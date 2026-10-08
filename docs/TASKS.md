@@ -82,9 +82,9 @@
 | T37 | 카페 피크타임 미니게임 S16·S17 (흘긋 시스템 포함) | B | T34, T13 | 3 | 3분 1판 완주 → 등급·팁·멘탈 결과 화면, 하루 3판 제한, 규모 확인 전 흘긋에서 금액 미표시 | Assets/Scripts/MiniGames/Cafe |
 | T38 | 편의점 조합 데이트 S18 + S06-c 데이트 비트 | B | T34, T16 | 2 | 예산 1만원·90초 조합 후 데이트 장면 복귀, 결과가 3축에 반영 | Assets/Scripts/MiniGames/Convenience |
 | T39 | 플레이테스트 이슈 수정 (시스템·LLM 쪽) | A | T33 | 1.5 | P0·P1 이슈 0건 + ./unity test edit 통과 | Assets/Scripts |
-| T40 | 시연 빌드: mac·windows 빌드 + 시연 체크리스트 | A+B | T35~T39, T41~T45 | 1 | ./unity build mac·windows 성공, 체크리스트대로 D+1~D+14 시연 통과 | Builds |
+| T40 | 시연 빌드: mac·windows 빌드 + 시연 체크리스트 | A+B | T35~T39, T41~T45 | 1 | ./unity build mac·windows 성공, 체크리스트대로 D+1~D+14 시연 통과. 체크리스트에 계좌 잔고 전환(T41)·복기(T42)·익명 댓글(T45) 확인 포함 | Builds |
 | T41 | S12 계좌 앱: 규모 확인 전 '말한 잔고' ↔ 후 실제 잔고 전환 | B | T19, T31 | 1 | 규모 확인 전에는 '말한 잔고', 후에는 실제 잔고 표시 | Assets/Scripts/UI/Phone/Account |
-| T42 | S14 복기 모드: 30배속 재생·매매 마커 질문·1회 제한(C29) | A | T20, T12 | 1.5 | 30배속 재생, 매매 마커 질문 동작, 1회 제한(C29) 테스트 통과 | Assets/Scripts/Core/Simulation |
+| T42 | S14 복기 모드: 30배속 재생·매매 마커 질문·1회 제한(C29) | A | T20, T12 | 1.5 | 30배속 재생, 매매 마커 질문 동작, 1회 제한(C29) 테스트 통과. 화면은 T19·T20 컴포넌트를 재사용하고 S14 씬 연결은 B가 한다 | Assets/Scripts/Core/Simulation |
 | T44 | S15 2주 결산 카드 + S13 사진첩 + S21 일시정지 | B | T19, T11 | 1.5 | D+14에 결산 카드 표시, 사진첩 저장·로드 유지, 일시정지 후 재개 | Assets/Scripts/UI/Screens, Assets/Scripts/UI/Phone/Album |
 | T45 | 갤 익명 댓글: 응원·현실 댓글 효과, 7일 5개 초과 의심 | A | T28, T31 | 1 | 댓글 종류별 수치 효과 테스트, 7일 안 6번째 댓글에서 의심 판정 | Assets/Scripts/Core/Events |
 
@@ -164,7 +164,7 @@ docs/            TASKS.md, playtest/
 ## 협업 규칙
 
 - main은 보호한다. 직접 push는 막고 PR 머지만 받는다.
-- 이 규칙은 TASKS.md 첫 커밋 이후부터 적용한다. GitHub에서 main 브랜치 보호를 설정한다.
+- 이 규칙은 M1 시작부터 적용한다. M1 시작 전에 GitHub에서 main 브랜치 보호를 설정한다.
 - 브랜치는 `feat/T번호-요약`이다. 예: `feat/T12-delay-sim`. 수정은 `fix/T번호-요약`.
 - PR 리뷰는 상대 담당이 한다. A+B 태스크는 PR을 올리지 않은 쪽이 승인한다.
 - PR 전에 `./unity test edit`를 통과시키고, 결과 줄(passed·failed 수)을 PR 본문에 붙인다.
