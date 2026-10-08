@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# 롱잡고알바감 Unity CLI. 사용법: ./unity help
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT="$ROOT"
+LOGS="$ROOT/logs"
+VERSION="$(sed -n 's/^m_EditorVersion: //p' "$PROJECT/ProjectSettings/ProjectVersion.txt")"
+UNITY="${UNITY_PATH:-/Applications/Unity/Hub/Editor/$VERSION/Unity.app/Contents/MacOS/Unity}"
+
+die() { echo "unity: $*" >&2; exit 1; }
+
+[ -x "$UNITY" ] || die "Unity $VERSION 없음 ($UNITY). Unity Hub에서 설치하거나 UNITY_PATH 지정."
+
+# 에디터가 프로젝트를 열고 있으면 batchmode가 실패하므로 미리 막는다.
+ensure_closed() {
+  if pgrep -f "Unity.app/Contents/MacOS/Unity.*-projectPath $PROJECT" >/dev/null \
+     || pgrep -f "Unity.app/Contents/MacOS/Unity.*-projectpath $PROJECT" >/dev/null; then
+    die "에디터에서 프로젝트가 열려 있음. 닫고 다시 실행."
+  fi
+}
+
+batch() { # batch <log name> <unity args...>
+  local name="$1"; shift
+  ensure_closed
+  mkdir -p "$LOGS"
+  local log="$LOGS/$name.log"
+  echo "▶ $name  (로그: ${log#$ROOT/})"
+  local code=0
+  "$UNITY" -batchmode -nographics -projectPath "$PROJECT" -logFile "$log" "$@" || code=$?
+  if [ $code -ne 0 ]; then
+    echo "✗ $name 실패 (exit $code). 에러:" >&2
+    grep -E "error CS|Error|Exception|\[BuildCli\]" "$log" | grep -vE "^UnityEngine|Licensing" | tail -20 >&2 || true
+  else
+    grep -E "\[BuildCli\]" "$log" || true
+    echo "✓ $name"
+  fi
+  return $code
+}
+
+test_mode() { # test_mode <EditMode|PlayMode> [filter]
+  local mode="$1" filter="${2:-}" result="$LOGS/test-$1.xml"
+  local args=(-runTests -testPlatform "$mode" -testResults "$result")
+  [ -n "$filter" ] && args+=(-testFilter "$filter")
+  local code=0
+  batch "test-$mode" "${args[@]}" || code=$?
+  if [ -f "$result" ]; then
+    python3 - "$result" <<'PY'
+import sys, xml.etree.ElementTree as ET
+r = ET.parse(sys.argv[1]).getroot()
+print(f"  {r.get('passed')} passed, {r.get('failed')} failed, {r.get('skipped')} skipped ({r.get('duration')}s)")
+for c in r.iter('test-case'):
+    if c.get('result') == 'Failed':
+        msg = c.find('failure/message')
+        print(f"  ✗ {c.get('fullname')}: {(msg.text or '').strip() if msg is not None else ''}")
+PY
+  fi
+  return $code
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  open)    open -a "$(dirname "$(dirname "$(dirname "$UNITY")")")" --args -projectPath "$PROJECT" ;;
+  init)    batch init -quit -executeMethod KwGame.EditorTools.BuildCli.Init ;;
+  compile) batch compile -quit ;;
+  test)
+    case "${1:-all}" in
+      edit) test_mode EditMode "${2:-}" ;;
+      play) test_mode PlayMode "${2:-}" ;;
+      all)  test_mode EditMode && test_mode PlayMode ;;
+      *)    die "test edit|play|all [필터]" ;;
+    esac ;;
+  build)
+    target="${1:-mac}"; shift || true
+    case "$target" in
+      mac)     batch build-mac     -quit -buildTarget OSXUniversal -executeMethod KwGame.EditorTools.BuildCli.BuildMac "$@" ;;
+      windows) batch build-windows -quit -buildTarget Win64        -executeMethod KwGame.EditorTools.BuildCli.BuildWindows "$@" ;;
+      webgl)   batch build-webgl   -quit -buildTarget WebGL        -executeMethod KwGame.EditorTools.BuildCli.BuildWebGL "$@" ;;
+      *)       die "build mac|windows|webgl [-development] [-outputPath 경로]" ;;
+    esac ;;
+  run)     open "$PROJECT/Builds/Mac/롱잡고알바감.app" ;;
+  exec)    [ $# -ge 1 ] || die "exec Namespace.Class.Method"; batch exec -quit -executeMethod "$@" ;;
+  log)     tail -f "$HOME/Library/Logs/Unity/Editor.log" ;;
+  clean)   rm -rf "$PROJECT/Library" "$PROJECT/Temp" "$PROJECT/Builds" "$LOGS"; echo "✓ Library·Builds·logs 삭제" ;;
+  version) echo "Unity $VERSION  ($UNITY)" ;;
+  help|*)
+    cat <<EOF
+롱잡고알바감 Unity CLI  (Unity $VERSION, 프로젝트: $ROOT)
+
+  ./unity open                    에디터로 열기
+  ./unity init                    Boot 씬·16:9·제품명 등 기본 설정 (재실행 안전)
+  ./unity compile                 스크립트 컴파일만 확인
+  ./unity test [edit|play|all] [필터]   테스트 실행, 결과는 logs/test-*.xml
+  ./unity build [mac|windows|webgl] [-development] [-outputPath 경로]
+  ./unity run                     맥 빌드 실행
+  ./unity exec 클래스.메서드        임의 에디터 정적 메서드 실행
+  ./unity log                     에디터 로그 tail
+  ./unity clean                   Library·Builds·logs 삭제 (다음 실행 시 재임포트)
+  ./unity version
+
+로그는 logs/<명령>.log. 에디터가 프로젝트를 열고 있으면 batch 명령은 거부됨.
+EOF
+    ;;
+esac

@@ -1,0 +1,26 @@
+# Unity
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Bb]uild/
+/[Bb]uilds/
+/[Uu]ser[Ss]ettings/
+/MemoryCaptures/
+*.csproj
+*.sln
+*.slnx
+*.unityproj
+*.pidb
+*.booproj
+*.user
+*.userprefs
+.vs/
+.idea/
+.DS_Store
+
+# CLI 출력
+/logs/
+
+# 에이전트 상태
+.omc/
