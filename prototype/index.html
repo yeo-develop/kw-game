@@ -613,6 +613,22 @@ const cEq = c => c.margin + cpnl(c) + (c.bonus || 0);
 const coinVal = () => S.cps.reduce((a, c) => a + cEq(c), 0);
 const holdVal = () => stockVal() + coinVal();
 const liqPx = c => c.entry * (1 - c.dir * 0.9 / (c.lev * c.mult));
+/* 칸 안에서 청산가를 찍었는지: 브라운 브리지 경계 통과 확률 (칸 시작가 o → 끝 c, 칸 내부 변동성 σ).
+   종가만 보면 고배율이 '손실은 증거금까지, 이익은 무한'이라 기대값이 플러스가 됨 → 경로 청산으로 막는다 */
+const INTRA = 1.6;
+/* UI용: 한 칸 동안 청산가를 찍을 대략 확률 (반사 원리, 추세 무시) */
+function liqOdds(lev, vol) {
+  const a = Math.log(1 / (1 - Math.min(0.99, 0.9 / lev))), sg = vol * Math.hypot(1, INTRA);
+  const z = a / sg, t = 1 / (1 + 0.3275911 * z / Math.SQRT2);
+  const erfc = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-z * z / 2);
+  return Math.min(0.99, erfc);
+}
+function liqHit(c, mv, vol) {
+  const L = liqPx(c), sg = vol * INTRA;
+  const a = c.dir > 0 ? Math.log(mv.o / L) : Math.log(L / mv.o), b = c.dir > 0 ? Math.log(mv.c / L) : Math.log(L / mv.c);
+  if (a <= 0 || b <= 0) return true;
+  return rnd() < Math.exp(-2 * a * b / (sg * sg));
+}
 
 /* ================= 그림: 미래 SVG ================= */
 function eye(cx, cy, type, look = 0) {
@@ -1929,7 +1945,7 @@ async function openTrade(where) {
           <div class="qrow">${[[.1, "10%"], [.25, "25%"], [.5, "50%"], [1, "최대"]].map(([q, l]) => `<button class="btn sm" data-tq="${q}" data-bot="t-q${Math.round(q * 100)}">${l}</button>`).join("")}</div>
           <div class="seg levs">${levs.map(l => `<button data-lev="${l}" data-bot="t-lev${l}" class="${l === lev ? "on" : ""}">${l}x</button>`).join("")}</div>
           <div class="seg" style="margin-top:8px"><button class="long ${dir > 0 ? "on" : ""}" data-dir="1" data-bot="t-long">롱 📈</button><button class="short ${dir < 0 ? "on" : ""}" data-dir="-1" data-bot="t-short">숏 📉</button></div>
-          <div class="onote">청산가 ≈ <b>${fmtP(estLiq)}</b> (${(90 / lev).toFixed(1)}% 역행) · 수수료 ${won(amt * lev * COIN_FEE)}${lev > 1 ? ` · 펀딩비 슬롯당 ${won(amt * lev * FUNDING)}` : ""}${has("kimp") && dir > 0 && S.kimpDay !== absDay() ? " · 🌶️김프 +5% (오늘 첫 롱)" : ""}${has("allin") ? " · 🎲95%↑ 넣으면 ×1.5" : ""}</div>
+          <div class="onote">청산가 ≈ <b>${fmtP(estLiq)}</b> (${(90 / lev).toFixed(1)}% 역행)${lev > 1 ? ` · <b style="color:#ff4d5e">💀 이번 칸 청산 확률 ≈ ${Math.round(liqOdds(lev * (has("allin") && amt * (1 + lev * COIN_FEE) >= S.cash * 0.95 ? 1.5 : 1), t.vol * (S.slot === 3 && has("whale") ? 2 : 1)) * 100)}%</b> (칸 중간 꼬리에도 청산)` : ""} · 수수료 ${won(amt * lev * COIN_FEE)}${lev > 1 ? ` · 펀딩비 슬롯당 ${won(amt * lev * FUNDING)}` : ""}${has("kimp") && dir > 0 && S.kimpDay !== absDay() ? " · 🌶️김프 +5% (오늘 첫 롱)" : ""}${has("allin") ? " · 🎲95%↑ 넣으면 ×1.5" : ""}</div>
           <button class="btn pri2" data-bot="t-open" id="tOpen" ${amt < 10000 ? "disabled" : ""}>${dir > 0 ? "롱" : "숏"} ${lev}x 진입</button>`
         : `<div class="oh">📊 주식 주문 ${stockOpen() ? `<small>장 열림 · 수수료 ${(fee * 100).toFixed(1)}%</small>` : `<small class="dn">장 마감 (오전·오후만)</small>`}</div>
           <div class="oamt"><span id="tAmtV">${won(amt)}</span><small>매수 금액</small></div>
@@ -2093,7 +2109,10 @@ async function marketTick() {
   const liqs = [];
   for (const c of S.cps.slice()) {
     const w = c.dir > 0 ? mv[c.tk].l : mv[c.tk].h;
-    if (c.margin <= 0 || c.lev * c.mult * c.dir * (w / c.entry - 1) <= -0.9) {
+    if (c.margin <= 0 || c.lev * c.mult * c.dir * (w / c.entry - 1) <= -0.9 || liqHit(c, mv[c.tk], TK[c.tk].vol * (evening && has("whale") ? 2 : 1))) {
+      // 꼬리로 청산가 찍은 걸 차트에 남김 (청산빔)
+      const hc = S.mk[c.tk].hist[S.mk[c.tk].hist.length - 1], L = liqPx(c);
+      if (c.dir > 0) hc.l = Math.min(hc.l, L * 0.998); else hc.h = Math.max(hc.h, L * 1.002);
       let back = 0;
       if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.round(c.margin / 2); S.cash += back; }
       S.cps = S.cps.filter(x => x !== c); S.st.liq++;
