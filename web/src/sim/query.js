@@ -15,10 +15,10 @@ export function query(S, fn, ...a) {
 }
 export const Q = {
   has: St.has, rate: St.rate, interestDue: St.interestDue, menLine: St.menLine, mental: St.mental, absDay: St.absDay, Tnow: St.Tnow, loanCap: St.loanCap,
-  stockOpen: St.stockOpen, tkOpen: St.tkOpen, limitOf: St.limitOf, stockVal: St.stockVal, cpnl: St.cpnl, cEq: St.cEq, coinVal: St.coinVal, holdVal: St.holdVal,
+  stockOpen: St.stockOpen, tkOpen: St.tkOpen, stockVal: St.stockVal, cpnl: St.cpnl, cEq: St.cEq, coinVal: St.coinVal, holdVal: St.holdVal,
   liqPx: St.liqPx, unreal: St.unreal, hasPos: St.hasPos, kUnread: St.kUnread, rankOf: St.rankOf, todayPnl: St.todayPnl, todayLiq: St.todayLiq, wroteToday: St.wroteToday,
-  moodFace: St.moodFace, clockNow: St.clockNow, liqOdds: St.liqOdds, TKS: St.TKS, STK: St.STK,
+  moodFace: St.moodFace, isEve: St.isEve, hpMult: St.hpMult, hpCost: St.hpCost, jobHp: St.jobHp, clockNow: St.clockNow, liqOdds: St.liqOdds, TKS: St.TKS, STK: St.STK,
   srcOf: Tp.srcOf, srcRec: Tp.srcRec, whenLabel: Tp.whenLabel, resMark: Tp.resMark, activeTips: Tp.activeTips, rsch: Tp.rsch, freeMax: Tp.freeMax,
   stockFee: Tr.stockFee, hlMult: Ga.hlMult, ladderEnd: Ga.ladderEnd, mgHard: Ga.mgHard, lottoToday: Ga.lottoToday,
-  locOpts: Pl.locOpts, loanFee: Pl.loanFee, draft: Gl.draft, postById: Gl.postById,
+  locOpts: Pl.locOpts, loanFee: Pl.loanFee, relicPrice: Pl.relicPrice, draft: Gl.draft, postById: Gl.postById,
 };

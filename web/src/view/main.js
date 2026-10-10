@@ -3,15 +3,15 @@
 const GREET = DATA.GREET;
 
 async function homePrompt() {
-  setScene("room", { night: S.slot === 3, face: q("moodFace"), mode: "home" });
+  setScene("room", { night: isEve(), face: q("moodFace"), mode: "home" });
   idle("미래", S.hl ? S.hl.t : "", q("moodFace"));
   const ku = q("kUnread"), pl = q("hasPos") ? q("unreal") : null;
   const kp = sideMenu({ title: `🏠 집 <small>${SLOT_IC[S.slot]} ${SLOT_NAME[S.slot]} ${SLOT_CLOCK[S.slot]}</small>`, opts: [
-    { k: "h-phone", ic: "📱", l: "폰 보기 (P)", sub: `카톡·주갤·증권·뉴스 · 슬롯 안 씀${ku ? ` · 💬${ku}` : ""}${pl != null ? ` · ${sgnMan(pl)}` : ""}`, cls: "wide hot" },
-    { k: "h-map", ic: "🗺️", l: "지도 (나가기)", sub: "장소+행동 1번 = 1슬롯" },
-    { k: "h-rest", ic: "🛏️", l: "집에서 쉬기", sub: "1슬롯 · 멘탈 회복" },
+    { k: "h-phone", ic: "📱", l: "폰 보기 (P)", sub: `카톡·주갤·증권·뉴스 · 칸 안 씀${ku ? ` · 💬${ku}` : ""}${pl != null ? ` · ${sgnMan(pl)}` : ""}`, cls: "wide hot" },
+    { k: "h-map", ic: "🗺️", l: "지도 (나가기)", sub: `장소+행동 1번 = 1칸${S.hp < RU.HP_LOW ? " · 😵 체력 부족" : ""}` },
+    { k: "h-rest", ic: "🛏️", l: isEve() ? "일찍 자기" : "집에서 쉬기", sub: `1칸 · 멘탈 회복 · 체력 +${isEve() ? RU.HP_REST_EVE : RU.HP_REST}${isEve() ? " (+밤잠 " + RU.HP_SLEEP + ")" : ""}`, cls: S.hp < RU.HP_LOW ? "hot" : "" },
     { k: "h-loan", ic: "💸", l: "돈 땡기기", sub: `사채 · 남은 한도 ${man(Math.max(0, q("loanCap") - S.debt))}` },
-    { k: "h-etc", ic: "⋯", l: "기타", sub: "증강 목록 · 규칙 · 메뉴" },
+    { k: "h-etc", ic: "⋯", l: "기타", sub: "유품 목록 · 규칙 · 기록" },
   ] });
   tutHook("home");
   const k = await kp;
@@ -24,15 +24,15 @@ async function homePrompt() {
   return null;   /* __refresh */
 }
 async function etcMenu() {
-  const v = await modal({ title: "⋯ 기타", wide: 1, body: `<h3 class="mh">🎴 보유 증강</h3>${S.augs.length ? S.augs.map(id => { const a = AUG[id]; return `<div class="augli t${a.tier}"><span>${a.ic}</span><b>${esc(a.name)}</b><small>[${TIER[a.tier]} · ${a.cat}]</small> ${esc(a.d)}</div>`; }).join("") : "없음"}
+  const v = await modal({ title: "⋯ 기타", wide: 1, body: `<h3 class="mh">🎁 챙긴 유품 · 수상한 물건</h3>${S.augs.length ? S.augs.map(id => { const a = AUG[id]; return `<div class="augli t${a.tier}"><span>${a.ic}</span><b>${esc(a.name)}</b><small>[${TIER[a.tier]} · ${a.cat}]</small> ${esc(a.d)}</div>`; }).join("") : "없음"}${recHtml()}
     <h3 class="mh">📜 규칙 요약</h3><div class="rules small">${RULES_HTML}</div>`, acts: [{ l: "타이틀로", v: "title", k: "etc-title" }, { l: "닫기 (Enter)", pri: 1, k: "etc-close" }] });
   if (v === "title") location.href = location.pathname + location.search;
 }
 async function mapPrompt() {
   setScene("map", { char: false, mode: "map" });
-  idle("미래", fpick(["어디 갈까? 가서 뭐 하나 하면 한 슬롯 지나감.", "카지노? 카지노지? …아 알바? ㅅㅂ", "자기야 오늘 경마 배당 좋대 (출처: 갤)"]), "neutral");
+  idle("미래", fpick(["어디 갈까? 가서 뭐 하나 하면 한 칸 지나감.", "카지노? 카지노지? …아 알바? ㅅㅂ", "자기야 오늘 경마 배당 좋대 (출처: 갤)"]), "neutral");
   const mp = $("#map");
-  const all = [["home", { name: "집", ic: "🏠", pos: [720, 540], open: [0, 1, 2, 3], hint: "돌아가기 · 슬롯 소모 없음" }]].concat(LOC_KEYS.map(k => [k, LOCS[k]]));
+  const all = [["home", { name: "집", ic: "🏠", pos: [720, 540], open: SLOT_NAME.map((_, i) => i), hint: "돌아가기 · 칸 소모 없음" }]].concat(LOC_KEYS.map(k => [k, LOCS[k]]));
   mp.innerHTML = all.map(([k, L], i) => { const op = L.open.includes(S.slot); return `<button class="loc ${k === "home" ? "home" : ""}" data-pick="${i}" data-bot="m-${k}" ${op ? "" : "disabled"} style="left:${L.pos[0] + 120}px;top:${L.pos[1] - 66}px"><span class="k">${i + 1}</span><span class="ic">${L.ic}</span><b>${L.name}</b><small>${op ? L.hint : "영업 끝 · " + L.open.map(x => SLOT_NAME[x]).join("/") + "만"}</small></button>`; }).join("");
   mp.classList.add("on"); curLoc = "";
   tutHook("map");
@@ -49,7 +49,7 @@ async function locPrompt(P) {
   const gk = `${Tnow()}:${key}`;   /* 같은 방문에서 다시 그릴 땐 인사 대신 "또 뭐" (v3.2 와 같음) */
   idle(NPCS[L.npc].name, P.first && gk !== lastGreet ? fpick(GREET[key]) : "또 뭐 하실래요?"); lastGreet = gk;
   const used = S.visit && S.visit.used;
-  const opts = q("locOpts", key).concat([{ k: "l-leave", ic: "🚪", l: used ? "볼일 끝 (집으로)" : "나가기 (지도로)", sub: used ? "1슬롯 사용됨" : "슬롯 소모 없음", cls: "leave" }]);
+  const opts = q("locOpts", key).concat([{ k: "l-leave", ic: "🚪", l: used ? "볼일 끝 (집으로)" : "나가기 (지도로)", sub: used ? "1칸 사용됨" : "칸 소모 없음", cls: "leave" }]);
   curLoc = key;
   const cp = sideMenu({ title: `${L.ic} ${L.name}`, sub: `${L.hint} · ${S.month}개월차 ${S.day}일 ${SLOT_NAME[S.slot]}`, opts });
   tutHook("loc", key);
@@ -68,7 +68,10 @@ async function prompt(P) {
     case "home": return homePrompt();
     case "map": return mapPrompt();
     case "loc": return locPrompt(P);
-    case "aug": return augPrompt(P);
+    case "relic": return augPrompt(P);
+    case "relicShop": return relicShopPrompt(P);
+    case "tempt": { const c = await choosePrompt(P.opts, "tempt"); return { t: "tempt", k: c.k }; }
+    case "impulse": { const c = await choosePrompt(P.opts, "impulse"); return { t: "reply", i: P.opts.findIndex(o => o.k === c.k) }; }
     case "loan": return loanPrompt(P);
     case "encounter": { const c = await choosePrompt(P.opts); return { t: "encounter", ask: c.k === "enc-ask" }; }
     case "menhera": { const c = await choosePrompt(P.opts, "menhera"); return { t: "reply", i: P.opts.findIndex(o => o.k === c.k) }; }
@@ -85,33 +88,58 @@ async function prompt(P) {
   console.warn("unknown pending", P.t);
   return null;
 }
+let endChoice = null;
 async function mainLoop(first) {
   if (first) await send(first);
   for (; ;) {
     const P = S.pending;
-    if (!P || P.t === "ending") return;
+    if (!P) return;
+    if (P.t === "ending") {
+      if (!P.cont) return;
+      /* 정식 엔딩: 화면에서 '계속하기' 고르면 자유 모드로 이어 감 */
+      const v = await new Promise(r => { endChoice = r; });
+      endChoice = null;
+      if (v !== "cont") return;
+      $("#full").classList.remove("on"); $("#full").innerHTML = "";
+      await send({ t: "continue" });
+      toast("🎉 빚 없는 자유 모드 — 꾸미기·투자·갤 명성 마음대로 (이자일 없음)", "good", null);
+      continue;
+    }
     updHud();
     const c = await prompt(P);
     if (c) await send(c);
   }
 }
 
-/* ================= 엔딩 ================= */
+/* ================= 엔딩 (스코어보드 · 정식 엔딩 컷신 → 계속하기) ================= */
+const pctOf = (w, n) => n ? Math.round(w / n * 100) + "%" : "-";
+function sbHtml(sb, E) {
+  const cells = [
+    ["엔딩", `${E.h}`], ["버틴 날", `${sb.days}일 (${sb.month}개월차 ${sb.day}일)`], ["총 수익 (투자 실현+평가)", sgnWon(sb.profit)], ["최대 자산", won(sb.maxAsset)],
+    ["갚은 빚", won(sb.repaid)], ["남은 빚", won(sb.debt)], ["알바 수입", won(sb.earned)], ["도박 순손익", sgnWon(sb.gnet)],
+    ["도박 승률", `${pctOf(sb.gW, sb.gN)} (${sb.gW}/${sb.gN})`], ["투자 승률", `${pctOf(sb.iW, sb.iN)} (${sb.iW}/${sb.iN})`], ["청산", `${sb.liq}회`], ["갤 명성", `${sb.fame} · ${sb.rank}`],
+    ["낸 이자", won(sb.interest)], ["도박 중독도", `${sb.addict}`], ["기절", `${sb.faint}회`], ["돌발 매수", `${sb.impulse}회`],
+  ];
+  return `<div class="sboard">${cells.map(([a, b]) => `<div><small>${a}</small><b>${esc(b)}</b></div>`).join("")}</div>`;
+}
 async function endingShow() {
   const E = S.endInfo; if (!E) return;
   if (PH.on) closePhone(true); if (coachRun) coachRun.skip(); hideDlg(); closePnl(); hideSide(); hideMap(); $("#modal").classList.remove("on"); $("#modal").innerHTML = ""; modalOpen = false; $("#choices").innerHTML = ""; chooseWait = null; keyHook = null; $("#augPick").classList.remove("on");
-  clearSave(); HS = null; updHud();
+  HS = null;
+  if (E.kind === "clear") { updHud(); await runScene("clear"); }
+  clearSave(); updHud();
+  const rec = recSave(E.kind, E.sb);
   const f = $("#full"); f.classList.add("on");
-  f.innerHTML = `<div class="end"><div class="art">${bgSVG(E.bg, { props: S.props, night: E.night })}</div>
+  f.innerHTML = `<div class="end end-${E.kind}"><div class="art">${bgSVG(E.bg, { props: S.props, night: E.night })}</div>
     ${E.noChar ? "" : `<div class="echar">${miraeSVG(E.face, S.outfit)}</div>`}
     <div class="card2"><span class="tag ${E.ok ? "ok" : ""}">${E.tag}</span><h1>${esc(E.h)}</h1>
       <div class="lead">${esc(E.lead)}</div>
-      <div class="stats"><div>버틴 날<b>${S.month}개월 ${S.day}일째</b></div><div>최종 빚<b style="color:var(--red)">${won(S.debt)}</b></div><div>최대 빚<b>${won(S.st.maxDebt)}</b></div><div>낸 이자<b>${won(S.st.interest)}</b></div>
-        <div>알바 / 도박 / 투자<b>${S.st.work} / ${S.st.gamble} / ${S.st.invest}</b></div><div>청산<b>${S.st.liq}회</b></div><div>꾸미기 지출<b>${won(S.st.decor)}</b></div><div>멘헤라 받아치기<b>${S.st.menOk}승 ${S.st.menBad}패</b></div></div>
-      <div class="eaug">🎴 ${S.augs.length ? S.augs.map(x => AUG[x].ic + " " + AUG[x].name).join(" · ") : "증강 없음"}</div>
-      <div class="row"><button class="btn pri" id="again" data-bot="again">새 게임 (Enter)</button><span style="font-size:18px;color:var(--mute)">호감도 ${S.aff} · 갤 명성 ${S.galFame} (${E.rank}) · 시드 ${S.seed} · ${E.days}일</span></div>
+      <h3 class="sbh">📊 스코어보드</h3>${sbHtml(E.sb, E)}
+      <div class="eaug">🎁 ${S.augs.length ? S.augs.map(x => AUG[x].ic + " " + AUG[x].name).join(" · ") : "유품 없음"} · 시드 ${S.seed} · 엔딩 기록 ${["clear", "bad1", "bad2"].map(k => rec.seen[k] ? "✅" : "⬜").join("")}</div>
+      <div class="row">${E.cont ? `<button class="btn pri" id="contE" data-bot="cont">계속하기 — 빚 없는 자유 모드 (Enter)</button><button class="btn" id="again" data-bot="again">새 게임</button>` : `<button class="btn pri" id="again" data-bot="again">새 게임 (Enter)</button>`}</div>
       <div class="disc">※ 이 게임은 도박·투자 권유가 아닙니다. 종목·코인·차트는 전부 가상(합성)이고 등장인물·업체·커뮤니티도 가상입니다.<br>현실의 사채·도박·고배율 선물은 진짜로 원양어선입니다.</div></div></div>`;
   $("#again").onclick = e => { e.stopPropagation(); clearSave(); location.href = location.pathname + location.search; };
+  if ($("#contE")) $("#contE").onclick = e => { e.stopPropagation(); if (endChoice) endChoice("cont"); };
 }
 
 /* ================= 타이틀 ================= */
@@ -121,9 +149,9 @@ function showTitle() {
   f.innerHTML = `<div class="title"><div class="ticker"><span>[속보] 주식갤 고닉 「롱잡고알바감」 빚 3천 고백 ▲ 김사장 캐피탈 금리 동결 (월 5%) ▲ 빚트코인 오늘도 위아래로 흔듦 ▲ 멍멍코인 개가 짖음 ▲ 원양어선 선원 상시 모집 ▲ 형 나 믿지? ▲ 이 게임은 도박·투자 권유가 아닙니다 ▲</span></div>
     <div class="tchar">${miraeSVG("smug")}</div><div class="stamp">빚 3,000만</div>
     <div class="tx"><h1>롱잡고알바감</h1><div class="tg">~빚 3천 갚기 전엔 못 헤어져~</div>
-    <div class="tg2">여친이 100일 기념으로 빚을 고백했다. 사채업자가 문을 두드린다.<br>하루 4슬롯, 한 달 7일. 알바냐, 경마냐, 50배냐. 증강 골라서 3개월 안에 갚아라.</div>
+    <div class="tg2">여친이 100일 기념으로 빚을 고백했다. 사채업자가 문을 두드린다.<br>하루 3칸, 한 달 7일. 알바냐, 경마냐, 50배냐. 체력 아끼고, 부모님 유품 챙기고, 빚 0원 만들어라.</div>
     <div class="acts"><button class="btn pri" id="newG" data-bot="newG" style="font-size:30px;padding:18px 44px">새 게임 (Enter)</button>${sv && sv.phase !== "ending" ? `<button class="btn" id="contG" data-bot="contG" style="font-size:26px">이어하기 · ${sv.month}개월차 ${sv.day}일 ${SLOT_NAME[sv.slot] || ""}</button>` : ""}</div></div>
-    <div class="note">❓ 처음이면 새 게임 → 첫날 튜토리얼이 따라옴 (메뉴에서 끄기 가능) · 컨셉 프로토타입 v3.3 · 15~25분 (하루 4슬롯 · 한 달 7일 · 최대 3개월) · 클릭/Space/Enter = 진행 · 숫자키 = 선택 · P = 폰 · D = 디버그<br>이 게임은 도박·투자 권유가 아닙니다. 종목·코인은 전부 가상 · 등장인물·업체도 가상입니다.</div></div>`;
+    <div class="note">❓ 처음이면 새 게임 → 첫날 튜토리얼이 따라옴 (메뉴에서 끄기 가능) · 컨셉 프로토타입 v3.3 · 30~60분 (하루 3칸 · 한 달 7일 · 시간 제한 없음 · 엔딩 3종) · 클릭/Space/Enter = 진행 · 숫자키 = 선택 · P = 폰 · D = 디버그<br>이 게임은 도박·투자 권유가 아닙니다. 종목·코인은 전부 가상 · 등장인물·업체도 가상입니다.</div></div>`;
   $("#newG").onclick = e => { e.stopPropagation(); clearSave(); f.classList.remove("on"); f.innerHTML = ""; newGame(); };
   if ($("#contG")) $("#contG").onclick = e => { e.stopPropagation(); f.classList.remove("on"); f.innerHTML = ""; resume(sv); };
 }
@@ -161,7 +189,7 @@ document.addEventListener("keydown", e => {
   if (qs("#modal.on")) { if (go) { const b = qs("#modal .btn.pri") || qs("#modal .btn"); if (b) b.click(); } return; }
   if (PH.on) { if (e.key === "d" || e.key === "D") return; phoneKey(e); e.preventDefault(); return; }
   if (keyHook && keyHook(e)) return;
-  if (qs("#full.on")) { if (go) { const b = qs("#full #again") || qs("#full #newG"); if (b) b.click(); } return; }
+  if (qs("#full.on")) { if (go) { const b = qs("#full #contE") || qs("#full #again") || qs("#full #newG"); if (b) b.click(); } return; }
   if (chooseWait && !modalOpen) { if (num >= 0) chooseWait(num); return; }
   if (qs("#screen.on")) { if (go) { const b = qs("#screen .btn.pri"); if (b) b.click(); } return; }
   if (qs("#panel.on")) {
@@ -177,5 +205,5 @@ document.addEventListener("keydown", e => {
 $("#helpBtn").onclick = e => { e.stopPropagation(); helpNow(); };
 fit();
 /* 자동 테스트(Playwright 봇)용 창구 — v3.2 와 같은 이름 */
-window.__G = { get S() { return S; }, waiting: () => !!advWait || !!typing, TK, has, holdVal: () => q("holdVal"), interestDue: () => q("interestDue"), loanCap: () => q("loanCap"), Tnow, stockOpen, cpnl: c => q("cpnl", c), PH, phoneOk, unreal, GN, rec, get coach() { return !!coachRun; }, SIM };
+window.__G = { get S() { return S; }, isEve, q, waiting: () => !!advWait || !!typing, TK, has, holdVal: () => q("holdVal"), interestDue: () => q("interestDue"), loanCap: () => q("loanCap"), Tnow, stockOpen, cpnl: c => q("cpnl", c), PH, phoneOk, unreal, GN, rec, get coach() { return !!coachRun; }, SIM };
 showTitle();

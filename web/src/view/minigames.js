@@ -112,3 +112,59 @@ async function mgWare(su) {
     keyHook = e => { if (e.key === " " || e.key === "Enter") { hit(); return true; } return false; };
   });
 }
+/* 마트 창고: 떨어지는 박스 📦 · 돌진하는 진상 손님 🛒 피하기 (←/→ · A/D · 화면 버튼/터치 드래그)
+   판 구성(떨어지는 시각·위치·종류)은 sim 이 setup.drops 로 미리 굴림. 체력이 낮으면 몸이 무거움(이동 속도↓). */
+async function mgMart(su) {
+  if (MGM) return mgMock();
+  const SEC = 9000, W = 1100, AH = 520, PW = 90, LIVES = 5;
+  const hpF = 0.55 + 0.45 * clamp(su.hp, 0, 100) / 100, speed = 760 * hpF;   /* px/s */
+  const p = panel(`<h2>🛒 마트 창고: 피하기</h2><div class="sub"><b>← → (A/D)</b> 또는 아래 버튼·화면 드래그로 움직여서 떨어지는 📦 박스와 돌진하는 🛒 진상 손님을 피하기. ${(SEC / 1000).toFixed(0)}초 버티면 끝. 맞을 때마다 일당 깎임.${hpF < 0.8 ? ` <b style="color:#ff9aa5">😵 체력 ${su.hp} — 몸이 무거움 (이동 ${Math.round(hpF * 100)}%)</b>` : ""}</div>
+    <div class="timer"><i></i></div>
+    <div class="dodge" id="dg" style="width:${W}px;height:${AH}px"><div class="dgp" id="dgp">🏃</div><div class="dglives" id="dgl">${"❤️".repeat(LIVES)}</div><div class="dgmsg" id="dgm"></div></div>
+    <div class="row" style="justify-content:center;gap:30px;margin-top:12px"><button class="btn dgb" id="dgL" data-bot="dodge-l">◀ 왼쪽</button><button class="btn dgb" id="dgR" data-bot="dodge-r">오른쪽 ▶</button></div>`, true);
+  p.style.top = "150px"; p.style.height = "880px";
+  const ar = p.querySelector("#dg"), pl = p.querySelector("#dgp"), lv = p.querySelector("#dgl"), msg = p.querySelector("#dgm");
+  let x = W / 2 - PW / 2, dir = 0, target = null, hits = 0, fin = false, last = performance.now();
+  const t0 = performance.now(), dur = D(SEC);
+  const objs = su.drops.map(([t, fx, k]) => ({ t: t * dur, x: 20 + fx * (W - 100), k, y: -80, on: false, done: false, el: null, vx: 0 }));
+  const held = { l: false, r: false };
+  const upd = () => { dir = (held.r ? 1 : 0) - (held.l ? 1 : 0); if (dir) target = null; };
+  return new Promise(res => {
+    const tick = timerBar(p, dur);
+    const end = () => { if (fin) return; fin = true; keyHook = null; document.removeEventListener("keyup", ku); res(clamp(1 - hits / LIVES, 0, 1)); };
+    const ku = e => { if (["ArrowLeft", "a", "A"].includes(e.key)) held.l = false; if (["ArrowRight", "d", "D"].includes(e.key)) held.r = false; upd(); };
+    document.addEventListener("keyup", ku);
+    keyHook = e => { if (["ArrowLeft", "a", "A"].includes(e.key)) { held.l = true; upd(); return true; } if (["ArrowRight", "d", "D"].includes(e.key)) { held.r = true; upd(); return true; } return e.key === " " || e.key === "Enter"; };
+    const hold = (b, k) => { b.onpointerdown = e => { e.stopPropagation(); e.preventDefault(); held[k] = true; upd(); }; b.onpointerup = b.onpointerleave = b.onpointercancel = e => { held[k] = false; upd(); }; b.onclick = e => { e.stopPropagation(); x = clamp(x + (k === "l" ? -1 : 1) * 120 * hpF, 0, W - PW); }; };
+    hold(p.querySelector("#dgL"), "l"); hold(p.querySelector("#dgR"), "r");
+    const toX = e => { const r = ar.getBoundingClientRect(), s = r.width / W; target = clamp((e.clientX - r.left) / s - PW / 2, 0, W - PW); };
+    ar.onpointerdown = e => { e.stopPropagation(); toX(e); ar.setPointerCapture && ar.setPointerCapture(e.pointerId); };
+    ar.onpointermove = e => { if (e.buttons) toX(e); };
+    ar.onclick = e => e.stopPropagation();
+    const loop = now => {
+      if (fin) return;
+      const dt = Math.min(0.05, (now - last) / 1000), el = now - t0; last = now;
+      if (target != null) { const d = target - x; x += Math.sign(d) * Math.min(Math.abs(d), speed * dt); }
+      else x = clamp(x + dir * speed * dt, 0, W - PW);
+      pl.style.left = x + "px"; pl.classList.toggle("mv", !!dir || target != null);
+      for (const o of objs) {
+        if (o.done || el < o.t) continue;
+        if (!o.on) { o.on = true; o.el = document.createElement("div"); o.el.className = "dgo" + (o.k ? " k1" : ""); o.el.textContent = o.k ? "🛒" : "📦"; ar.appendChild(o.el); o.vx = o.k ? (x > o.x ? 1 : -1) * 120 : 0; }
+        const vy = (o.k ? 520 : 400) * su.H * (FAST ? 12 : 1);
+        o.y += vy * dt; o.x = clamp(o.x + o.vx * dt, 0, W - 70);
+        o.el.style.transform = `translate(${o.x}px,${o.y}px)`;
+        if (o.y > AH - 120 && o.y < AH - 30 && Math.abs(o.x + 35 - (x + PW / 2)) < (o.k ? 70 : 58)) {
+          o.done = true; hits++; o.el.classList.add("hit"); setTimeout(() => o.el && o.el.remove(), 300);
+          lv.textContent = "❤️".repeat(Math.max(0, LIVES - hits)) + "🖤".repeat(Math.min(LIVES, hits));
+          msg.textContent = o.k ? "진상: \"사장 나오라 그래!!!\" (−일당)" : "박스에 맞음. 허리도 매도함 (−일당)";
+          ar.classList.remove("shake"); void ar.offsetWidth; ar.classList.add("shake");
+          if (hits === 2) bubble("자기 괜찮아?? 그거 계란 박스였음", 1300, "panic");
+          if (hits >= LIVES) return end();
+        } else if (o.y > AH) { o.done = true; o.el.remove(); }
+      }
+      if (tick() <= 0) return end();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+}

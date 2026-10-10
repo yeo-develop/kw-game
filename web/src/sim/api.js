@@ -4,15 +4,15 @@
 import { D, R, st, bind, unbind, emit } from "./core.js";
 import { fpick } from "./rng.js";
 import { T } from "./fmt.js";
-import { newState, Tnow, tkOpen } from "./state.js";
+import { newState, Tnow, tkOpen, isEve, hpCost } from "./state.js";
 import { initMarket, genNews } from "./market.js";
-import { aff, stress, pushK } from "./effects.js";
+import { stress, pushK, hp } from "./effects.js";
 import { galReact, kqReply, submitPost, upvote } from "./gall.js";
 import { getReport, tipAnnounce, encounterRoll } from "./tips.js";
 import { buyStock, sellStock, openCoin, closeCoin, stockFee } from "./trade.js";
 import { workStart, workSetup, workResult, casinoStart, casinoBet, casinoEnd, raceStart, raceBet, scratchStart, scratchBuy, scratchReveal, scratchDone, lottoStart, lottoBuy, lottoDone } from "./games.js";
-import { locOpts, doPc, payEarly, repayStart, repayDo, shopBuy, shopDone, brokerTip, borrow, loanDone, encounterStart, encounterAnswer } from "./places.js";
-import { run, after, slotUsed, toHome, augStart, augReroll, augPick, paydayCmd, menheraReply } from "./flow.js";
+import { locOpts, doPc, payEarly, repayStart, repayDo, shopBuy, shopDone, brokerTip, borrow, loanDone, encounterStart, encounterAnswer, relicShopStart, gachaRelic, buyRelic, relicDone } from "./places.js";
+import { run, after, slotUsed, toHome, relicStart, relicReroll, relicPick, paydayCmd, menheraReply, impulseReply, temptCmd, continueGame } from "./flow.js";
 import { M, hideDlg, face } from "./talk.js";
 
 export function createGame(seed, opts = {}) {
@@ -39,7 +39,7 @@ function actDone(r) {
 function restHome() {
   const S = st();
   S.workStreak = 0;
-  stress(-22); aff(2);
+  stress(-22); hp(isEve() ? R().HP_REST_EVE : R().HP_REST, T("why.rest"));
   face("tired");
   M(fpick(D.STR["rest.m"]), "tired");
   galReact("rest", {}, 1);
@@ -54,10 +54,11 @@ function act(k) {
     case "l-payint": return actDone(payEarly()), true;
     case "l-repay": if (repayStart(key) === false) actDone(false); return true;
     case "l-oddeven": case "l-card": case "l-slot": case "l-ladder": casinoStart(k.slice(2), key); return true;
-    case "l-cafe": case "l-store": case "l-ware": workStart(k.slice(2), key); return true;
+    case "l-cafe": case "l-store": case "l-ware": case "l-mart": workStart(k.slice(2), key); return true;
     case "l-pcgame": return actDone(doPc("game")), true;
     case "l-pcramen": return actDone(doPc("ramen")), true;
     case "l-shop": S.pending = { t: "shop", bought: 0 }; return true;
+    case "l-relic": relicShopStart(); return true;
     case "l-scratch": scratchStart(key); return true;
     case "l-lotto": lottoStart(key); return true;
     case "l-race": raceStart(key); return true;
@@ -109,13 +110,27 @@ function handle(c) {
       emit("opening");
       pushK("m", T("open.k3"));
       galReact("start", {}, 4);
-      /* phase 는 증강 고를 때까지 opening (HUD 꺼짐 — v3.2 와 같음), 고르면 home */
+      /* phase 는 유품 고를 때까지 opening (HUD 꺼짐), 고르면 home */
       after("tutInit", "loopTop");
-      augStart(T("aug.reasonStart"));
+      relicStart(T("aug.reasonStart"));
       return;
-    case "aug":
-      if (c.t === "aug") return augPick(c.i) || err("aug");
-      if (c.t === "augReroll") return augReroll() || err("reroll");
+    case "relic":
+      if (c.t === "pickRelic") return relicPick(c.i) || err("relic");
+      if (c.t === "relicReroll") return relicReroll() || err("reroll");
+      break;
+    case "relicShop":
+      if (c.t === "gachaRelic") return gachaRelic() || err("gacha");
+      if (c.t === "buyRelic") return buyRelic(c.id) || err("buyRelic");
+      if (c.t === "relicDone") { actDone(relicDone()); return; }
+      break;
+    case "tempt":
+      if (c.t === "tempt") return temptCmd(c.k) || err("tempt");
+      break;
+    case "impulse":
+      if (c.t === "reply") return impulseReply(c.i) || err("reply");
+      break;
+    case "ending":
+      if (c.t === "continue") return continueGame() || err("continue");
       break;
     case "home":
       if (c.t === "rest") { S.pending = null; restHome(); slotUsed(); return; }
@@ -143,7 +158,7 @@ function handle(c) {
       if (c.t === "leave") { const used = S.visit.used; S.visit = null; if (used) slotUsed(); else toHome(); return; }
       break;
     case "brokerTrade":
-      if (c.t === "brokerClose") { actDone(S.st.invest > P.n0); return; }
+      if (c.t === "brokerClose") { const used = S.st.invest > P.n0; if (used) hp(-hpCost("trade")); actDone(used); return; }
       break;
     case "work":
       if (c.t === "mgSetup") { workSetup(!!c.practice); return; }
@@ -185,7 +200,9 @@ function handle(c) {
 function debug(k) {
   const S = st();
   if (k === "cash") S.cash += 10000000;
-  if (k === "pay") { S.day = R().MONTH_DAYS; S.slot = 3; }
+  if (k === "pay") { S.day = R().MONTH_DAYS; S.slot = R().SLOTS - 1; }
+  if (k === "hp") S.hp = 5;
+  if (k === "addict") S.addict = 85;
   if (k === "men") S.stress = 95;
   if (k === "zero") S.debt = 1000000;
   if (k === "aug") S.dbgAug = 1;

@@ -17,7 +17,8 @@ const TK = DATA.TK, TKS = Object.keys(TK), STK = TKS.filter(k => TK[k].type === 
 const NPCS = DATA.NPCS, AUG = Object.fromEntries(DATA.AUGS.map(a => [a.id, a])), TIER = DATA.TIER;
 const RU = DATA.RULES, MONTH_DAYS = RU.MONTH_DAYS, SLOTS = RU.SLOTS, SLOT_NAME = DATA.SLOT_NAME, SLOT_IC = DATA.SLOT_IC, SLOT_CLOCK = DATA.SLOT_CLOCK;
 const GN = DATA.GN, FAME = DATA.FAME, RANKS = DATA.RANKS, KROOM = DATA.KROOM, ITEMS = DATA.ITEMS, JOBS = DATA.JOBS, LOCS = DATA.LOCS, LOC_KEYS = Object.keys(LOCS);
-const SAVE_KEY = "longjab_v33";
+const SAVE_KEY = "longjab_v34";
+const REC_KEY = "longjab_records";   /* 엔딩 기록 (본 엔딩·최고 점수) */
 
 /* 연출용 난수 (파티클 위치 등) — 결과에 영향 없음, 상태에 안 들어감 */
 let fxSeed = (Date.now() ^ 0x5bd1e995) | 0;
@@ -31,7 +32,8 @@ const conv = n => SIM.query(S, SIM.F.conv, n);
 const has = id => !!(S && S.augs.includes(id));
 const absDay = () => (S.month - 1) * MONTH_DAYS + S.day;
 const Tnow = () => (absDay() - 1) * SLOTS + S.slot;
-const stockOpen = () => S.slot === 1 || S.slot === 2;
+const stockOpen = () => RU.STOCK_SLOTS.includes(S.slot);
+const isEve = () => S.slot === SLOTS - 1;
 const tkOpen = k => !TK[k].lock || has(TK[k].lock);
 const mental = () => q("mental");
 const MENT = { calm: ["😌", "평온"], anx: ["😰", "불안"], men: ["🌀", "멘헤라"] };

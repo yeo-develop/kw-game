@@ -93,7 +93,7 @@ function helpCtx() {
   if ($("#augPick.on")) return "aug";
   if (PH.on) return ctxKey("phone");
   if ($("#panel.on")) return "panel";
-  if ($("#choices button")) return S.phase === "payday" ? "payday" : "menhera";
+  if ($("#choices button")) return S.phase === "payday" ? "payday" : S.pending && ["tempt", "impulse"].includes(S.pending.t) ? S.pending.t : "menhera";
   if ($("#map.on")) return "map";
   if ($("#main").dataset.mode === "loc" && curLoc) return "loc-" + curLoc;
   return "home";

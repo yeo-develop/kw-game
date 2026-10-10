@@ -3,13 +3,13 @@
 import { D, R, st } from "./core.js";
 import { rnd, gauss, pick, plog, pexp } from "./rng.js";
 import { clamp } from "./num.js";
-import { TKS, has, Tnow, tkOpen, liqPx } from "./state.js";
+import { TKS, has, Tnow, tkOpen, liqPx, isEve } from "./state.js";
 
 export function planMarket(shock, evening, M) {
   const S = st();
   M = M || S.mk;
   if (rnd() > 0.9) M.reg = -M.reg;
-  const mret = M.reg * 0.002 + gauss() * (evening ? 0.008 : 0.005) + (shock.MKT || 0);   /* v3.2: 주식 기본 노이즈 −35% → 정보가 주식 수익을 좌우 */
+  const mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) + (shock.MKT || 0);   /* v3.2: 주식 기본 노이즈 −35% → 정보가 주식 수익을 좌우 */
   const whale = evening && S.mk === M && has("whale");
   const P = { r: {}, w: {}, whale };
   for (const k of TKS()) {
@@ -45,13 +45,13 @@ export function planNext() {
   const S = st(), T = Tnow();
   const sh = Object.assign({}, S.shocks[T] || {}); delete S.shocks[T];
   if (S.news && !S.news.fake) sh[S.news.tk] = (sh[S.news.tk] || 0) + S.news.r;
-  S.mplan = planMarket(sh, S.slot === 3); S.mplan.T = T; return S.mplan;
+  S.mplan = planMarket(sh, isEve()); S.mplan.T = T; return S.mplan;
 }
 export const curPlan = () => { const S = st(); return (S.mplan && S.mplan.T === Tnow()) ? S.mplan : planNext(); };
 export function initMarket() {
   const M = { reg: rnd() < 0.6 ? 1 : -1 };
   for (const k of TKS()) M[k] = { p: D.TK[k].p0, tr: rnd() < 0.5 ? 1 : -1, hist: [] };
-  for (let i = 0; i < 14; i++) stepMarket({}, i % 4 === 3, M);
+  for (let i = 0; i < 14; i++) stepMarket({}, i % R().SLOTS === R().SLOTS - 1, M);
   return M;
 }
 /* 숨은 충격: 이미 계획된 칸이면 계획에 바로 더하고, 아니면 그 칸 계획 때 합쳐짐 */

@@ -1,18 +1,24 @@
 /* sim/effects.js — 수치 변화 + 알림 기록 (카톡·피드·토스트). 화면 연출은 이벤트로만 알린다. */
-import { D, st, emit } from "./core.js";
+import { D, R, st, emit } from "./core.js";
 import { clamp, roundHalfUp } from "./num.js";
 import { T } from "./fmt.js";
-import { has, mental, absDay, clockNow, rankOf } from "./state.js";
+import { has, mental, absDay, Tnow, clockNow, rankOf } from "./state.js";
 
-/* 호감도 캔들 */
-export function beginTurn() { const S = st(); S.cur = { o: S.aff, h: S.aff, l: S.aff, c: S.aff }; }
-export function endTurn() { const S = st(); if (S.cur) { S.candles.push(S.cur); if (S.candles.length > 60) S.candles.shift(); S.cur = null; } }
-export function aff(d, why) {
+/* 체력: d 만큼 (음수 = 소모). 0 이 되면 기절 예약 (flow.faintCheck 가 칸 끝에 처리) */
+export function hp(d, why) {
   const S = st();
   d = roundHalfUp(d); if (!d) return;
-  S.aff = clamp(S.aff + d, 0, 100);
-  if (S.cur) { S.cur.c = S.aff; S.cur.h = Math.max(S.cur.h, S.aff); S.cur.l = Math.min(S.cur.l, S.aff); }
-  emit("aff", { d, why: why || "" });
+  const b = S.hp;
+  S.hp = clamp(S.hp + d, 0, R().HP_MAX);
+  if (S.hp !== b) emit("hp", { d: S.hp - b, why: why || "" });
+}
+/* 도박 중독도 0~100 */
+export function addict(d, notMe) {
+  const S = st();
+  const b = S.addict;
+  S.addict = clamp(roundHalfUp(S.addict + d), 0, 100);
+  if (d > 0 && !notMe) { S.gday = absDay(); S.gT = Tnow(); }   /* 내가 도박한 칸·날 (미래 몰래 카지노는 제외) → 그 칸·그날은 중독도 감소 없음 */
+  if (S.addict !== b) emit("addict", { d: S.addict - b, v: S.addict });
 }
 export function stress(d) {
   const S = st();

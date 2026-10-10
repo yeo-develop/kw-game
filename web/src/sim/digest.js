@@ -9,7 +9,7 @@ export function digest(S) {
   const put = (k, v) => p.push(k + "=" + v);
   put("v", S.version); put("rngv", S.rngv); put("rng", S.rng >>> 0); put("fx", S.fx >>> 0);
   put("m", S.month); put("d", S.day); put("s", S.slot); put("ph", S.phase); put("end", S.ending || "");
-  put("cash", num(S.cash)); put("debt", num(S.debt)); put("aff", num(S.aff)); put("stress", num(S.stress)); put("fame", num(S.galFame)); put("paid", S.paidMonth);
+  put("cash", num(S.cash)); put("debt", num(S.debt)); put("hp", num(S.hp)); put("addict", num(S.addict)); put("faint", S.faint); put("cleared", S.cleared); put("stress", num(S.stress)); put("fame", num(S.galFame)); put("paid", S.paidMonth);
   put("realized", num(S.realized)); put("augs", S.augs.join(","));
   for (const k of Object.keys(S.st).sort()) if (typeof S.st[k] === "number") put("st." + k, num(S.st[k]));
   put("n.posts", S.posts.length); put("n.tips", S.tips.length); put("n.feed", S.feed.length); put("gid", S.gid); put("pid", S.pid);

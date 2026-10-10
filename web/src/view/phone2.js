@@ -33,11 +33,11 @@ function phHome() {
   return `<div class="phome">
     <div class="hw"><div class="clk">${clockNow()}</div><div class="cday">${S.month}개월차 ${S.day}일 · ${SLOT_NAME[S.slot]} · ${stockOpen() ? "주식 장 열림" : "주식 장 마감 (코인만)"}</div>
       <div class="wg"><div class="wc"><small>현금</small><b class="g">${won(S.cash)}</b></div><div class="wc"><small>빚</small><b class="r">${won(S.debt)}</b></div><div class="wc"><small>이자 ${man(due)}원</small><b class="y">${paid ? "완납 ✅" : dd > 0 ? "D-" + dd : "오늘 저녁!"}</b></div>
-        <div class="wc"><small>포지션 평가손익</small><b class="${pl >= 0 ? "up" : "dn"}">${hasPos() ? sgnWon(pl) : "없음"}</b></div><div class="wc"><small>갤 명성</small><b>${S.galFame} · ${rk[1]}</b></div><div class="wc"><small>미래 호감도</small><b class="p">♥ ${Math.round(S.aff)}</b></div></div>
+        <div class="wc"><small>포지션 평가손익</small><b class="${pl >= 0 ? "up" : "dn"}">${hasPos() ? sgnWon(pl) : "없음"}</b></div><div class="wc"><small>갤 명성</small><b>${S.galFame} · ${rk[1]}</b></div><div class="wc"><small>체력 · 중독도</small><b class="p">💪 ${Math.round(S.hp)} · 🎰 ${S.addict}</b></div></div>
       <div class="wk">${lastK.map(([r, m]) => `<div data-a="room" data-v="${r}" data-bot="ph-k-${r}"><span>${KROOM[r].ic}</span><b>${KROOM[r].n}</b> ${esc(m.x)}${S.kun[r] ? `<i>${S.kun[r]}</i>` : ""}</div>`).join("")}</div>
       ${best ? `<div class="wb" data-a="gpost" data-v="${best.id}"><small>🔥 주갤 개념글</small> ${esc(best.title)} <span>↑${best.up}</span></div>` : ""}</div>
     <div class="happs">${APPS.slice(1).map(([k, ic, l], i) => `<button class="happ a-${k}" data-a="app" data-v="${k}"><span class="ic">${ic}</span><b>${l}</b><span class="db">${dockBadge(k)}</span><small>${i + 1}</small></button>`).join("")}
-      <div class="hnote">폰은 슬롯을 안 씀 · 주식은 오전·오후만 · 숫자키 1~4 = 앱 · Esc = 닫기</div></div></div>`;
+      <div class="hnote">폰은 칸을 안 씀 · 주식은 아침·점심만 · 숫자키 1~4 = 앱 · Esc = 닫기</div></div></div>`;
 }
 /* ---------- 카톡 ---------- */
 function phKakao() {
@@ -49,7 +49,7 @@ function phKakao() {
     const me = m.w === "me";
     return sep + `<div class="kb ${me ? "me" : "them " + m.w}">${me ? "" : `<span class="av">${R.ic}</span>`}<div class="kx">${me ? "" : `<small>${R.n}</small>`}<div class="b">${esc(m.x)}</div></div><span class="t">${m.t}</span></div>`;
   }).join("");
-  const reply = r === "m" && S.kq ? `<div class="kreply"><span>답장 고르기 <small>(2칸 안에 안 하면 읽씹 처리 · 호감도)</small></span>${S.kq.opts.map((o, i) => `<button data-a="kr" data-v="${i}" data-bot="kr-${i}"><kbd>${"QWE"[i]}</kbd> ${esc(o.l)}</button>`).join("")}</div>`
+  const reply = r === "m" && S.kq ? `<div class="kreply"><span>답장 고르기 <small>(2칸 안에 안 하면 읽씹 처리 · 멘탈)</small></span>${S.kq.opts.map((o, i) => `<button data-a="kr" data-v="${i}" data-bot="kr-${i}"><kbd>${"QWE"[i]}</kbd> ${esc(o.l)}</button>`).join("")}</div>`
     : `<div class="kreply off">${r === "m" ? "보낼 말이 없다. (미래가 먼저 말 걸면 여기서 답장)" : r === "kim" ? "답장 기능이 차단된 채팅방입니다 (김사장 측 설정)" : "형한테 답장해 봤자 '형 나 믿지?'만 옴"}</div>`;
   return `<div class="kk"><div class="krooms"><div class="khd">💬 채팅 <kbd>Tab</kbd></div>${Object.keys(KROOM).map(k => { const m = S.kk[k][S.kk[k].length - 1]; return `<button class="kroom ${k === r ? "on" : ""}" data-a="room" data-v="${k}" data-bot="k-room-${k}"><span class="av">${KROOM[k].ic}</span><span class="kn"><b>${KROOM[k].n}</b><small>${m ? esc(m.x) : KROOM[k].sub}</small></span>${S.kun[k] ? `<i>${S.kun[k]}</i>` : ""}</button>`; }).join("")}
       <div class="khint">💡 형나믿지 찌라시 적중률 ${rec("형나믿지")}${S.galFame >= FAME.dm ? ` · 수학자 ${rec("수학자")}` : ` · 명성 ${FAME.dm} 되면 '수학자 정보' DM 해금`}</div></div>
@@ -93,9 +93,9 @@ function gWriter() {
 function phStock() {
   const where = PH.where, fee = q("stockFee", where), tab = PH.stab;
   const hv = q("holdVal"), pl = unreal();
-  const head = `<div class="shd"><b>🐜 개미증권 ${where === "broker" ? `<i class="tag2">창구 · 주식 수수료 ${(fee * 100).toFixed(1)}%</i>` : `<i class="tag2">앱 · 슬롯 소모 없음 · 수수료 ${(fee * 100).toFixed(1)}%</i>`}</b>
+  const head = `<div class="shd"><b>🐜 개미증권 ${where === "broker" ? `<i class="tag2">창구 · 주식 수수료 ${(fee * 100).toFixed(1)}%</i>` : `<i class="tag2">앱 · 칸 소모 없음 · 수수료 ${(fee * 100).toFixed(1)}%</i>`}</b>
     <span class="stabs"><kbd>Tab</kbd>${[["mkt", "시세"], ["detail", "종목 상세·주문"], ["rsch", "🏦 리서치"], ["acct", "내 계좌"]].map(([k, l]) => `<button class="${tab === k ? "on" : ""}" data-a="stab" data-v="${k}" data-bot="st-tab-${k}">${l}</button>`).join("")}</span>
-    <span class="ssum">현금 <b>${won(S.cash)}</b> · 평가 <b>${won(hv)}</b>${hasPos() ? ` <b class="${pl >= 0 ? "up" : "dn"}">${sgnWon(pl)}</b>` : ""} · <span class="${stockOpen() ? "up" : "dim"}">${stockOpen() ? "● 주식 장 열림" : "○ 주식 장 마감 (오전·오후만)"}</span> · 코인 24시간</span></div>`;
+    <span class="ssum">현금 <b>${won(S.cash)}</b> · 평가 <b>${won(hv)}</b>${hasPos() ? ` <b class="${pl >= 0 ? "up" : "dn"}">${sgnWon(pl)}</b>` : ""} · <span class="${stockOpen() ? "up" : "dim"}">${stockOpen() ? "● 주식 장 열림" : "○ 주식 장 마감 (아침·점심만)"}</span> · 코인 24시간</span></div>`;
   return `<div class="stk">${head}<div class="sbody">${tab === "mkt" ? stMkt() : tab === "acct" ? stAcct() : tab === "rsch" ? stRsch() : stDetail()}</div></div>`;
 }
 function stRsch() {
@@ -109,7 +109,7 @@ function posOf(k) { const h = S.hold[k]; const cs = S.cps.filter(c => c.tk === k
 function stMkt() {
   return `<div class="smkt">${TKS.map(k => { const t = TK[k], m = S.mk[k], l = m.hist[m.hist.length - 1], r = l.c / l.o - 1, lk = !tkOpen(k), po = posOf(k), d5 = m.hist.length > 5 ? m.p / m.hist[m.hist.length - 5].o - 1 : 0;
     return `<button class="sc ${lk ? "lk" : ""}" data-a="tsel" data-v="${k}" data-bot="t-sel-${k}"><div class="sct"><span class="ic">${t.ic}</span><b>${t.name}</b><span class="ty ${t.type}">${t.type === "coin" ? "코인" : "주식"}</span>${po != null ? `<span class="po ${po >= 0 ? "up" : "dn"}">보유 ${sgnMan(po)}</span>` : ""}</div>
-      ${lk ? `<div class="sclk">🔒 '밈코인 감별사' 증강 필요</div>` : `<div class="scp"><span>${fmtP(m.p)}</span><b class="${r >= 0 ? "up" : "dn"}">${pct(r)}</b></div><div class="scs">${spark(m.hist, 380, 92)}</div><div class="scd">${esc(t.d)} · 4칸 ${pct(d5)}</div>`}</button>`; }).join("")}
+      ${lk ? `<div class="sclk">🔒 유품 '수상한 강아지 목줄' 필요</div>` : `<div class="scp"><span>${fmtP(m.p)}</span><b class="${r >= 0 ? "up" : "dn"}">${pct(r)}</b></div><div class="scs">${spark(m.hist, 380, 92)}</div><div class="scd">${esc(t.d)} · 4칸 ${pct(d5)}</div>`}</button>`; }).join("")}
     <div class="sintel"><b>📡 받은 정보 (진행 중) <small>· 전체 기록은 📰 뉴스 → 📒 정보 수첩</small></b>${tipIntel()}</div></div>`;
 }
 function stDetail() {
@@ -132,9 +132,9 @@ function stDetail() {
       <div class="qrow">${[[.1, "10%"], [.25, "25%"], [.5, "50%"], [1, "최대"]].map(([q, l]) => `<button class="btn sm" data-a="tq" data-v="${q}" data-bot="t-q${Math.round(q * 100)}">${l}</button>`).join("")}</div>
       <div class="seg levs">${levs.map(l => `<button data-a="tlev" data-v="${l}" data-bot="t-lev${l}" class="${l === lev ? "on" : ""}">${l}x</button>`).join("")}</div>
       <div class="seg"><button class="long ${dir > 0 ? "on" : ""}" data-a="tdir" data-v="1" data-bot="t-long">롱 📈</button><button class="short ${dir < 0 ? "on" : ""}" data-a="tdir" data-v="-1" data-bot="t-short">숏 📉</button></div>
-      <div class="onote">청산가 ≈ <b>${fmtP(estLiq)}</b> (${(90 / lev).toFixed(1)}% 역행)${lev > 1 ? `<br><b style="color:#ff4d5e">💀 이번 칸 청산 확률 ≈ ${Math.round(q("liqOdds", lev * allin, t.vol * (S.slot === 3 && has("whale") ? 2 : 1)) * 100)}%</b> (칸 중간 꼬리에도 청산)` : ""}<br>수수료 ${won(amt * lev * RU.COIN_FEE)}${lev > 1 ? ` · 펀딩비 칸당 ${won(amt * lev * RU.FUNDING)}` : ""}${has("kimp") && dir > 0 && S.kimpDay !== absDay() ? " · 🌶️김프 +5% (오늘 첫 롱)" : ""}${has("allin") ? " · 🎲95%↑ 넣으면 ×1.5" : ""}</div>
+      <div class="onote">청산가 ≈ <b>${fmtP(estLiq)}</b> (${(90 / lev).toFixed(1)}% 역행)${lev > 1 ? `<br><b style="color:#ff4d5e">💀 이번 칸 청산 확률 ≈ ${Math.round(q("liqOdds", lev * allin, t.vol * (isEve() && has("whale") ? 2 : 1)) * 100)}%</b> (칸 중간 꼬리에도 청산)` : ""}<br>수수료 ${won(amt * lev * RU.COIN_FEE)}${lev > 1 ? ` · 펀딩비 칸당 ${won(amt * lev * RU.FUNDING)}` : ""}${has("kimp") && dir > 0 && S.kimpDay !== absDay() ? " · 🌶️김프 +5% (오늘 첫 롱)" : ""}${has("allin") ? " · 🎲95%↑ 넣으면 ×1.5" : ""}</div>
       <button class="btn pri2" data-a="topen" data-bot="t-open" ${amt < 10000 ? "disabled" : ""}>${dir > 0 ? "롱" : "숏"} ${lev}x 진입 <kbd>B</kbd></button>`
-    : `<div class="oh">📊 주식 주문 ${stockOpen() ? `<small>장 열림 · 수수료 ${(fee * 100).toFixed(1)}%</small>` : `<small class="dn">장 마감 (오전·오후만)</small>`}</div>
+    : `<div class="oh">📊 주식 주문 ${stockOpen() ? `<small>장 열림 · 수수료 ${(fee * 100).toFixed(1)}%</small>` : `<small class="dn">장 마감 (아침·점심만)</small>`}</div>
       <div class="oamt"><span id="tAmtV">${won(amt)}</span><small>매수 금액</small></div>
       <input type="range" id="tAmt" min="0" max="${maxAmt}" step="10000" value="${amt}" ${maxAmt < 10000 || !stockOpen() ? "disabled" : ""}>
       <div class="qrow">${[[.1, "10%"], [.25, "25%"], [.5, "50%"], [1, "전부"]].map(([q, l]) => `<button class="btn sm" data-a="tq" data-v="${q}" data-bot="t-q${Math.round(q * 100)}" ${stockOpen() ? "" : "disabled"}>${l}</button>`).join("")}</div>
@@ -267,7 +267,7 @@ function drawTk(cv, tk) {
   });
   lines.forEach(L => { ctx.strokeStyle = L.c; ctx.lineWidth = 3; ctx.setLineDash([12, 8]); ctx.beginPath(); ctx.moveTo(padL, Y(L.y)); ctx.lineTo(Wd - padR, Y(L.y)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = L.c; ctx.font = "bold 24px 'Noto Sans KR',sans-serif"; ctx.fillText(L.l, padL + 8, Y(L.y) - 8); });
   const lc = m.p; ctx.fillStyle = "#e8eaf2"; ctx.fillRect(Wd - padR + 2, Y(lc) - 18, padR - 4, 36); ctx.fillStyle = "#111"; ctx.font = "bold 22px ui-monospace,Menlo,monospace"; ctx.fillText(fmtP(lc), Wd - padR + 8, Y(lc) + 8);
-  ctx.fillStyle = "#4a5070"; ctx.font = "18px 'Noto Sans KR',sans-serif"; ctx.fillText("1봉 = 1슬롯", padL + 6, Ht - 6);
+  ctx.fillStyle = "#4a5070"; ctx.font = "18px 'Noto Sans KR',sans-serif"; ctx.fillText("1봉 = 1칸", padL + 6, Ht - 6);
 }
 /* ---------- 정보 카드 · 정보 수첩 (v3.2 info.js 의 화면 부분) ---------- */
 const srcOf = t => q("srcOf", t), resMark = r => q("resMark", r), whenLabel = Tr => q("whenLabel", Tr), activeTips = tk => q("activeTips", tk), TIER_NM = DATA.TIER_NM, SRC = DATA.SRC;

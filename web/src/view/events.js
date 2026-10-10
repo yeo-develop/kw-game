@@ -1,7 +1,7 @@
 /* ================= view/events.js — sim 이벤트 재생기 =================
    이벤트 하나씩 순서대로: e.h(그 시점 HUD 스냅샷)를 HUD 에 반영하고 연출한다. 대사(say)·모달은 끝날 때까지 기다림.
    casino·race 처럼 애니메이션이 있는 이벤트는 HUD 를 연출 뒤에 반영(돈이 결과 나올 때 바뀌게). */
-const LATE_HUD = new Set(["casino", "race"]);
+const LATE_HUD = new Set(["casino", "race", "gacha"]);
 const WHO = { m: "미래", me: "나", kim: "김사장", nar: null };
 let playing = 0;
 async function playEvents(evs) {
@@ -34,7 +34,15 @@ async function playOne(e) {
       else if (e.k === "crack") fxCrack(e.amt);
       else if (e.k === "big") bigFx(e.text, e.kind, e.small);
       return;
-    case "aff": fxAff(e.d, e.why); return;
+    case "hp": fxHp(e.d, e.why); return;
+    case "addict": fxAddict(e.d, e.v); return;
+    case "addictEv": if (e.k === "secret") { if (e.amt < 0) fxCrack(e.amt); else fxFlex(e.amt); } return;
+    case "relic": if (e.how !== "pick") relicGot(e.id, e.how); return;
+    case "gacha": await gachaShow(e); return;
+    case "impulse": await impulseFx(e); return;
+    case "faint": await faintFx(); return;
+    case "faintSlot": floatTxt("😵 기절 중… (칸이 그냥 지나감)", "#ff9aa5", 700, 240); await wait(500); return;
+    case "continued": return;
     case "ment": fxMent(e.m); return;
     case "cash": fxCash(e.d); return;
     case "debt": fxDebt(e.d); return;
@@ -83,3 +91,20 @@ async function runScene(id) {
   }
 }
 const RULES_HTML = DATA.RULES_TEXT.map(x => `<div>${x}</div>`).join("");
+/* 기절: 화면 암전 + 쓰러짐 */
+async function faintFx() {
+  closePnl(); hideSide(); hideMap(); hideDlg(); setChar(true, "cry");
+  fxAdd(`<div class="faintfx"></div>`, 2400);
+  bigFx("😵 기절", "dn", "체력 0 · 오늘 남은 칸 + 내일 하루 날아감");
+  const c = $("#char"); c.classList.remove("faintc"); void c.offsetWidth; c.classList.add("faintc");
+  await wait(1800);
+  c.classList.remove("faintc");
+}
+/* 돌발 매수: 미래 폰 화면에 '풀매수' 버튼이 깜빡 */
+async function impulseFx(e) {
+  closePnl(); hideSide(); hideMap(); hideDlg(); setChar(true, "menhera");
+  const t = TK[e.tk];
+  fxAdd(`<div class="impfx"><div class="ip"><div class="it">${t.ic} ${esc(t.name)}</div><div class="ia">${won(e.amt)}</div><div class="ib">풀매수 💥</div></div></div>`, 2600);
+  const pb = $("#phoneBtn"); if (pb) { pb.classList.remove("buzz"); void pb.offsetWidth; pb.classList.add("buzz"); }
+  await wait(900);
+}

@@ -1,17 +1,23 @@
 {
  "RULES": {
-  "DEBT0": 30000000, "CASH0": 300000, "RATE": 0.05, "DEBT_CAP": 50000000, "MONTH_DAYS": 7, "MAX_MONTH": 3, "SLOTS": 4,
+  "DEBT0": 30000000, "CASH0": 300000, "RATE": 0.05, "DEBT_CAP": 50000000, "MONTH_DAYS": 7, "SLOTS": 3, "STOCK_SLOTS": [0, 1],
   "LOAN_CAP": [36000000, 43000000, 50000000],
   "LOAN_AMTS": [500000, 1000000, 3000000], "LOAN_FEE": 0.1, "LOAN_FEE_BRO": 0.05,
-  "LIMIT_MULT": [1, 2, 4],
-  "FEE_APP": 0.005, "FEE_BROKER": 0.001, "COIN_FEE": 0.001, "FUNDING": 0.002, "INTRA": 1.6,
+  "FEE_APP": 0.005, "FEE_BROKER": 0.001, "COIN_FEE": 0.001, "FUNDING": 0.0027, "INTRA": 1.6,
+  "LIQ_LOSS": [0.7, 0.9],
   "ENCOUNTER_P": 0.25, "RSCH_FEE": 50000, "RSCH_PAID_MAX": 2, "WRITE_MAX": 2,
   "SCRATCH_PRICE": 5000, "SCRATCH_MAX": 5, "LOTTO_PRICE": 10000, "LOTTO_MAX": 5,
-  "PC_COST": { "game": 10000, "ramen": 6000 }
+  "PC_COST": { "game": 10000, "ramen": 6000 },
+  "HP_MAX": 100, "HP_SLEEP": 50, "HP_REST": 30, "HP_REST_EVE": 45, "HP_LOW": 30, "HP_FAINT_BACK": 70, "HP_FAINT_COST": 100000,
+  "HP_COST": { "casino": 10, "race": 8, "scratch": 4, "lotto": 4, "tip": 6, "trade": 4, "bank": 3, "shop": 4, "relic": 4, "pcgame": 6, "pcramen": -12 },
+  "ADD_GAIN": { "casino": 16, "race": 16, "scratch": 2, "lotto": 2, "coin": 8, "kim": 10, "bigwin": 18, "bigloss": 16, "secret": 3 },
+  "ADD_DECAY": 3, "ADD_SLOT_DECAY": 3, "ADD_STICKY": 101, "ADD_NAG": 30, "ADD_SECRET": 60, "ADD_TEMPT": 80, "ADD_WITHDRAW": 8, "ADD_COIN_LEV": 25,
+  "IMPULSE_P": 0.4, "IMPULSE_CASH": 0.9,
+  "GACHA_PRICE": 150000, "GACHA_JUNK": 0.4, "RELIC_PRICE": { "1": 500000, "2": 1000000, "3": 2000000 }, "RELIC_TIER_W": [0.6, 0.3, 0.1]
  },
- "SLOT_NAME": ["아침", "오전", "오후", "저녁"],
- "SLOT_IC": ["🌅", "☀️", "🌤️", "🌙"],
- "SLOT_CLOCK": ["08:10", "10:40", "15:20", "21:30"],
+ "SLOT_NAME": ["아침", "점심", "저녁"],
+ "SLOT_IC": ["🌅", "☀️", "🌙"],
+ "SLOT_CLOCK": ["08:10", "13:00", "21:30"],
  "CAS_TITLE": { "oddeven": "🎲 홀짝", "card": "🃏 하이로우 카드", "slot": "🎰 슬롯머신", "ladder": "🪜 사다리" },
  "SCRATCH_SYM": ["👑", "💎", "🍀", "💩", "🥔", "🧻", "📉"]
 }

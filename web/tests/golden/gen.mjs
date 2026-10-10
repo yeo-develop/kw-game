@@ -23,7 +23,7 @@ export function expectOf(S, nev) {
   return { hash: SIM.stateHash(S), events: nev, end: S.ending || "", month: S.month, day: S.day, slot: S.slot, cash: S.cash, debt: S.debt, galFame: S.galFame, augs: S.augs.slice(), rng: S.rng >>> 0, fx: S.fx >>> 0, pending: S.pending ? S.pending.t : "" };
 }
 const specs = [];
-for (const strat of ["work", "invest", "gamble", "random"]) for (const seed of [11, 22, 33, 1201]) specs.push({ name: `${strat}_${seed}`, strat, seed });
+for (const strat of ["steady", "work", "invest", "gamble", "random"]) for (const seed of [11, 22, 33, 1201]) specs.push({ name: `${strat}_${seed}`, strat, seed });
 for (const [seed, k] of [[7, 20], [7, 60], [42, 150], [42, 300]]) specs.push({ name: `random_${seed}_first${k}`, strat: "random", seed, cut: k });
 let n = 0;
 for (const sp of specs) {

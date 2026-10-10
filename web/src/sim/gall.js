@@ -5,7 +5,7 @@ import { T, fill, won, sgnWon, man, sgnMan, pct, conv } from "./fmt.js";
 import { roundHalfUp } from "./num.js";
 import { TKS, STK, Tnow, absDay, tkOpen, cpnl, mental, rate, interestDue, todayPnl, todayLiq, wroteToday } from "./state.js";
 import { rollTip, tipAnnounce, whenLabel, srcRec } from "./tips.js";
-import { aff, stress, fame, toast, pushF, pushKR } from "./effects.js";
+import { stress, fame, toast, pushF, pushKR } from "./effects.js";
 import { ANON, HY, MATH, KIM_OFF, ME_AU } from "./ids.js";
 
 export const postById = id => st().posts.find(p => p.id === id);
@@ -91,7 +91,7 @@ export function draft(k) {
   switch (k) {
     case "gain": { const big = pnl >= 1e6, ok = pnl >= 50000; return { ok, big, tag: T("tag.proof"), title: T(ok ? (big ? "gw.gain.tBig" : "gw.gain.tOk") : "gw.gain.tNo", base), body: T("gw.gain.b", base), why: T(ok ? (big ? "gw.gain.wBig" : "gw.gain.wOk") : "gw.gain.wNo") }; }
     case "loss": { const ok = pnl <= -50000 || todayLiq(); return { ok, tag: T("tag.proof"), title: T(ok ? "gw.loss.tOk" : "gw.loss.tNo", base), body: (todayLiq() ? T("gw.loss.liq") : "") + T("gw.loss.b", Object.assign({}, base, { c: pnl ? conv(pnl) : T("zeroWon") })), why: T(ok ? "gw.loss.wOk" : "gw.loss.wNo") }; }
-    case "gf": { const it = D.ITEMS.find(x => x.id === S.outfit); return { ok: true, tag: T("tag.brag"), title: T("gw.gf.t"), body: T("gw.gf.b", { aff: roundHalfUp(S.aff), o: it ? T("gw.gf.wear", { n: it.name }) : T("gw.gf.hoodie"), r: decor > 0 ? T("gw.gf.decor", { n: decor }) : T("gw.gf.jail"), day: absDay() }), why: T("gw.gf.w") }; }
+    case "gf": { const it = D.ITEMS.find(x => x.id === S.outfit); return { ok: true, tag: T("tag.brag"), title: T("gw.gf.t"), body: T("gw.gf.b", { hp: roundHalfUp(S.hp), o: it ? T("gw.gf.wear", { n: it.name }) : T("gw.gf.hoodie"), r: decor > 0 ? T("gw.gf.decor", { n: decor }) : T("gw.gf.jail"), day: absDay() }), why: T("gw.gf.w") }; }
     case "water": { const w = waterTarget(); return { ok: !!w, tk: w && w.tk, tag: T("tag.q"), title: w ? T("gw.water.t", { n: D.TK[w.tk].name, p: pct(w.r) }) : T("gw.water.tNo"), body: w ? T("gw.water.b", { p: pct(w.r), hold: base.hold }) : T("gw.water.bNo"), why: T(w ? "gw.water.w" : "gw.water.wNo") }; }
     case "kim": return { ok: true, tag: T("tag.sue"), title: T("gw.kim.t", { r: roundHalfUp(rate() * 100) }), body: T("gw.kim.b", { debt: won(S.debt), due: won(interestDue()) }), why: T("gw.kim.w") };
   }
@@ -115,7 +115,7 @@ export function settleMine(p) {
   if (!p.ok) { up = 2 + Math.floor(rnd() * 6); dn = 60 + Math.floor(rnd() * 60); fm = p.wk === "water" ? 0 : -3; cmk = p.wk === "water" ? "water" : "fake"; }
   else if (p.wk === "gain") { if (p.big) { up = Math.min(420, 45 + pnl / 30000) * mul; cmk = "big"; } else up = Math.min(60, 8 + pnl / 20000) * mul; }
   else if (p.wk === "loss") up = Math.min(450, 40 + Math.abs(pnl) / 20000) * mul;
-  else if (p.wk === "gf") up = (10 + S.aff * 0.6 + (Object.keys(S.props).length + Object.keys(S.owned).length - 1) * 8) * mul;
+  else if (p.wk === "gf") up = (10 + (100 - S.stress) * 0.4 + S.hp * 0.2 + (Object.keys(S.props).length + Object.keys(S.owned).length - 1) * 8) * mul;
   else if (p.wk === "water") up = (3 + rnd() * 14) * mul;
   else if (p.wk === "kim") up = (40 + rnd() * 50) * mul;
   up = roundHalfUp(up);
@@ -151,7 +151,7 @@ export function kqExpire() {
   const S = st();
   if (S.kq && Tnow() - S.kq.T >= 2) {
     S.kq = null; pushKR("m", "m", fpick(D.STR["kq.ignored"]));
-    S.aff = Math.max(0, Math.min(100, S.aff - 2));
+    stress(3);
   }
 }
 export function kqReply(i) {
@@ -159,7 +159,7 @@ export function kqReply(i) {
   if (!S.kq) return;
   const o = S.kq.opts[i], q = D.KQ[S.kq.i]; S.kq = null;
   pushKR("m", "me", o.l);
-  if (o.ok) { pushKR("m", "m", q.good); aff(3); stress(-5); } else { pushKR("m", "m", q.bad); aff(-2); stress(2); }
+  if (o.ok) { pushKR("m", "m", q.good); stress(-6); } else { pushKR("m", "m", q.bad); stress(3); }
 }
 export function hyMaybe() {
   const S = st(), r = rnd();

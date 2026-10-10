@@ -50,9 +50,19 @@ button{font-family:inherit;color:inherit}
 #hDue .v{font-family:var(--hfont);font-weight:400;font-size:28px;color:var(--gold)}
 #hDue.warn{border-color:#ff4d5e;animation:menpulse 1.2s infinite}#hDue.warn .v{color:#ff6b7a}
 #hDue.ok .v{color:var(--green);font-size:22px;font-family:inherit;font-weight:900}
-#hAff{flex-direction:row;align-items:center;gap:8px;padding-right:8px}
-#hAff .l{writing-mode:horizontal-tb}
-#hAff .v{color:var(--pink);font-family:var(--hfont);font-weight:400;font-size:30px}
+#hHp{width:250px}
+#hHp .v{display:flex;align-items:center;gap:10px}
+.hpbar{flex:1;height:18px;border-radius:9px;background:#2a2e40;overflow:hidden;border:1px solid #3a4058}
+.hpbar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#3ecf8e,#7ee0a8);transition:width .5s}
+#hHp.mid .hpbar i{background:linear-gradient(90deg,#e0b23e,#ffd166)}
+#hHp.low .hpbar i,#hHp.out .hpbar i{background:linear-gradient(90deg,#d9363e,#ff6b7a)}
+#hHp.low,#hHp.out{border-color:#d9363e;animation:menpulse 1.2s infinite}
+#hHp .hpn{font-size:24px;min-width:44px;text-align:right}
+#hHp.faint{opacity:.6}
+#hHp.ping,#hHp.ping .hpbar{animation:hpping .5s}
+@keyframes hpping{0%{transform:scale(1)}40%{transform:scale(1.06)}100%{transform:scale(1)}}
+#hMent .l i.add{font-style:normal;font-weight:900;margin-left:4px;padding:0 6px;border-radius:8px}
+#hMent .l i.a1{color:#ffd166}#hMent .l i.a2{color:#fff;background:#b3261e}#hMent .l i.a3{color:#fff;background:#b3261e;animation:menpulse .7s infinite}
 #affCv{width:130px;height:48px;display:block}
 #hMent .v{font-size:21px}
 #hMent.calm .v{color:var(--green)}#hMent.anx .v{color:var(--gold)}
@@ -710,3 +720,75 @@ kbd{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:.72e
 .shd{gap:14px}.shd>b{font-size:26px}
 .ssum{flex:1;min-width:0;text-align:right;font-size:15px;overflow:hidden;text-overflow:ellipsis}
 #main.kimOn[data-mode=home] #choices{left:1260px;width:600px}
+
+/* ================= v3.3 2단계 ================= */
+/* 경마 결승: 1등 말 흔들림 + 빛남 */
+.hz.fin1 .ho{animation:hzshake .16s 6 linear;filter:drop-shadow(0 0 10px #ffd166) drop-shadow(0 0 22px #ffd166)}
+.hz.fin1 .hn{box-shadow:0 0 16px #ffd166}
+.hz.fin1.mine .ho{filter:drop-shadow(0 0 12px #7ee0a8) drop-shadow(0 0 26px #7ee0a8)}
+.lane.winLane{background:linear-gradient(90deg,transparent,#ffd16655 70%,#ffd16699);transition:background .4s}
+@keyframes hzshake{0%{transform:scaleX(-1) translate(0,0) rotate(0)}25%{transform:scaleX(-1) translate(-3px,-3px) rotate(-6deg)}50%{transform:scaleX(-1) translate(3px,1px) rotate(5deg)}75%{transform:scaleX(-1) translate(-2px,2px) rotate(-3deg)}100%{transform:scaleX(-1) translate(0,0) rotate(0)}}
+/* 엔딩 스코어보드 */
+.end .card2{max-height:1000px;overflow:auto}
+.end .lead{font-size:22px;margin:10px 0 12px}
+.end h1{font-size:62px}
+.sbh{font-size:22px;margin:4px 0 8px;color:#ffd166}
+.sboard{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.sboard div{background:#1b1e2b;border-radius:12px;padding:7px 12px;font-size:14px;color:var(--mute)}
+.sboard b{display:block;font-size:20px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.end .echar2{position:absolute;right:400px;bottom:0;width:360px;height:540px;opacity:.95;transform:scaleX(-1)}
+/* 기절 */
+.faintfx{position:absolute;inset:0;background:radial-gradient(circle,transparent 20%,#000 75%);animation:faintIn 2.4s forwards;z-index:5}
+@keyframes faintIn{0%{opacity:0}40%{opacity:1}100%{opacity:.85}}
+#char.faintc{animation:faintChar 1.6s forwards}
+@keyframes faintChar{0%{transform:rotate(0)}60%{transform:rotate(-8deg) translateY(30px)}100%{transform:rotate(-80deg) translate(-120px,260px)}}
+/* 돌발 매수 */
+.impfx{position:absolute;left:0;top:0;width:1920px;height:1080px;display:flex;align-items:center;justify-content:center;z-index:6;pointer-events:none}
+.impfx .ip{width:420px;height:640px;border-radius:48px;background:#0c0e18;border:8px solid #444b66;box-shadow:0 0 80px #ff4d5e88;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;animation:impShake .12s 14 linear}
+.impfx .it{font-size:44px;font-weight:900;color:#fff}
+.impfx .ia{font-size:36px;color:#ffd166;font-weight:900}
+.impfx .ib{font-size:54px;font-weight:900;color:#fff;background:#ff4d5e;border-radius:24px;padding:16px 40px;animation:menpulse .4s infinite}
+@keyframes impShake{0%{transform:translate(0,0) rotate(0)}25%{transform:translate(-6px,2px) rotate(-2deg)}50%{transform:translate(5px,-3px) rotate(2deg)}75%{transform:translate(-3px,4px) rotate(-1deg)}100%{transform:translate(0,0)}}
+/* 유품 상점 */
+.rshop{display:flex;gap:26px;margin-top:10px}
+.rgacha{width:420px;flex:none;background:#1a1d29;border-radius:22px;padding:20px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.rgacha .cap{width:200px;height:200px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff8,transparent 40%),linear-gradient(180deg,#ff5fa2 50%,#f3f4f7 50%);border:6px solid #2a2e40;display:flex;align-items:center;justify-content:center;font-size:96px;box-shadow:0 10px 30px #0008}
+.rgacha .cap span{filter:drop-shadow(0 4px 8px #0008)}
+.rgacha .cap.spin{animation:capSpin .25s 4 linear}
+.rgacha .cap.open{background:radial-gradient(circle,#fff3,#1a1d29 70%);border-color:#ffd166;animation:capPop .4s}
+.rgacha .cap.open.t2{border-color:#ffd166;box-shadow:0 0 40px #ffd166}
+.rgacha .cap.open.t3{border-color:#ff8fd8;box-shadow:0 0 60px #ff8fd8,0 0 120px #b98cff}
+.rgacha .cap.open.junk{border-color:#555;filter:grayscale(.6)}
+@keyframes capSpin{0%{transform:rotate(0)}25%{transform:rotate(-14deg)}75%{transform:rotate(14deg)}100%{transform:rotate(0)}}
+@keyframes capPop{0%{transform:scale(.6)}70%{transform:scale(1.12)}100%{transform:scale(1)}}
+.rgi{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.rgi b{font-size:28px}.rgi small{font-size:16px;color:var(--mute);line-height:1.4}
+.rgi .res{font-size:24px;min-height:34px;margin:0}
+.roffer{flex:1}.roffer h3{margin:0 0 10px;font-size:22px;color:#ffd166}
+.rcards{display:flex;gap:16px}
+.rbuy{background:none;border:0;padding:0;cursor:pointer;color:inherit;font:inherit}
+.rbuy:disabled{opacity:.45;cursor:default}
+.rcard{width:290px;height:500px;border-radius:24px;padding:20px 18px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative}
+.rcard.t1{background:linear-gradient(160deg,#4a5368,#1d222e);border:3px solid #d9e0ec}
+.rcard.t2{background:linear-gradient(160deg,#6a5214,#241b06);border:3px solid #ffd166}
+.rcard.t3{background:linear-gradient(160deg,#47205e,#141a3a);border:3px solid #ff8fd8;box-shadow:0 0 30px #ff8fd866}
+.rcard .tier{font-size:16px;font-weight:900;padding:3px 12px;border-radius:999px;background:#0006}
+.rcard .aic{font-size:84px;margin:12px 0 4px}
+.rcard b{font-size:26px;line-height:1.2}
+.rcard .ad{font-size:17px;line-height:1.45;margin-top:10px;color:#f0f2f8;font-weight:700;word-break:keep-all}
+.rcard .fl{margin-top:auto;font-size:15px;color:#c9cee0;font-style:italic;word-break:keep-all}
+.rcard .pr{margin-top:10px;font-size:24px;font-weight:900;color:#7ee0a8}
+.rempty{font-size:22px;color:var(--mute);padding:40px}
+.rbuy:not(:disabled):hover .rcard{transform:translateY(-8px);transition:transform .15s}
+/* 피하기 미니게임 */
+.dodge{position:relative;margin:10px auto 0;background:linear-gradient(180deg,#2b2f3d,#1b1d22 80%,#3a3326 80%);border-radius:18px;border:3px solid #454c69;overflow:hidden;touch-action:none}
+.dgp{position:absolute;bottom:22px;left:0;width:90px;height:90px;font-size:76px;line-height:90px;text-align:center;filter:drop-shadow(0 6px 6px #0008)}
+.dgp.mv{animation:dgbob .2s infinite}
+@keyframes dgbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.dgo{position:absolute;left:0;top:0;width:70px;height:70px;font-size:60px;line-height:70px;text-align:center;will-change:transform}
+.dgo.k1{font-size:66px;filter:drop-shadow(0 0 8px #ff4d5e)}
+.dgo.hit{opacity:.3}
+.dglives{position:absolute;right:14px;top:10px;font-size:30px}
+.dgmsg{position:absolute;left:16px;top:12px;font-size:22px;color:#ffd166;font-weight:900}
+.dodge.shake{animation:shk .3s linear 1}
+.dgb{font-size:30px;padding:18px 50px;touch-action:none;user-select:none}

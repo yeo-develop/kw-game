@@ -1,4 +1,4 @@
-/* ================= view/panels2.js — 복권·빚또·은행 상환·상점·사채·증강 고르기 화면 (v3.2 화면 그대로) ================= */
+/* ================= view/panels2.js — 복권·빚또·은행 상환·상점·사채·유품(고르기·상점 뽑기)·아침 결산 화면 ================= */
 
 /* ---------- 즉석 복권 ---------- */
 async function scratchPrompt(P) {
@@ -46,7 +46,7 @@ function lottoPrompt(P) {
   const PRICE = RU.LOTTO_PRICE, MAXD = RU.LOTTO_MAX;
   let C = PNL && PNL.k === "lotto" ? PNL : null;
   if (!C) {
-    const p = panel(`<h2>🔮 빚또 4/20</h2><div class="sub">1~20 중 4개. 한 장 ${won(PRICE)}, 하루 최대 ${MAXD}장, <b>오늘 저녁 끝날 때 추첨</b>. 4개 = 3,000만 · 3개 = 20만 · 2개 = 2천원</div>
+    const p = panel(`<h2>🔮 빚또 4/20</h2><div class="sub">1~20 중 4개. 한 장 ${won(PRICE)}, 하루 최대 ${MAXD}장, <b>오늘 저녁 끝날 때 추첨</b>. 4개 = 4,000만 · 3개 = 10만 · 2개 = 2천원</div>
     <div class="ltix" id="ltix"></div>
     <div class="row" style="justify-content:space-between;margin-top:16px"><span id="ltInfo" style="font-size:20px;color:var(--mute)"></span><span class="row"><button class="btn" data-bot="lt-1" id="lt1">자동 1장</button><button class="btn" data-bot="lt-5" id="lt5">남은 만큼 자동</button><button class="btn pri" data-bot="lt-done" id="ltDone">됐어 (Enter)</button></span></div>`);
     hideDlg();
@@ -123,18 +123,18 @@ function loanPrompt(P) {
   });
 }
 
-/* ---------- 증강 고르기 ---------- */
+/* ---------- 유품 고르기 (시작: 부모님 유품 상자) ---------- */
 function augPrompt(P) {
   const el = $("#augPick");
   hideSide(); hideDlg();
   const list = P.offer.map(id => AUG[id]);
-  el.innerHTML = `<div class="aph"><h2><span class="e">🎴</span> 증강 선택</h2><div class="sub">${esc(P.reason)} · 3개 중 1개 · 게임 끝까지 유지 · 숫자키 1~3</div></div>
+  el.innerHTML = `<div class="aph"><h2><span class="e">📦</span> 부모님 유품</h2><div class="sub">${esc(P.reason)} · 3개 중 1개 · 게임 끝까지 유지 · 숫자키 1~3 · 나머지는 상점에서 뽑기/구매</div></div>
         <div class="acards">${list.map((a, i) => `<button class="acard t${a.tier}" data-pick="${i}" data-bot="aug${i}" data-aid="${a.id}" style="animation-delay:${FAST ? 0 : i * 0.12}s"><span class="k">${i + 1}</span><span class="tier">${TIER[a.tier]}</span><span class="cat">${a.cat}</span><span class="aic">${a.ic}</span><b>${esc(a.name)}</b><span class="ad">${esc(a.d)}</span><span class="fl">"${esc(a.fl)}"</span></button>`).join("")}</div>
-        <div class="arow"><button class="btn" data-bot="aug-reroll" id="augRe" ${P.rerolled ? "disabled" : ""}>🔄 리롤 (1회)</button><span class="owned">${S.augs.length ? "보유: " + S.augs.map(x => AUG[x].ic + " " + AUG[x].name).join(" · ") : ""}</span></div>`;
+        <div class="arow"><button class="btn" data-bot="aug-reroll" id="augRe" ${P.rerolled ? "disabled" : ""}>🔄 상자 더 뒤지기 (1회)</button><span class="owned">${S.augs.length ? "보유: " + S.augs.map(x => AUG[x].ic + " " + AUG[x].name).join(" · ") : ""}</span></div>`;
   el.classList.add("on");
   const pr = new Promise(res => {
-    el.querySelectorAll(".acard").forEach(b => b.onclick = e => { e.stopPropagation(); el.classList.remove("on"); el.innerHTML = ""; res({ t: "aug", i: +b.dataset.pick }); });
-    el.querySelector("#augRe").onclick = e => { e.stopPropagation(); if (P.rerolled) return; res({ t: "augReroll" }); };
+    el.querySelectorAll(".acard").forEach(b => b.onclick = e => { e.stopPropagation(); el.classList.remove("on"); el.innerHTML = ""; res({ t: "pickRelic", i: +b.dataset.pick }); });
+    el.querySelector("#augRe").onclick = e => { e.stopPropagation(); if (P.rerolled) return; res({ t: "relicReroll" }); };
   });
   tutHook("aug");
   return pr;
@@ -146,7 +146,7 @@ async function morningShow(e) {
   const sc = $("#screen"); sc.classList.add("on");
   const dd = e.dd, Y = e.Y;
   sc.innerHTML = `<div class="recap"><h2>☀️ ${e.month}개월차 ${e.day}일째 아침</h2>
-    <div class="sub">${e.paid ? "이번 달 이자 완납 ✅" : dd > 0 ? `이자일까지 D-${dd} (7일째 저녁) · 이번 달 이자 ${won(e.due)}` : `<b style="color:var(--red)">오늘 저녁이 이자일!</b> 이자 ${won(e.due)} · 현금 ${won(e.cash)}`} · 현금 ${won(e.cash)} · 평가 ${won(e.hv)}</div>
+    <div class="sub">💪 체력 ${e.hp}${e.addict >= RU.ADD_NAG ? ` · 🎰 중독도 ${e.addict}` : ""} · ${e.paid ? "이번 달 이자 완납 ✅" : dd > 0 ? `이자일까지 D-${dd} (7일째 저녁) · 이번 달 이자 ${won(e.due)}` : `<b style="color:var(--red)">오늘 저녁이 이자일!</b> 이자 ${won(e.due)} · 현금 ${won(e.cash)}`} · 현금 ${won(e.cash)} · 평가 ${won(e.hv)}</div>
     <div class="cols"><div><h3>어제 결산</h3><div class="ylist">${Y.length ? Y.slice(-7).map(x => `<div class="li"><span>${esc(x.label || x.kind)}</span><b class="${x.amt >= 0 ? "up" : "dn"}">${sgnWon(x.amt)}</b></div>`).join("") : `<div class="li"><span>어제 기록 없음 (빚만 숨 쉬듯 존재)</span><b>0원</b></div>`}${Y.length > 7 ? `<div class="li dim"><span>외 ${Y.length - 7}건</span><b></b></div>` : ""}</div>
       <div class="net ${e.net >= 0 ? "up" : "dn"}">${sgnWon(e.net)}</div><div class="conv">= ${esc(e.netConv)}</div></div>
     <div>${e.ev || e.tod.length ? `<h3>오늘의 사건</h3><div class="ev">${e.ev ? esc(e.ev) : ""}${e.tod.map(x => `<div>${esc(x.label)} <b class="up">${sgnWon(x.amt)}</b></div>`).join("")}</div>` : ""}
@@ -156,3 +156,49 @@ async function morningShow(e) {
   await clickOnce($("#goDay"));
   sc.classList.remove("on"); sc.innerHTML = "";
 }
+
+/* ---------- 상점: 부모님 유품 · 수상한 물건 (싸게 뽑기 / 비싸게 골라 사기) ---------- */
+const relicCard = (a, extra) => `<div class="rcard t${a.tier}"><span class="tier">${TIER[a.tier]}</span><span class="aic">${a.ic}</span><b>${esc(a.name)}</b><span class="ad">${esc(a.d)}</span><span class="fl">"${esc(a.fl)}"</span>${extra || ""}</div>`;
+function relicShopPrompt(P) {
+  const offer = (S.relicOffer ? S.relicOffer.ids : []).filter(id => !has(id)), GP = RU.GACHA_PRICE;
+  let C = PNL && PNL.k === "relicShop" ? PNL : null;
+  const html = `<h2>🎁 부모님 유품 · 수상한 물건 <span class="lim2">현금 ${won(S.cash)} · 뭐라도 사면 1칸</span></h2>
+    <div class="rshop"><div class="rgacha"><div class="cap" id="cap"><span>?</span></div><div class="rgi"><b>수상한 물건 뽑기</b><small>${won(GP)} · ${Math.round(RU.GACHA_JUNK * 100)}% 확률로 쓰레기(꽝) · 당첨 등급: 수상함 60 / 골동품 30 / 가보 10</small>
+      <button class="btn pri2" id="gacha" data-bot="gacha" ${S.cash < GP ? "disabled" : ""}>뽑기 (${man(GP)}) <kbd>G</kbd></button><div class="res" id="gRes2"></div></div></div>
+    <div class="roffer"><h3>오늘의 진열장 (골라 사기 · 비쌈)</h3><div class="rcards">${offer.length ? offer.map((id, i) => { const a = AUG[id], pr = q("relicPrice", id); return `<button class="rbuy" data-id="${id}" data-bot="rb-${i}" ${S.cash < pr ? "disabled" : ""}>${relicCard(a, `<span class="pr">${won(pr)}</span>`)}</button>`; }).join("") : `<div class="rempty">오늘 진열장 비었음. 내일 또 와~</div>`}</div></div></div>
+    <div class="row" style="justify-content:space-between;margin-top:10px"><span class="gag" id="rMsg">${C && C.msg ? esc(C.msg) : "사장님: \"유품은 사연이 있어서 비싸요~ 뽑기는 사연이 없어서 싸고요^^\""}</span><button class="btn pri" id="rDone" data-bot="rdone">됐어 (Enter)</button></div>`;
+  const p = panel(html, true);
+  p.style.top = "150px"; p.style.height = "900px";
+  if (!C) hideDlg();
+  PNL = C = { k: "relicShop", p, msg: C ? C.msg : "", cap: C ? C.cap : null };
+  if (C.cap) { const cp = p.querySelector("#cap"); cp.className = C.cap[0]; cp.innerHTML = C.cap[1]; const r = p.querySelector("#gRes2"); r.className = C.cap[2]; r.textContent = C.cap[3]; }
+  return new Promise(res => {
+    p.querySelector("#gacha").onclick = e => { e.stopPropagation(); if (!e.currentTarget.disabled) res({ t: "gachaRelic" }); };
+    p.querySelectorAll(".rbuy").forEach(b => b.onclick = e => { e.stopPropagation(); if (!b.disabled) res({ t: "buyRelic", id: b.dataset.id }); });
+    p.querySelector("#rDone").onclick = e => { e.stopPropagation(); res({ t: "relicDone" }); };
+    keyHook = e => { if (e.key === "g" || e.key === "G") { const b = p.querySelector("#gacha"); if (b && !b.disabled) { keyHook = null; res({ t: "gachaRelic" }); } return true; } if (e.key === "Enter" || e.key === " ") { keyHook = null; res({ t: "relicDone" }); return true; } return false; };
+  }).then(c => { keyHook = null; return c; });
+}
+/* sim 이벤트 gacha: 캡슐 흔들 → 열림 */
+async function gachaShow(e) {
+  const C = PNL; if (!C || C.k !== "relicShop") return;
+  const cap = C.p.querySelector("#cap"), R = C.p.querySelector("#gRes2");
+  cap.className = "cap spin"; cap.innerHTML = "<span>?</span>";
+  await wait(1100);
+  if (e.id) {
+    const a = AUG[e.id];
+    cap.className = "cap open t" + a.tier; cap.innerHTML = `<span>${a.ic}</span>`;
+    R.className = "res win"; R.textContent = `${TIER[a.tier]}! ${a.name}`;
+    C.msg = `뽑음: ${a.ic} ${a.name} — ${a.d}`;
+    C.cap = [cap.className, cap.innerHTML, R.className, R.textContent];
+    if (a.tier === 3) bigFx(`${a.ic} ${a.name}`, "up", "가보급 수상한 물건");
+  } else {
+    cap.className = "cap open junk"; cap.innerHTML = "<span>🗑️</span>";
+    R.className = "res lose"; R.textContent = `꽝: ${e.text}`;
+    C.msg = `꽝: ${e.text} (15만 원짜리)`;
+    C.cap = [cap.className, cap.innerHTML, R.className, R.textContent];
+  }
+  await wait(700);
+}
+/* 상점에서 산 유품 알림 (HUD 칩 + 떠오르는 글) */
+function relicGot(id, how) { const c = $(`#augBar [data-aug="${id}"]`); if (c) { c.classList.remove("ping"); void c.offsetWidth; c.classList.add("ping"); } }

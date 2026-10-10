@@ -3,7 +3,7 @@ import { D, R, st } from "./core.js";
 import { T, man } from "./fmt.js";
 import { roundHalfUp } from "./num.js";
 import { STK, has, Tnow, absDay, stockOpen, tkOpen, cpnl } from "./state.js";
-import { augFx } from "./effects.js";
+import { augFx, addict } from "./effects.js";
 
 export const stockFee = where => has("vip") ? 0 : where === "broker" ? R().FEE_BROKER : R().FEE_APP;
 export function buyStock(tk, amt, fee) {
@@ -25,7 +25,7 @@ export function sellStock(tk, frac, fee, force) {
   if (pnl > 0) {
     let m = 1;
     if (has("scalp") && h.bday === absDay()) { m += 0.2; augFx("scalp", T("aug.scalp")); }
-    if (has("hodl") && Tnow() - h.t0 >= 12) { m += 0.3; augFx("hodl", T("aug.hodl")); }
+    if (has("hodl") && Tnow() - h.t0 >= 3 * R().SLOTS) { m += 0.3; augFx("hodl", T("aug.hodl")); }
     if (has("inverse") && D.TK[tk].inv) { m += 0.25; augFx("inverse", T("aug.inverse")); }
     pnl *= m;
   } else if (pnl < 0 && has("diverse") && STK().filter(k => S.hold[k] && S.hold[k].q > 0).length >= 3) { pnl *= 0.6; augFx("diverse", T("aug.diverse")); }
@@ -33,7 +33,7 @@ export function sellStock(tk, frac, fee, force) {
   S.cash += back; h.q -= q; h.cost -= basis;
   if (frac >= 0.999 || h.q * p < 100) delete S.hold[tk];
   S.today.push({ kind: "invest", amt: back - basis, label: T("lbl.sell", { n: D.TK[tk].name }) }); S.realized += back - basis;
-  S.st.invest++;
+  S.st.invest++; S.st.iN++; if (back > basis) S.st.iW++;
   return back - basis;
 }
 export function openCoin(tk, dir, lev, margin) {
@@ -46,6 +46,7 @@ export function openCoin(tk, dir, lev, margin) {
   const c = { id: S.pid++, tk, dir, lev, margin, entry: S.mk[tk].p, mult, t0: Tnow(), bonus: has("kimp") && dir > 0 && S.kimpDay !== absDay() ? Math.min(300000, roundHalfUp(margin * 0.05)) : 0 };
   if (c.bonus) S.kimpDay = absDay();
   S.cash -= margin + fee; S.cps.push(c); S.st.invest++; S.workStreak = 0; S.invIn = (S.invIn || 0) + margin; S.realized -= fee;
+  if (lev >= R().ADD_COIN_LEV) { const f = Math.min(1, margin / Math.max(1, S.cash + margin + fee)); addict(R().ADD_GAIN.coin * (0.1 + 0.9 * f * f) * (has("addict") ? 1.5 : 1)); }
   if (mult > 1) augFx("allin", T("aug.allin"));
   if (c.bonus) augFx("kimp", T("aug.kimp", { m: man(c.bonus) }));
   return c;
@@ -59,6 +60,7 @@ export function closeCoin(c, force) {
   const back = roundHalfUp(Math.max(0, c.margin + pnl + c.bonus - fee));
   S.cash += back; S.cps = S.cps.filter(x => x !== c);
   S.today.push({ kind: "invest", amt: back - c.margin, label: T("lbl.close", { n: D.TK[c.tk].name, lev: c.lev, d: T(c.dir > 0 ? "long" : "short") }) }); S.realized += back - c.margin - c.bonus;
+  S.st.iN++; if (back > c.margin) S.st.iW++;
   return back - c.margin;
 }
 export function closeAll() { const S = st(); let t = 0; STK().forEach(k => { if (S.hold[k]) t += sellStock(k, 1, R().FEE_APP, true) || 0; }); S.cps.slice().forEach(c => t += closeCoin(c, true) || 0); return t; }
