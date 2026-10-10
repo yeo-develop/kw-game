@@ -1,0 +1,40 @@
+{
+ "ENDINGS": {
+  "clear": {
+   "tag": "CLEAR",
+   "ok": 1,
+   "h": "빚 0원. 롱 익절.",
+   "bg": "room"
+  },
+  "sea": {
+   "tag": "GAME OVER · 이자 미납",
+   "h": "원양어선행",
+   "bg": "sea",
+   "face": "cry",
+   "lead": "end.sea"
+  },
+  "gall": {
+   "tag": "GAME OVER · 이자 미납",
+   "h": "갤 운영자에게 팔려 감",
+   "bg": "gall",
+   "face": "smug",
+   "lead": "end.gall",
+   "noChar": 1
+  },
+  "loop": {
+   "tag": "GAME OVER · 시간 초과",
+   "h": "편의점 야간 무한루프",
+   "bg": "store",
+   "face": "tired",
+   "lead": "end.loop"
+  },
+  "block": {
+   "tag": "GAME OVER · 호감도 0",
+   "h": "차단당함",
+   "bg": "block",
+   "face": "angry",
+   "lead": "end.block",
+   "noChar": 1
+  }
+ }
+}
