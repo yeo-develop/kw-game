@@ -24,3 +24,8 @@
 
 # 에이전트 상태
 .omc/
+
+# sim dotnet 하네스 (dotnet/SimHarness)
+/dotnet/**/bin/
+/dotnet/**/obj/
+!/dotnet/**/*.csproj

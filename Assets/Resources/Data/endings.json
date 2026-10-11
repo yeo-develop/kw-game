@@ -1,0 +1,40 @@
+{
+ "ENDINGS": {
+  "clear": {
+   "tag": "CLEAR · 빚 0원",
+   "ok": 1,
+   "h": "빚 0원. 롱 익절.",
+   "hv": {
+    "gamble": "빚 0원. 도박으로 갚음 (1/30)"
+   },
+   "bg": "room"
+  },
+  "bad1": {
+   "tag": "GAME OVER · 이자 미납",
+   "h": "끌려감 (원양어선행)",
+   "hv": {
+    "gall": "끌려감 → 갤 운영자에게 팔려 감"
+   },
+   "bg": "sea",
+   "bgv": {
+    "gall": "gall"
+   },
+   "face": "cry",
+   "noCharV": {
+    "gall": 1
+   }
+  },
+  "bad2": {
+   "tag": "GAME OVER · 도박 중독",
+   "h": "올인의 끝",
+   "hv": {
+    "loop": "올인의 끝 → 편의점 야간 무한루프"
+   },
+   "bg": "casino",
+   "bgv": {
+    "loop": "store"
+   },
+   "face": "menhera"
+  }
+ }
+}

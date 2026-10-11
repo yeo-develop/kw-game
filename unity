@@ -58,6 +58,27 @@ PY
   return $code
 }
 
+
+# web JSON → 유니티 폴더 복사. sync_json <git ref 또는 빈 값=작업 트리> <web 안 경로> <대상 폴더>
+sync_json() {
+  local ref="$1" src="$2" dst="$3" from tmp=""
+  if [ -n "$ref" ]; then
+    tmp="$(mktemp -d)"
+    git -C "$ROOT" archive "$ref" "$src" | tar -x -C "$tmp" || die "git archive $ref $src 실패"
+    from="$tmp/$src"
+  else
+    from="$ROOT/$src"
+  fi
+  [ -d "$from" ] || die "$from 없음"
+  mkdir -p "$dst"
+  # 원본에 없는 json(+meta) 정리
+  for f in "$dst"/*.json; do [ -e "$f" ] || continue; [ -e "$from/$(basename "$f")" ] || rm -f "$f" "$f.meta"; done
+  cp "$from"/*.json "$dst"/
+  echo "✓ $(ls "$from"/*.json | wc -l | tr -d ' ')개 ${ref:-작업트리}:$src → ${dst#$ROOT/}"
+  [ -n "$tmp" ] && rm -rf "$tmp"
+  return 0
+}
+
 cmd="${1:-help}"; shift || true
 case "$cmd" in
   open)    open -a "$(dirname "$(dirname "$(dirname "$UNITY")")")" --args -projectPath "$PROJECT" ;;
@@ -78,6 +99,20 @@ case "$cmd" in
       webgl)   batch build-webgl   -quit -buildTarget WebGL        -executeMethod KwGame.EditorTools.BuildCli.BuildWebGL "$@" ;;
       *)       die "build mac|windows|webgl [-development] [-outputPath 경로]" ;;
     esac ;;
+  sync-data)   sync_json "${1:-}" web/src/data "$PROJECT/Assets/Resources/Data" ;;
+  sync-golden)
+    ref="${1:-4ff230c}"
+    sync_json "$ref" web/src/data "$PROJECT/Assets/Tests/EditMode/Golden/data"
+    sync_json "$ref" web/tests/golden/vectors "$PROJECT/Assets/Tests/EditMode/Golden/vectors"
+    echo "$ref" > "$PROJECT/Assets/Tests/EditMode/Golden/REF.txt" ;;
+  simtest)
+    # Unity 없이 sim 만 빠르게: Unity 번들 dotnet 으로 Assets/Scripts/Sim 컴파일 → RNG 값·골든·봇 명령열 검증
+    DN="$(dirname "$UNITY")/../Resources/Scripting/DotNetSdk"
+    NJ="$(ls -d "$PROJECT"/Library/PackageCache/com.unity.nuget.newtonsoft-json@*/Runtime/Newtonsoft.Json.dll 2>/dev/null | head -1)"
+    [ -n "$NJ" ] || die "Newtonsoft.Json.dll 없음 — ./unity compile 을 한 번 먼저"
+    export DOTNET_ROOT="$DN" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+    "$DN/dotnet" build "$ROOT/dotnet/SimHarness" -v q -nologo -p:NewtonsoftDll="$NJ" | grep -E "error|Build succeeded" | sort -u
+    "$DN/dotnet" "$ROOT/dotnet/SimHarness/bin/Debug/net8.0/SimHarness.dll" "$@" ;;
   run)     open "$PROJECT/Builds/Mac/롱잡고알바감.app" ;;
   exec)    [ $# -ge 1 ] || die "exec Namespace.Class.Method"; batch exec -quit -executeMethod "$@" ;;
   log)     tail -f "$HOME/Library/Logs/Unity/Editor.log" ;;
@@ -93,6 +128,9 @@ case "$cmd" in
   ./unity test [edit|play|all] [필터]   테스트 실행, 결과는 logs/test-*.xml
   ./unity build [mac|windows|webgl] [-development] [-outputPath 경로]
   ./unity run                     맥 빌드 실행
+  ./unity simtest [필터]           Unity 없이 sim 골든·봇 검증 (번들 dotnet, 1초 내외; GOLDEN_ROOT=폴더 로 다른 벡터)
+  ./unity sync-data [git ref]     web/src/data/*.json → Assets/Resources/Data (기본: 작업 트리)
+  ./unity sync-golden [git ref]   골든 픽스처(data+vectors) → Assets/Tests/EditMode/Golden (기본 4ff230c)
   ./unity exec 클래스.메서드        임의 에디터 정적 메서드 실행
   ./unity log                     에디터 로그 tail
   ./unity clean                   Library·Builds·logs 삭제 (다음 실행 시 재임포트)
