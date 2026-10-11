@@ -15,7 +15,7 @@
 | 유품 17 | Icons/Relics | 256 PNG | data/augments.json AUGS id와 같은 이름 |
 | 꽝 8 | Icons/Junk | 256 PNG | key, pen, lotto_slip, pouch, sock, whitepaper, calculator, toad (RELIC_JUNK 순서) |
 
-배경 제거 때 하트·반짝이·소용돌이 같은 효과 그림도 같이 지워진다(신남·기절 등). 필요하면 유니티 파티클/UI로 다시 얹는다.
+isnet-anime는 반짝이·땀방울 같은 효과 그림도 대부분 남긴다.
 
 ## 다시 뽑을 때 (NovelAI V4.5 Full)
 - Base Prompt·UC는 사용자 설정(아티스트 믹스) 그대로. 장면은 Character Prompt 칸에 쓴다.
@@ -27,6 +27,11 @@
 
 ## 게임용 파일 다시 만들기
 ```
-swiftc -O tools/art/cutout.swift -o /tmp/cutout   # macOS Vision 전경 마스크
-python3 tools/art/export.py                       # art/ → Assets/Resources/Art
+python3 -m venv /tmp/artvenv && /tmp/artvenv/bin/pip install "rembg[cpu]" numpy pillow
+swiftc -O tools/art/cutout.swift -o /tmp/cutout   # 아이콘용 macOS Vision 전경 마스크
+/tmp/artvenv/bin/python tools/art/export.py       # art/ → Assets/Resources/Art
+```
+- 캐릭터: 애니 전용 분할 모델 **isnet-anime**(rembg, 첫 실행 때 176MB 자동 다운로드) + 가장자리 흰색 언믹스 (`tools/art/clean.py`). macOS Vision은 머리카락 사이 흰 빈틈을 못 지워서 캐릭터에는 쓰지 않는다.
+- 아이콘: macOS Vision (물건은 이쪽이 그림자까지 깔끔).
+```
 ```
