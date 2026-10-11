@@ -44,7 +44,7 @@ export function workResult(score) {
   score = clamp(+score || 0, 0, 1);
   const hm = hpMult(), sc = score * hm;   /* 체력 낮으면 점수 깎임 (과로) */
   let pay = round1k(J.base + J.var * sc);
-  if (has("grind")) { pay = round1k(pay * 1.3); augFx("grind", T("aug.grind")); }
+  if (has("grind")) { pay = round1k(pay * R().GRIND_PAY); augFx("grind", T("aug.grind")); }
   S.st.work++; S.st.earned += pay; S.workStreak++;
   money(pay, "work", T("lbl.work", { n: J.name, p: roundHalfUp(sc * 100) }));
   hp(-jobHp(J), T("why.work"));

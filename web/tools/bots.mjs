@@ -1,7 +1,8 @@
 /* web/tools/bots.mjs — 헤드리스 봇 전략 (sim API 만 사용). Playwright 봇(play33b)의 결정 규칙을 단순화해 옮김.
-   전략: steady(알바 + 증권사 정보 주식, 착실) · work(알바만 빡세게) · invest(정보 따라 주식·코인) · gamble(카지노·경마·복권, 빚 남으면 상환) · random.
+   전략: steady(사채 400만 종잣돈 + 알바 + 증권사 정보 주식, 착실) · work(알바만 빡세게 — 이자만 막는 제자리걸음) · invest(정보 따라 주식·코인) · gamble(카지노·경마·복권, 빚 남으면 상환) · random.
    opt.maxMonth(기본 12): 그때까지 엔딩이 안 나면 'none'. 정식 엔딩(clear)에서 멈춤 (계속하기 안 함).
-   미니게임 점수 = 평균 사람 가정 0.6~0.8 균등 (봇 난수). 봇 난수는 게임 난수와 별개(LCG). */
+   미니게임 점수 = 평균 사람 가정 0.6~0.8 균등 (봇 난수, 환경변수 MG="lo,hi" 로 바꿈). 봇 난수는 게임 난수와 별개(LCG). */
+const [MG_LO, MG_HI] = (globalThis.process?.env?.MG || "0.6,0.8").split(",").map(Number);
 import * as SIM from "../src/sim/index.js";
 
 const AUGPREF = {
@@ -72,6 +73,7 @@ export function runGame(seed, strat, opt = {}) {
       if (st.hp < jobCost() + 2 || st.stress >= 60) p.steps.push(["rest"]);
       else p.steps.push(["go", "work", bpick(JOBS)]);
     } else if (strat === "steady") {
+      if (st.month === 1 && st.day === 1 && st.slot === 0 && room >= 4000000) p.steps.push(["loan", 3000000], ["loan", 1000000]);   /* 알바만으론 이자만 막으니 사채 400만을 종잣돈으로 */
       p.steps.push(["trade"]);
       const reserve = (unpaid ? due : 0) + 200000 + (st.day >= 6 ? due : 0);
       const rich = st.cash + Q("holdVal") >= st.debt + (unpaid ? due : 0);
@@ -152,7 +154,7 @@ export function runGame(seed, strat, opt = {}) {
         if (plan) plan.acted = Q("Tnow") + ":" + P.key;
         go(k ? { t: "act", k } : { t: "leave" }); break;
       }
-      case "work": if (!P.setup) go({ t: "mgSetup" }); else go({ t: "mgResult", score: 0.6 + br() * 0.2 }); break;
+      case "work": if (!P.setup) go({ t: "mgSetup" }); else go({ t: "mgResult", score: MG_LO + br() * (MG_HI - MG_LO) }); break;
       case "relicShop": {
         if (strat === "steady" && !P.bought && S.cash >= 1500000 + Q("interestDue")) { const ids = (S.relicOffer ? S.relicOffer.ids : []).filter(id => !S.augs.includes(id) && AUGPREF.steady.includes(id)); const id = ids.find(x => SIM.query(S, SIM.Q.relicPrice, x) <= S.cash - 1000000 - Q("interestDue")); if (id) { go({ t: "buyRelic", id }); break; } }
         if ((strat === "random" || strat === "gamble") && P.pulls < 2 && S.cash >= 500000 && br() < 0.6) { go({ t: "gachaRelic" }); break; }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* web/tools/sim-cli.mjs — 브라우저 없이 봇으로 수백 판 돌려 결과 표를 찍는다 (밸런스 리포트).
    사용: node web/tools/sim-cli.mjs [--n 200] [--strat work,invest,gamble,random] [--seed0 1] [--rngv 1|2] [--json]
-   미니게임 점수는 0.6~0.8 균등 (평균 사람 가정). */
+   미니게임 점수는 0.6~0.8 균등 (평균 사람 가정, 환경변수 MG="lo,hi" 로 바꿈). */
 import { loadData } from "./load-data.mjs";
 import * as SIM from "../src/sim/index.js";
 import { runGame } from "./bots.mjs";

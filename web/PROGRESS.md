@@ -19,3 +19,12 @@
 - [view 2단계] HUD 체력바(#hHp)·중독 배지·유품 칩, 유품 고르기(부모님 유품 상자)·유품 상점(뽑기 캡슐/진열장), 피하기 미니게임 mgMart(←→·A/D·버튼·드래그, 체력→이동속도), 경마 결승(1등 흔들림·빛남·레인 하이라이트), 기절·돌발 매수·몰래 카지노 연출, 엔딩 스코어보드 + 정식 엔딩 컷신(SCENES.clear) → 계속하기(continue), 엔딩 기록(localStorage longjab_records), 튜토리얼 데이터(체력·3칸·유품·유혹·돌발 TIPS). 저장 키 longjab_v34.
 - [Playwright] scratchpad/proto/play33b.js(+batch33b.sh, steady·CONT=1 계속하기 검증) 4전략×3시드+invest 2: 에러 0, clear 런은 계속하기 후 400스텝 에러 0. 스크린샷 shots33b.js → shots_v33b/ (집·체력 HUD, 유품 상점 뽑기, 피하기, 경마 결승, 엔딩 3종, 유혹·몰래 카지노, 돌발 매수). 다음: 튜토리얼 런, 골든 재생성, docs.
 - [완료] 골든 24개(5전략×4 + 앞부분 4) 재생성·24/24 통과 · check-sim OK · build OK · Playwright 14런(4전략×3 + invest 2, CONT=1) + 튜토리얼 4런(work 7·steady 8·gamble 9·random 10) 콘솔 에러 0 · 스크린샷 shots_v33b 18장 · docs/ARCHITECTURE.md §2~5·8·10·13 갱신. 최종 sim-cli: steady 100%(≤5개월 72%), work 100%(≤5개월 18%), gamble 3.0%(3000판, 나머지 bad2), random(36개월) bad1 51/bad2 42/clear 4.
+
+# v3.3b 밸런스 — "알바만으론 빚을 못 갚는다" (사용자 결정, 구 피드백 "알바만 빡세게 해도 클리어 가능" 대체)
+- [기준] 996af67: work 100% 클리어(모든 실력), steady 100%(≤5개월 72%). 봇 실력 MG="lo,hi" 환경변수 (tools/bots.mjs) 추가.
+- [data] jobs: 일당 카페·편의점 15+27만 → 1+9만, 상하차 20+31만 → 1.2+11만, 마트 17+29만 → 1.1+10만 (실력 비중 ↑, 0.7점 한 달 수입 ≈ 이자). sources: 박대리·리서치 mag [0.08,0.14] → [0.2,0.3] (적중률 그대로). rules: GRIND_PAY 1.15 신설 (목장갑 +30% → +15%, 안 그러면 목장갑 판은 알바만으로 클리어).
+- [sim 코드 변경 — C# 이식 반영 필요] games.js workResult · places.js locOpts(work): 목장갑 배율 상수 1.3 → R().GRIND_PAY. 그 외 sim 로직 변경 없음.
+- [봇] steady: 1개월차 1일 아침에 사채 300+100만 종잣돈 (알바로는 시드가 안 모이므로). work/invest/gamble/random 로직 그대로.
+- [텍스트] 유품 목장갑 설명·aug.grind '+15%', 일하기 장소 힌트 '일당 1~12만 · 이자 막는 용도', 튜토리얼 job 단계·도움말 loc-work·규칙 요약(scenes)에 '알바만 하면 이자 막는 정도, 원금은 정보로', 도박 클리어 엔딩 문구 '주식도 알바도 아니고 도박으로'.
+- [결과] sim-cli 24개월: work MG 0.6~0.8 클리어 0%·bad1 0%·빚 3,042만(제자리), 0.8~1.0 0%·1,673만, 0.2~0.4 bad1 84%. steady 0.6~0.8 100%(≤5개월 66.0%, ≤8 93.3%), 0.3~0.5 94%(≤5 53.7%, 미클리어 6%). gamble 3000판 2.6% (seed 3001~6000: 3.2%), 나머지 bad2. invest 100%(≤5 66%). random bad1 70/bad2 28/clear 1. 표 = docs/ARCHITECTURE.md §13.
+- [검증] 골든 24개 재생성 → 24/24 통과 · check-sim OK · build OK · Playwright 4전략×1시드(seed 11, CONT=1) 콘솔 에러 0 (결과 scratchpad/proto/runs33c: gamble bad2 3개월, random bad1 12개월, work bad1 25개월 = 실제 미니게임 난이도 상승으로 제자리걸음 끝 표류, steady bad1 44개월 — play33b 의 steady 는 사채 종잣돈 없이 알바+리포트만 하므로 시드가 안 모여 못 갚음 = 의도대로).

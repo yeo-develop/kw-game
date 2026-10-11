@@ -12,7 +12,7 @@
   "HP_COST": { "casino": 10, "race": 8, "scratch": 4, "lotto": 4, "tip": 6, "trade": 4, "bank": 3, "shop": 4, "relic": 4, "pcgame": 6, "pcramen": -12 },
   "ADD_GAIN": { "casino": 16, "race": 16, "scratch": 2, "lotto": 2, "coin": 8, "kim": 10, "bigwin": 18, "bigloss": 16, "secret": 3 },
   "ADD_DECAY": 3, "ADD_SLOT_DECAY": 3, "ADD_STICKY": 101, "ADD_NAG": 30, "ADD_SECRET": 60, "ADD_TEMPT": 80, "ADD_WITHDRAW": 8, "ADD_COIN_LEV": 25,
-  "IMPULSE_P": 0.4, "IMPULSE_CASH": 0.9,
+  "GRIND_PAY": 1.15, "IMPULSE_P": 0.4, "IMPULSE_CASH": 0.9,
   "GACHA_PRICE": 150000, "GACHA_JUNK": 0.4, "RELIC_PRICE": { "1": 500000, "2": 1000000, "3": 2000000 }, "RELIC_TIER_W": [0.6, 0.3, 0.1]
  },
  "SLOT_NAME": ["아침", "점심", "저녁"],
