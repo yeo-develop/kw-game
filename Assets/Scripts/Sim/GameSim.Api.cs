@@ -152,6 +152,9 @@ namespace KwGame.Sim
             if (t == "guide") { S.tg = c.Str("seg") ?? ""; if (c.Str("seg") == "home2") S.tgT = Tnow(); if (c.Truthy("reset")) S.tutSeen = new Dictionary<string, int>(); return; }
             if (t == "tutSeen") { S.tutSeen[c.Str("k") ?? "undefined"] = 1; return; }
             if (t == "debug") { debug(c.Str("k")); return; }
+            // LLM 연동 (docs/LLM.md): 모드 켜기/끄기 · 뉴스 사실 (검증 실패면 error, 상태 그대로)
+            if (t == "llmMode") { S.llm = c.Truthy("on"); if (!S.llm) S.nfact = null; return; }
+            if (t == "newsFact") { if (!newsFact(c)) err("newsFact"); return; }
             if (PHONE_CMDS.Contains(t))
             {
                 if (!PHONE_OK.Contains(pt)) { err("phone@" + (pt ?? "undefined")); return; }

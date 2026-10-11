@@ -59,13 +59,16 @@ namespace KwGame.View
             G = GameSim.Create(D, sd);
             G.Hud = true;
             phoneOpen = false;
+            LlmNewGame();
             RenderAll();
+            LlmTick();
         }
 
         public void Send(SimCommand c)
         {
             if (playing) return;
             var evs = G.Apply(c);
+            LlmTick();   // 새 칸이면 뉴스·대사 요청을 재생 전에 미리 (GameController.Llm.cs)
             StartCoroutine(Play(evs));
         }
         void Send(string t, params object[] kv) => Send(new SimCommand(t, kv));

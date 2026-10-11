@@ -19,6 +19,7 @@ export function newState(seed, rngv = 2) {
     st: { work: 0, gamble: 0, invest: 0, liq: 0, earned: 0, borrowed: 0, decor: 0, maxDebt: r.DEBT0, menOk: 0, menBad: 0, bigWin: 0, interest: 0, repaid: 0, race: 0, lotto: 0, pc: 0,
       gN: 0, gW: 0, gnet: 0, iN: 0, iW: 0, maxAsset: r.CASH0, minDebt: r.DEBT0, faint: 0, gacha: 0, impulse: 0, tempt: 0, secret: 0 },
     tg: "", tgT: 0, tutSeen: {}, mgN: 0,
+    llm: false, nfact: null, nlog: [], nstr: [0, 0, 0],
     pending: null, flow: [], ending: null, endInfo: null,
   };
 }

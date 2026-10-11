@@ -46,6 +46,16 @@ static class P {
       if (ok) bp++; else { bf++; Console.WriteLine($"BOT FAIL {name}: n {r.cmds.Count} vs {n} first diff #{bad} {(bad>=0?cmds[bad].ToString(Newtonsoft.Json.Formatting.None):"")} vs {(bad>=0?r.cmds[bad].ToString(Newtonsoft.Json.Formatting.None):"")}"); }
     }
     Console.WriteLine($"bots: {bp} pass, {bf} fail");
-    return fail;
+    // LLM 녹화 응답 픽스처 (web/tests/llm → ./unity sync-llm → Assets/Tests/EditMode/Llm)
+    string lroot = Environment.GetEnvironmentVariable("LLM_ROOT") ?? Path.Combine(root, "../Llm");
+    int lf = 0;
+    if (File.Exists(lroot + "/fixture.json")) {
+      var LD = GameData.Load(Directory.GetFiles(lroot + "/data", "*.json").Select(f => new KeyValuePair<string,string>(Path.GetFileName(f), File.ReadAllText(f))));
+      var bad = LlmFixture.Check(LD, JObject.Parse(File.ReadAllText(lroot + "/fixture.json")));
+      foreach (var b in bad.Take(10)) Console.WriteLine("LLM FAIL " + b);
+      lf = bad.Count;
+      Console.WriteLine(bad.Count == 0 ? "llm fixture: pass" : $"llm fixture: {bad.Count} fail");
+    } else Console.WriteLine("llm fixture: 없음 (" + lroot + ")");
+    return fail + lf;
   }
 }

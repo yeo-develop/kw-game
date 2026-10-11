@@ -6,6 +6,7 @@ import { fpick } from "./rng.js";
 import { T } from "./fmt.js";
 import { newState, Tnow, tkOpen, isEve, hpCost } from "./state.js";
 import { initMarket, genNews } from "./market.js";
+import { newsFact } from "./news.js";
 import { stress, pushK, hp } from "./effects.js";
 import { galReact, kqReply, submitPost, upvote } from "./gall.js";
 import { getReport, tipAnnounce, encounterRoll } from "./tips.js";
@@ -97,6 +98,9 @@ function handle(c) {
   if (c.t === "guide") { S.tg = c.seg || ""; if (c.seg === "home2") S.tgT = Tnow(); if (c.reset) S.tutSeen = {}; return; }
   if (c.t === "tutSeen") { S.tutSeen[c.k] = 1; return; }
   if (c.t === "debug") return debug(c.k);
+  /* LLM 연동 (docs/LLM.md): 모드 켜기/끄기 · 뉴스 사실 (검증 실패면 error, 상태 그대로) */
+  if (c.t === "llmMode") { S.llm = !!c.on; if (!S.llm) S.nfact = null; return; }
+  if (c.t === "newsFact") { if (!newsFact(c)) err("newsFact"); return; }
   if (["buy", "sell", "open", "close", "closeCoins", "report", "kqReply", "post", "upvote"].includes(c.t)) {
     if (!PHONE_OK.includes(pt)) return err("phone@" + pt);
     if ((c.t === "open") && !tkOpen(c.tk)) return err("locked");

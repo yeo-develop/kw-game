@@ -80,13 +80,16 @@ namespace KwGame.Sim
         }
         News genNews()
         {
+            if (S.llm) return genNewsLlm();
             if (rnd() > 0.32) return null;
             var pool = TKS().Where(k => k != "INV" && tkOpen(k)).Concat(new[] { "MKT" }).ToList();
             string tk = pick(pool);
             var nw = pick(D.NEWS[tk]);
             D.TK.TryGetValue(tk, out var t);
             double mag = tk == "MKT" ? 0.02 + rnd() * 0.02 : t.type == "stock" ? 0.05 + rnd() * 0.07 : t.meme ? 0.4 : 0.07 + rnd() * 0.09;
-            return new News { tk = tk, h = nw.h, dir = nw.dir, r = nw.dir * mag, fake = rnd() < 0.3 };
+            var n = new News { tk = tk, h = nw.h, dir = nw.dir, r = nw.dir * mag, fake = rnd() < 0.3 };
+            logNews(n);
+            return n;
         }
     }
 }

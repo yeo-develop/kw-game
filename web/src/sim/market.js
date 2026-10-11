@@ -4,6 +4,7 @@ import { D, R, st } from "./core.js";
 import { rnd, gauss, pick, plog, pexp } from "./rng.js";
 import { clamp } from "./num.js";
 import { TKS, has, Tnow, tkOpen, liqPx, isEve } from "./state.js";
+import { genNewsLlm, logNews } from "./news.js";
 
 export function planMarket(shock, evening, M) {
   const S = st();
@@ -68,10 +69,20 @@ export function liqHit(c, mv, vol) {
   if (a <= 0 || b <= 0) return true;
   return rnd() < pexp(-2 * a * b / (sg * sg));
 }
+/* 뉴스: 칸 끝에 굴려 다음 칸 시세 계획에 충격으로 들어감 (가짜면 충격 없음). LLM 모드(S.llm)면 news.js 쪽 — 꺼져 있으면 예전과 난수 소비까지 같음 */
 export function genNews() {
+  if (st().llm) return genNewsLlm(fallbackNews);
   if (rnd() > 0.32) return null;
   const pool = TKS().filter(k => k !== "INV" && tkOpen(k)).concat(["MKT"]);
   const tk = pick(pool), [h, dir] = pick(D.NEWS[tk]), t = D.TK[tk];
   const mag = tk === "MKT" ? 0.02 + rnd() * 0.02 : t.type === "stock" ? 0.05 + rnd() * 0.07 : t.meme ? 0.4 : 0.07 + rnd() * 0.09;
-  return { tk, h, dir, r: dir * mag, fake: rnd() < 0.3 };
+  const n = { tk, h, dir, r: dir * mag, fake: rnd() < 0.3 };
+  logNews(n);
+  return n;
+}
+/* LLM 모드인데 응답이 없을 때: 요청의 방향·가짜·종목 목록을 지키는 내장 생성기 */
+function fallbackNews(q) {
+  const tk = pick(q.tickers.map(x => x.k)), L = D.NEWS[tk].filter(x => x[1] === q.dir), [h] = pick(L.length ? L : D.NEWS[tk]), t = D.TK[tk];
+  const mag = tk === "MKT" ? 0.02 + rnd() * 0.02 : t.type === "stock" ? 0.05 + rnd() * 0.07 : t.meme ? 0.4 : 0.07 + rnd() * 0.09;
+  return { tk, h, dir: q.dir, r: q.dir * mag, fake: q.fake };
 }

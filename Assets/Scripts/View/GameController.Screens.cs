@@ -223,6 +223,8 @@ namespace KwGame.View
                     Title("롱잡고알바감");
                     Info("빚 3천만 원. 매달(7일) 이자 5%. 알바·주식·코인·도박… 갚을 방법은 많다.", 26, Ui.Text);
                     Btn("새 게임 시작", () => Send("start"), $"시드 {S.seed}", false, Ui.Accent);
+                    Btn($"AI 뉴스·대사 (Claude): {(LlmSettings.On ? "켜짐" : "꺼짐")}", () => LlmToggle(!LlmSettings.On),
+                        string.IsNullOrEmpty(LlmSettings.Url) ? "서버 URL 없음" : (LlmSettings.On ? "끄면 내장 문구만 씀" : "켜면 뉴스·대사를 AI 가 씀 (실패하면 내장 문구)"), string.IsNullOrEmpty(LlmSettings.Url));
                     break;
                 case "relic":
                     Title("부모님 유품 상자");
@@ -236,7 +238,7 @@ namespace KwGame.View
                     break;
                 case "home":
                     Title($"집 · {D.SLOT_NAME[S.slot]}");
-                    if (S.hl != null) Info("미래: " + S.hl.t, 24, Ui.Accent);
+                    { var hl = HomeLine(); if (hl != null) Info("미래: " + hl, 24, Ui.Accent); }
                     Btn("지도 열기 (외출)", () => Send("map"), "장소로 이동");
                     Btn(G.isEve() ? "일찍 자기" : "쉬기", () => Send("rest"), $"칸 소모 · 체력 +{(G.isEve() ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22");
                     Btn("김사장에게 돈 땡기기", () => Send("loanOpen"), $"사채 (선이자 {G.loanFee() * 100:0}%) · 한도 {G.man(G.loanCap())}");
@@ -425,9 +427,9 @@ namespace KwGame.View
             phone.Clear();
             if (!phoneOpen) return;
             var tabs = Ui.Row(); tabs.style.marginBottom = 12; phone.Add(tabs);
-            foreach (var (k, n) in new[] { ("stock", "개미증권"), ("kakao", $"카톡{(G.kUnread() > 0 ? $"({G.kUnread()})" : "")}"), ("gall", "주갤"), ("tips", "정보 수첩") })
+            foreach (var (k, n) in new[] { ("stock", "개미증권"), ("kakao", $"카톡{(G.kUnread() > 0 ? $"({G.kUnread()})" : "")}"), ("gall", "주갤"), ("news", "뉴스"), ("tips", "정보 수첩") })
             {
-                var kk = k; tabs.Add(Ui.Chip(n, () => { phoneTab = kk; if (kk == "kakao") { Send("read", "what", "kakao", "room", "m"); Send("read", "what", "kakao", "room", "kim"); Send("read", "what", "kakao", "room", "hy"); } RenderAll(); }, false, phoneTab == k ? Ui.Accent : (Color?)null));
+                var kk = k; tabs.Add(Ui.Chip(n, () => { phoneTab = kk; if (kk == "kakao") { Send("read", "what", "kakao", "room", "m"); Send("read", "what", "kakao", "room", "kim"); Send("read", "what", "kakao", "room", "hy"); } if (kk == "news") Send("read", "what", "news"); RenderAll(); }, false, phoneTab == k ? Ui.Accent : (Color?)null));
             }
             var sp = new VisualElement(); sp.style.flexGrow = 1; tabs.Add(sp);
             tabs.Add(Ui.Chip("닫기", () => { phoneOpen = false; RenderAll(); }));
@@ -489,6 +491,7 @@ namespace KwGame.View
                     {
                         L(room == "m" ? "── 미래 ♥" : room == "kim" ? "── 김사장" : "── 형나믿지", 22, Ui.Gold);
                         foreach (var m in S.kk[room].Skip(Math.Max(0, S.kk[room].Count - 5))) L($"[{m.t}] {(m.w == "me" ? "나" : m.w == "sys" ? "시스템" : m.w == "m" ? "미래" : m.w == "kim" ? "김사장" : "형")}: {m.x}", 20, m.w == "me" ? Ui.Dim : Ui.Text);
+                        if (room == "m") foreach (var x in aiKakao) L(x, 20);   // LLM 카톡 (화면 전용)
                     }
                     break;
                 case "gall":
@@ -501,8 +504,25 @@ namespace KwGame.View
                             row.Add(Ui.Chip((string)gw["l"] + (dr != null && !dr.ok ? " (주작각)" : ""), () => Send("post", "k", k), G.wroteToday() >= D.RULES.WRITE_MAX));
                         }
                     }
+                    foreach (var ap in aiPosts.AsEnumerable().Reverse().Take(3))   // LLM 글 (화면 전용)
+                    {
+                        L($"[실시간] {ap.title}  — ㅇㅇ · {ap.lab}", 20, Ui.Gold);
+                        L("   " + ap.body, 18, Ui.Dim);
+                        foreach (var c in ap.cm) L($"   ㄴ {c.au}: {c.x}", 18, Ui.Dim);
+                    }
                     foreach (var p in S.posts.AsEnumerable().Reverse().Take(10))
                         L($"[{p.tag}] {p.title}  — {p.au} · 추 {p.up:0}" + (p.best ? " · 개념글" : ""), 20, p.mine != 0 ? Ui.Accent : Ui.Text);
+                    break;
+                case "news":
+                    {
+                        var news = S.feed.Where(f => f.kind == "news").Reverse().Take(10).ToList();
+                        if (news.Count == 0) L("아직 뉴스 없음. 뉴스는 칸이 끝날 때 시세 결과와 같이 뜸.", 22, Ui.Dim);
+                        foreach (var f in news)
+                        {
+                            L($"[{f.lab}] {f.x}", 21);
+                            if (f.rows != null) foreach (var r0 in f.rows) L("   " + r0, 18, Ui.Dim);
+                        }
+                    }
                     break;
                 case "tips":
                     var tips = G.activeTips();

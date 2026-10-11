@@ -18,9 +18,11 @@ Assets/
         Market    market.js        Effects  effects.js + talk.js     Tips  tips.js        Gall  gall.js
         Trade     trade.js         Games    games.js                 Places places.js    Flow  flow.js
         Api       api.js + query.js (Create · Apply · Query)
+        Llm       news.js (NewsReq · newsFact 검증 · LLM 모드 genNews — docs/LLM.md)
       SimCommand.cs         명령 = JSON 객체 그대로 (k·id 처럼 문자열/숫자 겸용 필드 때문에 JObject 래핑)
       Digest.cs             digest.js (골든 비교용 숫자 요약 + FNV 해시)
       Bots.cs               web/tools/bots.mjs (헤드리스 봇 5전략, 봇 LCG 도 JS double 연산 그대로)
+      LlmFixture.cs         LLM 녹화 응답 픽스처 재생·비교 (web/tests/llm/common.mjs 대응, 테스트·simtest 공용)
     View/                   KwGame.View (UI Toolkit, 코드로 화면 생성)
       Ui.cs                 스타일 도우미 · 이모지 제거(표시용) · 점수 막대(테마 없는 슬라이더)
       ArtCatalog.cs         그림 키 → 스프라이트 표 (장면 bg·표정·NPC·CG·유품/꽝 아이콘, Resources.Load + 캐시)
@@ -28,6 +30,8 @@ Assets/
       GameController.cs     메인 루프 + 이벤트 재생기(say 클릭 대기, 아침 결산, 장면 스크립트 opening/clear)
       GameController.Screens.cs  HUD · pending 별 행동 패널 · 폰(증권/카톡/주갤/정보) · 엔딩+스코어보드
       GameController.Demo.cs     `-kwShots <폴더>` 스크린샷·화면 경로 재생 검증
+      GameController.Llm.cs      LLM 뉴스 요청·사실 적용, 집 대사·카톡·주갤 글 (docs/LLM.md §5)
+      LlmClient.cs               LlmSettings(URL·켜기·기기 id) · LlmClient.Post (UnityWebRequest)
   Resources/
     Data/*.json             web/src/data 복사본 (런타임 로드, 수정 금지 — 원본은 web/)
     Fonts/Pretendard-*.ttf  한글 폰트 (SIL OFL 1.1 원문 = OFL.txt)
@@ -58,7 +62,8 @@ dotnet/SimHarness/          Unity 없이 sim 검증하는 콘솔 (Unity 번들 d
 ./unity simtest            # 1초 내외. Unity 없이 RNG 값 + 골든 24 + 봇 명령열 24 (dotnet/SimHarness)
 ./unity simtest steady     # 이름 필터
 GOLDEN_ROOT=<폴더> ./unity simtest   # 다른 data/vectors 폴더로 (예: 작업 트리 벡터)
-./unity test edit          # Unity EditMode (현재 54 passed: 기존 2 + 규격 4 + 골든 24 + 봇 24)
+./unity test edit          # Unity EditMode (현재 58 passed: 기존 2 + 규격 4 + 골든 24 + 봇 24 + LLM 4)
+./unity sync-llm           # LLM 녹화 응답 픽스처(web/tests/llm) + data → Assets/Tests/EditMode/Llm
 ```
 
 골든 테스트는 digest 문자열 전체를 비교하고, 다르면 첫 차이 항목을 찍는다 (`digest[i]: 기대 · 실제`).

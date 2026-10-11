@@ -1,0 +1,144 @@
+{
+ "NPCS": {
+  "broker": {
+   "name": "증권사 박대리",
+   "body": "#1d2a4a",
+   "hair": "#16161c",
+   "hs": "slick",
+   "acc": [
+    "tie",
+    "glasses",
+    "tag"
+   ],
+   "tag": "VIP 전담"
+  },
+  "dealer": {
+   "name": "딜러 최실장",
+   "body": "#5a1020",
+   "hair": "#2b2230",
+   "hs": "slick",
+   "acc": [
+    "vest",
+    "bow",
+    "visor",
+    "stache"
+   ]
+  },
+  "race": {
+   "name": "경마 해설 강아재",
+   "body": "#4b5d2a",
+   "hair": "#6b6f78",
+   "hs": "bald",
+   "acc": [
+    "cap",
+    "pen",
+    "stache",
+    "paper"
+   ]
+  },
+  "lotto": {
+   "name": "복권방 사장님",
+   "body": "#b8466e",
+   "hair": "#3a2626",
+   "hs": "perm",
+   "acc": [
+    "apron",
+    "glasses"
+   ]
+  },
+  "pc": {
+   "name": "PC방 알바 겜돌이",
+   "body": "#2f3542",
+   "hair": "#ff8f3a",
+   "hs": "messy",
+   "acc": [
+    "headset"
+   ],
+   "eyes": "sleepy"
+  },
+  "bank": {
+   "name": "은행원 정주임",
+   "body": "#2e5e8c",
+   "hair": "#2a1f1a",
+   "hs": "bun",
+   "acc": [
+    "scarf",
+    "tag"
+   ],
+   "tag": "상환 창구"
+  },
+  "shop": {
+   "name": "편집숍 사장 쟝",
+   "body": "#151515",
+   "hair": "#d9c27a",
+   "hs": "beret",
+   "acc": [
+    "tape",
+    "stache"
+   ]
+  },
+  "work": {
+   "name": "인력사무소 소장",
+   "body": "#8a6a3a",
+   "hair": "#3a3a3a",
+   "hs": "buzz",
+   "acc": [
+    "clip",
+    "sweat"
+   ],
+   "brow": "angry"
+  },
+  "taxi": {
+   "name": "택시 기사 아저씨",
+   "body": "#d9a520",
+   "hair": "#333",
+   "hs": "buzz",
+   "acc": [
+    "visor",
+    "stache"
+   ]
+  },
+  "cousin": {
+   "name": "엘리베이터 통화남",
+   "body": "#2e5e8c",
+   "hair": "#1a1a1a",
+   "hs": "slick",
+   "acc": [
+    "tie",
+    "glasses",
+    "tag"
+   ],
+   "tag": "갓성 사원증"
+  },
+  "pckid": {
+   "name": "PC방 초딩",
+   "body": "#ff8f3a",
+   "hair": "#222",
+   "hs": "messy",
+   "acc": [
+    "headset"
+   ]
+  },
+  "hench": {
+   "name": "김사장 부하 덩치",
+   "body": "#111",
+   "hair": "#111",
+   "hs": "buzz",
+   "acc": [
+    "stache"
+   ],
+   "brow": "angry"
+  },
+  "suit": {
+   "name": "수상한 정장남",
+   "body": "#2a2a2a",
+   "hair": "#555",
+   "hs": "beret",
+   "acc": [
+    "vest",
+    "stache",
+    "glasses"
+   ]
+  }
+ }
+}

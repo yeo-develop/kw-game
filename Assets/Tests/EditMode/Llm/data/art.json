@@ -1,0 +1,71 @@
+{
+ "FACES": {
+  "neutral": {
+   "e": "open",
+   "b": "flat",
+   "m": "smile0"
+  },
+  "happy": {
+   "e": "closed",
+   "b": "up",
+   "m": "open",
+   "blush": 1,
+   "tooth": 1
+  },
+  "smug": {
+   "e": "half",
+   "b": "flat",
+   "m": "smirk",
+   "tooth": 1
+  },
+  "sad": {
+   "e": "down",
+   "b": "worry",
+   "m": "frown"
+  },
+  "panic": {
+   "e": "wide",
+   "b": "high",
+   "m": "o",
+   "sweat": 1
+  },
+  "tired": {
+   "e": "half",
+   "b": "flat",
+   "m": "flat",
+   "bags": 1
+  },
+  "angry": {
+   "e": "open",
+   "b": "angry",
+   "m": "frown",
+   "vein": 1
+  },
+  "menhera": {
+   "e": "dot",
+   "b": "worry",
+   "m": "wave",
+   "blush": 2
+  },
+  "flex": {
+   "e": "half",
+   "b": "up",
+   "m": "smirk",
+   "tooth": 1,
+   "shades": 1
+  },
+  "cry": {
+   "e": "closed",
+   "b": "worry",
+   "m": "open",
+   "tears": 1
+  },
+  "shy": {
+   "e": "open",
+   "look": -5,
+   "b": "worry",
+   "m": "wave",
+   "blush": 2
+  }
+ }
+}

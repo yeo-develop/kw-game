@@ -1,0 +1,27 @@
+# 롱잡고알바감 LLM 워커 (docs/LLM.md). 배포: npx wrangler deploy · 키: npx wrangler secret put ANTHROPIC_API_KEY
+name = "kw-game-llm"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[vars]
+MODEL = "claude-haiku-5-5"
+# 요청 한도 (기기 id = 클라이언트가 만든 무작위 id, IP, 전체). 하루 = UTC 기준
+PER_MIN_DEVICE = "30"
+PER_DAY_DEVICE = "600"
+PER_MIN_IP = "60"
+PER_DAY_IP = "1500"
+PER_DAY_GLOBAL = "10000"
+
+[[durable_objects.bindings]]
+name = "QUOTA"
+class_name = "Quota"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Quota"]
+
+[observability]
+enabled = true

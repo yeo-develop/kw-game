@@ -23,7 +23,10 @@ export function runGame(seed, strat, opt = {}) {
   const Q = (n, ...a) => SIM.query(S, SIM.Q[n], ...a);
   let steps = 0, errs = 0;
   const cmds = opt.record ? [] : null;
-  const go = c => { if (cmds) cmds.push(c); const r = SIM.apply(S, c); S = r.state; steps++; for (const e of r.events) if (e.t === "error") errs++; return r.events; };
+  const go = c => { if (cmds) cmds.push(c); const r = SIM.apply(S, c); S = r.state; steps++; for (const e of r.events) if (e.t === "error") errs++; if (opt.inject) inject(); return r.events; };
+  /* opt.inject(S, Q) → 봇 명령 사이에 끼울 명령들 (LLM 응답 녹화 테스트용: llmMode·newsFact). 봇 난수는 안 씀 */
+  const inject = () => { for (const x of opt.inject(S, Q) || []) { if (cmds) cmds.push(x); S = SIM.apply(S, x).state; } };
+  if (opt.inject) inject();
   let plan = null, plan_repay = 0;
   const tradeDone = {};
   /* 투자 매매 한 단계 (play32 tradeAct 단순판) */

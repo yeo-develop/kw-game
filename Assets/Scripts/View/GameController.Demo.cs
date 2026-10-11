@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using KwGame.Sim;
 using UnityEngine;
 
@@ -105,6 +106,17 @@ namespace KwGame.View
             foreach (var (fk, nm) in new[] { ("excited", "16_face_excited"), ("shocked", "17_face_shocked"), ("crying_comic", "18_face_crying_comic") })
             { faceStrong = false; HoldFace(fk, true); yield return Shot(dir, nm); }
             faceStrong = false;
+            // LLM: 여기까지 첫 판은 설정대로(기본 켜짐) llmMode 로 돌았음. 뉴스 요청이 꼭 나오게 집에서 쉬기로 15칸 더 (실제 워커 호출 → 키 없으면 no_key → sim 내장 뉴스)
+            for (int i = 0; i < 15 && S.pending?.t == "home"; i++)
+            {
+                Send("rest"); yield return UntilIdle(); yield return ToHome();
+                yield return new WaitForSeconds(0.6f);   // 워커 응답 기다림 (칸 하나 = 사람 기준 수십 초)
+            }
+            yield return new WaitForSeconds(2f);
+            Debug.Log($"[shot] llm: on={LlmSettings.On} url={LlmSettings.Url} simLlm={S.llm} sent={LlmClient.Sent} ok={LlmClient.Ok} failed={LlmClient.Failed} last={LlmClient.LastError} news={S.nlog.Count} llmNews={S.nstr.Sum()} asked={newsAsked.Count} day={S.month}-{S.day}");
+            phoneOpen = true; phoneTab = "news"; RenderAll();
+            yield return Shot(dir, "19_phone_news");
+            phoneOpen = false; RenderAll();
             // 엔딩 화면: 헤드리스 봇으로 끝까지 돌린 판을 그대로 띄움
             foreach (var (sd, strat, nm) in new[] { (11, "steady", "10_ending_clear"), (22, "gamble", "11_ending_bad2"), (1201, "random", "12_ending_bad1") })
             {
@@ -113,6 +125,7 @@ namespace KwGame.View
                 Debug.Log($"[shot] {nm}: ending={S.endInfo?.kind} cg={cgKey}");
                 yield return Shot(dir, nm);
             }
+            llmFlavor = false;   // 아래 화면 재생은 수백 칸을 몰아치므로 연출 요청 끔 (재생 판은 llmMode 아님 = 골든 해시 그대로)
             // 봇 명령열을 화면 경로(Send → 이벤트 재생 → RenderAll)로 재생: 모든 pending 화면이 예외 없이 그려지는지 + 화면별 첫 스크린샷
             int exc = 0;
             Application.logMessageReceived += (c, st, type) => { if (type == LogType.Exception || type == LogType.Error) exc++; };

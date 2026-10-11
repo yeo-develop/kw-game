@@ -25,6 +25,7 @@ web/
       flow.js      하루 흐름 단계(step) · 아침 · 칸 시작/끝 · 이자일 · 유품 고르기 · 멘헤라·돌발 매수 · 중독 사건·유혹 · 기절 · 엔딩·스코어보드·계속하기
       api.js       createGame · apply (명령 처리)        query.js  view 용 읽기 전용 계산
       digest.js    골든용 상태 요약·해시                  ids.js    한글 ID(데이터 키) 모음 — sim 의 유일한 한글 리터럴
+      news.js      LLM 뉴스 디렉터: newsReq(요청) · newsFact(검증) · LLM 모드 genNews (docs/LLM.md)
       index.js     공개 API
     data/  콘텐츠 JSON (§7) — 한글 문구는 전부 여기
     view/  화면 (클래식 스크립트, 같은 전역 스코프 · 빌드 순서는 build.mjs VIEW_JS)
@@ -99,6 +100,7 @@ pending 종류: `start · relic · home · map · loc · encounter · loan · wo
 | `read` | `what`(kakao·gall·news), `room`, `mine` | 어디서나 | 안 읽음 0 (폰 화면이 보고 있을 때) |
 | `guide` / `tutSeen` | `seg`, `reset` / `k` | 어디서나 | 첫날 가이드 단계 · 본 팁 기록 |
 | `debug` | `k` (cash·pay·men·zero·aug·hp·addict) | 어디서나 | 디버그 패널 |
+| `llmMode` / `newsFact` | `on` / `slotId, dir, ticker, strength, event, headline, body, source, arcId?, arcStep?` | 어디서나 | LLM 뉴스 모드 · LLM 이 쓴 뉴스 사실 (sim 이 검증, 요청은 query `newsReq`) — docs/LLM.md |
 
 잘못된 명령은 상태를 안 바꾸고 `error` 이벤트를 낸다.
 
@@ -157,6 +159,7 @@ pending 종류: `start · relic · home · map · loc · encounter · loan · wo
 | `paidMonth` · `insUsed` · `kimpDay` · `kimBig` · `menKey` · `menCool` · `startT` · `hl` · `lotto` · `workStreak` · `lastJob` · `needMorning` | 규칙 보조 |
 | `tg` · `tgT` · `tutSeen` · `optTut` | 첫날 가이드 단계 · 본 팁 |
 | `ending` · `endInfo` | 엔딩 종류 · 엔딩 화면 데이터(문구·스코어보드 포함) |
+| `llm` · `nfact` · `nlog` · `nstr` | LLM 뉴스 모드 · 받아 둔 뉴스 사실 · 최근 뉴스 12개 · LLM 세기 횟수 (digest 밖, docs/LLM.md §3.4) |
 
 호감도(`aff`)·호감도 캔들(`candles`·`cur`)·3개월 정산(`final`)·테이블 리밋은 v3.3 2단계에서 삭제.
 

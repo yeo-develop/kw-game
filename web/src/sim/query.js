@@ -7,6 +7,7 @@ import * as Tr from "./trade.js";
 import * as Ga from "./games.js";
 import * as Pl from "./places.js";
 import * as Gl from "./gall.js";
+import * as Nw from "./news.js";
 
 export function query(S, fn, ...a) {
   const r0 = S.rng, f0 = S.fx;
@@ -20,5 +21,5 @@ export const Q = {
   moodFace: St.moodFace, isEve: St.isEve, hpMult: St.hpMult, hpCost: St.hpCost, jobHp: St.jobHp, clockNow: St.clockNow, liqOdds: St.liqOdds, TKS: St.TKS, STK: St.STK,
   srcOf: Tp.srcOf, srcRec: Tp.srcRec, whenLabel: Tp.whenLabel, resMark: Tp.resMark, activeTips: Tp.activeTips, rsch: Tp.rsch, freeMax: Tp.freeMax,
   stockFee: Tr.stockFee, hlMult: Ga.hlMult, ladderEnd: Ga.ladderEnd, mgHard: Ga.mgHard, lottoToday: Ga.lottoToday,
-  locOpts: Pl.locOpts, loanFee: Pl.loanFee, relicPrice: Pl.relicPrice, draft: Gl.draft, postById: Gl.postById,
+  locOpts: Pl.locOpts, loanFee: Pl.loanFee, relicPrice: Pl.relicPrice, draft: Gl.draft, postById: Gl.postById, newsReq: Nw.newsReq,
 };

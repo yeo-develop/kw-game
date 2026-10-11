@@ -174,7 +174,8 @@ function marketTick() {
   const title = evening ? T("tick.night") : T("tick.slot", { ic: D.SLOT_IC[S.slot], s: D.SLOT_NAME[S.slot], x: S.slot === lastStock ? T("tick.close") : "" });
   const rt = resolveTips(); onTipsResolved(rt, postById);
   if (rt.length) pushF("🔎", T("tick.tips", { n: rt.length }) + rt.map(t => `${srcOf(t).name} ${D.TK[t.tk].name} ${resMark(t.res)} (${pct(t.rr)})`).join(" · "), "tip");
-  if (n && !n.fake) { const nm = D.TK[n.tk] ? D.TK[n.tk].name + " " + pct(mv[n.tk].r) : T("tick.all"); pushF("📰", `${n.h} → ${nm}`, "news"); toast(`📰 ${n.h} → ${nm}`, "news", "news"); if (rnd() < 0.6) galReact("news", { h: n.h }, 1); }
+  if (n && !n.fake) { const nm = D.TK[n.tk] ? D.TK[n.tk].name + " " + pct(mv[n.tk].r) : T("tick.all"); pushF("📰", `${n.h} → ${nm}`, "news", n.llm ? [T("news.src", { s: n.src, b: n.body })] : undefined); toast(`📰 ${n.h} → ${nm}`, "news", "news"); if (rnd() < 0.6) galReact("news", { h: n.h }, 1); }
+  else if (n && n.llm) { pushF("📰", T("news.fakeFeed", { h: n.h }), "news", [T("news.src", { s: n.src, b: n.body })]); toast(T("news.fakeToast", { h: n.h }), "news", "news"); }   /* LLM 모드 가짜 기사 = 오보 정정 (시세 영향 없음, 난수 안 씀) */
   const shown = TKS().filter(tkOpen);
   const c0 = total ? conv(total) : T("conv0");
   if (rows.length) {

@@ -28,7 +28,7 @@ namespace KwGame.Sim
     public class MarketState { public int reg; public OMap<TkState> tk = new OMap<TkState>(); }
     public class MarketPlan { public Dictionary<string, double> r = new Dictionary<string, double>(); public Dictionary<string, double[]> w = new Dictionary<string, double[]>(); public bool whale; public int T = int.MinValue; }
     public class Move { public double o, c, h, l, r; }
-    public class News { public string tk, h; public int dir; public double r; public bool fake; }
+    public class News { public string tk, h; public int dir; public double r; public bool fake; public bool llm; public string body, src, ev, arc; public int? step; }
     public class Holding { public double q, cost; public int t0, bday; }
     public class CoinPos { public int id; public string tk; public int dir; public double lev, margin, entry, mult; public int t0; public double bonus; }
     public class Ledger { public string kind; public double amt; public string label; }
@@ -119,6 +119,7 @@ namespace KwGame.Sim
         public int faint = -1, cleared = 0; public Dictionary<string, int> endSeen = new Dictionary<string, int>(); public List<string> resume; public RelicOffer relicOffer; public int gday;
         public Stats st = new Stats();
         public string tg = ""; public int tgT; public Dictionary<string, int> tutSeen = new Dictionary<string, int>(); public int mgN;
+        public bool llm; public NewsFact nfact; public List<NewsLog> nlog = new List<NewsLog>(); public int[] nstr = { 0, 0, 0 };   // LLM 뉴스 (GameSim.Llm.cs)
         public Pending pending; public List<string> flow = new List<string>(); public string ending; public EndInfo endInfo;
         // JS 에서 처음엔 undefined 인 보조 필드
         public bool optTut; public int? kimpDay, kimBig, menCool, temptT, gT, repT; public double invIn; public Visit visit; public int dbgAug;

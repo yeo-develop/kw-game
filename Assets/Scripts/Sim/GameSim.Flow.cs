@@ -220,8 +220,13 @@ namespace KwGame.Sim
             if (n != null && !n.fake)
             {
                 string nm = D.TK.ContainsKey(n.tk) ? D.TK[n.tk].name + " " + pct(mv[n.tk].r) : T("tick.all");
-                pushF("📰", n.h + " → " + nm, "news"); toast("📰 " + n.h + " → " + nm, "news", "news");
+                pushF("📰", n.h + " → " + nm, "news", n.llm ? new List<string> { T("news.src", "s", n.src, "b", n.body) } : null); toast("📰 " + n.h + " → " + nm, "news", "news");
                 if (rnd() < 0.6) galReact("news", V("h", n.h), 1);
+            }
+            else if (n != null && n.llm)
+            {
+                // LLM 모드 가짜 기사 = 오보 정정 (시세 영향 없음, 난수 안 씀)
+                pushF("📰", T("news.fakeFeed", "h", n.h), "news", new List<string> { T("news.src", "s", n.src, "b", n.body) }); toast(T("news.fakeToast", "h", n.h), "news", "news");
             }
             var shown = TKS().Where(tkOpen).ToList();
             string c0 = total != 0 ? conv(total) : T("conv0");

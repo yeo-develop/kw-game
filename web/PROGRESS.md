@@ -28,3 +28,8 @@
 - [텍스트] 유품 목장갑 설명·aug.grind '+15%', 일하기 장소 힌트 '일당 1~12만 · 이자 막는 용도', 튜토리얼 job 단계·도움말 loc-work·규칙 요약(scenes)에 '알바만 하면 이자 막는 정도, 원금은 정보로', 도박 클리어 엔딩 문구 '주식도 알바도 아니고 도박으로'.
 - [결과] sim-cli 24개월: work MG 0.6~0.8 클리어 0%·bad1 0%·빚 3,042만(제자리), 0.8~1.0 0%·1,673만, 0.2~0.4 bad1 84%. steady 0.6~0.8 100%(≤5개월 66.0%, ≤8 93.3%), 0.3~0.5 94%(≤5 53.7%, 미클리어 6%). gamble 3000판 2.6% (seed 3001~6000: 3.2%), 나머지 bad2. invest 100%(≤5 66%). random bad1 70/bad2 28/clear 1. 표 = docs/ARCHITECTURE.md §13.
 - [검증] 골든 24개 재생성 → 24/24 통과 · check-sim OK · build OK · Playwright 4전략×1시드(seed 11, CONT=1) 콘솔 에러 0 (결과 scratchpad/proto/runs33c: gamble bad2 3개월, random bad1 12개월, work bad1 25개월 = 실제 미니게임 난이도 상승으로 제자리걸음 끝 표류, steady bad1 44개월 — play33b 의 steady 는 사채 종잣돈 없이 알바+리포트만 하므로 시드가 안 모여 못 갚음 = 의도대로).
+
+# LLM 뉴스 디렉터 (docs/LLM.md)
+- [sim] news.js 신설: query `newsReq`(뉴스 난수 = 시드·칸 번호, S.rng 안 씀) · 명령 `llmMode`·`newsFact`(검증) · LLM 모드 genNews(방향·가짜·WHEN 은 요청, 크기는 세기 3등분 + 게임 난수, 종목 쏠림·세기 균형 가드레일). LLM 모드가 아니면 예전과 난수 소비까지 같음 → 골든 24/24 그대로(재생성 안 함). 상태 llm·nfact·nlog·nstr (digest 밖). LLM 모드 가짜 기사 = "[오보]" 피드·토스트. strings: news.src·news.fakeFeed·news.fakeToast.
+- [테스트] tests/llm/{gen,run,common}.mjs 녹화 응답 픽스처 (C# 와 같은 해시·요청·뉴스 로그·피드 문구). bots.mjs 에 opt.inject (봇 난수 안 씀).
+- view 는 그대로 (llmMode 안 보냄 → 기존 동작).
