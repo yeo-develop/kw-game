@@ -2,14 +2,19 @@
     "name": "KwGame.View",
     "rootNamespace": "KwGame.View",
     "references": [
-        "KwGame.Sim"
+        "KwGame.Sim",
+        "KwGame.Persistence",
+        "Febucci.TextAnimatorForUnity.Runtime",
+        "Febucci.TextAnimatorForUnity.UITk.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "Newtonsoft.Json.dll"
+        "Newtonsoft.Json.dll",
+        "Febucci.TextAnimatorCore.dll",
+        "DOTween.dll"
     ],
     "autoReferenced": true,
     "defineConstraints": [],

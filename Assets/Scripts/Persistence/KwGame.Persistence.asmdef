@@ -1,0 +1,14 @@
+{
+    "name": "KwGame.Persistence",
+    "rootNamespace": "KwGame.Persistence",
+    "references": [
+        "KwGame.Sim"
+    ],
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Newtonsoft.Json.dll",
+        "Sirenix.Serialization.dll",
+        "Sirenix.Serialization.Config.dll"
+    ],
+    "autoReferenced": true
+}

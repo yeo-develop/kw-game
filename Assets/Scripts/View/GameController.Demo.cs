@@ -20,7 +20,7 @@ namespace KwGame.View
         /// 대사 클릭을 대신 눌러 가며 조건이 맞을 때까지 (오프닝 CG 찍기용)
         IEnumerator ClickUntil(Func<bool> cond, int max = 80)
         {
-            for (int i = 0; i < max && !cond(); i++) { if (waiting) clicked = true; yield return null; yield return null; }
+            for (int i = 0; i < max && !cond(); i++) { RequestAdvance(); yield return null; yield return null; }
             yield return new WaitForSeconds(0.2f);
         }
         /// home 이 나올 때까지 단순 선택으로 넘김
