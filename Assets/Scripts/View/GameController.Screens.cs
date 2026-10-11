@@ -50,17 +50,11 @@ namespace KwGame.View
             // 장면
             stage = Ui.Box(BG["room"]); stage.style.flexGrow = 1; stage.style.position = Position.Relative; stage.style.overflow = Overflow.Hidden;
             main.Add(stage);
-            stageTitle = Ui.Label("", 30, Ui.Dim, true); Ui.Abs(stageTitle, 32, 24); stage.Add(stageTitle);
-            stageCard = Ui.Box(new Color(1, 1, 1, 0.06f), 24, 200);
-            stageCard.style.width = 360; stageCard.style.height = 360; Ui.Abs(stageCard, 400, 120);
-            stageCard.style.alignItems = Align.Center; stageCard.style.justifyContent = Justify.Center;
-            Ui.Border(stageCard, Ui.Accent, 4);
-            stageCard.Add(Ui.Label("미래", 56, Ui.Accent, true));
-            charFace = Ui.Label("(neutral)", 26, Ui.Dim); stageCard.Add(charFace);
-            stage.Add(stageCard);
-            kimLabel = Ui.Label("김사장 등장", 34, Ui.Gold, true); Ui.Abs(kimLabel, null, 160, 60);
-            kimLabel.style.backgroundColor = new Color(0, 0, 0, 0.5f); Ui.Pad(kimLabel, 16); Ui.Radius(kimLabel, 10);
-            kimLabel.style.display = DisplayStyle.None; stage.Add(kimLabel);
+            BuildStageArt();   // 배경 · 미래 · NPC · CG (GameController.Art.cs)
+            stageTitle = Ui.Label("", 30, Ui.Text, true); Ui.Abs(stageTitle, 32, 24);
+            stageTitle.style.backgroundColor = new Color(0, 0, 0, 0.55f); Ui.Radius(stageTitle, 10);
+            stageTitle.style.paddingLeft = 18; stageTitle.style.paddingRight = 18; stageTitle.style.paddingTop = 8; stageTitle.style.paddingBottom = 8;
+            stageTitle.pickingMode = PickingMode.Ignore; stage.Add(stageTitle);
 
             // 대사창
             dlg = Ui.Box(new Color(0.06f, 0.06f, 0.09f, 0.94f), 28, 16);
@@ -89,7 +83,8 @@ namespace KwGame.View
             main.Add(panel);
 
             // 토스트 · 모달
-            toastCol = new VisualElement(); Ui.Abs(toastCol, null, 16, 24); toastCol.style.width = 560; toastCol.pickingMode = PickingMode.Ignore;
+            // 토스트는 오른쪽 아래(대사창 위)에 쌓음 — 위쪽에 두면 NPC 얼굴을 가림
+            toastCol = new VisualElement(); Ui.Abs(toastCol, null, null, 24, 250); toastCol.style.width = 500; toastCol.pickingMode = PickingMode.Ignore;
             stage.Insert(stage.IndexOf(dlg), toastCol);   // 대사창·폰 아래에 깔림
             modal = Ui.Box(new Color(0, 0, 0, 0.72f)); Ui.Fill(modal);
             modal.style.alignItems = Align.Center; modal.style.justifyContent = Justify.Center; modal.style.display = DisplayStyle.None;
@@ -119,32 +114,29 @@ namespace KwGame.View
         void RenderAll()
         {
             RenderHud(G.HudSnapOf());
+            RenderStage();
             RenderPanel();
             RenderPhone();
         }
 
-        void SetScene(string bg, string face)
-        {
-            stage.style.backgroundColor = bg != null && BG.TryGetValue(bg, out var c) ? c : BG["room"];
-            if (face != null) SetFace(face);
-        }
-        void SetFace(string f) { if (f != null) charFace.text = "(" + f + ")"; }
         string LocTitle()
         {
             var P = S.pending;
             string key = P?.key ?? P?.loc;
             if (key != null && D.LOCS.TryGetValue(key, out var L)) return L.name;
+            if (P?.t != "home" && S.visit?.key != null && D.LOCS.TryGetValue(S.visit.key, out L)) return L.name;
             return P?.t == "map" ? "동네 지도" : "원룸";
         }
 
-        void Toast(string text, string kind)
+        void Toast(string text, string kind, Sprite icon = null)
         {
             if (string.IsNullOrEmpty(text)) return;
             var t = Ui.Box(kind == "good" ? new Color(0.12f, 0.3f, 0.18f, 0.95f) : kind == "liq" ? new Color(0.35f, 0.1f, 0.12f, 0.95f) : kind == "big" ? new Color(0.4f, 0.3f, 0.05f, 0.95f) : new Color(0.15f, 0.15f, 0.22f, 0.95f), 14, 10);
             t.style.marginBottom = 8; t.pickingMode = PickingMode.Ignore;
+            if (icon != null) { t.style.flexDirection = FlexDirection.Row; t.style.alignItems = Align.Center; t.Add(Icon(icon, 56)); }
             var l = Ui.Label(text, kind == "big" ? 28 : 21, Ui.Text, kind == "big"); l.pickingMode = PickingMode.Ignore; t.Add(l);
             toastCol.Add(t);
-            while (toastCol.childCount > 6) toastCol.RemoveAt(0);
+            while (toastCol.childCount > 5) toastCol.RemoveAt(0);
             t.schedule.Execute(() => t.RemoveFromHierarchy()).StartingIn(kind == "big" ? 5000 : 3800);
         }
 
@@ -178,9 +170,13 @@ namespace KwGame.View
             string men = h.stress >= G.menLine() ? "멘헤라" : h.stress >= 40 ? "불안" : "평온";
             hudBar.Add(Stat("멘탈", $"{men} {h.stress:0}", h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : Ui.Good));
             hudBar.Add(Stat("중독", $"{h.addict:0}", h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim));
-            var relics = string.Join(", ", h.augs.Select(id => D.AUGS.FirstOrDefault(a => a.id == id)?.name ?? id));
-            var rl = Stat("유품", relics.Length > 0 ? relics : "없음", Ui.Gold); rl.style.flexShrink = 1; rl.style.maxWidth = 360;
-            ((Label)rl[1]).style.fontSize = 20;
+            // 유품 슬롯: 아이콘 (최대 7개 + 나머지 개수)
+            var rl = new VisualElement(); rl.style.marginRight = 24; rl.style.flexShrink = 1;
+            rl.Add(Ui.Label("유품", 18, Ui.Dim));
+            var icons = Ui.Row(); icons.style.marginTop = 4; rl.Add(icons);
+            foreach (var id in h.augs.Take(7)) { var ic = Icon(ArtCatalog.Relic(id), 48); ic.style.marginRight = 4; ic.tooltip = D.AUGS.FirstOrDefault(a => a.id == id)?.name ?? id; icons.Add(ic); }
+            if (h.augs.Count > 7) icons.Add(Ui.Label($"+{h.augs.Count - 7}", 22, Ui.Gold, true));
+            if (h.augs.Count == 0) icons.Add(Ui.Label("없음", 22, Ui.Dim));
             hudBar.Add(rl);
             var sp = new VisualElement(); sp.style.flexGrow = 1; hudBar.Add(sp);
             bool canPhone = PHONE_OK.Contains(S.pending?.t);
@@ -193,6 +189,25 @@ namespace KwGame.View
         // ---------- 행동 패널 (pending 마다) ----------
         void Title(string t) => panelTitle.text = Ui.Clean(t);
         void Btn(string text, Action a, string sub = null, bool dis = false, Color? bg = null) => panelBody.Add(Ui.Button(text, a, sub, dis, bg));
+        /// 아이콘 붙은 버튼 (유품 고르기·상점)
+        void IconBtn(Sprite icon, string text, Action a, string sub = null, bool dis = false)
+        {
+            var b = Ui.Button(text, a, sub, dis);
+            var col = new VisualElement(); col.style.flexShrink = 1; col.pickingMode = PickingMode.Ignore;
+            while (b.childCount > 0) col.Add(b[0]);
+            b.style.flexDirection = FlexDirection.Row; b.style.alignItems = Align.Center;
+            var ic = Icon(icon, 72); ic.style.marginRight = 16; ic.style.flexShrink = 0;
+            if (dis) ic.style.opacity = 0.5f;
+            b.Add(ic); b.Add(col);
+            panelBody.Add(b);
+        }
+        static VisualElement Icon(Sprite s, float size)
+        {
+            var v = new VisualElement(); v.style.width = size; v.style.height = size; v.pickingMode = PickingMode.Ignore;
+            v.style.backgroundColor = new Color(1, 1, 1, 0.08f); Ui.Radius(v, 8);
+            if (s != null) { v.style.backgroundImage = new StyleBackground(s); v.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Contain); }
+            return v;
+        }
         void Info(string text, float size = 22, Color? c = null) { var l = Ui.Label(text, size, c ?? Ui.Dim); l.style.marginBottom = 12; panelBody.Add(l); }
         VisualElement ChipRow() { var r = Ui.Row(); r.style.flexWrap = Wrap.Wrap; r.style.marginBottom = 8; panelBody.Add(r); return r; }
 
@@ -215,7 +230,7 @@ namespace KwGame.View
                     for (int i = 0; i < P.offer.Count; i++)
                     {
                         int k = i; var a = D.AUGS.First(x => x.id == P.offer[i]);
-                        Btn($"{a.name}  [{(D.TIER.TryGetValue(a.tier.ToString(), out var tn) ? tn : a.tier.ToString())}]", () => Send("pickRelic", "i", k), a.d);
+                        IconBtn(ArtCatalog.Relic(a.id), $"{a.name}  [{(D.TIER.TryGetValue(a.tier.ToString(), out var tn) ? tn : a.tier.ToString())}]", () => Send("pickRelic", "i", k), a.d);
                     }
                     Btn("상자 더 뒤지기 (1회)", () => Send("relicReroll"), null, P.rerolled);
                     break;
@@ -289,12 +304,17 @@ namespace KwGame.View
                     break;
                 case "relicShop":
                     Title("수상한 유품 상점");
-                    if (P.last != null) Info(P.last.junk.HasValue ? "방금 뽑기: 꽝 — " + D.RELIC_JUNK[P.last.junk.Value] : "방금 뽑기: " + D.AUGS.First(a => a.id == P.last.id).name, 22, Ui.Gold);
+                    if (P.last != null)
+                    {
+                        var lr = Ui.Row(); lr.style.marginBottom = 12; panelBody.Add(lr);
+                        var ic = Icon(P.last.junk.HasValue ? ArtCatalog.Junk(P.last.junk.Value) : ArtCatalog.Relic(P.last.id), 96); ic.style.marginRight = 16; lr.Add(ic);
+                        var lt = Ui.Label(P.last.junk.HasValue ? "방금 뽑기: 꽝 — " + D.RELIC_JUNK[P.last.junk.Value] : "방금 뽑기: " + D.AUGS.First(a => a.id == P.last.id).name, 22, Ui.Gold); lt.style.flexShrink = 1; lr.Add(lt);
+                    }
                     Btn($"랜덤 뽑기 ({G.won(D.RULES.GACHA_PRICE)})", () => Send("gachaRelic"), $"꽝 {D.RULES.GACHA_JUNK * 100:0}%", S.cash < D.RULES.GACHA_PRICE);
                     foreach (var id in G.Query(() => G.relicOffer()))
                     {
                         var a = D.AUGS.First(x => x.id == id); double pr = G.relicPrice(id); var rid = id;
-                        Btn($"{a.name}  {G.won(pr)}", () => Send("buyRelic", "id", rid), a.d, S.cash < pr);
+                        IconBtn(ArtCatalog.Relic(id), $"{a.name}  {G.won(pr)}", () => Send("buyRelic", "id", rid), a.d, S.cash < pr);
                     }
                     Btn("나가기", () => Send("relicDone"), null, false, Ui.Panel);
                     break;
@@ -394,7 +414,6 @@ namespace KwGame.View
             panelBody.Add(new VisualElement { style = { height = 16 } });
             if (P.cont) Btn("계속하기 (빚 없는 자유 모드)", () => Send("continue"), null, false, Ui.Accent);
             Btn("새 게임", () => NewGame(UnityEngine.Random.Range(1, 1000000)));
-            SetScene(E.bg, E.face);
         }
 
         // ---------- 폰 ----------

@@ -1,14 +1,11 @@
-"""art/ 원본(webp) → Assets/Art 게임용 파일. 사용법: swiftc -O tools/art/cutout.swift -o /tmp/cutout && python3 tools/art/export.py
+"""art/ 원본(webp) → Assets/Resources/Art 게임용 파일. 사용법: swiftc -O tools/art/cutout.swift -o /tmp/cutout && <numpy·scipy·pillow 있는 python> tools/art/export.py
 캐릭터·아이콘은 macOS Vision으로 배경 제거(투명 PNG), 배경·CG는 JPG(q90)."""
-import glob, os, subprocess, tempfile
+import glob, os
 from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-A, U, CUT = f"{ROOT}/art", f"{ROOT}/Assets/Art", "/tmp/cutout"
+A, U = f"{ROOT}/art", f"{ROOT}/Assets/Resources/Art"
 
-def cutout(src):
-    out = tempfile.mktemp(suffix=".png")
-    subprocess.run([CUT, src, out], check=True, capture_output=True)
-    return Image.open(out).convert("RGBA")
+from clean import clean_cutout as cutout
 
 def save_char(src, dst):  # 높이 1080, 원본 캔버스 유지(표정 바꿔도 위치 고정)
     im = cutout(src)

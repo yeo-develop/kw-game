@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.IO;
 using KwGame.Sim;
@@ -15,6 +16,12 @@ namespace KwGame.View
             ScreenCapture.CaptureScreenshot(Path.Combine(dir, name + ".png"));
             for (int i = 0; i < 4; i++) yield return null;
             Debug.Log("[shot] " + name);
+        }
+        /// 대사 클릭을 대신 눌러 가며 조건이 맞을 때까지 (오프닝 CG 찍기용)
+        IEnumerator ClickUntil(Func<bool> cond, int max = 80)
+        {
+            for (int i = 0; i < max && !cond(); i++) { if (waiting) clicked = true; yield return null; yield return null; }
+            yield return new WaitForSeconds(0.2f);
         }
         /// home 이 나올 때까지 단순 선택으로 넘김
         IEnumerator ToHome()
@@ -43,15 +50,18 @@ namespace KwGame.View
             autoSkipDialog = false;
             Send("start");
             yield return new WaitForSeconds(0.5f);
-            clicked = true; yield return null; clicked = true; yield return null; clicked = true;
-            yield return new WaitForSeconds(0.3f);
             yield return Shot(dir, "02_dialogue");
+            yield return ClickUntil(() => cgKey == "opening_visit");
+            yield return Shot(dir, "02b_opening_visit");
+            yield return ClickUntil(() => cgKey == "opening_box");
+            yield return Shot(dir, "02c_opening_box");
             autoSkipDialog = true; clicked = true;
             yield return UntilIdle();
             yield return Shot(dir, "03_relic");
             Send("pickRelic", "i", 0); yield return UntilIdle();
             yield return ToHome();
             yield return Shot(dir, "04_home");
+            { int sl = S.slot; S.slot = D.RULES.SLOTS - 1; RenderAll(); yield return Shot(dir, "04b_home_night"); S.slot = sl; RenderAll(); }   // 화면만 저녁으로 (데모 전용)
             Send("map"); yield return UntilIdle();
             yield return Shot(dir, "05_map");
             Send("goTo", "loc", "work"); yield return UntilIdle();
@@ -67,11 +77,40 @@ namespace KwGame.View
             phoneTab = "gall"; RenderAll();
             yield return Shot(dir, "09_phone_gall");
             phoneOpen = false; RenderAll();
+            // 장소 NPC (카지노 = 딜러, 점심·저녁만 열림)
+            Send("map"); yield return UntilIdle();
+            Send("goTo", "loc", "casino"); yield return UntilIdle();
+            if (S.pending.t == "encounter") { yield return Shot(dir, "05c_encounter"); Send("encounter", "ask", false); yield return UntilIdle(); }
+            if (S.pending.t == "loc") yield return Shot(dir, "06b_loc_casino");
+            yield return ToHome();
+            // 유품 상점: 뽑기 결과 아이콘
+            Send("debug", "k", "cash"); yield return UntilIdle();
+            Send("map"); yield return UntilIdle();
+            Send("goTo", "loc", "shop"); yield return UntilIdle();
+            if (S.pending.t == "encounter") { Send("encounter", "ask", false); yield return UntilIdle(); }
+            if (S.pending.t == "loc")
+            {
+                Send("act", "k", "l-relic"); yield return UntilIdle();
+                yield return Shot(dir, "13_relic_shop");
+                Send("gachaRelic"); yield return UntilIdle();
+                Send("gachaRelic"); yield return UntilIdle();
+                yield return Shot(dir, "14_relic_gacha");
+                Send("relicDone"); yield return UntilIdle();
+            }
+            yield return ToHome();
+            // 표정: 상태(멘헤라) → 이벤트 강한 연출(큰 수익·큰 손실·청산) 덮어쓰기
+            Send("debug", "k", "men"); yield return UntilIdle();
+            faceHold = 0; RenderAll();
+            yield return Shot(dir, "15_face_mental");
+            foreach (var (fk, nm) in new[] { ("excited", "16_face_excited"), ("shocked", "17_face_shocked"), ("crying_comic", "18_face_crying_comic") })
+            { faceStrong = false; HoldFace(fk, true); yield return Shot(dir, nm); }
+            faceStrong = false;
             // 엔딩 화면: 헤드리스 봇으로 끝까지 돌린 판을 그대로 띄움
-            foreach (var (sd, strat, nm) in new[] { (11, "steady", "10_ending_clear"), (22, "gamble", "11_ending_bad2"), (11, "random", "12_ending_bad1") })
+            foreach (var (sd, strat, nm) in new[] { (11, "steady", "10_ending_clear"), (22, "gamble", "11_ending_bad2"), (1201, "random", "12_ending_bad1") })
             {
                 var r = Bots.Run(D, sd, strat);
                 G = r.game; G.Hud = true; RenderAll();
+                Debug.Log($"[shot] {nm}: ending={S.endInfo?.kind} cg={cgKey}");
                 yield return Shot(dir, nm);
             }
             // 봇 명령열을 화면 경로(Send → 이벤트 재생 → RenderAll)로 재생: 모든 pending 화면이 예외 없이 그려지는지 + 화면별 첫 스크린샷

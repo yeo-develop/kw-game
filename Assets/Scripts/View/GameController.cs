@@ -19,8 +19,8 @@ namespace KwGame.View
 
         GameData D; GameSim G; GameState S => G.S;
         UIDocument doc; VisualElement root;
-        VisualElement hudBar, stage, stageCard, dlg, panel, panelBody, toastCol, modal, phone;
-        Label stageTitle, charFace, kimLabel, dlgName, dlgText, panelTitle;
+        VisualElement hudBar, stage, dlg, panel, panelBody, toastCol, modal, phone;
+        Label stageTitle, dlgName, dlgText, panelTitle;
         bool playing, waiting, clicked; int waitFrame;
         bool phoneOpen; string phoneTab = "stock";
         float mgScore = 0.7f; double stakeFrac = 0.1;
@@ -73,7 +73,7 @@ namespace KwGame.View
         // ---------- 이벤트 재생 (events.js) ----------
         IEnumerator Play(List<SimEvent> evs)
         {
-            playing = true;
+            playing = true; FacePlayBegin();
             panel.SetEnabled(false); panel.style.opacity = 0.45f;
             foreach (var e in evs)
             {
@@ -82,23 +82,32 @@ namespace KwGame.View
                 {
                     case "say": yield return Say(e.Str("who"), e.Str("name"), e.Str("text"), e.Str("face")); break;
                     case "hideDlg": dlg.style.display = DisplayStyle.None; break;
-                    case "scene": SetScene(e.Str("bg"), e.Str("face")); break;
+                    case "scene": SetScene(e.Str("bg"), e.Str("face"), e["night"] is bool nt && nt); break;
                     case "face": SetFace(e.Str("f")); break;
-                    case "kim": kimLabel.style.display = (e["on"] is bool on && on) ? DisplayStyle.Flex : DisplayStyle.None; break;
-                    case "npc": stageTitle.text = Ui.Clean(e.Str("kind") != null && D.NPC_NAME.TryGetValue(e.Str("kind"), out var nn) ? nn : LocTitle()); break;
-                    case "toast": Toast(e.Str("text"), e.Str("kind")); break;
-                    case "bubble": Toast("미래: " + e.Str("text"), "bubble"); break;
-                    case "tip": if (e.Str("bubble") != null) Toast("미래: " + e.Str("bubble"), "bubble"); break;
-                    case "casino": Toast($"{e.Str("txt")}  ({G.sgnWon(e.Num("net"))})", e.Num("net") > 0 ? "good" : "liq"); yield return new WaitForSeconds(autoSkipDialog ? 0 : 0.35f); break;
-                    case "race": { var H = S.pending?.H; string w = H != null && (int)e.Num("win") < H.Count ? H[(int)e.Num("win")].name : "?"; Toast($"1등: {w}  ({G.sgnWon(e.Num("net"))})", e.Num("net") > 0 ? "good" : "liq"); break; }
-                    case "scratch": Toast(e["prize"] is object[] pz ? $"당첨! {G.won(Convert.ToDouble(pz[1]))}" : "꽝", e["prize"] != null ? "good" : ""); break;
+                    case "kim": ShowKim(e["on"] is bool on && on); break;
+                    case "npc": stageTitle.text = Ui.Clean(e.Str("kind") != null && D.NPC_NAME.TryGetValue(e.Str("kind"), out var nn) ? nn : LocTitle()); ShowNpc(e.Str("kind")); break;
+                    case "toast": Toast(e.Str("text"), e.Str("kind")); if (e.Str("app") == "gall") HoldFace("annoyed"); break;
+                    case "bubble": Toast("미래: " + e.Str("text"), "bubble"); SetFace(e.Str("face")); break;
+                    case "tip": if (e.Str("bubble") != null) { Toast("미래: " + e.Str("bubble"), "bubble"); SetFace(e.Str("face")); } break;
+                    case "casino": Toast($"{e.Str("txt")}  ({G.sgnWon(e.Num("net"))})", e.Num("net") > 0 ? "good" : "liq"); if (e.Num("net") > 0) HoldFace("smug"); yield return new WaitForSeconds(autoSkipDialog ? 0 : 0.35f); break;
+                    case "race": { var H = S.pending?.H; string w = H != null && (int)e.Num("win") < H.Count ? H[(int)e.Num("win")].name : "?"; Toast($"1등: {w}  ({G.sgnWon(e.Num("net"))})", e.Num("net") > 0 ? "good" : "liq"); if (e.Num("net") > 0) HoldFace("smug"); break; }
+                    case "scratch": Toast(e["prize"] is object[] pz ? $"당첨! {G.won(Convert.ToDouble(pz[1]))}" : "꽝", e["prize"] != null ? "good" : ""); if (e["prize"] != null) HoldFace("smug"); break;
                     case "lottoDraw": Toast($"빚또 추첨: {string.Join("·", (List<int>)e["win"])} → {G.won(e.Num("tot"))}", "news"); break;
-                    case "fx": if (e.Str("k") == "big") Toast(e.Str("text") + " " + (e.Str("small") ?? ""), "big"); break;
-                    case "relic": { var a = D.AUGS.FirstOrDefault(x => x.id == e.Str("id")); if (a != null) Toast($"유품 획득: {a.name}", "good"); break; }
-                    case "gacha": if (e["junk"] != null) Toast("꽝: " + e.Str("text"), ""); break;
-                    case "menhera": Toast("카톡 " + ((string[])e["msgs"]).Length + "개 폭탄", "liq"); break;
+                    case "fx":
+                        switch (e.Str("k"))
+                        {
+                            case "big": Toast(e.Str("text") + " " + (e.Str("small") ?? ""), "big"); break;
+                            case "flex": HoldFace("excited", true); break;
+                            case "crack": HoldFace("shocked", true); break;
+                            case "ash": HoldFace("crying_comic", true); break;
+                        }
+                        break;
+                    case "relic": { var a = D.AUGS.FirstOrDefault(x => x.id == e.Str("id")); if (a != null) { Toast($"유품 획득: {a.name}", "good", ArtCatalog.Relic(a.id)); HoldFace("smug"); } break; }
+                    case "gacha": if (e["junk"] != null) Toast("꽝: " + e.Str("text"), "", ArtCatalog.Junk((int)e.Num("junk"))); break;
+                    case "bought": SetFace("happy"); break;
+                    case "menhera": Toast("카톡 " + ((string[])e["msgs"]).Length + "개 폭탄", "liq"); SetFace("menhera"); break;
                     case "addictEv": if (e.Str("k") == "secret") Toast($"몰래 카지노 {G.sgnWon(e.Num("amt"))}", "liq"); break;
-                    case "faint": Toast("기절!", "liq"); break;
+                    case "faint": Toast("기절!", "liq"); HoldFace("dizzy", true); break;
                     case "morning": yield return Morning(e); break;
                     case "opening": yield return PlayScene("opening"); break;
                     case "ending": if (e.Str("kind") == "clear") yield return PlayScene("clear"); break;
@@ -106,7 +115,7 @@ namespace KwGame.View
                 }
             }
             dlg.style.display = DisplayStyle.None;
-            playing = false;
+            playing = false; FacePlayEnd();
             panel.SetEnabled(true); panel.style.opacity = 1f;
             RenderAll();
         }
@@ -119,6 +128,7 @@ namespace KwGame.View
             dlgText.text = Ui.Clean(text);
             dlgText.style.unityFontStyleAndWeight = who == "nar" ? FontStyle.Italic : FontStyle.Normal;
             if (face != null) SetFace(face);
+            SpeakerArt(who, name, face);
             yield return WaitClick();
         }
         IEnumerator WaitClick()
@@ -130,6 +140,7 @@ namespace KwGame.View
         }
         void Update()
         {
+            FaceTick();
             if (!waiting) return;
             if (Time.frameCount <= waitFrame) return;
             if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) clicked = true;
@@ -139,18 +150,20 @@ namespace KwGame.View
         {
             var steps = D.J["SCENES"]?[key] as JArray;
             if (steps == null) yield break;
+            sceneKey = key;
             foreach (JObject st in steps)
             {
                 if (st["say"] != null) yield return Say((string)st["say"], (string)st["name"], (string)st["text"], (string)st["face"]);
                 else switch ((string)st["do"])
                 {
-                    case "scene": SetScene((string)st["bg"], (string)st["face"]); break;
+                    case "scene": SetScene((string)st["bg"], (string)st["face"], (bool?)st["night"] == true); break;
                     case "face": SetFace((string)st["f"]); break;
-                    case "kim": kimLabel.style.display = (bool?)st["on"] == true ? DisplayStyle.Flex : DisplayStyle.None; break;
+                    case "kim": ShowKim((bool?)st["on"] == true); break;
                     case "hideDlg": dlg.style.display = DisplayStyle.None; break;
-                    case "rules": yield return RulesCard(); break;
+                    case "rules": yield return RulesCard(); if (key == "opening") ShowCg("opening_box"); break;   // 규칙 뒤 = 유품 상자 장면
                 }
             }
+            sceneKey = null;
             dlg.style.display = DisplayStyle.None;
         }
 
@@ -158,6 +171,7 @@ namespace KwGame.View
         {
             modal.Clear();
             modal.style.display = DisplayStyle.Flex;
+            HoldFace("pajama");   // 밤잠 자고 일어난 아침
             var card = Card(900);
             card.Add(Ui.Label($"☀ {e.Num("month")}개월차 {e.Num("day")}일 아침", 40, Ui.Gold, true));
             card.Add(Ui.Label(e["paid"] is bool p && p ? "이번 달 이자 냄" : $"이자일까지 D-{e.Num("dd")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Dim));

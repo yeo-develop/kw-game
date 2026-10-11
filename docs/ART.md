@@ -1,12 +1,12 @@
 # 아트 에셋 (v1, 2026-10-11)
 
 ## 어디에 있나
-- **게임용 (git):** `Assets/Art/` — 캐릭터·아이콘은 배경 제거한 투명 PNG, 배경·CG는 JPG. `Assets/Editor/ArtImporter.cs`가 전부 스프라이트로 가져오고, 캐릭터 피벗은 발끝(아래 가운데).
+- **게임용 (git):** `Assets/Resources/Art/` — 캐릭터·아이콘은 배경 제거한 투명 PNG, 배경·CG는 JPG. `Assets/Editor/ArtImporter.cs`가 전부 스프라이트로 가져오고, 캐릭터 피벗은 발끝(아래 가운데). 런타임은 `Resources.Load` (View/ArtCatalog.cs) — 화면 어디에 무엇이 붙는지는 docs/UNITY.md §9.
 - **원본 (git 아님):** 로컬 `art/` (gitignore) + R2 `serin-assets/kw-game/art-src/` (같은 폴더 구조, webp). 다시 받기: `npx wrangler r2 object get serin-assets/kw-game/art-src/<경로> --file <경로> --remote`.
 - 탈락작은 각 폴더 `rejects/`, 고르기 전 후보는 `cg/candidates/`, 첫 시안은 `mirai/raw/`·`mirai/base_candidates/`.
 
 ## 목록 (67장)
-| 구분 | Assets/Art | 크기 | 파일 |
+| 구분 | Assets/Resources/Art | 크기 | 파일 |
 |---|---|---|---|
 | 미래 스탠딩 11 | Characters/Mirai | 높이 1080 PNG | base, excited, mental(멘헤라), crying, crying_comic(오열), annoyed, shocked, smug, tired, pajama, dizzy(기절) — `mirai_` 접두 |
 | 김사장·NPC 16 | Characters/NPC | 높이 1080 PNG | kim_base, kim_menace, kim_farewell + data/npcs.json 키(broker, dealer, race, lotto, pc, bank, shop, work, taxi, cousin, pckid, hench, suit) |
@@ -28,5 +28,5 @@
 ## 게임용 파일 다시 만들기
 ```
 swiftc -O tools/art/cutout.swift -o /tmp/cutout   # macOS Vision 전경 마스크
-python3 tools/art/export.py                       # art/ → Assets/Art
+python3 tools/art/export.py                       # art/ → Assets/Resources/Art
 ```
