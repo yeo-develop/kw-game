@@ -29,3 +29,6 @@
 /dotnet/**/bin/
 /dotnet/**/obj/
 !/dotnet/**/*.csproj
+
+# 아트 원본(webp, 약 57MB)은 R2 kw-game/art-src/ 에 보관. 게임용은 Assets/Art.
+/art/
