@@ -31,7 +31,7 @@ python3 -m venv /tmp/artvenv && /tmp/artvenv/bin/pip install "rembg[cpu]" numpy 
 swiftc -O tools/art/cutout.swift -o /tmp/cutout   # 아이콘용 macOS Vision 전경 마스크
 /tmp/artvenv/bin/python tools/art/export.py       # art/ → Assets/Resources/Art
 ```
-- 캐릭터: 애니 전용 분할 모델 **isnet-anime**(rembg, 첫 실행 때 176MB 자동 다운로드) + 가장자리 흰색 언믹스 (`tools/art/clean.py`). macOS Vision은 머리카락 사이 흰 빈틈을 못 지워서 캐릭터에는 쓰지 않는다.
+- 캐릭터: **NovelAI Director Tools → Remove BG**(장당 65 Anlas)의 `generated` 결과를 `art/nobg/<이름>.png`로 두면 그걸 쓴다(머리카락 사이까지 가장 깨끗, 현재 27장 전부). 없으면 애니 전용 분할 모델 **isnet-anime**(rembg, 첫 실행 때 176MB 자동 다운로드) + 가장자리 흰색 언믹스 (`tools/art/clean.py`). macOS Vision은 머리카락 사이 흰 빈틈을 못 지워서 캐릭터에는 쓰지 않는다.
 - 아이콘: macOS Vision (물건은 이쪽이 그림자까지 깔끔).
 ```
 ```
