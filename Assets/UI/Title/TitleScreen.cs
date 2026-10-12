@@ -134,6 +134,20 @@ namespace KwGame.Title
             continueButton.tooltip = saveStatus;
         }
 
+        // 스크린샷 데모(-kwShots <폴더>): 타이틀을 찍고 바로 게임 씬으로 (게임 씬이 나머지를 찍음)
+        private System.Collections.IEnumerator Start()
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            int i = System.Array.IndexOf(args, "-kwShots");
+            if (i < 0 || i + 1 >= args.Length) yield break;
+            System.IO.Directory.CreateDirectory(args[i + 1]);
+            yield return new WaitForSeconds(3f);
+            yield return new WaitForEndOfFrame();
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(args[i + 1], "00_title_scene.png"));
+            yield return new WaitForSeconds(0.5f);
+            SceneManager.LoadScene(gameScene);
+        }
+
         [Button("새로 시작"), DisableInEditorMode]
         public void StartGame()
         {

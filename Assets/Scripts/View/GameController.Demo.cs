@@ -100,6 +100,10 @@ namespace KwGame.View
                 Send("relicDone"); yield return UntilIdle();
             }
             yield return ToHome();
+            // 돌발 이벤트 (첫 번째 = 김사장 깜짝 방문)
+            Send("debug", "k", "event"); yield return UntilIdle();
+            if (S.pending?.t == "event") { yield return Shot(dir, "20_event"); Send("evPick", "k", S.pending.opts[0].k); yield return UntilIdle(); }
+            yield return ToHome();
             // 표정: 상태(멘헤라) → 이벤트 강한 연출(큰 수익·큰 손실·청산) 덮어쓰기
             Send("debug", "k", "men"); yield return UntilIdle();
             faceHold = 0; RenderAll();
