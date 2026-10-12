@@ -137,6 +137,7 @@ namespace KwGame.View
             RenderPanel();
             RenderPhone();
             RenderSaveControls();
+            BarrageSync();
         }
 
         string LocTitle()
