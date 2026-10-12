@@ -32,3 +32,13 @@
 
 # 아트 원본(webp, 약 57MB)은 R2 kw-game/art-src/ 에 보관. 게임용은 Assets/Art.
 /art/
+
+# 유료 에셋 (에셋 스토어 라이선스상 공개 저장소에 못 올림) — 각자 로컬에 설치
+# DOTween Pro(+DemiLib·DOTween 동봉) · Odin Inspector · Text Animator
+/Assets/Plugins/Demigiant/
+/Assets/Plugins/Demigiant.meta
+/Assets/Plugins/Sirenix/
+/Assets/Plugins/Sirenix.meta
+/Assets/Plugins/Febucci/
+/Assets/Plugins/Febucci.meta
+/Packages/com.febucci.text-animator-unity/
