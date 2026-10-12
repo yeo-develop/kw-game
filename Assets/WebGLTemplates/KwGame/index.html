@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #15121B; overflow: hidden; }
+      #wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+      /* 16:9 로 창에 맞춤 (레터박스) */
+      #unity-canvas { width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)); background: #15121B; display: block; }
+      #loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+                 color: #F4EFE6; font: 700 20px system-ui, sans-serif; }
+      #bar { width: min(60vw, 480px); height: 10px; border-radius: 5px; background: #3B3346; overflow: hidden; }
+      #fill { width: 0; height: 100%; background: #FFD447; }
+      #err { color: #FF4F87; font-size: 16px; max-width: 80vw; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap"><canvas id="unity-canvas" tabindex="-1"></canvas></div>
+    <div id="loading"><div>{{{ PRODUCT_NAME }}} 불러오는 중…</div><div id="bar"><div id="fill"></div></div><div id="err"></div></div>
+    <script>
+      var buildUrl = "Build";
+      var config = {
+        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_WASM
+        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        // 세이브(persistentDataPath)를 브라우저 IndexedDB 에 자동 저장 — 없으면 새로고침 때 날아감
+        autoSyncPersistentDataPath: true,
+        showBanner: function (msg, type) { if (type == "error") document.querySelector("#err").textContent = msg; else console.warn(msg); },
+      };
+      var script = document.createElement("script");
+      script.src = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      script.onload = function () {
+        createUnityInstance(document.querySelector("#unity-canvas"), config, function (p) {
+          document.querySelector("#fill").style.width = 100 * p + "%";
+        }).then(function () {
+          document.querySelector("#loading").remove();
+        }).catch(function (m) { document.querySelector("#err").textContent = m; });
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

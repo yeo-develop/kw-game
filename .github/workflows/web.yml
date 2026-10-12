@@ -1,0 +1,71 @@
+# main 을 따라가는 웹 빌드: main 에 푸시될 때마다 WebGL 빌드 → GitHub Pages
+#   https://yeo-develop.github.io/kw-game/
+# 유료 에셋(DOTween Pro·Odin·Text Animator)은 공개 저장소에 못 올리므로
+# 비공개 yeo-develop/kw-game-assets 를 읽기 전용 배포 키(ASSETS_SSH_KEY)로 받아 덮어쓴다.
+# Unity 라이선스: Personal 좌석을 UNITY_EMAIL · UNITY_PASSWORD 로 활성화/반납 (GameCI v6, .ulf 불필요).
+# Unity 계정은 구글 로그인이 아니라 id.unity.com 비밀번호 로그인이어야 하고 2FA 꺼져 있어야 함.
+name: web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: web
+  cancel-in-progress: false   # 도중에 죽이면 Personal 좌석이 반납 안 되고 샐 수 있음
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 유료 에셋 받기 (비공개 저장소)
+        uses: actions/checkout@v4
+        with:
+          repository: yeo-develop/kw-game-assets
+          ssh-key: ${{ secrets.ASSETS_SSH_KEY }}
+          path: .paid
+      - run: cp -R .paid/Assets/. Assets/ && cp -R .paid/Packages/. Packages/ && rm -rf .paid
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-WebGL-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: Library-WebGL-
+
+      - uses: game-ci/unity-builder@v6
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: WebGL
+          buildName: WebGL
+          buildsPath: build
+          allowDirtyBuild: true
+
+      - name: 버전 표시
+        run: |
+          sudo chown -R "$USER" build
+          git log -1 --format='%H%n%cd %s' --date=format:'%F %R' > build/WebGL/WebGL/version.txt
+          touch build/WebGL/WebGL/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/WebGL/WebGL
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
