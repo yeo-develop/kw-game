@@ -113,24 +113,5 @@ namespace KwGame.View
             b.style.marginRight = 8; b.style.paddingTop = 8; b.style.paddingBottom = 8; b.style.paddingLeft = 12; b.style.paddingRight = 12;
             return b;
         }
-
-        /// 0~1 값을 클릭/드래그로 고르는 막대 (테마 없이 보이는 슬라이더)
-        public static VisualElement ScoreBar(float width, Action<float> onChange, float init = 0.7f)
-        {
-            var bar = Box(new Color(1, 1, 1, 0.1f), 0, 8);
-            bar.style.width = width; bar.style.height = 44;
-            var fill = Box(Accent, 0, 8);
-            fill.style.height = Length.Percent(100);
-            fill.style.width = Length.Percent(init * 100);
-            fill.pickingMode = PickingMode.Ignore;
-            bar.Add(fill);
-            bool drag = false;
-            void Set(Vector2 p) { float v = Mathf.Clamp01(p.x / Mathf.Max(1, bar.resolvedStyle.width)); fill.style.width = Length.Percent(v * 100); onChange(v); }
-            bar.RegisterCallback<PointerDownEvent>(e => { drag = true; Set(e.localPosition); bar.CapturePointer(e.pointerId); });
-            bar.RegisterCallback<PointerMoveEvent>(e => { if (drag) Set(e.localPosition); });
-            bar.RegisterCallback<PointerUpEvent>(e => { drag = false; bar.ReleasePointer(e.pointerId); });
-            onChange(init);
-            return bar;
-        }
     }
 }

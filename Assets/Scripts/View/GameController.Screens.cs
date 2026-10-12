@@ -138,6 +138,7 @@ namespace KwGame.View
             RenderPhone();
             RenderSaveControls();
             BarrageSync();
+            MinigameSync();
         }
 
         string LocTitle()
@@ -384,24 +385,28 @@ namespace KwGame.View
             }
         }
 
+        static readonly Dictionary<string, string> MG_RULES = new Dictionary<string, string>
+        {
+            ["cafe"] = "주문표대로 음료를 담고 서빙. 손님은 주문을 잠깐만 보여 주고 폰 봄 → 까먹으면 R (주문당 1번). 틀리면 그 주문 날아감.\n1~5 음료 · 0 비우기 · Enter 서빙 · 주문 3개",
+            ["store"] = "바늘이 초록 구간에 왔을 때 삑! 4개 찍기. 찍을수록 바늘은 빨라지고 구간은 좁아짐.\nSpace / 클릭",
+            ["ware"] = "연타로 박스 올리기. 중간에 깨지기 쉬움 박스가 오면 1초 동안 손 떼기 (치면 −3). 허리는 소모품.\nSpace / 클릭 연타 · 6초",
+            ["mart"] = "떨어지는 박스와 돌진하는 진상 카트 피하기. 9초 버티기, 맞을 때마다 일당 깎임.\n← → / A D / 화면 드래그 · 목숨 5개",
+        };
+
         void RenderWork(Pending P)
         {
             var J = D.JOBS[P.key];
             Title(J.name);
+            Info(MG_RULES.TryGetValue(P.key, out var rule) ? rule : "", 22, Ui.Text);
             if (P.setup == null)
             {
-                Info($"일당 {G.man(J.@base)}~{G.man(J.@base + J.var)}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Text);
-                Btn("일 시작 (미니게임)", () => Send("mgSetup"));
+                Info($"일당 {G.man(J.@base)}~{G.man(J.@base + J.var)}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
+                if (G.hpMult() < 1) Info($"체력이 낮아 점수 ×{G.hpMult():0.00}", 20, Ui.Bad);
+                Btn("일 시작", () => Send("mgSetup"), "3·2·1 하고 바로 시작", false, Ui.Accent);
                 return;
             }
-            Info("[미니게임 자리] 실제 미니게임 대신 점수를 직접 고른다 (0~1).", 22, Ui.Gold);
             if (P.setup.hpm < 1) Info($"체력이 낮아 점수 ×{P.setup.hpm:0.00}", 20, Ui.Bad);
-            var lbl = Ui.Label($"점수 {mgScore:0.00}", 28, Ui.Text, true); panelBody.Add(lbl);
-            var bar = Ui.ScoreBar(560, v => { mgScore = v; lbl.text = $"점수 {v:0.00}  → 예상 일당 {G.won(MathK.Round1k(J.@base + J.var * v * P.setup.hpm))}"; }, mgScore);
-            bar.style.marginBottom = 16; panelBody.Add(bar);
-            var r = ChipRow();
-            foreach (var v in new[] { 0.3f, 0.6f, 0.8f, 1f }) { var x = v; r.Add(Ui.Chip($"{x:0.0}", () => Send("mgResult", "score", (double)x))); }
-            Btn("결과 제출", () => Send("mgResult", "score", (double)mgScore), null, false, Ui.Accent);
+            MinigameEnsure(P);
         }
 
         double Stake(double frac) { double mx = Math.Floor(S.cash / 10000) * 10000; return Math.Max(10000, Math.Floor(mx * frac / 10000) * 10000); }

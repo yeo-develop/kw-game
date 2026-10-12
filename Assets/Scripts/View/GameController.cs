@@ -29,7 +29,7 @@ namespace KwGame.View
         bool waitingForDialogue;
         int advanceFrame = -1;
         bool phoneOpen; string phoneTab = "stock";
-        float mgScore = 0.7f; double stakeFrac = 0.1;
+        double stakeFrac = 0.1;
         Font font, fontBold;
 
         static readonly Dictionary<string, Color> BG = new Dictionary<string, Color>

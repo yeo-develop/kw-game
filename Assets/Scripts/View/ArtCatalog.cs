@@ -44,6 +44,13 @@ namespace KwGame.View
         /// npcs.json 키 또는 kim_base·kim_menace·kim_farewell
         public static Sprite Npc(string key) => key == null ? null : Load("Characters/NPC/" + key);
         public static Sprite Cg(string key) => key == null ? null : Load("CG/" + key);
+        /// 미니게임 그림 (Icons/Minigame/<키>). 아직 없는 그림이 많아서 없으면 경고 없이 null → 색 도형으로 그림
+        public static Sprite Minigame(string key)
+        {
+            string path = "Icons/Minigame/" + key;
+            if (!cache.TryGetValue(path, out var s)) cache[path] = s = Resources.Load<Sprite>("Art/" + path);
+            return s;
+        }
         public static Sprite Relic(string id) => id == null ? null : Load("Icons/Relics/" + id);
 
         /// RELIC_JUNK 순서 그대로
