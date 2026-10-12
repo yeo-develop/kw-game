@@ -1,0 +1,430 @@
+.title-root {
+    flex-grow: 1;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: rgb(19, 23, 34);
+    color: rgb(248, 244, 243);
+    -unity-font-definition: url("project://database/Assets/Resources/Fonts/Pretendard-Regular.ttf?fileID=12800000&guid=c42e2f368ff4040d58de51708649011c&type=3#Pretendard-Regular");
+}
+
+.room-art {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("project://database/Assets/Resources/Art/Backgrounds/room_night.jpg?fileID=21300000&guid=17f78bda133a442778d632fd93716f0e&type=3#room_night");
+    -unity-background-scale-mode: scale-and-crop;
+    opacity: 0.6;
+}
+
+.reading-veil {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 52%;
+    background-color: rgba(19, 23, 34, 0.92);
+    border-right-width: 1px;
+    border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+.character-art {
+    position: absolute;
+    right: 3%;
+    bottom: 5%;
+    width: 40%;
+    height: 98%;
+    background-image: url("project://database/Assets/Resources/Art/Characters/Mirai/mirai_base.png?fileID=21300000&guid=33daf05a4e0b948ebaa7806225c94e51&type=3#mirai_base");
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.top-bar {
+    position: absolute;
+    top: 4%;
+    left: 7.5%;
+    right: 5%;
+    flex-direction: row;
+    align-items: center;
+}
+
+.wordmark {
+    font-size: 22px;
+    color: rgb(199, 200, 210);
+}
+
+.spacer {
+    flex-grow: 1;
+}
+
+.api-status {
+    background-color: rgba(19, 23, 34, 0.94);
+    color: rgb(224, 224, 231);
+    font-size: 20px;
+    padding: 12px 20px;
+    border-width: 1px;
+    border-color: rgb(104, 107, 122);
+    border-radius: 6px;
+}
+
+.title-content {
+    position: absolute;
+    left: 7.5%;
+    top: 15%;
+    width: 40%;
+}
+
+.logo {
+    margin-bottom: 14px;
+}
+
+.title-line {
+    -unity-font-definition: url("project://database/Assets/Resources/Fonts/Pretendard-Bold.ttf?fileID=12800000&guid=c70d21a98011743c0997aca8fb95b5c8&type=3#Pretendard-Bold");
+    font-size: 112px;
+    margin: 0;
+    padding: 0;
+}
+
+.title-accent {
+    color: rgb(242, 168, 190);
+    margin-top: -14px;
+}
+
+.tagline {
+    font-size: 28px;
+    color: rgb(235, 228, 231);
+    margin-bottom: 26px;
+}
+
+.story-hook {
+    min-height: 68px;
+    margin-bottom: 30px;
+    max-width: 670px;
+}
+
+.story-text {
+    font-size: 24px;
+    color: rgb(206, 208, 220);
+    white-space: normal;
+}
+
+.main-menu {
+    width: 410px;
+}
+
+.menu-button {
+    margin: 0 0 10px 0;
+    padding: 16px 24px;
+    min-height: 66px;
+    border-width: 1px;
+    border-color: rgb(106, 107, 122);
+    border-radius: 6px;
+    background-color: rgb(40, 44, 58);
+    color: rgb(248, 244, 243);
+    font-size: 28px;
+    -unity-text-align: middle-left;
+}
+
+.continue-button {
+    align-items: flex-start;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.menu-label {
+    font-size: 25px;
+    margin: 0;
+    padding: 0;
+}
+
+.menu-detail {
+    font-size: 19px;
+    color: rgb(174, 176, 188);
+    margin: 4px 0 0 0;
+    padding: 0;
+}
+
+.menu-button:disabled {
+    background-color: rgb(32, 36, 49);
+    color: rgb(174, 176, 188);
+    border-color: rgb(72, 76, 92);
+}
+
+.primary-button {
+    background-color: rgb(242, 168, 190);
+    color: rgb(37, 25, 35);
+    border-color: rgb(242, 168, 190);
+    -unity-font-definition: url("project://database/Assets/Resources/Fonts/Pretendard-Bold.ttf?fileID=12800000&guid=c70d21a98011743c0997aca8fb95b5c8&type=3#Pretendard-Bold");
+}
+
+.menu-button:hover {
+    background-color: rgb(58, 63, 80);
+}
+
+.primary-button:hover {
+    background-color: rgb(255, 208, 221);
+    color: rgb(37, 25, 35);
+}
+
+.menu-button:focus,
+.api-status:focus,
+.dialog-button:focus {
+    border-color: rgb(255, 255, 255);
+    border-width: 3px;
+}
+
+.menu-button:active,
+.dialog-button:active {
+    background-color: rgb(217, 144, 166);
+    color: rgb(37, 25, 35);
+}
+
+.quit-button {
+    color: rgb(208, 209, 220);
+}
+
+.keyboard-hint {
+    font-size: 18px;
+    color: rgb(183, 185, 198);
+    margin-top: 14px;
+}
+
+.loading-label {
+    font-size: 24px;
+    margin-top: 12px;
+    color: rgb(242, 168, 190);
+}
+
+.bottom-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 64px;
+    padding: 15px 5%;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(15, 18, 28, 0.98);
+    border-top-width: 1px;
+    border-top-color: rgb(66, 70, 84);
+}
+
+.disclaimer {
+    flex-grow: 1;
+    flex-shrink: 1;
+    font-size: 18px;
+    color: rgb(194, 196, 206);
+    white-space: normal;
+}
+
+.version {
+    font-size: 18px;
+    color: rgb(194, 196, 206);
+    margin-left: 24px;
+}
+
+.dialog-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(7, 9, 15, 0.86);
+}
+
+.dialog-panel {
+    width: 640px;
+    padding: 40px;
+    background-color: rgb(32, 37, 50);
+    border-width: 1px;
+    border-color: rgb(123, 128, 146);
+    border-radius: 12px;
+}
+
+.dialog-title {
+    font-size: 36px;
+    -unity-font-definition: url("project://database/Assets/Resources/Fonts/Pretendard-Bold.ttf?fileID=12800000&guid=c70d21a98011743c0997aca8fb95b5c8&type=3#Pretendard-Bold");
+    margin-bottom: 18px;
+}
+
+.dialog-message {
+    font-size: 24px;
+    color: rgb(209, 211, 223);
+    white-space: normal;
+    margin-bottom: 24px;
+}
+
+.settings-body {
+    margin-bottom: 24px;
+}
+
+.volume-slider,
+.fullscreen-toggle {
+    font-size: 24px;
+    margin-bottom: 22px;
+    color: rgb(248, 244, 243);
+}
+
+.settings-body .unity-base-field__label,
+.settings-body .unity-base-field:focus > .unity-base-field__label {
+    color: rgb(248, 244, 243);
+}
+
+.volume-slider .unity-base-field__label {
+    min-width: 155px;
+}
+
+.volume-slider .unity-base-slider__tracker {
+    top: 50%;
+    height: 8px;
+    margin-top: -4px;
+    background-color: rgb(108, 114, 133);
+}
+
+.volume-slider .unity-base-slider__dragger {
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    margin-top: -12px;
+    margin-bottom: 0;
+    background-color: rgb(242, 168, 190);
+    border-radius: 12px;
+}
+
+.fullscreen-toggle .unity-toggle__input {
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-grow: 0;
+    flex-shrink: 0;
+    margin-left: 12px;
+    width: 28px;
+    min-width: 28px;
+    max-width: 28px;
+    height: 28px;
+    background-color: rgb(60, 67, 84);
+    border-width: 2px;
+    border-color: rgb(198, 201, 214);
+}
+
+.fullscreen-toggle:checked .unity-toggle__input {
+    background-color: rgb(242, 168, 190);
+}
+
+.api-information {
+    padding-top: 18px;
+    border-top-width: 1px;
+    border-top-color: rgb(75, 82, 100);
+}
+
+.settings-heading {
+    font-size: 22px;
+    margin-bottom: 10px;
+}
+
+.settings-note {
+    font-size: 21px;
+    color: rgb(193, 197, 211);
+    white-space: normal;
+}
+
+.dialog-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.dialog-button {
+    min-width: 150px;
+    min-height: 60px;
+    margin-left: 12px;
+    padding: 12px 20px;
+    font-size: 24px;
+    border-width: 1px;
+    border-color: rgb(116, 123, 145);
+    border-radius: 6px;
+}
+
+.cancel-button {
+    background-color: rgb(53, 60, 78);
+    color: rgb(248, 244, 243);
+}
+
+.hidden {
+    display: none;
+}
+
+.short .title-content {
+    top: 11%;
+}
+
+.short .title-line {
+    font-size: 86px;
+}
+
+.short .tagline {
+    margin-bottom: 18px;
+}
+
+.short .story-hook {
+    min-height: 56px;
+    margin-bottom: 18px;
+}
+
+.short .menu-button {
+    min-height: 58px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.narrow .title-content {
+    width: 55%;
+}
+
+.narrow .reading-veil {
+    width: 65%;
+}
+
+.narrow .character-art {
+    right: -12%;
+    width: 60%;
+}
+
+.narrow .title-line {
+    font-size: 84px;
+}
+
+.narrow .main-menu {
+    width: 360px;
+}
+
+.narrow .story-text {
+    font-size: 22px;
+}
+
+.narrow .api-status {
+    font-size: 18px;
+}
+
+.fullscreen-toggle .unity-toggle__checkmark {
+    margin: 0;
+    flex-shrink: 0;
+    background-image: none;
+    background-color: transparent;
+    width: 18px;
+    height: 18px;
+}
+
+.fullscreen-toggle:checked .unity-toggle__checkmark {
+    background-color: rgb(242, 168, 190);
+}
+
+.volume-slider:focus .unity-base-slider__tracker {
+    background-color: rgb(255, 255, 255);
+}
+
+.fullscreen-toggle:focus .unity-toggle__input {
+    border-color: rgb(255, 255, 255);
+}

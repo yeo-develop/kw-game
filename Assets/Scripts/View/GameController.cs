@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Febucci.TextAnimatorForUnity;
 using KwGame.Sim;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -20,8 +21,13 @@ namespace KwGame.View
         GameData D; GameSim G; GameState S => G.S;
         UIDocument doc; VisualElement root;
         VisualElement hudBar, stage, dlg, panel, panelBody, toastCol, modal, phone;
-        Label stageTitle, dlgName, dlgText, panelTitle;
+        Label stageTitle, dlgName, dlgHint, panelTitle;
+        AnimatedLabel dlgText;
+        TypingDelaysByCharacter dialogueTiming;
+        AnimatorSettingsScriptable dialogueAnimation;
         bool playing, waiting, clicked; int waitFrame;
+        bool waitingForDialogue;
+        int advanceFrame = -1;
         bool phoneOpen; string phoneTab = "stock";
         float mgScore = 0.7f; double stakeFrac = 0.1;
         Font font, fontBold;
@@ -43,7 +49,18 @@ namespace KwGame.View
             font = Resources.Load<Font>("Fonts/Pretendard-Regular");
             fontBold = Resources.Load<Font>("Fonts/Pretendard-Bold");
             BuildUi();
-            NewGame(seed != 0 ? seed : UnityEngine.Random.Range(1, 1000000));
+            bool requested = TitleStartup.Consume(out var restored);
+            if (restored != null)
+            {
+                G = new GameSim(D, restored) { Hud = true };
+                saveMessage = "저장 데이터를 불러왔습니다.";
+                RenderAll();
+            }
+            else
+            {
+                NewGame(seed != 0 ? seed : UnityEngine.Random.Range(1, 1000000));
+                if (requested) Send("start");
+            }
             var shots = ArgValue("-kwShots");
             if (shots != null) StartCoroutine(DemoShots(shots));
         }
@@ -78,13 +95,14 @@ namespace KwGame.View
         {
             playing = true; FacePlayBegin();
             panel.SetEnabled(false); panel.style.opacity = 0.45f;
+            saveControls.SetEnabled(false);
             foreach (var e in evs)
             {
                 if (e.h != null) RenderHud(e.h);
                 switch (e.t)
                 {
                     case "say": yield return Say(e.Str("who"), e.Str("name"), e.Str("text"), e.Str("face")); break;
-                    case "hideDlg": dlg.style.display = DisplayStyle.None; break;
+                    case "hideDlg": HideDialogue(); break;
                     case "scene": SetScene(e.Str("bg"), e.Str("face"), e["night"] is bool nt && nt); break;
                     case "face": SetFace(e.Str("f")); break;
                     case "kim": ShowKim(e["on"] is bool on && on); break;
@@ -117,9 +135,11 @@ namespace KwGame.View
                     case "error": Debug.LogWarning("[sim] " + e.Str("msg")); break;
                 }
             }
-            dlg.style.display = DisplayStyle.None;
+            HideDialogue();
             playing = false; FacePlayEnd();
             panel.SetEnabled(true); panel.style.opacity = 1f;
+            saveControls.SetEnabled(true);
+            if (!evs.Any(e => e.t == "error")) SaveCheckpoint(false);
             RenderAll();
         }
 
@@ -128,25 +148,86 @@ namespace KwGame.View
             dlg.style.display = DisplayStyle.Flex;
             dlgName.text = Ui.Clean(who == "m" ? "미래" : who == "me" ? "나" : who == "kim" ? "김사장" : who == "npc" ? name : "");
             dlgName.style.display = dlgName.text == "" ? DisplayStyle.None : DisplayStyle.Flex;
-            dlgText.text = Ui.Clean(text);
             dlgText.style.unityFontStyleAndWeight = who == "nar" ? FontStyle.Italic : FontStyle.Normal;
+            dlgText.ResumeAnimation();
+            dlgText.Typewriter.ShowText(Ui.Clean(text));
+            dlgText.Typewriter.StartShowingText(true);
+            UpdateDialogueHint();
             if (face != null) SetFace(face);
             SpeakerArt(who, name, face);
-            yield return WaitClick();
+            yield return WaitClick(true);
         }
-        IEnumerator WaitClick()
+        IEnumerator WaitClick(bool dialogue = false)
         {
-            if (autoSkipDialog) { yield return null; yield break; }
+            if (autoSkipDialog)
+            {
+                if (dialogue) CompleteDialogueText();
+                yield return null; yield break;
+            }
+            waitingForDialogue = dialogue;
             waiting = true; clicked = false; waitFrame = Time.frameCount;
             while (!clicked) yield return null;
-            waiting = false;
+            waiting = false; waitingForDialogue = false;
         }
         void Update()
         {
+            if (dlgText == null) return;
             FaceTick();
+            if (waitingForDialogue)
+            {
+                dlgText.Typewriter.UpdateTypewriter();
+                UpdateDialogueHint();
+            }
             if (!waiting) return;
-            if (Time.frameCount <= waitFrame) return;
-            if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) clicked = true;
+            if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) RequestAdvance();
+        }
+
+        void RequestAdvance()
+        {
+            if (!waiting || Time.frameCount <= waitFrame || advanceFrame == Time.frameCount) return;
+            advanceFrame = Time.frameCount;
+            if (waitingForDialogue && dlgText.Typewriter.IsShowingText)
+            {
+                CompleteDialogueText();
+                return;
+            }
+            clicked = true;
+        }
+
+        void CompleteDialogueText()
+        {
+            dlgText.Typewriter.SkipTypewriter();
+            dlgText.SetVisibilityEntireText(true, false);
+            UpdateDialogueHint();
+        }
+
+        void UpdateDialogueHint()
+        {
+            dlgHint.text = dlgText.Typewriter.IsShowingText ? "클릭 / Space : 즉시 표시" : "클릭 / Space ▶";
+        }
+
+        void HideDialogue()
+        {
+            dlgText.Typewriter.StopShowingText();
+            dlgText.PauseAnimation();
+            dlg.style.display = DisplayStyle.None;
+        }
+
+        void OnDestroy()
+        {
+            dlgText?.Typewriter?.StopShowingText();
+            dlgText?.PauseAnimation();
+            dlgText?.Typewriter?.Dispose();
+            if (Application.isPlaying)
+            {
+                Destroy(dialogueTiming);
+                Destroy(dialogueAnimation);
+            }
+            else
+            {
+                DestroyImmediate(dialogueTiming);
+                DestroyImmediate(dialogueAnimation);
+            }
         }
 
         IEnumerator PlayScene(string key)
@@ -162,12 +243,12 @@ namespace KwGame.View
                     case "scene": SetScene((string)st["bg"], (string)st["face"], (bool?)st["night"] == true); break;
                     case "face": SetFace((string)st["f"]); break;
                     case "kim": ShowKim((bool?)st["on"] == true); break;
-                    case "hideDlg": dlg.style.display = DisplayStyle.None; break;
+                    case "hideDlg": HideDialogue(); break;
                     case "rules": yield return RulesCard(); if (key == "opening") ShowCg("opening_box"); break;   // 규칙 뒤 = 유품 상자 장면
                 }
             }
             sceneKey = null;
-            dlg.style.display = DisplayStyle.None;
+            HideDialogue();
         }
 
         IEnumerator Morning(SimEvent e)

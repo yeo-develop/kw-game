@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using DG.Tweening;
+using Febucci.TextAnimatorForUnity;
 using KwGame.Sim;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -61,10 +63,22 @@ namespace KwGame.View
             Ui.Abs(dlg, 32, null, 32, 28); dlg.style.minHeight = 200;
             Ui.Border(dlg, new Color(1, 1, 1, 0.15f), 2);
             dlgName = Ui.Label("", 30, Ui.Accent, true); dlg.Add(dlgName);
-            dlgText = Ui.Label("", 32); dlgText.style.marginTop = 10; dlg.Add(dlgText);
-            var hint = Ui.Label("클릭 / Space ▶", 18, Ui.Dim); Ui.Abs(hint, null, null, 20, 12); dlg.Add(hint);
+            dialogueTiming = ScriptableObject.CreateInstance<TypingDelaysByCharacter>();
+            dialogueTiming.hideFlags = HideFlags.DontSave;
+            dialogueTiming.avoidMultiplePunctuationWait = true;
+            dialogueTiming.waitForLastCharacter = false;
+            dialogueAnimation = ScriptableObject.CreateInstance<AnimatorSettingsScriptable>();
+            dialogueAnimation.hideFlags = HideFlags.DontSave;
+            dialogueAnimation.Settings.defaultAppearanceTags = new[] { "fade" };
+            dlgText = new AnimatedLabel { name = "dialogueText", TimingSettings = dialogueTiming, AnimationSettings = dialogueAnimation };
+            dlgText.style.fontSize = 32; dlgText.style.color = Ui.Text;
+            dlgText.style.whiteSpace = WhiteSpace.Normal;
+            dlgText.style.marginTop = 10;
+            dlgText.style.paddingLeft = 0; dlgText.style.paddingRight = 0;
+            dlgText.style.marginBottom = 28;
+            dlg.Add(dlgText);
+            dlgHint = Ui.Label("클릭 / Space ▶", 18, Ui.Dim); Ui.Abs(dlgHint, null, null, 20, 12); dlg.Add(dlgHint);
             dlg.style.display = DisplayStyle.None;
-            dlg.RegisterCallback<PointerDownEvent>(_ => { if (waiting) clicked = true; });
             stage.Add(dlg);
 
             // 폰 오버레이
@@ -81,14 +95,19 @@ namespace KwGame.View
             panelBody = sv.contentContainer;
             panel.Add(sv);
             main.Add(panel);
+            saveControls = new VisualElement();
+            saveControls.style.marginTop = 16;
+            panel.Add(saveControls);
 
             // 토스트 · 모달
-            // 토스트는 오른쪽 아래(대사창 위)에 쌓음 — 위쪽에 두면 NPC 얼굴을 가림
-            toastCol = new VisualElement(); Ui.Abs(toastCol, null, null, 24, 250); toastCol.style.width = 500; toastCol.pickingMode = PickingMode.Ignore;
-            stage.Insert(stage.IndexOf(dlg), toastCol);   // 대사창·폰 아래에 깔림
+            toastCol = new VisualElement(); Ui.Abs(toastCol, 24, null, null, 24); toastCol.style.width = 500; toastCol.pickingMode = PickingMode.Ignore;
+            stage.Insert(stage.IndexOf(dlg) + 1, toastCol);
+            dlg.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                toastCol.style.bottom = dlg.resolvedStyle.display == DisplayStyle.None ? 24 : dlg.resolvedStyle.height + 44;
+            });
             modal = Ui.Box(new Color(0, 0, 0, 0.72f)); Ui.Fill(modal);
             modal.style.alignItems = Align.Center; modal.style.justifyContent = Justify.Center; modal.style.display = DisplayStyle.None;
-            modal.RegisterCallback<PointerDownEvent>(_ => { if (waiting) clicked = true; });
             root.Add(modal);
         }
 
@@ -117,6 +136,7 @@ namespace KwGame.View
             RenderStage();
             RenderPanel();
             RenderPhone();
+            RenderSaveControls();
         }
 
         string LocTitle()
@@ -135,9 +155,24 @@ namespace KwGame.View
             t.style.marginBottom = 8; t.pickingMode = PickingMode.Ignore;
             if (icon != null) { t.style.flexDirection = FlexDirection.Row; t.style.alignItems = Align.Center; t.Add(Icon(icon, 56)); }
             var l = Ui.Label(text, kind == "big" ? 28 : 21, Ui.Text, kind == "big"); l.pickingMode = PickingMode.Ignore; t.Add(l);
+            t.style.opacity = 0;
+            t.style.translate = new Translate(0, 14, 0);
             toastCol.Add(t);
             while (toastCol.childCount > 5) toastCol.RemoveAt(0);
-            t.schedule.Execute(() => t.RemoveFromHierarchy()).StartingIn(kind == "big" ? 5000 : 3800);
+            var animation = DOTween.Sequence().SetTarget(t).SetLink(gameObject).SetUpdate(true);
+            animation.Append(DOTween.To(() => 0f, value =>
+            {
+                t.style.opacity = value;
+                t.style.translate = new Translate(0, 14 * (1 - value), 0);
+            }, 1f, 0.22f).SetEase(Ease.OutCubic));
+            animation.AppendInterval(kind == "big" ? 4.6f : 3.4f);
+            animation.Append(DOTween.To(() => 1f, value =>
+            {
+                t.style.opacity = value;
+                t.style.translate = new Translate(0, 8 * (1 - value), 0);
+            }, 0f, 0.18f).SetEase(Ease.InQuad));
+            animation.OnComplete(() => t.RemoveFromHierarchy());
+            t.RegisterCallback<DetachFromPanelEvent>(_ => animation.Kill());
         }
 
         // ---------- HUD ----------

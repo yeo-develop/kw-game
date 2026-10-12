@@ -4,7 +4,10 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "KwGame.Sim"
+        "KwGame.Sim",
+        "KwGame.Persistence",
+        "KwGame.View",
+        "Febucci.TextAnimatorForUnity.UITk.Runtime"
     ],
     "includePlatforms": [
         "Editor"
@@ -14,7 +17,8 @@
     "overrideReferences": true,
     "precompiledReferences": [
         "nunit.framework.dll",
-        "Newtonsoft.Json.dll"
+        "Newtonsoft.Json.dll",
+        "Febucci.TextAnimatorCore.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [

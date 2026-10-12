@@ -1,0 +1,53 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Title/TitleScreen.uss?fileID=7433441132597879392&amp;guid=5fb6f5eb70f807f4eaf34572fef27c75&amp;type=3#TitleScreen"/>
+    <ui:VisualElement name="titleRoot" class="title-root">
+        <ui:VisualElement picking-mode="Ignore" class="room-art"/>
+        <ui:VisualElement picking-mode="Ignore" name="Right-Panel" class="reading-veil" style="top: 0; bottom: 0; left: 0; right: auto;"/>
+        <ui:VisualElement picking-mode="Ignore" name="Character-Panel" class="character-art" style="width: 936px; bottom: 70px; right: 10px; height: 1008px;"/>
+        <ui:VisualElement name="Top-Panel" class="top-bar" style="left: auto; top: 2%; right: 2%;">
+            <ui:Button name="apiStatusButton" text="LLM API 키: 미설정" class="api-status"/>
+        </ui:VisualElement>
+        <ui:VisualElement name="titleContent" class="title-content">
+            <ui:VisualElement name="GameTitle" class="logo">
+                <ui:Label text="롱잡고" class="title-line"/>
+                <ui:Label text="알바감" class="title-line title-accent"/>
+            </ui:VisualElement>
+            <ui:Label text="빚 3천 갚기 전엔 못 헤어져." name="SubTitle" class="tagline"/>
+            <ui:VisualElement name="storyHook" class="story-hook">
+                <ui:Label text="D+1. 첫 데이트 귀갓길, 여자친구 폰에 증거금 부족 경고가 떴다." class="story-text"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="mainMenu" class="main-menu">
+                <ui:Button name="continueButton" tooltip="현재 Unity 버전에는 저장·불러오기 기능이 없습니다." class="menu-button continue-button">
+                    <ui:Label text="이어하기" picking-mode="Ignore" class="menu-label"/>
+                    <ui:Label text="저장 데이터 없음" picking-mode="Ignore" class="menu-detail"/>
+                </ui:Button>
+                <ui:Button name="newGameButton" text="새로 시작" class="menu-button primary-button"/>
+                <ui:Button name="settingsButton" text="설정" class="menu-button secondary-button"/>
+                <ui:Button name="quitButton" text="종료" class="menu-button secondary-button quit-button"/>
+            </ui:VisualElement>
+            <ui:Label name="loadingLabel" text="게임을 시작하는 중…" class="loading-label hidden"/>
+        </ui:VisualElement>
+        <ui:VisualElement name="dialogOverlay" class="dialog-overlay hidden">
+            <ui:VisualElement name="dialogPanel" class="dialog-panel" style="display: flex;">
+                <ui:Label name="dialogTitle" class="dialog-title"/>
+                <ui:Label name="dialogMessage" class="dialog-message"/>
+                <ui:VisualElement name="settingsBody" class="settings-body hidden">
+                    <ui:Slider name="volumeSlider" label="전체 음량" low-value="0" high-value="1" value="1" class="volume-slider" style="display: flex;"/>
+                    <ui:Toggle name="fullscreenToggle" label="전체 화면" class="fullscreen-toggle"/>
+                    <ui:VisualElement class="api-information">
+                        <ui:Label text="LLM API 키: 미설정" class="settings-heading"/>
+                        <ui:Label text="LLM 연결은 준비 중입니다. 현재 게임은 API 키 없이 플레이할 수 있습니다." class="settings-note"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="dialog-actions">
+                    <ui:Button name="dialogCancelButton" text="취소" class="dialog-button cancel-button"/>
+                    <ui:Button name="dialogConfirmButton" text="확인" class="dialog-button primary-button"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="Bottom-Panel" class="bottom-bar">
+            <ui:Label text="투자 권유가 아닙니다. 게임 내 시세와 자금은 가상이며, 현금과 교환되지 않습니다." class="disclaimer"/>
+            <ui:Label text="v0.1 MVP" class="version"/>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
