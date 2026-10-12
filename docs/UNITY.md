@@ -48,7 +48,7 @@ dotnet/SimHarness/          Unity 없이 sim 검증하는 콘솔 (Unity 번들 d
 
 | 방법 | 내용 |
 |---|---|
-| `./unity sync-data` | 작업 트리 `web/src/data/*.json` → `Assets/Resources/Data` (Unity 안 띄움, 즉시) |
+| `./unity sync-data` | 작업 트리 `web/src/data/*.json` → `Assets/Resources/Data` (Unity 안 띄움, 즉시). `unity_*.json`(Unity 전용: 돌발 이벤트·문구 풀 추가분)은 건드리지 않음 |
 | `./unity sync-data <ref>` | 특정 커밋의 데이터로 (`git archive`) |
 | 에디터 메뉴 **KwGame → Sync Data (web → Resources)** | 같은 복사 + AssetDatabase.Refresh (`./unity exec KwGame.EditorTools.BuildCli.SyncData` 도 가능) |
 | `./unity sync-golden [ref]` (인자 없으면 4ff230c) | 테스트 픽스처(data + vectors)를 `Assets/Tests/EditMode/Golden` 로 교체 |

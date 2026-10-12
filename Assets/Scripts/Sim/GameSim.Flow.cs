@@ -543,6 +543,7 @@ namespace KwGame.Sim
                 after(AFTER_SLOT); return;
             }
             if (S.addict >= R.ADD_TEMPT && S.temptT != Tnow() && rnd() < 0.3) { temptStart(); return; }
+            if (evCheck()) return;
             homeLine(); S.pending = new Pending("home");
         }
         void menCheck()

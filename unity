@@ -71,8 +71,8 @@ sync_json() {
   fi
   [ -d "$from" ] || die "$from 없음"
   mkdir -p "$dst"
-  # 원본에 없는 json(+meta) 정리
-  for f in "$dst"/*.json; do [ -e "$f" ] || continue; [ -e "$from/$(basename "$f")" ] || rm -f "$f" "$f.meta"; done
+  # 원본에 없는 json(+meta) 정리 (unity_*.json 은 Unity 전용 데이터라 남김)
+  for f in "$dst"/*.json; do [ -e "$f" ] || continue; case "$(basename "$f")" in unity_*) continue ;; esac; [ -e "$from/$(basename "$f")" ] || rm -f "$f" "$f.meta"; done
   cp "$from"/*.json "$dst"/
   echo "✓ $(ls "$from"/*.json | wc -l | tr -d ' ')개 ${ref:-작업트리}:$src → ${dst#$ROOT/}"
   [ -n "$tmp" ] && rm -rf "$tmp"

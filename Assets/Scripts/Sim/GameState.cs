@@ -62,7 +62,7 @@ namespace KwGame.Sim
         public string key, loc, kind, id, reason, tk, stage;
         public bool first, jackpot, rerolled, betUsed, cont;
         public double n0, total, staked, before, spent, got, mx, due, took, half;
-        public int A, As, rounds, race, n, bought, pulls, si;
+        public int A, As, rounds, race, n, bought, pulls, si; public string evId;
         public WorkSetup setup; public List<Horse> H; public ScratchCard card; public GachaLast last;
         public List<Opt> opts; public List<string> offer;
         public Pending(string t) { this.t = t; }
@@ -123,5 +123,6 @@ namespace KwGame.Sim
         public Pending pending; public List<string> flow = new List<string>(); public string ending; public EndInfo endInfo;
         // JS 에서 처음엔 undefined 인 보조 필드
         public bool optTut; public int? kimpDay, kimBig, menCool, temptT, gT, repT; public double invIn; public Visit visit; public int dbgAug;
+        public List<string> evSeen = new List<string>(); public int? evCool, evT;   // 돌발 이벤트 (GameSim.Events.cs, 다이제스트 밖)
     }
 }

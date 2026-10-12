@@ -50,6 +50,9 @@ namespace KwGame.Sim
     public class Loc { public string id, name, ic, bg, npc, hint; public double[] pos; public int[] open; }
     public class RandEv { public string t; public double cash, st, fame, hp; }
     public class KQDef { public string q, ok, good, bad; public string[] no; }
+    /// 돌발 이벤트 (unity_events.json). lines = [who, text, face?] 목록, who: m·me·kim·nar
+    public class EvDef { public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay; public double minCash, minAddict; public List<EvOpt> opts; }
+    public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict; public EvOpt fail; }
     public class MenSet { public string[] msgs; public string last, ok, good, bad; public string[] no; }
     public class ImpulseSet { public string line, ok, good, bad; public string[] no; }
     public class EndingDef
@@ -91,7 +94,7 @@ namespace KwGame.Sim
         public Dictionary<string, List<string>> CM, TIP_RES, MYCM, ML, KIM_DM, TIP_REACT;
         public Dictionary<string, string> GR_T;
         public Dictionary<string, int> HOT;
-        public List<MenSet> MEN_SETS; public List<ImpulseSet> IMPULSE; public List<RandEv> MORNING_EV, PC_EV; public List<KQDef> KQ;
+        public List<MenSet> MEN_SETS; public List<ImpulseSet> IMPULSE; public List<RandEv> MORNING_EV, PC_EV; public List<KQDef> KQ; public List<EvDef> EVENTS = new List<EvDef>();
         public Dictionary<string, EndingDef> ENDINGS;
         public JObject STR;
         public Dictionary<string, string> NPC_NAME = new Dictionary<string, string>();
@@ -166,6 +169,9 @@ namespace KwGame.Sim
             d.MORNING_EV = j["MORNING_EV"].ToObject<List<RandEv>>();
             d.PC_EV = j["PC_EV"].ToObject<List<RandEv>>();
             d.KQ = j["KQ"].ToObject<List<KQDef>>();
+            // unity_events.json (Unity 전용, 웹 데이터·골든 고정 데이터엔 없음): 문구 풀 추가분 + 돌발 이벤트
+            void more<T>(List<T> to, string k) { if (j[k] != null) to.AddRange(j[k].ToObject<List<T>>()); }
+            more(d.MORNING_EV, "MORNING_EV_X"); more(d.PC_EV, "PC_EV_X"); more(d.KQ, "KQ_X"); more(d.MEN_SETS, "MEN_SETS_X"); more(d.IMPULSE, "IMPULSE_X"); more(d.EVENTS, "EVENTS");
             d.KIM_DM = j["KIM_DM"].ToObject<Dictionary<string, List<string>>>();
             d.HY_TALK = j["HY_TALK"].ToObject<List<string>>();
             d.TIP_REACT = j["TIP_REACT"].ToObject<Dictionary<string, List<string>>>();

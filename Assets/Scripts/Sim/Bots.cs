@@ -273,6 +273,11 @@ namespace KwGame.Sim
                     case "repay": go("repay", "amt", plan != null && plan.repayAmt != 0 ? Math.Min(P.mx, plan.repayAmt) : P.mx); break;
                     case "shop": go("shopDone"); break;
                     case "brokerTrade": go("brokerClose"); break;
+                    case "event":
+                        {
+                            var ok = P.opts.Where(o => !o.dis).Select(o => o.k).ToList();
+                            go("evPick", "k", strat == "random" || strat == "gamble" ? bpick(ok) : ok[0]); break;
+                        }
                     case "menhera": go("reply", "i", strat == "random" ? (int)Math.Floor(br() * 3) : 0); break;
                     case "loan": go("loanDone"); break;
                     case "payday":

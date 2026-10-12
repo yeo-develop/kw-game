@@ -33,6 +33,7 @@ namespace KwGame.View
                 switch (P.t)
                 {
                     case "menhera": case "impulse": Send("reply", "i", P.opts.FindIndex(o => o.ok)); break;
+                    case "event": Send("evPick", "k", P.opts.First(o => !o.dis).k); break;
                     case "tempt": Send("tempt", "k", "no"); break;
                     case "payday": Send("payday", "k", P.opts.Find(o => !o.dis)?.k ?? "pay"); break;
                     case "loc": Send("leave"); break;

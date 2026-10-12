@@ -185,6 +185,9 @@ namespace KwGame.Sim
                 case "tempt":
                     if (t == "tempt") { if (!temptCmd(c.Str("k"))) err("tempt"); return; }
                     break;
+                case "event":
+                    if (t == "evPick") { if (!evPick(c.Str("k"))) err("event"); return; }
+                    break;
                 case "impulse":
                     if (t == "reply") { if (!impulseReply(c.Int("i"))) err("reply"); return; }
                     break;

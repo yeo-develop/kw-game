@@ -67,7 +67,7 @@ namespace KwGame.View
             npcKey = null; kimKey = null; cgKey = null; miraiOn = true;
             switch (P?.t)
             {
-                case null: case "start": case "home": case "menhera": case "impulse": case "tempt": break;
+                case null: case "start": case "home": case "menhera": case "impulse": case "tempt": case "event": break;
                 case "relic": if (S.phase == "opening") cgKey = "opening_box"; break;
                 case "payday": night = true; kimKey = "kim_menace"; break;
                 case "loan": kimKey = "kim_base"; break;

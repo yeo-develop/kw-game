@@ -331,6 +331,10 @@ namespace KwGame.View
                     Title(P.t == "menhera" ? "미래 멘헤라 — 받아치기" : "미래 돌발 풀매수! — 말리기");
                     for (int i = 0; i < P.opts.Count; i++) { int k = i; Btn(P.opts[i].l, () => Send("reply", "i", k)); }
                     break;
+                case "event":
+                    Title("돌발 상황 — 어떻게 할까?");
+                    foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("evPick", "k", k), o.sub, o.dis); }
+                    break;
                 case "tempt":
                     Title("도박 유혹");
                     foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("tempt", "k", k), o.sub, o.dis); }
