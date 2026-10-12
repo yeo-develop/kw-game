@@ -23,6 +23,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60   # 멈춘 Unity 가 Personal 좌석을 6시간 붙잡지 않게
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +35,7 @@ jobs:
           path: .paid
       - run: cp -R .paid/Assets/. Assets/ && cp -R .paid/Packages/. Packages/ && rm -rf .paid
 
+      # Library 에 유료 에셋 임포트 결과가 들어감 → 외부 기여자 PR 워크플로는 저장소 설정에서 승인 필수로 막아 둠
       - uses: actions/cache@v4
         with:
           path: Library
