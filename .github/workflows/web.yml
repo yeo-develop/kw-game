@@ -42,7 +42,20 @@ jobs:
           key: Library-WebGL-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
           restore-keys: Library-WebGL-
 
-      - uses: game-ci/unity-builder@v6
+      # 러너에서 Unity 가 가끔 시작하자마자 Killed(137) 로 죽음 (같은 커밋 재실행하면 통과) → 한 번 더 시도
+      - id: build1
+        continue-on-error: true
+        uses: game-ci/unity-builder@v6
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: WebGL
+          buildName: WebGL
+          buildsPath: build
+          allowDirtyBuild: true
+      - if: steps.build1.outcome == 'failure'
+        uses: game-ci/unity-builder@v6
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
