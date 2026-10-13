@@ -42,7 +42,8 @@ jobs:
           key: Library-WebGL-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
           restore-keys: Library-WebGL-
 
-      # 러너에서 Unity 가 가끔 시작하자마자 Killed(137) 로 죽음 (같은 커밋 재실행하면 통과) → 한 번 더 시도
+      # 러너에서 Unity 가 시작 직후(어셈블리 로드 중) Killed(137) 로 죽는 일이 잦음 — 같은 러너·캐시·커밋에서도 될 때 있고 안 될 때 있음.
+      # 죽는 건 활성화 직후 몇 초라 싸게 다시 시도 (최대 4번)
       - id: build1
         continue-on-error: true
         uses: game-ci/unity-builder@v6
@@ -54,7 +55,9 @@ jobs:
           buildName: WebGL
           buildsPath: build
           allowDirtyBuild: true
-      - if: steps.build1.outcome == 'failure'
+      - id: build2
+        if: steps.build1.outcome == 'failure'
+        continue-on-error: true
         uses: game-ci/unity-builder@v6
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
@@ -64,7 +67,29 @@ jobs:
           buildName: WebGL
           buildsPath: build
           allowDirtyBuild: true
-
+      - id: build3
+        if: steps.build2.outcome == 'failure'
+        continue-on-error: true
+        uses: game-ci/unity-builder@v6
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: WebGL
+          buildName: WebGL
+          buildsPath: build
+          allowDirtyBuild: true
+      - id: build4
+        if: steps.build3.outcome == 'failure'
+        uses: game-ci/unity-builder@v6
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: WebGL
+          buildName: WebGL
+          buildsPath: build
+          allowDirtyBuild: true
       - name: 버전 표시
         run: |
           sudo chown -R "$USER" build
