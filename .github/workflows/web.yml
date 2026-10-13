@@ -39,8 +39,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-WebGL-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
-          restore-keys: Library-WebGL-
+          key: Library-WebGL2-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
 
       # 러너에서 Unity 가 시작 직후(어셈블리 로드 중) Killed(137) 로 죽는 일이 잦음 — 같은 러너·캐시·커밋에서도 될 때 있고 안 될 때 있음.
       # 죽는 건 활성화 직후 몇 초라 싸게 다시 시도 (최대 4번)
