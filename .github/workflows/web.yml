@@ -36,10 +36,12 @@ jobs:
       - run: cp -R .paid/Assets/. Assets/ && cp -R .paid/Packages/. Packages/ && rm -rf .paid
 
       # Library 에 유료 에셋 임포트 결과가 들어감 → 외부 기여자 PR 워크플로는 저장소 설정에서 승인 필수로 막아 둠
+      # 스크립트가 바뀐 커밋에 옛 Library 를 복원하면 Unity 가 시작 직후 Killed(137) 로 죽음 (2026-10-13, 10번 중 8번).
+      # 그래서 스크립트까지 똑같을 때만 재사용 (restore-keys 없음). 코드 바뀐 빌드는 새로 임포트 ~17분.
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-WebGL2-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
+          key: Library-WebGL3-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt', 'Assets/**/*.cs', 'Assets/**/*.asmdef') }}
 
       # 러너에서 Unity 가 시작 직후(어셈블리 로드 중) Killed(137) 로 죽는 일이 잦음 — 같은 러너·캐시·커밋에서도 될 때 있고 안 될 때 있음.
       # 죽는 건 활성화 직후 몇 초라 싸게 다시 시도 (최대 4번)
