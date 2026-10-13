@@ -76,6 +76,16 @@ namespace KwGame.View
             yield return ToHome();
             phoneOpen = true; phoneTab = "stock"; RenderAll();
             yield return Shot(dir, "08_phone_stock");
+            {   // 증권 앱: 주식 1개 사고 코인 롱 하나 잡은 뒤 차트·계좌 화면
+                var stk = D.TKList.First(x => x.IsStock && G.tkOpen(x.id)).id; var coin = D.TKList.First(x => x.IsCoin && G.tkOpen(x.id)).id;
+                Send("buy", "tk", stk, "amt", 100000, "where", "app"); yield return UntilIdle();
+                Send("open", "tk", coin, "dir", 1, "lev", 10, "amt", 100000); yield return UntilIdle();
+                phoneOpen = true; phoneTab = "stock"; stkTab = "detail"; stkSel = coin; RenderAll();
+                yield return Shot(dir, "08b_stock_coin");
+                stkSel = stk; RenderAll(); yield return Shot(dir, "08c_stock_stock");
+                stkTab = "acct"; RenderAll(); yield return Shot(dir, "08d_stock_acct");
+                stkTab = "mkt";
+            }
             phoneTab = "gall"; RenderAll();
             yield return Shot(dir, "09_phone_gall");
             phoneOpen = false; RenderAll();

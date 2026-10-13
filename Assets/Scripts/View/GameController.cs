@@ -85,6 +85,7 @@ namespace KwGame.View
         {
             if (playing) return;
             var evs = G.Apply(c);
+            var cb = onSent; onSent = null; cb?.Invoke(evs);   // 주문 결과 메시지 (GameController.Chart.cs)
             LlmTick();   // 새 칸이면 뉴스·대사 요청을 재생 전에 미리 (GameController.Llm.cs)
             StartCoroutine(Play(evs));
         }

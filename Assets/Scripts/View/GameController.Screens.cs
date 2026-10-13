@@ -83,7 +83,7 @@ namespace KwGame.View
 
             // 폰 오버레이
             phone = Ui.Box(new Color(0.08f, 0.08f, 0.12f, 0.97f), 24, 24);
-            Ui.Abs(phone, 40, 30, 40, 30); Ui.Border(phone, Ui.Accent, 3);
+            Ui.Abs(phone, 40, 30, 40, 30); Ui.Border(phone, Ui.Accent, 3); phone.style.overflow = Overflow.Hidden;
             phone.style.display = DisplayStyle.None;
             stage.Add(phone);
 
@@ -387,10 +387,10 @@ namespace KwGame.View
 
         static readonly Dictionary<string, string> MG_RULES = new Dictionary<string, string>
         {
-            ["cafe"] = "주문표대로 음료를 담고 서빙. 손님은 주문을 잠깐만 보여 주고 폰 봄 → 까먹으면 R (주문당 1번). 틀리면 그 주문 날아감.\n1~5 음료 · 0 비우기 · Enter 서빙 · 주문 3개",
-            ["store"] = "바늘이 초록 구간에 왔을 때 삑! 4개 찍기. 찍을수록 바늘은 빨라지고 구간은 좁아짐.\nSpace / 클릭",
-            ["ware"] = "연타로 박스 올리기. 중간에 깨지기 쉬움 박스가 오면 1초 동안 손 떼기 (치면 −3). 허리는 소모품.\nSpace / 클릭 연타 · 6초",
-            ["mart"] = "떨어지는 박스와 돌진하는 진상 카트 피하기. 9초 버티기, 맞을 때마다 일당 깎임.\n← → / A D / 화면 드래그 · 목숨 5개",
+            ["cafe"] = "주문표대로 음료를 담고 서빙. 손님은 주문을 잠깐만 보여 주고 폰 봄 → 까먹으면 R (주문당 1번, 인내심 깎임). '샷 추가' 주문엔 S. 손님 인내심 바닥나면 그냥 나감.\n1~5 음료 · 0 비우기 · S 샷 · Enter 서빙 · 손님 3명",
+            ["store"] = "바늘이 초록 구간에 왔을 때 삑! 4개 찍기. 가운데 노란 칸이면 PERFECT. 찍을수록 바늘은 빨라지고 구간은 좁아지고 흔들림. 소주는 신분증(I) 먼저.\nSpace / 클릭 · I 신분증",
+            ["ware"] = "연타로 박스 올리기. 무거운 박스는 3번 쳐야 올라감(+2). 중간에 깨지기 쉬움 박스가 오면 1초 동안 손 떼기 (치면 −3, 콤보 끊김). 허리는 소모품.\nSpace / 클릭 연타 · 6초",
+            ["mart"] = "떨어지는 박스와 돌진하는 진상 카트 피하기. 위에 뜨는 경고 보고 미리 피하기, 아슬하게 피하면 콤보. 박카스 먹으면 목숨 +1. 9초 버티기, 맞을 때마다 일당 깎임.\n← → / A D / 화면 드래그 · 목숨 5개",
         };
 
         void RenderWork(Pending P)
@@ -464,6 +464,7 @@ namespace KwGame.View
         }
 
         // ---------- 폰 ----------
+        ScrollView phoneSv; string phoneSvKey;
         void RenderPhone()
         {
             bool can = PHONE_OK.Contains(S.pending?.t);
@@ -478,7 +479,10 @@ namespace KwGame.View
             }
             var sp = new VisualElement(); sp.style.flexGrow = 1; tabs.Add(sp);
             tabs.Add(Ui.Chip("닫기", () => { phoneOpen = false; RenderAll(); }));
-            var sv = new ScrollView(); sv.style.flexGrow = 1; phone.Add(sv);
+            var sv = new ScrollView(); sv.style.flexGrow = 1; sv.contentViewport.style.overflow = Overflow.Hidden; phone.Add(sv);   // 테마 USS 가 없어서 직접 잘라야 함
+            string scrollKey = phoneTab + "/" + stkTab;   // 주문 버튼 눌러 다시 그려도 보던 자리 유지
+            if (phoneSv != null && phoneSvKey == scrollKey) { var keep = phoneSv.scrollOffset; sv.schedule.Execute(() => sv.scrollOffset = keep); }
+            phoneSv = sv; phoneSvKey = scrollKey;
             var body = sv.contentContainer;
             void L(string t, float s = 22, Color? c = null) { var l = Ui.Label(t, s, c ?? Ui.Text); l.style.marginBottom = 6; body.Add(l); }
             VisualElement R() { var r = Ui.Row(); r.style.flexWrap = Wrap.Wrap; r.style.marginBottom = 10; body.Add(r); return r; }
@@ -486,45 +490,7 @@ namespace KwGame.View
             switch (phoneTab)
             {
                 case "stock":
-                    L(G.stockOpen() ? $"주식장 열림 ({D.SLOT_NAME[S.slot]}) · 수수료 {G.stockFee(where) * 100:0.0}%" : "주식장 닫힘 (코인은 24시간)", 22, Ui.Gold);
-                    {
-                        var rr = R();
-                        var rs = G.rsch();
-                        rr.Add(Ui.Chip($"무료 리포트 ({rs.free}/{G.freeMax()})", () => Send("report", "paid", false), rs.free >= G.freeMax()));
-                        rr.Add(Ui.Chip($"유료 리포트 {G.man(D.RULES.RSCH_FEE)}", () => Send("report", "paid", true), rs.paid >= D.RULES.RSCH_PAID_MAX || S.cash < D.RULES.RSCH_FEE));
-                    }
-                    foreach (var t in D.TKList.Where(x => G.tkOpen(x.id)))
-                    {
-                        var mk = S.mk.tk[t.id]; double r0 = mk.hist.Count > 0 ? mk.hist[mk.hist.Count - 1].c / mk.hist[mk.hist.Count - 1].o - 1 : 0;
-                        var h = S.hold.Get(t.id);
-                        L($"{t.name}  {G.fmtP(mk.p)}  {GameSim.pct(r0)}" + (h != null ? $"   보유 {G.won(h.q * mk.p)} ({GameSim.pct(h.q * mk.p / h.cost - 1)})" : ""), 24, r0 >= 0 ? Ui.Good : Ui.Bad);
-                        var row = R(); string tk = t.id;
-                        if (t.IsStock)
-                        {
-                            bool so = G.stockOpen();
-                            row.Add(Ui.Chip("10% 사기", () => Send("buy", "tk", tk, "amt", Math.Floor(S.cash * 0.1 / 1000) * 1000, "where", where), !so || S.cash < 10000));
-                            row.Add(Ui.Chip("50% 사기", () => Send("buy", "tk", tk, "amt", Math.Floor(S.cash * 0.5 / 1000) * 1000, "where", where), !so || S.cash < 20000));
-                            row.Add(Ui.Chip("전부 팔기", () => Send("sell", "tk", tk, "frac", 1, "where", where), !so || h == null));
-                        }
-                        else
-                        {
-                            foreach (var (dir, lev) in new[] { (1, 1.0), (1, 10.0), (-1, 10.0), (1, Math.Min(50, t.maxLev)) }.Distinct())
-                            {
-                                int d = dir; double lv = lev;
-                                row.Add(Ui.Chip($"{(d > 0 ? "롱" : "숏")} x{lv:0} 10%", () => Send("open", "tk", tk, "dir", d, "lev", lv, "amt", Math.Floor(S.cash * 0.1 / 1000) * 1000), S.cash < 20000));
-                            }
-                        }
-                    }
-                    if (S.cps.Count > 0)
-                    {
-                        L("코인 포지션", 24, Ui.Gold);
-                        foreach (var c in S.cps.ToList())
-                        {
-                            var row = R(); int id = c.id; double pnl = G.cpnl(c) + c.bonus;
-                            row.Add(Ui.Label($"{D.TK[c.tk].name} {(c.dir > 0 ? "롱" : "숏")} x{c.lev:0} 증거금 {G.man(c.margin)} 손익 {G.sgnWon(pnl)}  청산가 {G.fmtP(GameSim.liqPx(c))}", 20, pnl >= 0 ? Ui.Good : Ui.Bad));
-                            row.Add(Ui.Chip("청산(종료)", () => Send("close", "id", id), c.t0 == G.Tnow()));
-                        }
-                    }
+                    StockApp(body, where);
                     break;
                 case "kakao":
                     if (S.kq != null)
