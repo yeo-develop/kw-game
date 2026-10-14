@@ -201,6 +201,7 @@ namespace KwGame.Sim
                     if (t == "rest") { S.pending = null; if (S.rt) S.actMin = isEve() ? Math.Max(1, slotEndMin(S.slot) - S.min) : R.RT_REST; restHome(); slotUsed(); return; }
                     if (t == "map") { S.pending = new Pending("map"); return; }
                     if (t == "loanOpen") { S.pending = new Pending("loan") { took = 0 }; return; }
+                    if (t == "repayOpen") { repayStart("home"); return; }   // 집에서 바로 원금 상환 (김사장 계좌로 이체, 시간 안 씀)
                     break;
                 case "loan":
                     if (t == "borrow") { if (!borrow(c.Num("amt"))) err("borrow"); return; }
@@ -249,7 +250,12 @@ namespace KwGame.Sim
                     if (t == "lottoDone") { sub(lottoDone()); return; }
                     break;
                 case "repay":
-                    if (t == "repay") { Emit("panelEnd", "k", "repay"); actDone(repayDo(c.Num("amt"))); return; }
+                    if (t == "repay")
+                    {
+                        Emit("panelEnd", "k", "repay");
+                        if (P.loc == "home") { repayDo(c.Num("amt")); toHome(); return; }
+                        actDone(repayDo(c.Num("amt"))); return;
+                    }
                     break;
                 case "shop":
                     if (t == "shopBuy") { shopBuy(c.Str("id")); return; }

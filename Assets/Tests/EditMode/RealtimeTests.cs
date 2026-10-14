@@ -122,5 +122,25 @@ namespace KwGame.Tests
             Assert.That(n, Is.GreaterThan(30));
             Assert.That(same, Is.LessThan(n / 10 + 1), "갓성 오르면 곱버스는 내려야 함");
         }
+
+        [Test]
+        public void RepayFromHome()
+        {
+            var g = GameSim.Create(Data, 4242, new GameSim.Opts { rt = true });
+            g.Apply(C("start")); g.Apply(C("pickRelic", "i", 0));
+            var S = g.S; var r = new System.Random(3);
+            while (S.pending.t != "home") g.Apply(Respond(g, r));
+            double debt0 = S.debt, cash0 = S.cash; int min0 = S.min;
+            g.Apply(C("repayOpen"));
+            Assert.That(S.pending.t, Is.EqualTo("repay"));
+            var evs = g.Apply(C("repay", "amt", 100000));
+            Assert.That(evs.Any(e => e.t == "error"), Is.False);
+            Assert.That(S.debt, Is.EqualTo(debt0 - 100000));
+            Assert.That(S.cash, Is.EqualTo(cash0 - 100000));
+            Assert.That(S.min, Is.EqualTo(min0), "집 상환은 시간 안 씀");
+            Assert.That(S.pending.t, Is.EqualTo("home"));
+            g.Apply(C("repayOpen")); g.Apply(C("repay", "amt", 0));
+            Assert.That(S.pending.t, Is.EqualTo("home"), "취소");
+        }
     }
 }

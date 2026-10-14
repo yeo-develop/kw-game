@@ -92,7 +92,11 @@ namespace KwGame.Sim
         bool repayStart(string loc)
         {
             double mx = Math.Floor(Math.Min(S.cash, S.debt) / 10000) * 10000, due = S.paidMonth == S.month ? 0 : interestDue();
-            if (mx < 10000) { NPC(BANK, T("bank.noCash")); hideDlg(); return false; }
+            if (mx < 10000)
+            {
+                if (loc == "home") toast(T("repay.noCashHome"), "liq"); else { NPC(BANK, T("bank.noCash")); hideDlg(); }
+                return false;
+            }
             S.pending = new Pending("repay") { loc = loc, mx = mx, due = due };
             return true;
         }

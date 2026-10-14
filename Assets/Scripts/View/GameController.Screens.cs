@@ -421,10 +421,16 @@ namespace KwGame.View
                     Btn("됐어", () => Send("lottoDone"), null, false, Ui.Panel);
                     break;
                 case "repay":
-                    Title("원금 상환");
+                    Title(P.loc == "home" ? "빚 갚기 (김사장 계좌로 이체)" : "원금 상환");
                     Info($"빚 {G.won(S.debt)} · 현금 {G.won(S.cash)}" + (P.due > 0 ? $" · 이번 달 이자 {G.won(P.due)} 남겨 둘 것" : ""), 22, Ui.Text);
-                    foreach (var a in new[] { P.mx, Math.Floor(P.mx / 20000) * 10000, Math.Max(0, Math.Floor((P.mx - P.due) / 10000) * 10000), 100000 }.Distinct().Where(x => x >= 10000 && x <= P.mx))
-                    { var amt = a; Btn($"{G.won(amt)} 갚기", () => Send("repay", "amt", amt)); }
+                    {
+                        var seen = new HashSet<double>();
+                        foreach (var (a, l) in new[] { (P.mx, P.mx >= S.debt ? "빚 전부 갚기" : "가진 돈 전부"), (Math.Max(0, Math.Floor((P.mx - P.due) / 10000) * 10000), "이자 몫은 남기고"), (Math.Floor(P.mx / 20000) * 10000, "절반"), (100000.0, "10만 원만") })
+                        {
+                            if (a < 10000 || a > P.mx || !seen.Add(a)) continue;
+                            var amt = a; Btn($"{l} · {G.won(amt)}", () => Send("repay", "amt", amt), $"갚으면 빚 {G.won(S.debt - amt)} · 이자 {G.won(MathK.Round1k((S.debt - amt) * G.rate()))}로 줄어듦");
+                        }
+                    }
                     Btn("취소", () => Send("repay", "amt", 0), null, false, Ui.Panel);
                     break;
                 case "shop":
