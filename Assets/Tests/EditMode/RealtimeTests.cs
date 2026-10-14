@@ -197,6 +197,33 @@ namespace KwGame.Tests
         static double D_HP_LOW => Data.RULES.HP_LOW;
 
         [Test]
+        public void CoinStuckAtFloorGetsDelistedInsteadOfBouncing()
+        {
+            // 피드백: 종목마다 더 안 떨어지는 최저가가 있어서 거기서 몰빵하면 무조건 오름 (1조 2천억) → 바닥 근처면 상폐
+            var g = GameSim.Create(Data, 2024, new GameSim.Opts { rt = true });
+            g.Apply(C("start")); g.Apply(C("pickRelic", "i", 0));
+            var S = g.S; var r = new System.Random(4);
+            while (S.pending.t != "home") g.Apply(Respond(g, r));
+            g.Apply(C("tick", "m", 1));
+            const string K = "MMC"; var t = g.D.TK[K]; if (!S.augs.Contains("meme")) S.augs.Add("meme");   // 밈코인 해금 유물
+            Assert.That(g.Apply(C("open", "tk", K, "dir", 1, "lev", 1, "amt", 100000)).FirstOrDefault(e => e.t == "error"), Is.Null);
+            Assert.That(g.Apply(C("open", "tk", K, "dir", -1, "lev", 1, "amt", 100000)).FirstOrDefault(e => e.t == "error"), Is.Null);
+            var s = S.mk.tk[K];
+            s.p = s.so = t.p0 * 0.01;   // 바닥 근처로 끌어내림
+            double cash0 = S.cash; bool gone = false;
+            for (int i = 0; i < 400 && !gone; i++)
+            {
+                var evs = g.Apply(S.pending.t == "home" ? C("tick", "m", 10) : Respond(g, r));
+                Assert.That(evs.FirstOrDefault(e => e.t == "error"), Is.Null);
+                gone = evs.Any(e => e.t == "delist" && (string)e.d["tk"] == K);
+            }
+            Assert.That(gone, Is.True, "바닥에 붙은 코인은 시간대 끝에 상폐");
+            Assert.That(S.cps.Any(c => c.tk == K), Is.False, "포지션 정리");
+            Assert.That(S.cash - cash0, Is.GreaterThan(150000), "숏은 폭락만큼 벌어서 정산");
+            Assert.That(S.mk.tk[K].p, Is.GreaterThanOrEqualTo(t.p0 * 0.5), "재상장가로 리셋");
+        }
+
+        [Test]
         public void MissedInterestIsAlwaysTakenAwayInRealtime()
         {
             var bad = typeof(GameSim).GetMethod("badKind", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);

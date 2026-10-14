@@ -118,6 +118,7 @@
   "RT_WARN_P": 0.05,
   "RT_WARN_LOW_P": 0.15,
   "RT_DELIST_P": 0.5,
+  "RT_DELIST_AT": 0.03,
   "RT_HP_SLEEP": 35,
   "RT_HP_REST": 20,
   "RT_HP_REST_EVE": 10,

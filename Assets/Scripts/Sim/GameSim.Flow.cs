@@ -246,6 +246,7 @@ namespace KwGame.Sim
             else if (rt.Count > 0) toast(T("tick.tipsToast", "l", string.Join(" · ", rt.Select(t => srcOf(t).name + " " + resMark(t.res)))), "news", "news");
             else Emit("tickFloat", "text", T("tick.float", "ic", D.SLOT_IC[nextSlot], "s", D.SLOT_NAME[nextSlot]));
             gallMarketPosts(mv);
+            if (S.rt) foreach (var t in D.TKList.Where(t => S.mk.tk[t.id].p <= t.p0 * R.RT_DELIST_AT).ToList()) delist(t);   // 바닥가에 붙으면 위로만 튀는 무한 돈복사 → 동전주는 상폐
             S.eqh.Add(new EqPoint { T = Tnow(), v = S.realized + unreal() }); if (S.eqh.Count > 100) S.eqh.RemoveAt(0);
             S.st.maxAsset = Math.Max(S.st.maxAsset, rhu(S.cash + holdVal()));
             Emit("tick");

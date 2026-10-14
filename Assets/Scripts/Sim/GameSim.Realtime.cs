@@ -200,6 +200,7 @@ namespace KwGame.Sim
             }
             foreach (var c in S.cps.Where(c => c.tk == t.id).ToList())
             {
+                if (c.dir < 0) { double back = rhu(cEq(c)); S.cash += back; S.realized += back - c.margin; S.st.iN++; S.today.Add(new Ledger { kind = "invest", amt = back - c.margin, label = T("rt.delistLbl", "n", t.name) }); S.cps.Remove(c); continue; }   // 숏은 지금 값으로 정산
                 lost += c.margin; S.realized -= c.margin; S.st.iN++;
                 S.today.Add(new Ledger { kind = "invest", amt = -c.margin, label = T("rt.delistLbl", "n", t.name) });
                 S.cps.Remove(c);
