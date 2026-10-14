@@ -142,5 +142,25 @@ namespace KwGame.Tests
             g.Apply(C("repayOpen")); g.Apply(C("repay", "amt", 0));
             Assert.That(S.pending.t, Is.EqualTo("home"), "취소");
         }
+
+        [Test]
+        public void OldTurnSaveMissingNewTickersContinuesInRealtime()
+        {
+            var g = GameSim.Create(Data, 99, new GameSim.Opts { rt = false });
+            g.Apply(C("start")); g.Apply(C("pickRelic", "i", 0));
+            var S = g.S; var r = new System.Random(5);
+            while (S.pending.t != "home") g.Apply(Respond(g, r));
+            g.Query(() => 0);   // 계획이 만들어져 있게
+            foreach (var k in new[] { "GAE", "JHS", "TAL" }) { S.mk.tk.Remove(k); S.mplan?.r.Remove(k); S.mplan?.w.Remove(k); }   // 예전 저장 흉내
+            var g2 = new GameSim(Data, S);
+            g2.EnableRt();
+            Assert.That(S.rt && S.mk.tk.Has("GAE"));
+            for (int i = 0; i < 2000 && g2.absDay() < 4 && S.pending.t != "ending"; i++)
+            {
+                var evs = g2.Apply(Respond(g2, r));
+                Assert.That(evs.FirstOrDefault(e => e.t == "error"), Is.Null);
+            }
+            Assert.That(g2.absDay(), Is.GreaterThanOrEqualTo(3));
+        }
     }
 }

@@ -26,6 +26,7 @@ namespace KwGame.Sim
         {
             foreach (var t in D.TKList.Where(t => !S.mk.tk.Has(t.id))) S.mk.tk[t.id] = new TkState { p = t.p0, tr = rnd() < 0.5 ? 1 : -1 };
             foreach (var kv in S.mk.tk) { if (kv.Value.ref0 <= 0) kv.Value.ref0 = kv.Value.p; }
+            if (S.mplan != null && D.TKList.Any(t => !S.mplan.r.ContainsKey(t.id) || !S.mplan.w.ContainsKey(t.id))) S.mplan = null;   // 새 종목이 빠진 옛 시세 계획은 다시 짬
             if (S.rt) return;
             S.rt = true; S.min = slotStartMin(S.slot); S.owe = 0;
             foreach (var kv in S.mk.tk) { kv.Value.sT = int.MinValue; kv.Value.cb = int.MinValue; kv.Value.ref0 = kv.Value.p; }
