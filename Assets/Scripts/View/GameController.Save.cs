@@ -1,3 +1,4 @@
+using System.Linq;
 using KwGame.Persistence;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -11,22 +12,36 @@ namespace KwGame.View
         string saveMessage = "선택 완료 후 자동 저장";
         bool CanSave => G != null && !playing && S.pending != null && S.pending.t != "start";
 
+        /// 대사창 아래 퀵메뉴 (문예부식): 집 행동 · 폰 · 저장 · 타이틀 · 시간 속도
         void RenderSaveControls()
         {
             saveControls.Clear();
-            var buttons = Ui.Row();
-            var save = Ui.Chip("저장", () => SaveCheckpoint(true), !CanSave);
-            save.name = "saveGameButton";
-            buttons.Add(save);
-            var title = Ui.Chip("타이틀로", ReturnToTitle, playing);
-            title.name = "returnToTitleButton";
-            buttons.Add(title);
-            saveControls.Add(buttons);
-            var status = Ui.Label(saveMessage, 18, Ui.Dim);
-            status.name = "saveStatus";
-            status.style.marginTop = 8;
-            saveControls.Add(status);
+            if (G == null || S.pending?.t == "start") return;
+            bool home = S.pending?.t == "home" && !playing;
+            Button Q(string text, System.Action a, bool dis = false, Color? bg = null)
+            {
+                var b = Ui.Chip(text, a, dis, bg ?? new Color(1, 1, 1, 0.06f)); b.style.flexShrink = 0; b.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap;
+                saveControls.Add(b); return b;
+            }
+            Q("외출", () => Send("map"), !home);
+            Q(G.isEve() ? "자기" : "쉬기", () => Send("rest"), !home).tooltip = (S.rt ? (G.isEve() ? "자정까지 잠 · " : $"{D.RULES.RT_REST / 60}시간 · ") : "") + $"체력 +{(G.isEve() ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22";
+            Q("김사장 대출", () => Send("loanOpen"), !home).tooltip = $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}";
+            int unread = G.kUnread();
+            Q(phoneOpen ? "폰 닫기 (P)" : $"폰 (P){(unread > 0 ? $" · {unread}" : "")}", TogglePhone, false, phoneOpen ? Ui.Accent : (Color?)null);
+            var sp = new VisualElement(); sp.style.flexGrow = 1; saveControls.Add(sp);
+            var status = Ui.Label(saveMessage, 16, Ui.Dim); status.name = "saveStatus"; status.style.marginRight = 10; status.style.whiteSpace = WhiteSpace.NoWrap; saveControls.Add(status);
+            var save = Q("저장", () => SaveCheckpoint(true), !CanSave); save.name = "saveGameButton";
+            var title = Q("타이틀", ReturnToTitle, playing); title.name = "returnToTitleButton";
+            if (S.rt)
+            {
+                var gap = new VisualElement(); gap.style.width = 18; saveControls.Add(gap);
+                bool flowing = GameController_PhoneOk(S.pending?.t);
+                var st = Ui.Label(!flowing ? "⏸ 선택 중" : rtSpeed == 0 ? "⏸" : "▶", 18, flowing && rtSpeed > 0 ? Ui.Good : Ui.Dim); st.style.marginRight = 6; st.style.whiteSpace = WhiteSpace.NoWrap; saveControls.Add(st);
+                foreach (var (v0, l) in new[] { (0, "Ⅱ"), (1, "1x"), (2, "2x"), (4, "4x") })
+                { int v = v0; Q(l, () => { rtSpeed = v; RenderSaveControls(); }, false, rtSpeed == v ? Ui.Accent : (Color?)null); }
+            }
         }
+        static bool GameController_PhoneOk(string t) => PHONE_OK.Contains(t);
 
         public bool SaveCheckpoint(bool notify)
         {

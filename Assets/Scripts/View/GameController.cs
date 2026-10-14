@@ -154,6 +154,7 @@ namespace KwGame.View
         IEnumerator Say(string who, string name, string text, string face)
         {
             dlg.style.display = DisplayStyle.Flex;
+            dlgText.style.display = DisplayStyle.Flex; idleText.style.display = DisplayStyle.None; dlgHint.style.display = DisplayStyle.Flex;
             dlgName.text = Ui.Clean(who == "m" ? "미래" : who == "me" ? "나" : who == "kim" ? "김사장" : who == "npc" ? name : "");
             dlgName.style.display = dlgName.text == "" ? DisplayStyle.None : DisplayStyle.Flex;
             dlgText.style.unityFontStyleAndWeight = who == "nar" ? FontStyle.Italic : FontStyle.Normal;
@@ -192,7 +193,7 @@ namespace KwGame.View
             RenderHud(G.HudSnapOf());
             LiveChart();
             rtPhoneT += Time.unscaledDeltaTime; rtSaveT += Time.unscaledDeltaTime;
-            if (rtPhoneT >= 0.5f && !stkDragging) { rtPhoneT = 0; RenderPhone(); }
+            if (rtPhoneT >= 0.5f && !stkDragging) { rtPhoneT = 0; if (phoneOpen) RenderPhone(); RenderMini(); }
             if (rtSaveT >= 30f) { rtSaveT = 0; SaveCheckpoint(false); }
         }
 
@@ -200,6 +201,10 @@ namespace KwGame.View
         {
             if (dlgText == null) return;
             RtUpdate();
+            if (!waiting && mg == null && G != null && S.pending?.t != "start")
+            {
+                if (Input.GetKeyDown(KeyCode.P) || (phoneOpen && Input.GetKeyDown(KeyCode.Escape))) TogglePhone();
+            }
             FaceTick();
             if (waitingForDialogue)
             {
@@ -238,7 +243,8 @@ namespace KwGame.View
         {
             dlgText.Typewriter.StopShowingText();
             dlgText.PauseAnimation();
-            dlg.style.display = DisplayStyle.None;
+            dlgText.style.display = DisplayStyle.None; idleText.style.display = DisplayStyle.Flex; dlgHint.style.display = DisplayStyle.None;
+            if (G != null) SetIdle();
         }
 
         void OnDestroy()

@@ -60,8 +60,8 @@ namespace KwGame.View
         void StockApp(VisualElement body, string where)
         {
             var R = D.RULES; double fee = G.stockFee(where);
-            // 위: 시세 띠 (전 종목 등락이 흘러감)
-            body.Add(TickerTape());
+            // 위: 시세 띠 (전 종목 등락이 흘러감). 실시간 차트 화면엔 관심종목 목록이 있어서 생략
+            if (!(S.rt && stkTab == "detail")) body.Add(TickerTape());
 
             var head = Ui.Row(); head.style.flexWrap = Wrap.Wrap; head.style.marginTop = 14; head.style.marginBottom = 10; body.Add(head);
             foreach (var (k, n) in new[] { ("mkt", "시세"), ("detail", "차트·주문"), ("acct", "내 계좌") })
@@ -237,9 +237,30 @@ namespace KwGame.View
             if (stkSel == null || !D.TK.ContainsKey(stkSel) || !G.tkOpen(stkSel)) stkSel = D.TKList.First(x => G.tkOpen(x.id)).id;
             var t = D.TK[stkSel]; var mk = S.mk.tk[stkSel]; bool isC = t.IsCoin; double r = Rr(stkSel);
 
-            // 종목 띠
-            var strip = Ui.Row(); strip.style.flexWrap = Wrap.Wrap; body.Add(strip);
-            foreach (var x in D.TKList.Where(y => G.tkOpen(y.id)))
+            // 종목 고르기: 실시간이면 왼쪽 세로 관심종목, 아니면 칩 띠
+            if (S.rt)
+            {
+                var cols0 = Ui.Row(); cols0.style.alignItems = Align.FlexStart; body.Add(cols0);
+                var wl = new VisualElement(); wl.style.width = 230; wl.style.flexShrink = 0; wl.style.marginRight = 14; cols0.Add(wl);
+                foreach (var x in D.TKList.Where(y => G.tkOpen(y.id)))
+                {
+                    string id = x.id; var xm = S.mk.tk[id]; double rx = Rr(id); bool sel = id == stkSel;
+                    var it = Ui.Box(sel ? Color.Lerp(StkCard, Ui.Accent, 0.28f) : StkCard, 10, 8); it.style.marginBottom = 6; it.style.paddingLeft = 12; it.style.paddingRight = 12; it.style.paddingTop = 6; it.style.paddingBottom = 6;
+                    it.style.borderLeftWidth = 4; it.style.borderLeftColor = sel ? Ui.Accent : (Color)StkLine;
+                    var nr = Ui.Row(); it.Add(nr);
+                    var nm = Ui.Label(x.name, 19, Ui.Text, true); nm.style.flexGrow = 1; nm.style.whiteSpace = WhiteSpace.NoWrap; nm.style.overflow = Overflow.Hidden; nm.style.textOverflow = TextOverflow.Ellipsis; nr.Add(nm);
+                    if (G.limitUp(id)) nr.Add(Badge("상", StkUp)); else if (G.limitDn(id)) nr.Add(Badge("하", StkDn));
+                    if (xm.warn) nr.Add(Badge("관리", Ui.Bad));
+                    var pr0 = Ui.Row(); pr0.style.justifyContent = Justify.SpaceBetween; it.Add(pr0);
+                    pr0.Add(Ui.Label(G.fmtP(xm.p), 17, StkAxis)); pr0.Add(Ui.Label(GameSim.pct(rx), 17, UpDn(rx), true));
+                    foreach (var ch in it.Children()) ch.pickingMode = PickingMode.Ignore;
+                    it.RegisterCallback<ClickEvent>(_ => { stkSel = id; stkAmt = null; stkMsg = ""; RenderAll(); });
+                    wl.Add(it);
+                }
+                body = new VisualElement(); body.style.flexGrow = 1; body.style.flexShrink = 1; body.style.minWidth = 0; cols0.Add(body);
+            }
+            var strip = Ui.Row(); strip.style.flexWrap = Wrap.Wrap; if (!S.rt) body.Add(strip);
+            foreach (var x in D.TKList.Where(y => G.tkOpen(y.id) && !S.rt))
             {
                 string id = x.id; double rx = Rr(id);
                 var b = Ui.Chip($"{x.name} {GameSim.pct(rx)}", () => { stkSel = id; stkAmt = null; stkMsg = ""; RenderAll(); }, false, id == stkSel ? Ui.Accent : (Color?)null);
@@ -253,23 +274,35 @@ namespace KwGame.View
 
             // 종목 머리
             var th = Ui.Row(); th.style.alignItems = Align.FlexEnd; left.Add(th);
-            th.Add(Ui.Label(t.name, 32, Ui.Text, true));
-            th.Add(Badge(isC ? $"{t.cat ?? "코인"} · 최대 {t.maxLev:0}x" : t.cat ?? "주식", isC ? Ui.Gold : StkAxis));
-            if (G.limitUp(stkSel)) th.Add(Badge("상한가", StkUp)); else if (G.limitDn(stkSel)) th.Add(Badge("하한가", StkDn));
-            if (mk.warn) th.Add(Badge("관리종목 · 상폐 심사", Ui.Bad));
-            var sp0 = new VisualElement(); sp0.style.flexGrow = 1; th.Add(sp0);
-            th.Add(Ui.Label(G.fmtP(mk.p), 40, UpDn(r), true));
-            var rl = Ui.Label(" " + GameSim.pct(r), 26, UpDn(r), true); th.Add(rl);
-            var hi = mk.hist.Count > 0 ? mk.hist.Max(c => c.h) : mk.p; var lo = mk.hist.Count > 0 ? mk.hist.Min(c => c.l) : mk.p;
-            left.Add(Ui.Label(S.rt ? $"{Ui.Clean(t.d)} · 오늘 {GameSim.pct(r)} · 기준가 {G.fmtP(mk.ref0)}" + (t.IsStock ? $" (±{D.RULES.RT_LIMIT * 100:0}%)" : "") + $" · 고가 {G.fmtP(hi)} / 저가 {G.fmtP(lo)}"
-                : $"{Ui.Clean(t.d)} · 4칸 {GameSim.pct(SpanR(mk, 4))} · 최근 {mk.hist.Count}칸 고가 {G.fmtP(hi)} / 저가 {G.fmtP(lo)}", 18, StkAxis));
+            if (S.rt)
+            {   // 좁은 칸: 1줄 이름·배지, 2줄 가격·등락
+                var nmL = Ui.Label(t.name, 28, Ui.Text, true); nmL.style.whiteSpace = WhiteSpace.NoWrap; th.Add(nmL);
+                th.Add(Badge(isC ? $"{t.cat ?? "코인"} · {t.maxLev:0}x" : t.cat ?? "주식", isC ? Ui.Gold : StkAxis));
+                if (G.limitUp(stkSel)) th.Add(Badge("상한가", StkUp)); else if (G.limitDn(stkSel)) th.Add(Badge("하한가", StkDn));
+                if (mk.warn) th.Add(Badge("관리종목", Ui.Bad));
+                var pr = Ui.Row(); pr.style.alignItems = Align.FlexEnd; left.Add(pr);
+                var pl0 = Ui.Label(G.fmtP(mk.p), 36, UpDn(r), true); pl0.style.whiteSpace = WhiteSpace.NoWrap; pr.Add(pl0);
+                var rl0 = Ui.Label(" " + GameSim.pct(r), 22, UpDn(r), true); rl0.style.whiteSpace = WhiteSpace.NoWrap; rl0.style.marginBottom = 4; pr.Add(rl0);
+                var rf = Ui.Label($"  기준 {G.fmtP(mk.ref0)}" + (t.IsStock ? $" · ±{D.RULES.RT_LIMIT * 100:0}%" : " · 자정"), 16, StkAxis); rf.style.marginBottom = 6; rf.style.whiteSpace = WhiteSpace.NoWrap; pr.Add(rf);
+            }
+            else th.Add(Ui.Label(t.name, 32, Ui.Text, true));
+            if (!S.rt)
+            {
+                th.Add(Badge(isC ? $"{t.cat ?? "코인"} · 최대 {t.maxLev:0}x" : t.cat ?? "주식", isC ? Ui.Gold : StkAxis));
+                var sp0 = new VisualElement(); sp0.style.flexGrow = 1; th.Add(sp0);
+                th.Add(Ui.Label(G.fmtP(mk.p), 40, UpDn(r), true));
+                var rl = Ui.Label(" " + GameSim.pct(r), 26, UpDn(r), true); th.Add(rl);
+                var hi = mk.hist.Count > 0 ? mk.hist.Max(c => c.h) : mk.p; var lo = mk.hist.Count > 0 ? mk.hist.Min(c => c.l) : mk.p;
+                left.Add(Ui.Label($"{Ui.Clean(t.d)} · 4칸 {GameSim.pct(SpanR(mk, 4))} · 최근 {mk.hist.Count}칸 고가 {G.fmtP(hi)} / 저가 {G.fmtP(lo)}", 18, StkAxis));
+            }
 
             // 차트 옵션
             var opt = Ui.Row(); opt.style.marginTop = 8; left.Add(opt);
-            foreach (var n in S.rt ? new[] { 24, 48, 96 } : new[] { 12, 24, 40 }) { int nn = n; opt.Add(Ui.Chip(S.rt ? $"{n / 2}시간" : $"{n}칸", () => { stkBars = nn; RenderAll(); }, false, stkBars == n ? Ui.Panel2 : StkBg)); }
-            opt.Add(Ui.Chip(stkLineMode ? "라인" : "캔들", () => { stkLineMode = !stkLineMode; RenderAll(); }, false, StkBg));
+            foreach (var n in S.rt ? new[] { 24, 48, 96 } : new[] { 12, 24, 40 }) { int nn = n; var oc = Ui.Chip(S.rt ? $"{n / 2}h" : $"{n}칸", () => { stkBars = nn; RenderAll(); }, false, stkBars == n ? Ui.Panel2 : StkBg); oc.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap; opt.Add(oc); }
+            { var lc = Ui.Chip(stkLineMode ? "라인" : "캔들", () => { stkLineMode = !stkLineMode; RenderAll(); }, false, StkBg); lc.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap; opt.Add(lc); }
             var lg = Ui.Row(); lg.style.marginLeft = 10; opt.Add(lg);
-            lg.Add(Ui.Label("MA5 ", 18, CandleChart.Ma5C, true)); lg.Add(Ui.Label("MA20 ", 18, CandleChart.Ma20C, true)); lg.Add(Ui.Label(S.rt ? "· 1봉 = 30분 · 실시간" : "· 1봉 = 1칸 · 마우스 올리면 시고저종", 16, StkAxis));
+            lg.Add(Ui.Label("MA5 ", 18, CandleChart.Ma5C, true)); lg.Add(Ui.Label("MA20 ", 18, CandleChart.Ma20C, true)); lg.Add(Ui.Label(S.rt ? "· 30분봉" : "· 1봉 = 1칸 · 마우스 올리면 시고저종", 16, StkAxis));
+            foreach (var ch in lg.Children()) ch.style.whiteSpace = WhiteSpace.NoWrap;
 
             // 차트
             if (S.rt && stkBars < 24) stkBars = 48;
@@ -286,7 +319,7 @@ namespace KwGame.View
                 bool grow = !S.rt && seen >= 0 && seen != nowT;
                 stkSeen[stkSel] = nowT;
                 var chart = new CandleChart(mk.hist, stkBars, mk.p, lines, G.fmtP, stkLineMode);
-                chart.style.height = 340; chart.style.marginTop = 8;
+                chart.style.height = S.rt ? 300 : 340; chart.style.marginTop = 8;
                 left.Add(chart);
                 if (grow) chart.Grow();
                 liveChart = chart; liveChartKey = ck;
@@ -294,7 +327,7 @@ namespace KwGame.View
 
             // 포지션 (코인)
             foreach (var c in S.cps.Where(c => c.tk == stkSel)) left.Add(CoinRow(c));
-            TipCards(left, stkSel);
+            if (!S.rt) TipCards(left, stkSel);   // 실시간 화면은 주문창이 먼저 보이게 (정보는 정보 수첩 탭)
 
             // 주문창
             OrderPanel(right, t, mk, where, fee);
