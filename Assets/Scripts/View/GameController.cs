@@ -182,20 +182,33 @@ namespace KwGame.View
         // ---------- 실시간 (GameSim.Realtime.cs) ----------
         int rtSpeed = 1; float rtAcc, rtPhoneT, rtSaveT;
         /// 고를 게 없는 화면(집·지도·장소·창구)에선 게임 시간이 흐름. 조용한 분은 HUD·차트만 다시 그리고, 무슨 일이 생기면(시간대 끝·청산·상폐) 이벤트 재생
+        bool rtDirty, rtWasOpen;
         void RtUpdate()
         {
             if (G == null || !S.rt || playing || waiting || rtSpeed == 0 || mg != null || modal.style.display == DisplayStyle.Flex || !PHONE_OK.Contains(S.pending?.t)) return;
-            rtAcc += Time.unscaledDeltaTime * (float)D.RULES.RT_SPEED * rtSpeed;
+            // 타이머는 매 프레임 쌓음 (예전엔 시계가 1분 갈 때만 쌓여서 폰 글자가 8초에 한 번꼴로만 바뀜)
+            float dt = Time.unscaledDeltaTime;
+            rtPhoneT += dt; rtSaveT += dt;
+            rtAcc += dt * (float)D.RULES.RT_SPEED * rtSpeed;
             int m = Mathf.Min(30, (int)rtAcc);
-            if (m < 1) return;
-            rtAcc -= m;
-            var evs = G.Apply(new SimCommand("tick", "m", m));
-            if (evs.Count > 0) { rtAcc = 0; LlmTick(); StartCoroutine(Play(evs)); return; }
-            if (!Input.GetMouseButton(0) && Input.touchCount == 0) RenderHud(G.HudSnapOf());
-            LiveChart();
-            rtPhoneT += Time.unscaledDeltaTime; rtSaveT += Time.unscaledDeltaTime;
-            // 누르고 있는 동안엔 다시 그리지 않음 (누름~뗌 사이에 버튼이 바뀌면 클릭이 사라짐)
-            if (rtPhoneT >= 0.5f && !stkDragging && !Input.GetMouseButton(0) && Input.touchCount == 0) { rtPhoneT = 0; if (phoneOpen) RenderPhone(); RenderMini(); }
+            if (m >= 1)
+            {
+                rtAcc -= m;
+                var evs = G.Apply(new SimCommand("tick", "m", m));
+                if (evs.Count > 0) { rtAcc = 0; LlmTick(); StartCoroutine(Play(evs)); return; }
+                rtDirty = true;
+                LiveChart();
+            }
+            bool held = Input.GetMouseButton(0) || Input.touchCount > 0;   // 누르고 있는 동안엔 다시 그리지 않음 (누름~뗌 사이에 버튼이 바뀌면 클릭이 사라짐)
+            if (!held) stkDragging = false;                                 // 막대 끌던 중 다시 그려져서 뗌을 못 받아도 풀리게
+            bool flip = G.stockOpen() != rtWasOpen;                         // 장 열림/닫힘이 바뀌면 바로 (매수 버튼)
+            if (rtDirty && !held && !stkDragging && (rtPhoneT >= 0.3f || flip))
+            {
+                rtDirty = false; rtPhoneT = 0; rtWasOpen = G.stockOpen();
+                RenderHud(G.HudSnapOf());
+                if (phoneOpen) RenderPhone();
+                RenderMini();
+            }
             if (rtSaveT >= 30f) { rtSaveT = 0; SaveCheckpoint(false); }
         }
 
