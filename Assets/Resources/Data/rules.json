@@ -117,7 +117,16 @@
   "RT_WORK": 300,
   "RT_WARN_P": 0.05,
   "RT_WARN_LOW_P": 0.15,
-  "RT_DELIST_P": 0.5
+  "RT_DELIST_P": 0.5,
+  "RT_HP_SLEEP": 35,
+  "RT_HP_REST": 20,
+  "RT_HP_REST_EVE": 10,
+  "RT_REST_ST": -8,
+  "RT_WORK_ST": 12,
+  "RT_WORK_ST_STREAK": 4,
+  "RT_DUE_ST": 2,
+  "RT_ANX_PAY": 0.9,
+  "RT_MEN_PAY": 0.7
  },
  "SLOT_NAME": [
   "아침",

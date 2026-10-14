@@ -171,6 +171,32 @@ namespace KwGame.Tests
         }
 
         [Test]
+        public void WorkSpamWearsDownBodyAndMind()
+        {
+            // 피드백: 알바만 계속 해도 체력 30 밑으로 안 가고 멘탈도 안 나빠짐 → 실시간에선 깎여야 함
+            var g = GameSim.Create(Data, 31337, new GameSim.Opts { rt = true });
+            g.Apply(C("start")); g.Apply(C("pickRelic", "i", System.Math.Max(0, g.S.pending.offer.FindIndex(id => id != "ginseng"))));   // 인삼(알바 체력 ×0.7) 말고
+            var S = g.S; var r = new System.Random(9);
+            double minHp = 100, maxSt = 0; int works = 0;
+            for (int i = 0; i < 5000 && g.absDay() < 9 && S.pending.t != "ending"; i++)
+            {
+                var P = S.pending; SimCommand c;
+                if (P.t == "home") c = g.isEve() ? C("rest") : C("map");
+                else if (P.t == "map") c = C("goTo", "loc", g.isEve() ? "home" : "work");
+                else if (P.t == "loc") { var o = g.Query(() => g.locOpts(P.key)).FirstOrDefault(x => !x.dis && x.k == "l-cafe"); c = o != null ? C("act", "k", o.k) : C("leave"); }
+                else if (P.t == "work" && P.setup != null) { works++; c = C("mgResult", "score", 0.7); }
+                else c = Respond(g, r);
+                Assert.That(g.Apply(c).FirstOrDefault(e => e.t == "error"), Is.Null);
+                minHp = System.Math.Min(minHp, S.hp); maxSt = System.Math.Max(maxSt, S.stress);
+            }
+            Debug.Log($"[rt] work spam ({string.Join(",", S.augs)}): works {works} · minHp {minHp} · maxStress {maxSt}");
+            Assert.That(works, Is.GreaterThan(5));
+            Assert.That(minHp, Is.LessThan(D_HP_LOW), "알바만 하면 체력이 바닥남");
+            Assert.That(maxSt, Is.GreaterThanOrEqualTo(40), "알바만 하면 멘탈이 불안 이상으로");
+        }
+        static double D_HP_LOW => Data.RULES.HP_LOW;
+
+        [Test]
         public void MissedInterestIsAlwaysTakenAwayInRealtime()
         {
             var bad = typeof(GameSim).GetMethod("badKind", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);

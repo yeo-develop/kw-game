@@ -327,7 +327,8 @@ namespace KwGame.View
 
             // 포지션 (코인)
             foreach (var c in S.cps.Where(c => c.tk == stkSel)) left.Add(CoinRow(c));
-            if (!S.rt) TipCards(left, stkSel);   // 실시간 화면은 주문창이 먼저 보이게 (정보는 정보 수첩 탭)
+            if (!S.rt) TipCards(left, stkSel);   // 실시간 화면은 주문창이 먼저 보이게 — 정보는 한 줄씩만 (자세한 건 정보 수첩)
+            else TipStrip(left, stkSel);
 
             // 주문창
             OrderPanel(right, t, mk, where, fee);

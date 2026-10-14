@@ -132,6 +132,8 @@ namespace KwGame.Sim
         public bool todayLiq() => S.today.Any(x => (x.label ?? "").Contains(D.S("liqWord")));
         public int wroteToday() => S.wrote.TryGetValue(absDay(), out var n) ? n : 0;
         public string moodFace() { var m = mental(); return m == "men" ? "menhera" : m == "anx" || S.hp < R.HP_LOW ? "tired" : S.stress < 25 ? "happy" : "neutral"; }
+        /// 실시간 모드: 멘탈 나쁘면 알바 성과도 깎임 (불안 ×0.9 · 멘헤라 ×0.7)
+        public double menPay() { var m = mental(); return m == "men" ? R.RT_MEN_PAY : m == "anx" ? R.RT_ANX_PAY : 1; }
         public double hpMult() { double lo = R.HP_LOW; return S.hp >= lo ? 1 : 0.4 + 0.6 * S.hp / lo; }
         public double hpCost(string k) { double c = R.HpCost(k); return c > 0 && has("ginseng") ? rhu(c * 0.7) : c; }
         public double jobHp(Job J) => has("ginseng") ? rhu(J.hp * 0.7) : J.hp;

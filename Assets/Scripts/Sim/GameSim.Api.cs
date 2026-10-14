@@ -61,7 +61,8 @@ namespace KwGame.Sim
         void restHome()
         {
             S.workStreak = 0;
-            stress(-22); hp(isEve() ? R.HP_REST_EVE : R.HP_REST, T("why.rest"));
+            if (S.rt) { stress(R.RT_REST_ST); hp(isEve() ? R.RT_HP_REST_EVE : R.RT_HP_REST, T("why.rest")); }   // 저녁 쉬기 = 일찍 잠 (자정 수면 회복은 따로)
+            else { stress(-22); hp(isEve() ? R.HP_REST_EVE : R.HP_REST, T("why.rest")); }
             face("tired");
             M(fpick(TA("rest.m")), "tired");
             galReact("rest", null, 1);

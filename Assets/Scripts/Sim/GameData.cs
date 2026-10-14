@@ -24,6 +24,8 @@ namespace KwGame.Sim
         public int RT_DAY0 = 480, RT_CANDLE = 30, RT_HIST = 160, RT_REST = 180, RT_ACT = 120, RT_WORK = 300;
         public int[] RT_SLOT_END = { 720, 1080, 1440 }, RT_STOCK = { 540, 930 };
         public double RT_VOL = 2, RT_LIMIT = 0.3, RT_SPEED = 4, RT_WARN_P = 0.05, RT_WARN_LOW_P = 0.15, RT_DELIST_P = 0.5;
+        // 실시간 모드 체력·멘탈: 알바 무지성 반복·집에서 쉬기만 하기 막기 (턴 모드는 위 HP_* 그대로)
+        public double RT_HP_SLEEP = 35, RT_HP_REST = 20, RT_HP_REST_EVE = 10, RT_REST_ST = -8, RT_WORK_ST = 12, RT_WORK_ST_STREAK = 4, RT_DUE_ST = 2, RT_ANX_PAY = 0.9, RT_MEN_PAY = 0.7;
 
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;

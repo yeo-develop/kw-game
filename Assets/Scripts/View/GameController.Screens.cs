@@ -104,8 +104,8 @@ namespace KwGame.View
             stage.Add(dlg);
 
             // 폰 (오른쪽에서 밀려 나옴)
-            phone = Ui.Box(new Color(0.07f, 0.07f, 0.11f, 0.98f), 18, 22);
-            Ui.Abs(phone, null, 20, 20, 20); phone.style.width = 880; Ui.Border(phone, Ui.Accent, 3); phone.style.overflow = Overflow.Hidden;
+            phone = Ui.Box(new Color(0.04f, 0.04f, 0.06f, 0.99f), 12, 40);   // 폰 테두리(베젤) — 안쪽 앱 화면은 RenderPhone
+            Ui.Abs(phone, null, 20, 20, 20); phone.style.width = 880; Ui.Border(phone, new Color(0.32f, 0.32f, 0.38f), 3); phone.style.overflow = Overflow.Hidden;
             phone.style.display = DisplayStyle.None;
             stage.Add(phone);
 
@@ -146,6 +146,61 @@ namespace KwGame.View
             modal.Add(card);
             yield return WaitClick();
             modal.style.display = DisplayStyle.None;
+        }
+
+        /// 장면 자막 카드 (인트로 회상): 큰 제목 + 설명 + 그려지는 차트 (up = 불장, crash = 오르다 폭락)
+        string storyNow;
+        IEnumerator StoryCard(string h, string t, string sub, string chart)
+        {
+            storyNow = h;
+            modal.Clear(); modal.style.display = DisplayStyle.Flex;
+            var card = Ui.Box(new Color(0.05f, 0.05f, 0.08f, 0.94f), 48, 20); card.style.width = 1100; card.style.alignItems = Align.Center;
+            var hl = Ui.Label(h ?? "", 56, Ui.Gold, true); hl.style.unityTextAlign = TextAnchor.MiddleCenter; card.Add(hl);
+            if (!string.IsNullOrEmpty(t)) { var tl = Ui.Label(t, 28, Ui.Text); tl.style.unityTextAlign = TextAnchor.MiddleCenter; tl.style.marginTop = 14; card.Add(tl); }
+            StoryChart sc = null;
+            if (!string.IsNullOrEmpty(chart)) { sc = new StoryChart(chart == "crash"); sc.style.width = 900; sc.style.height = 300; sc.style.marginTop = 24; card.Add(sc); }
+            Label sl = null;
+            if (!string.IsNullOrEmpty(sub)) { sl = Ui.Label(sub, 32, chart == "crash" ? StkDn : StkUp, true); sl.style.unityTextAlign = TextAnchor.MiddleCenter; sl.style.marginTop = 18; sl.style.opacity = sc != null ? 0 : 1; card.Add(sl); }
+            card.Add(Ui.Label("(클릭해서 계속)", 20, Ui.Dim));
+            modal.Add(card);
+            if (sc != null && !autoSkipDialog)
+            {
+                for (float a = 0; a < 1.6f; a += Time.unscaledDeltaTime) { sc.t = a / 1.6f; sc.MarkDirtyRepaint(); if (Input.GetMouseButtonDown(0)) break; yield return null; }
+                yield return null;
+            }
+            if (sc != null) { sc.t = 1; sc.MarkDirtyRepaint(); }
+            if (sl != null) sl.style.opacity = 1;
+            if (sc != null && sc.crash) Shake(card, 22);
+            yield return WaitClick();
+            modal.style.display = DisplayStyle.None;
+            storyNow = null;
+        }
+        class StoryChart : VisualElement
+        {
+            public float t; public readonly bool crash; readonly float[] ys;
+            public StoryChart(bool crash)
+            {
+                this.crash = crash; var r = new System.Random(crash ? 7 : 3);
+                ys = new float[60]; float y = 0.15f;
+                for (int i = 0; i < ys.Length; i++)
+                {
+                    float f = (float)i / (ys.Length - 1);
+                    float trend = crash ? (f < 0.55f ? 0.022f : f < 0.62f ? -0.16f : -0.012f) : 0.013f;
+                    y = Mathf.Clamp(y + trend + ((float)r.NextDouble() - 0.5f) * 0.05f, 0.02f, 0.98f); ys[i] = y;
+                }
+                generateVisualContent += ctx =>
+                {
+                    var rc = contentRect; var p = ctx.painter2D; int n = Mathf.Max(2, Mathf.CeilToInt(t * ys.Length));
+                    p.strokeColor = new Color(1, 1, 1, 0.12f); p.lineWidth = 2; p.BeginPath(); p.MoveTo(new Vector2(0, rc.height)); p.LineTo(new Vector2(rc.width, rc.height)); p.Stroke();
+                    p.lineWidth = 6; p.lineJoin = LineJoin.Round; p.BeginPath();
+                    for (int i = 0; i < n; i++)
+                    {
+                        var v = new Vector2(rc.width * i / (ys.Length - 1), rc.height * (1 - ys[i]));
+                        if (i == 0) p.MoveTo(v); else p.LineTo(v);
+                    }
+                    p.strokeColor = crash && n > ys.Length * 0.56f ? StkDn : StkUp; p.Stroke();
+                };
+            }
         }
 
         /// 캐릭터 그림을 장면 높이에 맞춤 (그림은 739×1080)
@@ -518,10 +573,11 @@ namespace KwGame.View
             {
                 Info($"일당 {G.man(J.@base)}~{G.man(J.@base + J.var)}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
                 if (G.hpMult() < 1) Info($"체력이 낮아 점수 ×{G.hpMult():0.00}", 20, Ui.Bad);
+                if (S.rt && G.menPay() < 1) Info($"멘탈이 {(G.mental() == "men" ? "나가서" : "불안해서")} 점수 ×{G.menPay():0.00} (쇼핑·PC방·미래 달래기로 회복)", 20, Ui.Bad);
                 Btn("일 시작", () => Send("mgSetup"), "3·2·1 하고 바로 시작", false, Ui.Accent);
                 return;
             }
-            if (P.setup.hpm < 1) Info($"체력이 낮아 점수 ×{P.setup.hpm:0.00}", 20, Ui.Bad);
+            if (P.setup.hpm < 1) Info($"체력·멘탈 때문에 점수 ×{P.setup.hpm:0.00}", 20, Ui.Bad);
             MinigameEnsure(P);
         }
 
@@ -577,89 +633,6 @@ namespace KwGame.View
             Row("알바로 번 돈", G.won(sb.earned)); Row("투자 손익", G.sgnWon(sb.profit)); Row("도박 순손익", G.sgnWon(sb.gnet));
             Row("최대 자산", G.won(sb.maxAsset)); Row("도박 승/판", $"{sb.gW}/{sb.gN}"); Row("투자 승/매도", $"{sb.iW}/{sb.iN} · 청산 {sb.liq}");
             Row("갤 명성", $"{sb.fame} ({sb.rank})"); Row("중독도", $"{sb.addict}"); Row("기절 · 돌발 매수", $"{sb.faint} · {sb.impulse}");
-        }
-
-        // ---------- 폰 ----------
-        ScrollView phoneSv; string phoneSvKey;
-        void RenderPhone()
-        {
-            bool can = PHONE_OK.Contains(S.pending?.t);
-            phone.Clear();
-            var tabs = Ui.Row(); tabs.style.marginBottom = 12; tabs.style.flexShrink = 0; phone.Add(tabs);
-            foreach (var (k, n) in new[] { ("stock", "개미증권"), ("kakao", $"카톡{(G.kUnread() > 0 ? $"({G.kUnread()})" : "")}"), ("gall", "주갤"), ("news", "뉴스"), ("tips", "정보 수첩") })
-            {
-                var kk = k; tabs.Add(Ui.Chip(n, () => { phoneTab = kk; if (kk == "kakao") { Send("read", "what", "kakao", "room", "m"); Send("read", "what", "kakao", "room", "kim"); Send("read", "what", "kakao", "room", "hy"); } if (kk == "news") Send("read", "what", "news"); RenderAll(); }, false, phoneTab == k ? Ui.Accent : (Color?)null));
-            }
-            if (!can) { var lk = Ui.Label("지금은 폰 못 봄", 18, Ui.Dim); lk.style.alignSelf = Align.Center; tabs.Add(lk); }
-            var tsp = new VisualElement(); tsp.style.flexGrow = 1; tabs.Add(tsp);
-            tabs.Add(Ui.Chip("닫기 (P)", TogglePhone));
-            var sv = new ScrollView(); sv.style.flexGrow = 1; sv.contentViewport.style.overflow = Overflow.Hidden; phone.Add(sv);   // 테마 USS 가 없어서 직접 잘라야 함
-            string scrollKey = phoneTab + "/" + stkTab;   // 주문 버튼 눌러 다시 그려도 보던 자리 유지
-            if (phoneSv != null && phoneSvKey == scrollKey) { var keep = phoneSv.scrollOffset; sv.schedule.Execute(() => sv.scrollOffset = keep); }
-            phoneSv = sv; phoneSvKey = scrollKey;
-            var body = sv.contentContainer;
-            sv.SetEnabled(can);
-            void L(string t, float s = 22, Color? c = null) { var l = Ui.Label(t, s, c ?? Ui.Text); l.style.marginBottom = 6; body.Add(l); }
-            VisualElement R() { var r = Ui.Row(); r.style.flexWrap = Wrap.Wrap; r.style.marginBottom = 10; body.Add(r); return r; }
-            string where = S.pending?.t == "brokerTrade" ? "broker" : "app";
-            switch (phoneTab)
-            {
-                case "stock":
-                    StockApp(body, where);
-                    break;
-                case "kakao":
-                    if (S.kq != null)
-                    {
-                        L("미래가 답장 기다림: " + D.KQ[S.kq.i].q, 24, Ui.Accent);
-                        for (int i = 0; i < S.kq.opts.Count; i++) { int k = i; body.Add(Ui.Button(S.kq.opts[i].l, () => Send("kqReply", "i", k))); }
-                    }
-                    foreach (var room in new[] { "m", "kim", "hy" })
-                    {
-                        L(room == "m" ? "미래 ♥" : room == "kim" ? "김사장" : "형나믿지", 22, Ui.Gold);
-                        foreach (var m in S.kk[room].Skip(Math.Max(0, S.kk[room].Count - 5))) L($"[{m.t}] {(m.w == "me" ? "나" : m.w == "sys" ? "시스템" : m.w == "m" ? "미래" : m.w == "kim" ? "김사장" : "형")}: {m.x}", 20, m.w == "me" ? Ui.Dim : Ui.Text);
-                        if (room == "m") foreach (var x in aiKakao) L(x, 20);   // LLM 카톡 (화면 전용)
-                    }
-                    break;
-                case "gall":
-                    L($"주식 갤러리 · 명성 {S.galFame} ({G.rankOf(S.galFame).name}) · 오늘 쓴 글 {G.wroteToday()}/{D.RULES.WRITE_MAX}", 22, Ui.Gold);
-                    {
-                        var row = R();
-                        foreach (var gw in (D.J["GW"] as JArray) ?? new JArray())
-                        {
-                            string k = (string)gw["k"]; var dr = G.Query(() => G.draft(k));
-                            row.Add(Ui.Chip((string)gw["l"] + (dr != null && !dr.ok ? " (주작각)" : ""), () => Send("post", "k", k), G.wroteToday() >= D.RULES.WRITE_MAX));
-                        }
-                    }
-                    foreach (var ap in aiPosts.AsEnumerable().Reverse().Take(3))   // LLM 글 (화면 전용)
-                    {
-                        L($"[실시간] {ap.title}  — ㅇㅇ · {ap.lab}", 20, Ui.Gold);
-                        L("   " + ap.body, 18, Ui.Dim);
-                        foreach (var c in ap.cm) L($"   ㄴ {c.au}: {c.x}", 18, Ui.Dim);
-                    }
-                    foreach (var p in S.posts.AsEnumerable().Reverse().Take(10))
-                        L($"[{p.tag}] {p.title}  — {p.au} · 추 {p.up:0}" + (p.best ? " · 개념글" : ""), 20, p.mine != 0 ? Ui.Accent : Ui.Text);
-                    break;
-                case "news":
-                    {
-                        var news = S.feed.Where(f => f.kind == "news").Reverse().Take(10).ToList();
-                        if (news.Count == 0) L("아직 뉴스 없음. 뉴스는 시간대가 끝날 때 시세 결과와 같이 뜸.", 22, Ui.Dim);
-                        foreach (var f in news)
-                        {
-                            L($"[{f.lab}] {f.x}", 21);
-                            if (f.rows != null) foreach (var r0 in f.rows) L("   " + r0, 18, Ui.Dim);
-                        }
-                    }
-                    break;
-                case "tips":
-                    var tips = G.activeTips();
-                    if (tips.Count == 0) L("받은 정보 없음. 증권사 리포트·길거리·갤 찌라시로 모으기.", 22, Ui.Dim);
-                    foreach (var t in tips)
-                    {
-                        var s0 = G.srcOf(t);
-                        L($"{s0.name}: {D.TK[t.tk].name} {(t.dir > 0 ? "상승" : "하락")} · {G.whenLabel(t.Tr)} · 신뢰 {GameSim.stars(s0.trust)} · 기록 {G.srcRec(t.who)}", 21);
-                    }
-                    break;
-            }
         }
     }
 }

@@ -151,6 +151,7 @@ namespace KwGame.Sim
             if (!hasEv && S.hp < 40) { evT = T("morning.lowHp"); hasEv = true; }
             else if (!hasEv && S.stress < 20) { evT = T("morning.fresh"); hasEv = true; }
             S.stress = clamp(S.stress - 6, 0, 100);
+            if (S.rt && S.paidMonth != S.month && S.debt > 0) S.stress = clamp(S.stress + R.RT_DUE_ST * (S.day - 1), 0, 100);   // 이자일 다가올수록 아침부터 불안
             if (S.galFame >= D.FAME["gift"] && rnd() < 0.4)
             {
                 double g = Math.Min(200000, rhu((10000 + S.galFame * 1500) / 1000) * 1000); S.cash += g; S.today.Add(new Ledger { kind = "ev", amt = g, label = T("lbl.gift") }); S.stress = clamp(S.stress - 4, 0, 100);
@@ -578,7 +579,7 @@ namespace KwGame.Sim
                 S.slot = 0; S.day++; S.yday = S.today; S.today = new List<Ledger>();
                 if (S.day > R.MONTH_DAYS) { S.day = 1; S.month++; }
                 S.needMorning = true;
-                S.hp = clamp(S.hp + R.HP_SLEEP, 0, R.HP_MAX);
+                S.hp = clamp(S.hp + (S.rt ? R.RT_HP_SLEEP : R.HP_SLEEP), 0, R.HP_MAX);
                 if (S.gday != d0)
                 {
                     if (S.addict >= R.ADD_SECRET) { S.stress = clamp(S.stress + R.ADD_WITHDRAW, 0, 100); pushK("m", fpick(TA("add.withdraw"))); }

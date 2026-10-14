@@ -44,7 +44,7 @@ namespace KwGame.Sim
                 su = new WorkSetup { H = H, drops = drops };
             }
             else su = new WorkSetup { H = H, w = rnd() };
-            su.hp = S.hp; su.hpm = hpMult();
+            su.hp = S.hp; su.hpm = hpMult() * (S.rt ? menPay() : 1);
             su.practice = practice;
             P.setup = su;
             return su;
@@ -53,14 +53,14 @@ namespace KwGame.Sim
         {
             var P = S.pending; var J = D.JOBS[P.key]; string key = P.key;
             score = clamp(double.IsNaN(score) ? 0 : score, 0, 1);
-            double hm = hpMult(), sc = score * hm;
+            double hm = hpMult() * (S.rt ? menPay() : 1), sc = score * hm;
             double pay = round1k(J.@base + J.var * sc);
             if (has("grind")) { pay = round1k(pay * R.GRIND_PAY); augFx("grind", T("aug.grind")); }
             S.st.work++; S.st.earned += pay; S.workStreak++;
             money(pay, "work", T("lbl.work", "n", J.name, "p", rhu(sc * 100)));
             hp(-jobHp(J), T("why.work"));
             galReact("work", V("amt", man(pay) + D.U("won"), "int", man(interestDue()) + D.U("won"), "pct", JsFmt.ToFixed(pay / Math.Max(1, interestDue()) * 100, 1), "conv", conv(pay)), 2);
-            stress(5 + 2 * Math.Min(S.workStreak - 1, 4));
+            stress(S.rt ? R.RT_WORK_ST + R.RT_WORK_ST_STREAK * Math.Min(S.workStreak - 1, 4) : 5 + 2 * Math.Min(S.workStreak - 1, 4));
             if (hm < 1) bubble(T("work.tired", "p", rhu((1 - hm) * 100)), 2500, "tired");
             else if (S.workStreak >= 5) bubble(T("work.slave", "n", S.workStreak), 2500, "angry");
             if (sc >= 0.7) M(T("work.good", "pay", won(pay), "c", conv(pay), "x50", man(pay * 50)), "smug");

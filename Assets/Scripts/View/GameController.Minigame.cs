@@ -54,7 +54,7 @@ namespace KwGame.View
             head.Add(title);
             mgPerfLbl = HeadChip("성과 0%", Ui.Text); head.Add(mgPerfLbl);
             mgComboLbl = HeadChip("", Ui.Gold); mgComboLbl.style.display = DisplayStyle.None; head.Add(mgComboLbl);
-            if (P.setup.hpm < 1) head.Add(HeadChip($"체력 ×{P.setup.hpm:0.00}", Ui.Bad));
+            if (P.setup.hpm < 1) head.Add(HeadChip($"{(S.rt ? "컨디션" : "체력")} ×{P.setup.hpm:0.00}", Ui.Bad));
             var tb =Ui.Box(new Color(1, 1, 1, 0.12f), 0, 12); tb.style.flexGrow = 1; tb.style.height = 24; tb.style.marginLeft = 24; tb.style.overflow = Overflow.Hidden;
             mgTimerFill = Ui.Box(Ui.Good, 0, 12); mgTimerFill.style.height = Length.Percent(100); mgTimerFill.style.width = Length.Percent(100); tb.Add(mgTimerFill);
             head.Add(tb);
@@ -133,7 +133,7 @@ namespace KwGame.View
             card.Add(Ui.Label("알바 끝", 30, Ui.Dim, true));
             var gl = Ui.Label(g, 200, gc, true); gl.style.unityTextAlign = TextAnchor.MiddleCenter; gl.style.marginTop = -10; gl.style.marginBottom = -10; card.Add(gl);
             card.Add(Ui.Label(cm, 28, Ui.Text, true));
-            var sl = Ui.Label($"성과 {score * 100:0}%{(su.hpm < 1 ? $" × 체력 {su.hpm:0.00}" : "")}", 24, Ui.Dim); sl.style.marginTop = 16; card.Add(sl);
+            var sl = Ui.Label($"성과 {score * 100:0}%{(su.hpm < 1 ? $" × {(S.rt ? "컨디션" : "체력")} {su.hpm:0.00}" : "")}", 24, Ui.Dim); sl.style.marginTop = 16; card.Add(sl);
             if (mgBestCombo >= 2) { var bc = Ui.Label($"최고 콤보 {mgBestCombo}", 24, Ui.Gold, true); bc.style.marginTop = 4; card.Add(bc); }
             var pl = Ui.Label($"예상 일당 {G.won(pay)}", 40, Ui.Good, true); pl.style.marginTop = 8; card.Add(pl);
             var hint = Ui.Label("클릭 / Space", 20, Ui.Dim); hint.style.marginTop = 18; card.Add(hint);

@@ -24,7 +24,7 @@ namespace KwGame.View
                 saveControls.Add(b); return b;
             }
             Q("외출", () => Send("map"), !home);
-            Q(G.isEve() ? "자기" : "쉬기", () => Send("rest"), !home).tooltip = (S.rt ? (G.isEve() ? "자정까지 잠 · " : $"{D.RULES.RT_REST / 60}시간 · ") : "") + $"체력 +{(G.isEve() ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22";
+            Q(G.isEve() ? "자기" : "쉬기", () => Send("rest"), !home).tooltip = (S.rt ? (G.isEve() ? "자정까지 잠 · " : $"{D.RULES.RT_REST / 60}시간 · ") : "") + (S.rt ? $"체력 +{(G.isEve() ? D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP : D.RULES.RT_HP_REST)} · 멘탈 {D.RULES.RT_REST_ST:0}" : $"체력 +{(G.isEve() ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22");
             Q("빚 갚기", () => Send("repayOpen"), !home || S.cash < 10000 || S.debt <= 0, home && S.cash >= 10000 && S.debt > 0 ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null).tooltip = $"남은 빚 {G.won(S.debt)} · 김사장 계좌로 바로 이체 (시간 안 씀)";
             Q("김사장 대출", () => Send("loanOpen"), !home).tooltip = $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}";
             int unread = G.kUnread();

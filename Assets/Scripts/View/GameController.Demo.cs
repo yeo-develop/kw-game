@@ -52,6 +52,13 @@ namespace KwGame.View
             autoSkipDialog = false;
             Send("start");
             yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(2f);
+            yield return Shot(dir, "02_intro_card");
+            yield return ClickUntil(() => storyNow == "그리고 한 달 뒤");
+            yield return new WaitForSeconds(2f);
+            yield return Shot(dir, "02a_intro_crash");
+            yield return ClickUntil(() => storyNow == null && dlgName.text == "미래");
+            yield return new WaitForSeconds(1.5f);
             yield return Shot(dir, "02_dialogue");
             yield return ClickUntil(() => cgKey == "opening_visit");
             yield return Shot(dir, "02b_opening_visit");
@@ -87,8 +94,20 @@ namespace KwGame.View
                 stkTab = "acct"; RenderAll(); yield return Shot(dir, "08d_stock_acct");
                 stkTab = "mkt";
             }
-            phoneTab = "gall"; RenderAll();
+            Send("report", "paid", false); yield return UntilIdle();
+            for (int i = 0; i < 3 && S.pending?.t == "home"; i++) { Send("tick", "m", 200); yield return UntilIdle(); yield return ToHome(); }   // 갤 찌라시·카톡이 좀 쌓이게
+            phoneOpen = true;
+            phoneTab = "gall"; gallTab = "all"; RenderAll();
             yield return Shot(dir, "09_phone_gall");
+            gallTab = "tip"; gallOpen = S.posts.Where(p => p.tip.HasValue).Select(p => p.id).LastOrDefault(); RenderAll();
+            yield return Shot(dir, "09b_phone_gall_tip");
+            gallTab = "all"; gallOpen = 0;
+            phoneTab = "kakao"; kkRoom = "m"; RenderAll();
+            yield return Shot(dir, "09c_phone_kakao");
+            phoneTab = "tips"; RenderAll();
+            yield return Shot(dir, "09d_phone_tips");
+            phoneTab = "news"; RenderAll();
+            yield return Shot(dir, "09e_phone_news");
             phoneTab = "stock"; stkTab = "detail"; RenderAll(); yield return new WaitForSeconds(6f);   // 실시간으로 6초 흐른 뒤
             yield return Shot(dir, "08e_live_6s");
             phoneOpen = false; RenderAll();

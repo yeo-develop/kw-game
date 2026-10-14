@@ -294,8 +294,12 @@ namespace KwGame.View
                     case "kim": ShowKim((bool?)st["on"] == true); break;
                     case "hideDlg": HideDialogue(); break;
                     case "rules": yield return RulesCard(); if (key == "opening") ShowCg("opening_box"); break;   // 규칙 뒤 = 유품 상자 장면
+                    case "shake": Shake(stage, 18); break;
+                    case "flash": Flashback((bool?)st["on"] == true); break;
+                    case "card": HideDialogue(); yield return StoryCard((string)st["h"], (string)st["t"], (string)st["sub"], (string)st["chart"]); break;
                 }
             }
+            Flashback(false);
             sceneKey = null;
             HideDialogue();
         }

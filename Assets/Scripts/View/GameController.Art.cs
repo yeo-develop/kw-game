@@ -17,7 +17,7 @@ namespace KwGame.View
     public partial class GameController
     {
         const float FACE_HOLD = 3f;
-        VisualElement bgEl, cgEl, miraiEl, npcEl;
+        VisualElement bgEl, cgEl, miraiEl, npcEl, flashEl;
         string faceNow = "base", npcKey, kimKey, cgKey, sceneKey;
         float faceHold; bool faceStrong, faceSetInPlay, miraiOn = true;
 
@@ -27,6 +27,8 @@ namespace KwGame.View
             miraiEl = Figure(); miraiEl.style.left = 20; stage.Add(miraiEl);
             npcEl = Figure(); npcEl.style.right = 10; npcEl.style.height = 800; npcEl.style.width = 800 * 739f / 1080f; stage.Add(npcEl);
             cgEl = new VisualElement(); Ui.Fill(cgEl); Cover(cgEl); cgEl.pickingMode = PickingMode.Ignore; cgEl.style.display = DisplayStyle.None; stage.Add(cgEl);
+            // 회상 장면: 누렇게 바랜 필터 (장면 스크립트 {"do":"flash"})
+            flashEl = new VisualElement(); Ui.Fill(flashEl); flashEl.pickingMode = PickingMode.Ignore; flashEl.style.backgroundColor = new Color(0.42f, 0.3f, 0.12f, 0.42f); flashEl.style.display = DisplayStyle.None; stage.Add(flashEl);
         }
         static void Cover(VisualElement v) => v.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
         static VisualElement Figure()
@@ -120,6 +122,7 @@ namespace KwGame.View
             DrawStage();
         }
         void ShowCg(string key) { cgKey = key; DrawStage(); }
+        void Flashback(bool on) => flashEl.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
 
         /// 대사 화자에 맞춰 인물 띄우기
         void SpeakerArt(string who, string name, string face)
