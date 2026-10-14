@@ -26,6 +26,36 @@ namespace KwGame.View
         readonly Dictionary<string, int> stkSeen = new Dictionary<string, int>();
         /// Send 직후 이번 명령의 이벤트를 받는 1회용 콜백 (주문 결과 메시지용)
         Action<List<SimEvent>> onSent;
+        // 실시간: 차트는 폰을 다시 그려도 같은 걸 다시 붙여 씀 (축 글자 깜빡임 방지), 금액 막대 끄는 중엔 폰 다시 안 그림, 시세 띠 위치 유지
+        CandleChart liveChart; string liveChartKey; bool stkDragging; float tapeX;
+
+        /// 등락: 실시간이면 오늘(전일 종가·자정 대비), 아니면 마지막 칸
+        double Rr(string id) => S.rt ? G.dayR(id) : LastR(S.mk.tk[id]);
+        string RrLabel => S.rt ? "오늘" : "지난 칸";
+
+        List<(double y, Color c, string l)> ChartLines(string tk)
+        {
+            var lines = new List<(double y, Color c, string l)>();
+            var h0 = S.hold.Get(tk);
+            if (h0 != null && h0.q > 0) lines.Add((h0.cost / h0.q, Ui.Gold, "평단"));
+            foreach (var c in S.cps.Where(c => c.tk == tk).Take(2))
+            {
+                lines.Add((c.entry, Ui.Gold, $"진입 {c.lev:0}x {(c.dir > 0 ? "롱" : "숏")}"));
+                if (c.lev * c.mult > 1.2) lines.Add((GameSim.liqPx(c), new Color32(0xff, 0x3b, 0x4f, 0xff), "청산가"));
+            }
+            if (S.rt && D.TK[tk].IsStock && S.mk.tk[tk].ref0 > 0)
+            {
+                lines.Add((S.mk.tk[tk].ref0 * (1 + D.RULES.RT_LIMIT), new Color(1f, 0.3f, 0.37f, 0.5f), "상한가"));
+                lines.Add((S.mk.tk[tk].ref0 * (1 - D.RULES.RT_LIMIT), new Color(0.3f, 0.55f, 1f, 0.5f), "하한가"));
+            }
+            return lines;
+        }
+        /// 조용한 분마다: 보고 있는 차트만 새 시세로
+        void LiveChart()
+        {
+            if (liveChart == null || liveChart.panel == null || stkSel == null || !S.mk.tk.Has(stkSel)) return;
+            liveChart.Set(S.mk.tk[stkSel].p, ChartLines(stkSel));
+        }
 
         void StockApp(VisualElement body, string where)
         {
@@ -48,7 +78,7 @@ namespace KwGame.View
             Sum("현금", G.won(S.cash), Ui.Text);
             Sum("평가", G.won(G.holdVal()), Ui.Text);
             if (G.hasPos()) Sum("평가손익", G.sgnWon(pl), UpDn(pl));
-            Sum(G.stockOpen() ? "● 주식장" : "○ 주식장", G.stockOpen() ? $"열림 · 수수료 {fee * 100:0.0}%" : "마감 (아침·점심만)", G.stockOpen() ? StkUp : StkAxis);
+            Sum(G.stockOpen() ? "● 주식장" : "○ 주식장", G.stockOpen() ? $"열림 · 수수료 {fee * 100:0.0}%" : S.rt ? "마감 (09:00~15:30)" : "마감 (아침·점심만)", G.stockOpen() ? StkUp : StkAxis);
             Sum("코인", "24시간", Ui.Gold);
             if (stkMsg != "") { var m = Ui.Label(stkMsg, 22, Ui.Gold, true); m.style.marginBottom = 10; body.Add(m); }
 
@@ -82,7 +112,7 @@ namespace KwGame.View
                 double pnl = e?.Num("pnl") ?? 0;
                 string tkn = e?.Str("tk") != null && D.TK.TryGetValue(e.Str("tk"), out var t) ? t.name : "";
                 string op = e?.Str("op");
-                stkMsg = !ok ? $"{what} 실패 (장 마감 / 현금 부족 / 이번 칸에 진입함)"
+                stkMsg = !ok ? (S.rt ? $"{what} 실패 (장 마감 / 현금 부족)" : $"{what} 실패 (장 마감 / 현금 부족 / 이번 칸에 진입함)")
                     : op == "buy" ? $"체결: {tkn} {G.won(e.Num("amt"))} 매수"
                     : op == "open" ? $"체결: {tkn} {e.Num("lev"):0}x {(e.Num("dir") > 0 ? "롱" : "숏")} · 증거금 {G.won(e.Num("margin"))}"
                     : $"체결: {tkn} {what} {G.sgnWon(pnl)}";
@@ -102,16 +132,16 @@ namespace KwGame.View
             for (int rep = 0; rep < 3; rep++)
                 foreach (var t in D.TKList.Where(x => G.tkOpen(x.id)))
                 {
-                    var mk = S.mk.tk[t.id]; double r = LastR(mk);
+                    var mk = S.mk.tk[t.id]; double r = Rr(t.id);
                     var l = Ui.Label($"{t.name} {G.fmtP(mk.p)} {GameSim.pct(r)}", 20, UpDn(r), true); l.style.marginRight = 36; l.pickingMode = PickingMode.Ignore;
                     run.Add(l);
                 }
-            float x = 0;
+            run.style.left = tapeX;
             tape.schedule.Execute(() =>
             {
                 float w = run.resolvedStyle.width / 3; if (float.IsNaN(w) || w <= 0) return;
-                x -= 1.2f; if (x < -w) x += w;
-                run.style.left = x;
+                tapeX -= 1.2f; if (tapeX < -w) tapeX += w;
+                run.style.left = tapeX;
             }).Every(16);
             return tape;
         }
@@ -126,13 +156,16 @@ namespace KwGame.View
             foreach (var t in D.TKList)
             {
                 if (col++ % 2 == 0) { grid = Ui.Row(); grid.style.alignItems = Align.Stretch; body.Add(grid); }
-                var mk = S.mk.tk[t.id]; bool lk = !G.tkOpen(t.id); double r = LastR(mk), r4 = SpanR(mk, 4);
+                var mk = S.mk.tk[t.id]; bool lk = !G.tkOpen(t.id); double r = Rr(t.id), r4 = SpanR(mk, 4);
                 var card = Ui.Box(StkCard, 16, 14); card.style.flexBasis = 0; card.style.flexGrow = 1; card.style.marginRight = col % 2 == 1 ? 12 : 0; card.style.marginBottom = 12;
                 Ui.Border(card, Math.Abs(r) >= 0.1 && !lk ? UpDn(r) : StkLine, 2);
                 var top = Ui.Row(); card.Add(top);
                 top.Add(Ui.Label(t.name, 26, Ui.Text, true));
-                top.Add(Badge(t.IsCoin ? "코인" : "주식", t.IsCoin ? Ui.Gold : StkAxis));
-                if (!lk && Math.Abs(r) >= 0.1) top.Add(Badge(r > 0 ? "급등" : "급락", UpDn(r)));
+                top.Add(Badge(t.cat ?? (t.IsCoin ? "코인" : "주식"), t.IsCoin ? Ui.Gold : StkAxis));
+                if (!lk && G.limitUp(t.id)) top.Add(Badge("상한가", StkUp));
+                else if (!lk && G.limitDn(t.id)) top.Add(Badge("하한가", StkDn));
+                else if (!lk && Math.Abs(r) >= 0.1) top.Add(Badge(r > 0 ? "급등" : "급락", UpDn(r)));
+                if (mk.warn) top.Add(Badge("관리종목", Ui.Bad));
                 var po = PosPnl(t.id);
                 if (po.HasValue) top.Add(Badge("보유 " + G.sgnMan(po.Value), UpDn(po.Value)));
                 if (lk) { card.Add(Ui.Label($"잠김 — 유품 '{LockName(t)}' 필요", 20, StkAxis)); }
@@ -141,9 +174,9 @@ namespace KwGame.View
                     var pr = Ui.Row(); pr.style.marginTop = 6; card.Add(pr);
                     pr.Add(Ui.Label(G.fmtP(mk.p), 34, Ui.Text, true));
                     var rl = Ui.Label(GameSim.pct(r), 24, UpDn(r), true); rl.style.marginLeft = 12; pr.Add(rl);
-                    var sp = new LineChart(mk.hist.Skip(Math.Max(0, mk.hist.Count - 16)).Select(c => c.c).ToList(), false, null);
+                    var sp = new LineChart(mk.hist.Skip(Math.Max(0, mk.hist.Count - 16)).Select(c => c.c).Concat(new[] { mk.p }).ToList(), false, null);
                     sp.style.height = 70; sp.style.marginTop = 6; card.Add(sp);
-                    card.Add(Ui.Label($"{Ui.Clean(t.d)} · 4칸 {GameSim.pct(r4)}", 18, StkAxis));
+                    card.Add(Ui.Label(S.rt ? Ui.Clean(t.d) + (mk.relist > 0 ? $" · 재상장 {mk.relist}회" : "") : $"{Ui.Clean(t.d)} · 4칸 {GameSim.pct(r4)}", 18, StkAxis));
                     string id = t.id;
                     card.RegisterCallback<ClickEvent>(_ => { stkSel = id; stkTab = "detail"; stkAmt = null; stkMsg = ""; RenderAll(); });
                     card.RegisterCallback<PointerEnterEvent>(_ => card.style.backgroundColor = Color.Lerp(StkCard, Ui.Accent, 0.12f));
@@ -190,7 +223,7 @@ namespace KwGame.View
             if (S.whale != null && S.whale.T == G.Tnow() && (tk == null || tk == S.whale.tk))
             {
                 var c = Ui.Box(StkCard, 12, 10); c.style.marginBottom = 10; Ui.Border(c, Ui.Gold, 2);
-                c.Add(Ui.Label("새벽 고래 · 이번 칸 70%", 17, Ui.Gold));
+                c.Add(Ui.Label(S.rt ? "새벽 고래 · 이번 시간대 70%" : "새벽 고래 · 이번 칸 70%", 17, Ui.Gold));
                 c.Add(Ui.Label($"{D.TK[S.whale.tk].name} {(S.whale.dir > 0 ? "▲ 매집" : "▼ 투매")}", 22, S.whale.dir > 0 ? StkUp : StkDn, true));
                 row.Add(c);
             }
@@ -202,56 +235,62 @@ namespace KwGame.View
         {
             var R = D.RULES;
             if (stkSel == null || !D.TK.ContainsKey(stkSel) || !G.tkOpen(stkSel)) stkSel = D.TKList.First(x => G.tkOpen(x.id)).id;
-            var t = D.TK[stkSel]; var mk = S.mk.tk[stkSel]; bool isC = t.IsCoin; double r = LastR(mk);
+            var t = D.TK[stkSel]; var mk = S.mk.tk[stkSel]; bool isC = t.IsCoin; double r = Rr(stkSel);
 
             // 종목 띠
             var strip = Ui.Row(); strip.style.flexWrap = Wrap.Wrap; body.Add(strip);
             foreach (var x in D.TKList.Where(y => G.tkOpen(y.id)))
             {
-                string id = x.id; double rx = LastR(S.mk.tk[id]);
+                string id = x.id; double rx = Rr(id);
                 var b = Ui.Chip($"{x.name} {GameSim.pct(rx)}", () => { stkSel = id; stkAmt = null; stkMsg = ""; RenderAll(); }, false, id == stkSel ? Ui.Accent : (Color?)null);
                 b.Q<Label>().style.color = id == stkSel ? Color.white : UpDn(rx);
                 strip.Add(b);
             }
 
-            var cols = Ui.Row(); cols.style.alignItems = Align.FlexStart; body.Add(cols);
-            var left = new VisualElement(); left.style.flexGrow = 1; left.style.flexShrink = 1; left.style.minWidth = 0; cols.Add(left);
-            var right = Ui.Box(StkCard, 18, 14); right.style.width = 380; right.style.flexShrink = 0; right.style.marginLeft = 16; Ui.Border(right, StkLine, 2); cols.Add(right);
+            // 폰 폭이 좁아서 차트 위, 주문창 아래 (주문창은 가로로 두 칸)
+            var left = new VisualElement(); body.Add(left);
+            var right = Ui.Box(StkCard, 18, 14); right.style.marginTop = 10; Ui.Border(right, StkLine, 2); body.Add(right);
 
             // 종목 머리
             var th = Ui.Row(); th.style.alignItems = Align.FlexEnd; left.Add(th);
             th.Add(Ui.Label(t.name, 32, Ui.Text, true));
-            th.Add(Badge(isC ? $"코인 · 최대 {t.maxLev:0}x" : "주식", isC ? Ui.Gold : StkAxis));
+            th.Add(Badge(isC ? $"{t.cat ?? "코인"} · 최대 {t.maxLev:0}x" : t.cat ?? "주식", isC ? Ui.Gold : StkAxis));
+            if (G.limitUp(stkSel)) th.Add(Badge("상한가", StkUp)); else if (G.limitDn(stkSel)) th.Add(Badge("하한가", StkDn));
+            if (mk.warn) th.Add(Badge("관리종목 · 상폐 심사", Ui.Bad));
             var sp0 = new VisualElement(); sp0.style.flexGrow = 1; th.Add(sp0);
             th.Add(Ui.Label(G.fmtP(mk.p), 40, UpDn(r), true));
             var rl = Ui.Label(" " + GameSim.pct(r), 26, UpDn(r), true); th.Add(rl);
             var hi = mk.hist.Count > 0 ? mk.hist.Max(c => c.h) : mk.p; var lo = mk.hist.Count > 0 ? mk.hist.Min(c => c.l) : mk.p;
-            left.Add(Ui.Label($"{Ui.Clean(t.d)} · 4칸 {GameSim.pct(SpanR(mk, 4))} · 최근 {mk.hist.Count}칸 고가 {G.fmtP(hi)} / 저가 {G.fmtP(lo)}", 18, StkAxis));
+            left.Add(Ui.Label(S.rt ? $"{Ui.Clean(t.d)} · 오늘 {GameSim.pct(r)} · 기준가 {G.fmtP(mk.ref0)}" + (t.IsStock ? $" (±{D.RULES.RT_LIMIT * 100:0}%)" : "") + $" · 고가 {G.fmtP(hi)} / 저가 {G.fmtP(lo)}"
+                : $"{Ui.Clean(t.d)} · 4칸 {GameSim.pct(SpanR(mk, 4))} · 최근 {mk.hist.Count}칸 고가 {G.fmtP(hi)} / 저가 {G.fmtP(lo)}", 18, StkAxis));
 
             // 차트 옵션
             var opt = Ui.Row(); opt.style.marginTop = 8; left.Add(opt);
-            foreach (var n in new[] { 12, 24, 40 }) { int nn = n; opt.Add(Ui.Chip($"{n}칸", () => { stkBars = nn; RenderAll(); }, false, stkBars == n ? Ui.Panel2 : StkBg)); }
+            foreach (var n in S.rt ? new[] { 24, 48, 96 } : new[] { 12, 24, 40 }) { int nn = n; opt.Add(Ui.Chip(S.rt ? $"{n / 2}시간" : $"{n}칸", () => { stkBars = nn; RenderAll(); }, false, stkBars == n ? Ui.Panel2 : StkBg)); }
             opt.Add(Ui.Chip(stkLineMode ? "라인" : "캔들", () => { stkLineMode = !stkLineMode; RenderAll(); }, false, StkBg));
             var lg = Ui.Row(); lg.style.marginLeft = 10; opt.Add(lg);
-            lg.Add(Ui.Label("MA5 ", 18, CandleChart.Ma5C, true)); lg.Add(Ui.Label("MA20 ", 18, CandleChart.Ma20C, true)); lg.Add(Ui.Label("· 1봉 = 1칸 · 마우스 올리면 시고저종", 16, StkAxis));
+            lg.Add(Ui.Label("MA5 ", 18, CandleChart.Ma5C, true)); lg.Add(Ui.Label("MA20 ", 18, CandleChart.Ma20C, true)); lg.Add(Ui.Label(S.rt ? "· 1봉 = 30분 · 실시간" : "· 1봉 = 1칸 · 마우스 올리면 시고저종", 16, StkAxis));
 
             // 차트
-            var lines = new List<(double y, Color c, string l)>();
-            var h0 = S.hold.Get(stkSel);
-            if (h0 != null && h0.q > 0) lines.Add((h0.cost / h0.q, Ui.Gold, "평단"));
-            foreach (var c in S.cps.Where(c => c.tk == stkSel).Take(2))
+            if (S.rt && stkBars < 24) stkBars = 48;
+            var lines = ChartLines(stkSel);
+            string ck = $"{stkSel}|{stkBars}|{stkLineMode}";
+            if (S.rt && liveChart != null && liveChartKey == ck)
             {
-                lines.Add((c.entry, Ui.Gold, $"진입 {c.lev:0}x {(c.dir > 0 ? "롱" : "숏")}"));
-                if (c.lev * c.mult > 1.2) lines.Add((GameSim.liqPx(c), new Color32(0xff, 0x3b, 0x4f, 0xff), "청산가"));
+                liveChart.RemoveFromHierarchy(); left.Add(liveChart); liveChart.Set(mk.p, lines);
             }
-            int seen = stkSeen.TryGetValue(stkSel, out var sv) ? sv : -1;
-            int nowT = G.Tnow();
-            bool grow = seen >= 0 && seen != nowT;
-            stkSeen[stkSel] = nowT;
-            var chart = new CandleChart(mk.hist, Math.Min(stkBars, mk.hist.Count), mk.p, lines, G.fmtP, stkLineMode);
-            chart.style.height = 430; chart.style.marginTop = 8;
-            left.Add(chart);
-            if (grow) chart.Grow();
+            else
+            {
+                int seen = stkSeen.TryGetValue(stkSel, out var sv) ? sv : -1;
+                int nowT = G.Tnow();
+                bool grow = !S.rt && seen >= 0 && seen != nowT;
+                stkSeen[stkSel] = nowT;
+                var chart = new CandleChart(mk.hist, stkBars, mk.p, lines, G.fmtP, stkLineMode);
+                chart.style.height = 340; chart.style.marginTop = 8;
+                left.Add(chart);
+                if (grow) chart.Grow();
+                liveChart = chart; liveChartKey = ck;
+            }
 
             // 포지션 (코인)
             foreach (var c in S.cps.Where(c => c.tk == stkSel)) left.Add(CoinRow(c));
@@ -263,7 +302,7 @@ namespace KwGame.View
 
         VisualElement CoinRow(CoinPos c)
         {
-            double pl = G.cpnl(c) + c.bonus; bool lk = c.t0 == G.Tnow(); int id = c.id;
+            double pl = G.cpnl(c) + c.bonus; bool lk = !S.rt && c.t0 == G.Tnow(); int id = c.id;
             var row = Ui.Box(StkCard, 12, 10); row.style.flexDirection = FlexDirection.Row; row.style.alignItems = Align.Center; row.style.marginTop = 8; row.style.borderLeftWidth = 4; row.style.borderLeftColor = c.dir > 0 ? StkUp : StkDn;
             var info = new VisualElement(); info.style.flexGrow = 1; row.Add(info);
             info.Add(Ui.Label($"{D.TK[c.tk].name} {c.lev:0}x {(c.dir > 0 ? "롱" : "숏")}{(c.mult > 1 ? " (올인 ×1.5)" : "")}", 22, c.dir > 0 ? StkUp : StkDn, true));
@@ -299,9 +338,10 @@ namespace KwGame.View
             fill.style.width = Length.Percent(maxAmt > 0 ? (float)(amt / maxAmt) * 100 : 0);
             if (maxAmt >= 10000 && open)
             {
-                track.RegisterCallback<PointerDownEvent>(e => { track.CapturePointer(e.pointerId); SetFrac(e.localPosition.x / track.resolvedStyle.width, false); });
+                track.RegisterCallback<PointerDownEvent>(e => { stkDragging = true; track.CapturePointer(e.pointerId); SetFrac(e.localPosition.x / track.resolvedStyle.width, false); });
                 track.RegisterCallback<PointerMoveEvent>(e => { if (track.HasPointerCapture(e.pointerId)) SetFrac(e.localPosition.x / track.resolvedStyle.width, false); });
-                track.RegisterCallback<PointerUpEvent>(e => { if (track.HasPointerCapture(e.pointerId)) { track.ReleasePointer(e.pointerId); SetFrac(e.localPosition.x / track.resolvedStyle.width, true); } });
+                track.RegisterCallback<PointerUpEvent>(e => { stkDragging = false; if (track.HasPointerCapture(e.pointerId)) { track.ReleasePointer(e.pointerId); SetFrac(e.localPosition.x / track.resolvedStyle.width, true); } });
+                track.RegisterCallback<PointerCaptureOutEvent>(_ => stkDragging = false);
             }
             right.Add(track);
             var q = Ui.Row(); right.Add(q);
@@ -329,10 +369,10 @@ namespace KwGame.View
                 if (stkLev > 1)
                 {
                     double odds = G.liqOdds(stkLev * allin, t.vol * (G.isEve() && G.has("whale") ? 2 : 1));
-                    right.Add(Ui.Label($"이번 칸 청산 확률 ≈ {odds * 100:0}%", 22, odds >= 0.3 ? StkUp : Ui.Gold, true));
+                    right.Add(Ui.Label($"{(S.rt ? "이번 시간대" : "이번 칸")} 청산 확률 ≈ {odds * 100:0}%", 22, odds >= 0.3 ? StkUp : Ui.Gold, true));
                     right.Add(RiskBar((float)odds));
                 }
-                right.Add(Ui.Label($"수수료 {G.won(amt * stkLev * R.COIN_FEE)}" + (stkLev > 1 ? $" · 펀딩비 칸당 {G.won(amt * stkLev * R.FUNDING)}" : ""), 18, StkAxis));
+                right.Add(Ui.Label($"수수료 {G.won(amt * stkLev * R.COIN_FEE)}" + (stkLev > 1 ? $" · 펀딩비 {(S.rt ? "시간대당" : "칸당")} {G.won(amt * stkLev * R.FUNDING)}" : ""), 18, StkAxis));
                 if (G.has("allin")) right.Add(Ui.Label("올인 유품: 현금 95% 이상 넣으면 손익 ×1.5", 18, Ui.Gold));
                 var go = Ui.Button($"{(stkDir > 0 ? "롱" : "숏")} {stkLev:0}x 진입", () =>
                     Order("진입", stkDir > 0 ? "롱 가즈아아아" : "숏 잡았다. 떨어져라 떨어져라", null, "open", "tk", t.id, "dir", stkDir, "lev", stkLev, "amt", stkAmt ?? 0),
@@ -342,7 +382,7 @@ namespace KwGame.View
             else
             {
                 var buy = Ui.Button("매수", () => Order("매수", "가즈아. 이건 우상향이다 (희망)", null, "buy", "tk", t.id, "amt", stkAmt ?? 0, "where", where),
-                    open ? $"{G.won(amt)} · 수수료 {G.won(amt * fee)}" : "장 마감 (아침·점심만)", amt < 10000 || !open, StkUp, 28);
+                    open ? $"{G.won(amt)} · 수수료 {G.won(amt * fee)}" : S.rt ? "장 마감 (09:00~15:30)" : "장 마감 (아침·점심만)", amt < 10000 || !open, StkUp, 28);
                 buy.style.marginTop = 12; buy.style.alignItems = Align.Center; right.Add(buy);
                 var h = S.hold.Get(t.id);
                 if (h != null && h.q > 0)
@@ -352,7 +392,7 @@ namespace KwGame.View
                     box.Add(Ui.Label($"보유 {h.q:0.##}주 · 평단 {G.fmtP(h.cost / h.q)}", 19, Ui.Text));
                     box.Add(Ui.Label($"평가 {G.won(hv)}", 19, Ui.Text));
                     box.Add(Ui.Label($"{G.sgnWon(pl)} ({GameSim.pct(hv / h.cost - 1)})", 26, UpDn(pl), true));
-                    box.Add(Ui.Label($"{G.Tnow() - h.t0}칸 보유", 17, StkAxis));
+                    if (!S.rt) box.Add(Ui.Label($"{G.Tnow() - h.t0}칸 보유", 17, StkAxis));
                 }
                 else right.Add(Ui.Label("보유 없음", 20, StkAxis));
                 var sr = Ui.Row(); right.Add(sr);
@@ -387,14 +427,14 @@ namespace KwGame.View
             Card("실현손익 누적", G.sgnWon(S.realized), UpDn(S.realized));
             Card("투입금 대비", GameSim.pct(ret), UpDn(ret));
 
-            var eh = Ui.Label($"누적 투자손익 (실현+평가, 칸마다) · 투입 원금 누적 {G.won(S.invIn)}", 20, Ui.Gold, true); eh.style.marginTop = 6; body.Add(eh);
+            var eh = Ui.Label($"누적 투자손익 (실현+평가, {(S.rt ? "시간대마다" : "칸마다")}) · 투입 원금 누적 {G.won(S.invIn)}", 20, Ui.Gold, true); eh.style.marginTop = 6; body.Add(eh);
             var pts = S.eqh.Select(p => p.v).Concat(new[] { tot }).ToList();
             var eq = new LineChart(pts, true, v => G.sgnMan(v)); eq.style.height = 220; eq.style.marginTop = 6; eq.style.marginBottom = 12;
             body.Add(eq);
 
             var ph = Ui.Row(); ph.style.marginBottom = 6; body.Add(ph);
             ph.Add(Ui.Label("보유 포지션", 22, Ui.Gold, true));
-            if (S.cps.Any(c => c.t0 != G.Tnow())) { var b = Ui.Chip("코인 전부 정리", () => Order("코인 정리", "다 정리함. 이제 현금이 왕", "다 정리함… 현금이라도 남았네", "closeCoins")); b.style.marginLeft = 12; ph.Add(b); }
+            if (S.cps.Any(c => S.rt || c.t0 != G.Tnow())) { var b = Ui.Chip("코인 전부 정리", () => Order("코인 정리", "다 정리함. 이제 현금이 왕", "다 정리함… 현금이라도 남았네", "closeCoins")); b.style.marginLeft = 12; ph.Add(b); }
             int n = 0;
             foreach (var k in G.STK().Where(k => S.hold.Has(k)).ToList())
             {
@@ -402,7 +442,7 @@ namespace KwGame.View
                 var row = Ui.Box(StkCard, 12, 10); row.style.flexDirection = FlexDirection.Row; row.style.alignItems = Align.Center; row.style.marginBottom = 8; row.style.borderLeftWidth = 4; row.style.borderLeftColor = UpDn(v - x.cost);
                 var info = new VisualElement(); info.style.flexGrow = 1; row.Add(info);
                 info.Add(Ui.Label($"{D.TK[k].name} · 주식", 22, Ui.Text, true));
-                info.Add(Ui.Label($"{G.man(x.cost)} → {G.man(v)} · {G.Tnow() - x.t0}칸 보유", 18, StkAxis));
+                info.Add(Ui.Label($"{G.man(x.cost)} → {G.man(v)}" + (S.rt ? "" : $" · {G.Tnow() - x.t0}칸 보유"), 18, StkAxis));
                 var pv = Ui.Label(G.sgnWon(v - x.cost), 24, UpDn(v - x.cost), true); pv.style.marginRight = 12; row.Add(pv);
                 row.Add(Ui.Chip(G.stockOpen() ? "전량 매도" : "장 마감", () => Order("전량 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 1, "where", where), !G.stockOpen()));
                 body.Add(row); n++;
@@ -419,31 +459,47 @@ namespace KwGame.View
         public static readonly Color Ma20C = new Color32(0xb4, 0x8c, 0xff, 0xff);
         const float PadL = 8, PadR = 150, PadT = 14, PadB = 26, VolH = 70, Gap = 10;
 
-        readonly List<Candle> all; readonly int n, off; readonly double last;
-        readonly List<(double y, Color c, string l)> lines; readonly Func<double, string> fmt; readonly bool lineMode;
-        readonly double[] ma5, ma20;
+        readonly List<Candle> all; readonly int bars; int n, off; double last;
+        List<(double y, Color c, string l)> lines; readonly Func<double, string> fmt; readonly bool lineMode;
+        double[] ma5, ma20;
         double lo, hi; int hover = -1; float grow = 1;
         readonly VisualElement labels; readonly Label tip;
 
         public CandleChart(List<Candle> hist, int bars, double lastPx, List<(double y, Color c, string l)> lines, Func<double, string> fmt, bool lineMode)
         {
-            all = hist; n = Math.Max(1, bars); off = Math.Max(0, hist.Count - n); last = lastPx; this.lines = lines; this.fmt = fmt; this.lineMode = lineMode;
-            ma5 = Ma(5); ma20 = Ma(20);
+            all = hist; this.bars = bars; this.fmt = fmt; this.lineMode = lineMode;
             style.backgroundColor = (Color)new Color32(0x0d, 0x0f, 0x16, 0xff); Ui.Radius(this, 10); style.overflow = Overflow.Hidden;
             labels = new VisualElement(); Ui.Fill(labels); labels.pickingMode = PickingMode.Ignore; Add(labels);
             tip = Ui.Label("", 18, Ui.Text, true); Ui.Abs(tip, 14, 10); tip.style.backgroundColor = new Color(0.05f, 0.06f, 0.1f, 0.92f); Ui.Pad(tip, 8); Ui.Radius(tip, 8);
             tip.pickingMode = PickingMode.Ignore; tip.style.display = DisplayStyle.None; Add(tip);
 
-            lo = double.MaxValue; hi = double.MinValue;
-            for (int i = off; i < all.Count; i++) { lo = Math.Min(lo, all[i].l); hi = Math.Max(hi, all[i].h); }
-            if (all.Count == off) { lo = hi = last; }
-            foreach (var L in lines) { lo = Math.Min(lo, L.y); hi = Math.Max(hi, L.y); }
-            double span = Math.Max(hi - lo, last * 0.01), mid = (hi + lo) / 2; lo = mid - span * 0.56; hi = mid + span * 0.56;
-
+            Recalc(lastPx, lines);
             generateVisualContent += Draw;
             RegisterCallback<GeometryChangedEvent>(_ => Relabel());
             RegisterCallback<PointerMoveEvent>(e => { int h = IndexAt(e.localPosition.x); if (h != hover) { hover = h; Hover(); } });
             RegisterCallback<PointerLeaveEvent>(_ => { hover = -1; Hover(); });
+        }
+
+        /// 봉 목록(같은 List, sim 이 실시간으로 늘림)·현재가·가격선이 바뀌면 다시 계산
+        void Recalc(double lastPx, List<(double y, Color c, string l)> ls)
+        {
+            last = lastPx; lines = ls;
+            n = Math.Max(1, bars); off = Math.Max(0, all.Count - n);
+            ma5 = Ma(5); ma20 = Ma(20);
+            lo = double.MaxValue; hi = double.MinValue;
+            for (int i = off; i < all.Count; i++) { lo = Math.Min(lo, all[i].l); hi = Math.Max(hi, all[i].h); }
+            if (all.Count == off) { lo = hi = last; }
+            // 가격선은 화면 근처일 때만 범위에 넣음 (상·하한가 ±30% 가 차트를 납작하게 만들지 않게)
+            double c0 = Math.Max(hi - lo, last * 0.01);
+            foreach (var L in lines) if (L.y >= lo - c0 * 0.6 && L.y <= hi + c0 * 0.6) { lo = Math.Min(lo, L.y); hi = Math.Max(hi, L.y); }
+            double span = Math.Max(hi - lo, last * 0.01), mid = (hi + lo) / 2; lo = mid - span * 0.56; hi = mid + span * 0.56;
+            if (hover >= all.Count) hover = -1;
+        }
+        public void Set(double lastPx, List<(double y, Color c, string l)> ls)
+        {
+            Recalc(lastPx, ls);
+            Relabel(); MarkDirtyRepaint();
+            if (hover >= 0) Hover();
         }
 
         double[] Ma(int k)
@@ -479,6 +535,7 @@ namespace KwGame.View
         void Draw(MeshGenerationContext ctx)
         {
             if (W <= PadL + PadR || Hh <= PadT + PadB + VolH) return;
+            if (ma5.Length != all.Count) Recalc(last, lines);   // sim 이 봉을 늘린 뒤 아직 Set 안 받았으면
             var p = ctx.painter2D;
             // 격자
             p.lineWidth = 1; p.strokeColor = new Color32(0x1c, 0x20, 0x30, 0xff);
@@ -515,7 +572,7 @@ namespace KwGame.View
             Poly(p, ma5, CandleChart.Ma5C); Poly(p, ma20, CandleChart.Ma20C);
 
             // 가격선
-            foreach (var L in lines) { p.strokeColor = L.c; p.lineWidth = 2; Dash(p, PadL, Y(L.y), W - PadR, Y(L.y)); }
+            foreach (var L in lines) { if (L.y < lo || L.y > hi) continue; p.strokeColor = L.c; p.lineWidth = 2; Dash(p, PadL, Y(L.y), W - PadR, Y(L.y)); }
             p.strokeColor = new Color(1, 1, 1, 0.35f); p.lineWidth = 1; Dash(p, PadL, Y(last), W - PadR, Y(last));
 
             // 십자선
@@ -562,9 +619,10 @@ namespace KwGame.View
             var axis = new Color32(0x6b, 0x71, 0x86, 0xff);
             for (int k = 0; k <= 4; k++) { float y = PadT + k * (PriceBottom - PadT) / 4; L(fmt(hi - k * (hi - lo) / 4), W - PadR + 8, y - 11, axis); }
             L("거래량", PadL + 4, PriceBottom + Gap + 2, axis, 15);
-            for (int i = all.Count - 1, k = 0; i >= off; i -= 6, k += 6) L(k == 0 ? "지금" : $"-{k}칸", X(i) - 16, Hh - PadB + 4, axis, 15);
+            for (int i = all.Count - 1, k = 0; i >= off; i -= 6, k += 6) L(k == 0 ? "지금" : $"-{k}봉", X(i) - 16, Hh - PadB + 4, axis, 15);
             foreach (var Ln in lines)
             {
+                if (Ln.y < lo || Ln.y > hi) continue;
                 var l = L(Ln.l, PadL + 6, Y(Ln.y) - 24, Ln.c, 17, true);
                 l.style.backgroundColor = new Color(0.05f, 0.06f, 0.1f, 0.8f); l.style.paddingLeft = 4; l.style.paddingRight = 4;
             }
@@ -577,9 +635,10 @@ namespace KwGame.View
         void Hover()
         {
             MarkDirtyRepaint();
-            if (hover < 0) { tip.style.display = DisplayStyle.None; return; }
+            if (hover < 0 || hover >= all.Count) { hover = -1; tip.style.display = DisplayStyle.None; return; }
+            if (ma5.Length != all.Count) Recalc(last, lines);
             var b = all[hover]; double r = b.c / b.o - 1; int ago = all.Count - 1 - hover;
-            tip.text = $"{(ago == 0 ? "지난 칸" : $"{ago + 1}칸 전")}  시 {fmt(b.o)}  고 {fmt(b.h)}  저 {fmt(b.l)}  종 {fmt(b.c)}  {GameSim.pct(r)}"
+            tip.text = $"{(ago == 0 ? "지금 봉" : $"{ago}봉 전")}  시 {fmt(b.o)}  고 {fmt(b.h)}  저 {fmt(b.l)}  종 {fmt(b.c)}  {GameSim.pct(r)}"
                 + (!double.IsNaN(ma5[hover]) ? $"  MA5 {fmt(ma5[hover])}" : "");
             tip.style.color = r >= 0 ? Up : Dn;
             tip.style.display = DisplayStyle.Flex;

@@ -109,7 +109,7 @@ namespace KwGame.Sim
         public int absDay() => (S.month - 1) * R.MONTH_DAYS + S.day;
         public int Tnow() => (absDay() - 1) * R.SLOTS + S.slot;
         public double loanCap() => R.LOAN_CAP[(int)clamp(S.month, 1, 3) - 1];
-        public bool stockOpen() => R.STOCK_SLOTS.Contains(S.slot);
+        public bool stockOpen() => S.rt ? S.min >= R.RT_STOCK[0] && S.min < R.RT_STOCK[1] : R.STOCK_SLOTS.Contains(S.slot);
         public bool isEve() => S.slot == R.SLOTS - 1;
         public bool tkOpen(string k) => string.IsNullOrEmpty(D.TK[k].@lock) || has(D.TK[k].@lock);
         public double stockVal() { double a = 0; foreach (var k in STK()) { var h = S.hold.Get(k); a = a + (h != null ? h.q * S.mk.tk[k].p : 0); } return a; }
@@ -135,11 +135,11 @@ namespace KwGame.Sim
         public double hpMult() { double lo = R.HP_LOW; return S.hp >= lo ? 1 : 0.4 + 0.6 * S.hp / lo; }
         public double hpCost(string k) { double c = R.HpCost(k); return c > 0 && has("ginseng") ? rhu(c * 0.7) : c; }
         public double jobHp(Job J) => has("ginseng") ? rhu(J.hp * 0.7) : J.hp;
-        public string clockNow() => S != null && S.phase != "title" ? (S.phase == "payday" ? "23:50" : (S.slot < D.SLOT_CLOCK.Count ? D.SLOT_CLOCK[S.slot] : "09:00")) : "09:00";
+        public string clockNow() => S != null && S.rt ? clockOf(S.min) : S != null && S.phase != "title" ? (S.phase == "payday" ? "23:50" : (S.slot < D.SLOT_CLOCK.Count ? D.SLOT_CLOCK[S.slot] : "09:00")) : "09:00";
         /// UI 용 청산 확률 (상태에 안 들어감 → Math 써도 됨)
         public double liqOdds(double lev, double vol)
         {
-            double a = Math.Log(1 / (1 - Math.Min(0.99, 0.9 / lev))), sg = vol * Math.Sqrt(1 + R.INTRA * R.INTRA);
+            double a = Math.Log(1 / (1 - Math.Min(0.99, 0.9 / lev))), sg = vol * rtVol() * Math.Sqrt(1 + R.INTRA * R.INTRA);
             double z = a / sg, t = 1 / (1 + 0.3275911 * z / Math.Sqrt(2));
             double erfc = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.Exp(-z * z / 2);
             return Math.Min(0.99, erfc);

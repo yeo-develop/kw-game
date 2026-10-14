@@ -7,7 +7,7 @@ namespace KwGame.Sim
     // api.js — createGame · apply(명령) · query
     public partial class GameSim
     {
-        public class Opts { public bool tut; }
+        public class Opts { public bool tut, rt; }
 
         /// 새 게임 (createGame). rngv 2 만 지원 (rngv 1 은 웹 회귀 비교 전용).
         public static GameSim Create(GameData data, int seed, Opts opts = null)
@@ -23,6 +23,7 @@ namespace KwGame.Sim
             S.st.maxDebt = r.DEBT0; S.st.maxAsset = r.CASH0; S.st.minDebt = r.DEBT0;
             g.S = S;
             S.optTut = opts != null && opts.tut;
+            S.rt = opts != null && opts.rt; S.min = r.RT_DAY0;
             S.mk = g.initMarket(); S.news = g.genNews();
             S.pending = new Pending("start");
             g.ev.Clear();
@@ -70,6 +71,7 @@ namespace KwGame.Sim
         {
             string key = S.visit.key; var o = locOpts(key).FirstOrDefault(x => x.k == k);
             if (o == null || o.dis) return err("act " + k);
+            if (S.rt) setActMin(k);
             switch (k)
             {
                 case "l-trade": S.pending = new Pending("brokerTrade") { n0 = S.st.invest }; return true;
@@ -122,7 +124,7 @@ namespace KwGame.Sim
                     }
                 case "closeCoins":
                     {
-                        double s = 0; foreach (var x in S.cps.Where(y => y.t0 != Tnow()).ToList()) s += closeCoin(x) ?? 0;
+                        double s = 0; foreach (var x in S.cps.Where(y => S.rt || y.t0 != Tnow()).ToList()) s += closeCoin(x) ?? 0;
                         Emit("trade", "op", "closeCoins", "ok", true, "pnl", s); return true;
                     }
                 case "report":
@@ -150,6 +152,7 @@ namespace KwGame.Sim
                 return;
             }
             if (t == "guide") { S.tg = c.Str("seg") ?? ""; if (c.Str("seg") == "home2") S.tgT = Tnow(); if (c.Truthy("reset")) S.tutSeen = new Dictionary<string, int>(); return; }
+            if (t == "tick") { if (!tickCmd(c)) err("tick"); return; }
             if (t == "tutSeen") { S.tutSeen[c.Str("k") ?? "undefined"] = 1; return; }
             if (t == "debug") { debug(c.Str("k")); return; }
             // LLM 연동 (docs/LLM.md): 모드 켜기/끄기 · 뉴스 사실 (검증 실패면 error, 상태 그대로)
@@ -195,7 +198,7 @@ namespace KwGame.Sim
                     if (t == "continue") { if (!continueGame()) err("continue"); return; }
                     break;
                 case "home":
-                    if (t == "rest") { S.pending = null; restHome(); slotUsed(); return; }
+                    if (t == "rest") { S.pending = null; if (S.rt) S.actMin = isEve() ? Math.Max(1, slotEndMin(S.slot) - S.min) : R.RT_REST; restHome(); slotUsed(); return; }
                     if (t == "map") { S.pending = new Pending("map"); return; }
                     if (t == "loanOpen") { S.pending = new Pending("loan") { took = 0 }; return; }
                     break;

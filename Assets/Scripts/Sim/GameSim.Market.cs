@@ -13,7 +13,8 @@ namespace KwGame.Sim
         {
             M = M ?? S.mk;
             if (rnd() > 0.9) M.reg = -M.reg;
-            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) + sh(shock, "MKT");
+            double v = rtVol();
+            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) * v + sh(shock, "MKT");
             bool whale = evening && S.mk == M && has("whale");
             var P = new MarketPlan { whale = whale };
             foreach (var t in D.TKList)
@@ -21,11 +22,11 @@ namespace KwGame.Sim
                 string k = t.id; var s = M.tk[k];
                 if (rnd() > (t.type == "coin" ? 0.85 : 0.9)) s.tr = -s.tr;
                 double r;
-                if (t.inv) r = -2 * mret - 0.001 + gauss() * t.vol;
+                if (t.inv) r = (t.of != null && P.r.ContainsKey(t.of) ? -2 * P.r[t.of] : -2 * mret) - 0.001 + gauss() * t.vol * v;
                 else if (t.meme) r = rnd() < 0.46 ? 0.45 + rnd() * 0.45 : -(0.28 + rnd() * 0.3);
-                else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * (evening ? 1.3 : 1);
-                else r = (s.tr * t.tr + gauss() * t.vol) * (whale ? 2 : 1);
-                r += sh(shock, k);
+                else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * v * (evening ? 1.3 : 1);
+                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? 2 : 1);
+                if (!(t.inv && t.of != null)) r += sh(shock, k);
                 P.r[k] = clamp(r, -0.7, 1.5);
                 double wig = t.vol * (whale ? 2 : 1) * (0.2 + rnd() * 0.6);
                 double w0 = wig * rnd(); double w1 = wig * rnd();
@@ -61,12 +62,18 @@ namespace KwGame.Sim
         {
             var M = new MarketState { reg = rnd() < 0.6 ? 1 : -1 };
             foreach (var t in D.TKList) M.tk[t.id] = new TkState { p = t.p0, tr = rnd() < 0.5 ? 1 : -1 };
-            for (int i = 0; i < 14; i++) stepMarket(new Dictionary<string, double>(), i % R.SLOTS == R.SLOTS - 1, M);
+            if (S.rt) rtInitMarket(M);
+            else for (int i = 0; i < 14; i++) stepMarket(new Dictionary<string, double>(), i % R.SLOTS == R.SLOTS - 1, M);
             return M;
         }
         void addShock(int T, string tk, double r)
         {
-            if (S.mplan != null && S.mplan.T == T) { S.mplan.r[tk] = clamp(S.mplan.r[tk] + r, -0.7, 1.5); return; }
+            if (S.mplan != null && S.mplan.T == T)
+            {
+                S.mplan.r[tk] = clamp(S.mplan.r[tk] + r, -0.7, 1.5);
+                foreach (var t in D.TKList.Where(x => x.inv && x.of == tk)) S.mplan.r[t.id] = clamp(S.mplan.r[t.id] - 2 * r, -0.7, 1.5);   // 곱버스는 따라가는 종목 반대로
+                return;
+            }
             if (!S.shocks.TryGetValue(T, out var o)) S.shocks[T] = o = new Dictionary<string, double>();
             o[tk] = sh(o, tk) + r;
         }
@@ -86,7 +93,7 @@ namespace KwGame.Sim
             string tk = pick(pool);
             var nw = pick(D.NEWS[tk]);
             D.TK.TryGetValue(tk, out var t);
-            double mag = tk == "MKT" ? 0.02 + rnd() * 0.02 : t.type == "stock" ? 0.05 + rnd() * 0.07 : t.meme ? 0.4 : 0.07 + rnd() * 0.09;
+            double mag = (tk == "MKT" ? 0.02 + rnd() * 0.02 : t.type == "stock" ? 0.05 + rnd() * 0.07 : t.meme ? 0.4 : 0.07 + rnd() * 0.09) * (t != null ? t.nmag : 1);
             var n = new News { tk = tk, h = nw.h, dir = nw.dir, r = nw.dir * mag, fake = rnd() < 0.3 };
             logNews(n);
             return n;

@@ -74,6 +74,7 @@ namespace KwGame.View
             yield return Shot(dir, "07_minigame");
             Send("mgResult", "score", 0.8); yield return UntilIdle();
             yield return ToHome();
+            if (S.rt && S.min < 600 && S.pending.t == "home") { Send("tick", "m", 600 - S.min); yield return UntilIdle(); yield return ToHome(); }   // 장 열린 10:00 으로
             phoneOpen = true; phoneTab = "stock"; RenderAll();
             yield return Shot(dir, "08_phone_stock");
             {   // 증권 앱: 주식 1개 사고 코인 롱 하나 잡은 뒤 차트·계좌 화면
@@ -88,6 +89,8 @@ namespace KwGame.View
             }
             phoneTab = "gall"; RenderAll();
             yield return Shot(dir, "09_phone_gall");
+            phoneTab = "stock"; stkTab = "detail"; RenderAll(); yield return new WaitForSeconds(6f);   // 실시간으로 6초 흐른 뒤
+            yield return Shot(dir, "08e_live_6s");
             phoneOpen = false; RenderAll();
             // 장소 NPC (카지노 = 딜러, 점심·저녁만 열림)
             Send("map"); yield return UntilIdle();

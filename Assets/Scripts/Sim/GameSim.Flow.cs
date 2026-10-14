@@ -9,7 +9,12 @@ namespace KwGame.Sim
     {
         static readonly string[] AFTER_SLOT = { "endCheck", "faintCheck", "menCheck", "endSlot", "endCheck", "menCheck", "loopTop" };
         void after(params string[] steps) => S.flow.InsertRange(0, steps);
-        void slotUsed() { S.pending = null; after(AFTER_SLOT); }
+        void slotUsed()
+        {
+            S.pending = null;
+            if (S.rt) { S.owe += actMinutes(); after("endCheck", "faintCheck", "menCheck", "spend"); return; }   // 실시간: 행동한 만큼 시계가 감
+            after(AFTER_SLOT);
+        }
         void toHome() { S.pending = null; after("home"); }
         bool fainted() => S.faint >= Tnow();
 
@@ -36,6 +41,7 @@ namespace KwGame.Sim
                 case "endSlot": endSlot(); break;
                 case "market": marketTick(); break;
                 case "advance": advance(); break;
+                case "spend": spend(); break;
                 case "paydayMsg": M(T("pd.next", "m", S.month + 1), "smug"); hideDlg(); break;
                 case "tutInit": if (S.optTut) S.tg = "home"; break;
                 default: throw new Exception("unknown step " + k);
@@ -189,15 +195,15 @@ namespace KwGame.Sim
                 }
             if (fund != 0) { S.today.Add(new Ledger { kind = "invest", amt = -fund, label = T("lbl.funding") }); S.realized -= fund; }
             var P = curPlan(); S.mplan = null;
-            var mv = applyMarket(P);
+            var mv = S.rt ? rtSnap(S.mk, P, Tnow()) : applyMarket(P);
             var liqs = new List<Liq>();
             foreach (var c in S.cps.ToList())
             {
                 double w = c.dir > 0 ? mv[c.tk].l : mv[c.tk].h;
-                if (c.margin <= 0 || c.lev * c.mult * c.dir * (w / c.entry - 1) <= -0.9 || liqHit(c, mv[c.tk], D.TK[c.tk].vol * (evening && has("whale") ? 2 : 1)))
+                if (c.margin <= 0 || (S.rt ? c.lev * c.mult * c.dir * (S.mk.tk[c.tk].p / c.entry - 1) <= -0.9 : c.lev * c.mult * c.dir * (w / c.entry - 1) <= -0.9 || liqHit(c, mv[c.tk], D.TK[c.tk].vol * (evening && has("whale") ? 2 : 1))))
                 {
-                    var hist = S.mk.tk[c.tk].hist; var hc = hist[hist.Count - 1]; double L = liqPx(c);
-                    if (c.dir > 0) hc.l = Math.Min(hc.l, L * 0.998); else hc.h = Math.Max(hc.h, L * 1.002);
+                    var hist = S.mk.tk[c.tk].hist; double L = liqPx(c);
+                    if (hist.Count > 0 && !S.rt) { var hc = hist[hist.Count - 1]; if (c.dir > 0) hc.l = Math.Min(hc.l, L * 0.998); else hc.h = Math.Max(hc.h, L * 1.002); }
                     var LL = R.LIQ_LOSS; double loss = LL[0] + rnd() * (LL[1] - LL[0]);
                     double back = Math.Max(0, rhu(c.margin * (1 - loss)));
                     if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.Max(back, rhu(c.margin / 2)); }
@@ -532,7 +538,7 @@ namespace KwGame.Sim
             if (S.dbgAug != 0) { S.dbgAug = 0; after("loopTop2"); relicStart(T("aug.reasonDebug")); return; }
             loopTop2();
         }
-        void loopTop2() { S.phase = "home"; slotStart(); Emit("save"); after("home"); }
+        void loopTop2() { S.phase = "home"; slotStart(); Emit("save"); after(S.rt && S.owe > 0 ? "spend" : "home"); }
         void homeStep()
         {
             S.phase = "home";
@@ -540,6 +546,7 @@ namespace KwGame.Sim
             {
                 Emit("faintSlot");
                 if (S.faint == Tnow()) S.hp = Math.Max(S.hp, R.HP_FAINT_BACK);
+                if (S.rt) { S.owe += Math.Max(0, slotEndMin(S.slot) - S.min); after("spend"); return; }   // 기절: 시간대 끝까지 건너뜀
                 after(AFTER_SLOT); return;
             }
             if (S.addict >= R.ADD_TEMPT && S.temptT != Tnow() && rnd() < 0.3) { temptStart(); return; }
@@ -563,6 +570,7 @@ namespace KwGame.Sim
         void advance()
         {
             S.slot++;
+            if (S.rt) S.min = slotStartMin(S.slot >= R.SLOTS ? 0 : S.slot);
             if (S.slot >= R.SLOTS)
             {
                 int d0 = absDay();
@@ -575,6 +583,7 @@ namespace KwGame.Sim
                     if (S.addict >= R.ADD_SECRET) { S.stress = clamp(S.stress + R.ADD_WITHDRAW, 0, 100); pushK("m", fpick(TA("add.withdraw"))); }
                     S.addict = Math.Max(0, S.addict - R.ADD_DECAY);
                 }
+                if (S.rt) rtDayRoll();
             }
         }
     }

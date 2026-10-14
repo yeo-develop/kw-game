@@ -75,7 +75,7 @@ namespace KwGame.View
             var cm = ((p["comments"] as JArray) ?? new JArray()).Select(c => (c.Value<string>("au"), c.Value<string>("x"))).ToList();
             aiPosts.Add(($"{S.month}-{S.day} {D.SLOT_NAME[S.slot]}", p.Value<string>("title"), p.Value<string>("body"), cm));
             if (aiPosts.Count > 10) aiPosts.RemoveAt(0);
-            if (phoneOpen && phoneTab == "gall" && !playing) RenderAll();
+            if (phoneTab == "gall" && !playing) RenderAll();
         }
 
         /// 집 화면 대사: 이번 칸 LLM 대사가 제때 왔으면 그것, 아니면 sim 대사(strings.json)

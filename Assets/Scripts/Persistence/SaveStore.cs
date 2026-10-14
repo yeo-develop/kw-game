@@ -122,7 +122,7 @@ namespace KwGame.Persistence
         public static bool IsCompatible(GameState state, GameData data, out string error)
         {
             bool valid = state.day <= data.RULES.MONTH_DAYS && state.slot < data.RULES.SLOTS &&
-                data.TKList.All(t => state.mk.tk.Has(t.id) && state.mk.tk[t.id]?.hist != null) &&
+                state.mk.tk.All(kv => kv.Value?.hist != null) && state.mk.tk.Keys.All(k => data.TK.ContainsKey(k)) &&
                 state.hold.All(h => data.TK.ContainsKey(h.Key)) &&
                 state.cps.All(p => data.TK.ContainsKey(p.tk)) &&
                 state.augs.All(id => data.AUGS.Any(a => a.id == id)) &&

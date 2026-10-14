@@ -24,7 +24,12 @@ namespace KwGame.Sim
     }
 
     public class Candle { public double o, h, l, c; }
-    public class TkState { public double p; public int tr; public List<Candle> hist = new List<Candle>(); }
+    public class TkState
+    {
+        public double p; public int tr; public List<Candle> hist = new List<Candle>();
+        // 실시간 모드 (GameSim.Realtime.cs): 시간대 시가·고가·저가, 지금 그리는 봉 번호, 하루 기준가(전일 종가), 관리종목·상폐 횟수
+        public int sT = int.MinValue, cb = int.MinValue; public double so, sh, sl, ref0; public bool warn; public int relist;
+    }
     public class MarketState { public int reg; public OMap<TkState> tk = new OMap<TkState>(); }
     public class MarketPlan { public Dictionary<string, double> r = new Dictionary<string, double>(); public Dictionary<string, double[]> w = new Dictionary<string, double[]>(); public bool whale; public int T = int.MinValue; }
     public class Move { public double o, c, h, l, r; }
@@ -124,5 +129,7 @@ namespace KwGame.Sim
         // JS 에서 처음엔 undefined 인 보조 필드
         public bool optTut; public int? kimpDay, kimBig, menCool, temptT, gT, repT; public double invIn; public Visit visit; public int dbgAug;
         public List<string> evSeen = new List<string>(); public int? evCool, evT;   // 돌발 이벤트 (GameSim.Events.cs, 다이제스트 밖)
+        // 실시간 모드 (GameSim.Realtime.cs, 다이제스트 밖): 하루 중 분(08:00 = 480), 행동이 아직 못 쓴 시간, 지금 행동이 쓸 시간
+        public bool rt; public int min, owe, actMin;
     }
 }

@@ -56,6 +56,7 @@ namespace KwGame.View
             if (restored != null)
             {
                 G = new GameSim(D, restored) { Hud = true };
+                G.EnableRt();   // 예전(칸 방식) 저장도 실시간으로 이어서
                 saveMessage = "저장 데이터를 불러왔습니다.";
                 RenderAll();
             }
@@ -76,7 +77,7 @@ namespace KwGame.View
 
         void NewGame(int sd)
         {
-            G = GameSim.Create(D, sd);
+            G = GameSim.Create(D, sd, new GameSim.Opts { rt = true });
             G.Hud = true;
             phoneOpen = false;
             LlmNewGame();
@@ -176,9 +177,29 @@ namespace KwGame.View
             while (!clicked) yield return null;
             waiting = false; waitingForDialogue = false;
         }
+        // ---------- 실시간 (GameSim.Realtime.cs) ----------
+        int rtSpeed = 1; float rtAcc, rtPhoneT, rtSaveT;
+        /// 고를 게 없는 화면(집·지도·장소·창구)에선 게임 시간이 흐름. 조용한 분은 HUD·차트만 다시 그리고, 무슨 일이 생기면(시간대 끝·청산·상폐) 이벤트 재생
+        void RtUpdate()
+        {
+            if (G == null || !S.rt || playing || waiting || rtSpeed == 0 || mg != null || modal.style.display == DisplayStyle.Flex || !PHONE_OK.Contains(S.pending?.t)) return;
+            rtAcc += Time.unscaledDeltaTime * (float)D.RULES.RT_SPEED * rtSpeed;
+            int m = Mathf.Min(30, (int)rtAcc);
+            if (m < 1) return;
+            rtAcc -= m;
+            var evs = G.Apply(new SimCommand("tick", "m", m));
+            if (evs.Count > 0) { rtAcc = 0; LlmTick(); StartCoroutine(Play(evs)); return; }
+            RenderHud(G.HudSnapOf());
+            LiveChart();
+            rtPhoneT += Time.unscaledDeltaTime; rtSaveT += Time.unscaledDeltaTime;
+            if (rtPhoneT >= 0.5f && !stkDragging) { rtPhoneT = 0; RenderPhone(); }
+            if (rtSaveT >= 30f) { rtSaveT = 0; SaveCheckpoint(false); }
+        }
+
         void Update()
         {
             if (dlgText == null) return;
+            RtUpdate();
             FaceTick();
             if (waitingForDialogue)
             {

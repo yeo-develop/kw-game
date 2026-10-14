@@ -59,7 +59,7 @@ namespace KwGame.Sim
         }
         double? closeCoin(CoinPos c, bool force = false)
         {
-            if (!force && c.t0 == Tnow()) return null;
+            if (!force && !S.rt && c.t0 == Tnow()) return null;
             double pnl = cpnl(c);
             if (pnl > 0 && c.dir < 0 && has("inverse")) { pnl *= 1.25; augFx("inverse", T("aug.short")); }
             double fee = rhu(c.margin * c.lev * R.COIN_FEE);

@@ -20,6 +20,10 @@ namespace KwGame.Sim
         public double IMPULSE_P, IMPULSE_CASH, GACHA_PRICE, GACHA_JUNK;
         /// 목장갑(grind) 일당 배율. 996af67 데이터엔 없음(코드 상수 1.3) → v3.3b 에서 rules.json 으로 빠짐 (1.15)
         public double GRIND_PAY = 1.3;
+        // 실시간 모드 (GameSim.Realtime.cs). 시각은 하루 중 분 (480 = 08:00)
+        public int RT_DAY0 = 480, RT_CANDLE = 30, RT_HIST = 160, RT_REST = 180, RT_ACT = 120, RT_WORK = 300;
+        public int[] RT_SLOT_END = { 720, 1080, 1440 }, RT_STOCK = { 540, 930 };
+        public double RT_VOL = 2, RT_LIMIT = 0.3, RT_SPEED = 4, RT_WARN_P = 0.05, RT_WARN_LOW_P = 0.15, RT_DELIST_P = 0.5;
 
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;
@@ -30,6 +34,8 @@ namespace KwGame.Sim
         public string id, name, type, ic, d, @lock;
         public double p0, vol, beta, tr, maxLev;
         public bool inv, meme;
+        /// inv 가 따라가는 종목 (없으면 시장 전체 반대). junk = 관리종목·상장폐지 대상. cat = 화면 분류. nmag = 뉴스 크기 배수
+        public string of, cat; public bool junk; public double nmag = 1;
         public bool IsCoin => type == "coin";
         public bool IsStock => type == "stock";
     }
