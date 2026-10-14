@@ -33,6 +33,8 @@
                 <ui:Label name="dialogMessage" class="dialog-message"/>
                 <ui:VisualElement name="settingsBody" class="settings-body hidden">
                     <ui:Slider name="volumeSlider" label="전체 음량" low-value="0" high-value="1" value="1" class="volume-slider" style="display: flex;"/>
+                    <ui:Slider name="musicVolumeSlider" label="배경음" low-value="0" high-value="1" value="1" class="volume-slider"/>
+                    <ui:Slider name="effectsVolumeSlider" label="효과음" low-value="0" high-value="1" value="1" class="volume-slider"/>
                     <ui:Toggle name="fullscreenToggle" label="전체 화면" class="fullscreen-toggle"/>
                     <ui:VisualElement class="api-information">
                         <ui:Label text="LLM API 키: 미설정" class="settings-heading"/>

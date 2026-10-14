@@ -14,7 +14,8 @@
     "precompiledReferences": [
         "Newtonsoft.Json.dll",
         "Febucci.TextAnimatorCore.dll",
-        "DOTween.dll"
+        "DOTween.dll",
+        "Sirenix.OdinInspector.Attributes.dll"
     ],
     "autoReferenced": true,
     "defineConstraints": [],

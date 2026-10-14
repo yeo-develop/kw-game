@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using Febucci.TextAnimatorForUnity;
 using KwGame.Sim;
+using KwGame.Audio;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -45,6 +46,8 @@ namespace KwGame.View
         void Start()
         {
             Application.targetFrameRate = 60;
+            if (Camera.main != null && !FindObjectsByType<AudioListener>().Any(listener => listener.isActiveAndEnabled))
+                Camera.main.gameObject.AddComponent<AudioListener>();
             D = LoadData();
             font = Resources.Load<Font>("Fonts/Pretendard-Regular");
             fontBold = Resources.Load<Font>("Fonts/Pretendard-Bold");
@@ -84,21 +87,24 @@ namespace KwGame.View
         public void Send(SimCommand c)
         {
             if (playing) return;
+            int coinsBefore = S.cps.Count;
             var evs = G.Apply(c);
+            int closedCoins = c.t == "closeCoins" ? coinsBefore - S.cps.Count : 0;
             var cb = onSent; onSent = null; cb?.Invoke(evs);   // 주문 결과 메시지 (GameController.Chart.cs)
             LlmTick();   // 새 칸이면 뉴스·대사 요청을 재생 전에 미리 (GameController.Llm.cs)
-            StartCoroutine(Play(evs));
+            StartCoroutine(Play(evs, closedCoins));
         }
         void Send(string t, params object[] kv) => Send(new SimCommand(t, kv));
 
         // ---------- 이벤트 재생 (events.js) ----------
-        IEnumerator Play(List<SimEvent> evs)
+        IEnumerator Play(List<SimEvent> evs, int closedCoins = 0)
         {
             playing = true; FacePlayBegin();
             panel.SetEnabled(false); panel.style.opacity = 0.45f;
             saveControls.SetEnabled(false);
             foreach (var e in evs)
             {
+                SoundEventAdapter.Play(e, closedCoins);
                 if (e.h != null) RenderHud(e.h);
                 switch (e.t)
                 {

@@ -79,7 +79,7 @@ namespace KwGame.View
 
         public static Button Button(string text, Action onClick, string sub = null, bool disabled = false, Color? bg = null, float size = 24)
         {
-            var b = new Button(() => { if (!disabled) onClick?.Invoke(); }) { text = "" };
+            var b = new Button(() => { if (!disabled) { KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.ButtonClick); onClick?.Invoke(); } }) { text = "" };
             b.style.flexDirection = FlexDirection.Column;
             b.style.alignItems = Align.FlexStart;
             b.style.backgroundColor = disabled ? new Color(0.18f, 0.18f, 0.22f, 1) : (bg ?? Panel2);

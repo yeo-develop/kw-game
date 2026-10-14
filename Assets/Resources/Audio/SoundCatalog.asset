@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3bbf2be2c74b2b498ba3b6d02d9bdca, type: 3}
+  m_Name: SoundCatalog
+  m_EditorClassIdentifier: KwGame.View::KwGame.Audio.SoundCatalog
+  buttonClick:
+    clip: {fileID: 8300000, guid: 270856b236f8d834ba0ce24bfdc89ad2, type: 3}
+    volume: 0.7
+  tradeSuccess:
+    clip: {fileID: 8300000, guid: e1e3293dd43aa0b4e8c83545fde4dbfc, type: 3}
+    volume: 0.9
+  income:
+    clip: {fileID: 8300000, guid: 887871a1af06b754ea253716021c9e9d, type: 3}
+    volume: 0.9
+  loss:
+    clip: {fileID: 8300000, guid: 04643e6bd56cfb04bb6307badc4a0596, type: 3}
+    volume: 0.9
+  backgroundMusic:
+    clip: {fileID: 8300000, guid: ed80de57e288c4645887db965af8cb97, type: 3}
+    volume: 0.65
+  musicVolume: 0.5
+  effectsVolume: 1
+  musicGroup: {fileID: 0}
+  effectsGroup: {fileID: 0}

@@ -1,0 +1,13 @@
+.sound-window { padding: 10px; }
+.sound-window > .unity-scroll-view { flex-grow: 1; margin-top: 12px; }
+.sound-window .unity-scroll-view__content-container { width: 100%; min-width: 0; }
+.sound-heading { font-size: 22px; -unity-font-style: bold; margin-bottom: 6px; }
+.sound-channels { flex-direction: row; padding: 12px 0; }
+.sound-channels > .sound-volume { flex-grow: 1; flex-basis: 0; min-width: 0; margin-right: 14px; }
+.sound-card { border-width: 1px; border-color: #666666; border-radius: 5px; padding: 12px; margin: 8px 0; flex-shrink: 0; }
+.sound-card-heading { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.sound-card-title { font-size: 16px; -unity-font-style: bold; }
+.sound-card-heading > .unity-button { width: 94px; min-height: 26px; }
+.sound-description { white-space: normal; opacity: 0.8; margin: 4px 0 8px; }
+.sound-volume { margin: 6px 0; }
+.sound-status { padding: 8px 0 0; -unity-font-style: bold; }

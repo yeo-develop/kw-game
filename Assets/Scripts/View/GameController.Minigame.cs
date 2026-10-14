@@ -250,7 +250,7 @@ namespace KwGame.View
 
         Button BigBtn(string text, string key, Action a, Color bg, float w, float h, float size = 30)
         {
-            var b = new Button(a) { text = "", focusable = false };   // 포커스 받으면 Space/Enter 가 버튼도 눌러서 두 번 먹음
+            var b = new Button(() => ExecuteButtonAction(a)) { text = "", focusable = false };   // 포커스 받으면 Space/Enter 가 버튼도 눌러서 두 번 먹음
             b.style.width = w; b.style.height = h; b.style.backgroundColor = bg; Ui.Radius(b, 18); Ui.Border(b, new Color(1, 1, 1, 0.25f), 2);
             b.style.alignItems = Align.Center; b.style.justifyContent = Justify.Center; b.style.marginLeft = 8; b.style.marginRight = 8;
             var l = Ui.Label(text, size, Color.white, true); l.pickingMode = PickingMode.Ignore; l.style.unityTextAlign = TextAnchor.MiddleCenter; b.Add(l);
@@ -258,6 +258,12 @@ namespace KwGame.View
             b.RegisterCallback<PointerEnterEvent>(_ => b.style.backgroundColor = Color.Lerp(bg, Color.white, 0.15f));
             b.RegisterCallback<PointerLeaveEvent>(_ => b.style.backgroundColor = bg);
             return b;
+        }
+
+        static void ExecuteButtonAction(Action action)
+        {
+            KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.ButtonClick);
+            action();
         }
 
         // ---------- ☕ 카페: 주문 맞추기 ----------
@@ -314,7 +320,7 @@ namespace KwGame.View
             for (int i = 0; i < 5; i++)
             {
                 int k = i;
-                var b = new Button(() => Add(k)) { text = "", focusable = false };
+                var b = new Button(() => ExecuteButtonAction(() => Add(k))) { text = "", focusable = false };
                 b.style.width = 200; b.style.height = 230; b.style.backgroundColor = MgCard; Ui.Radius(b, 18); Ui.Border(b, MgLine, 2);
                 b.style.alignItems = Align.Center; b.style.justifyContent = Justify.Center; b.style.marginLeft = 8; b.style.marginRight = 8;
                 b.Add(Icon(DRINK_KEY[i], DRINK_C[i], null, 130));
@@ -440,11 +446,11 @@ namespace KwGame.View
                 if (patience <= 0) { custBox[oi].style.translate = new Translate(0, 0); Leave(); }
                 if (oi < NO)
                 {
-                    for (int i = 0; i < 5; i++) if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i)) Add(i);
-                    if (Input.GetKeyDown(KeyCode.Alpha0) || Input.GetKeyDown(KeyCode.Keypad0)) Clear();
-                    if (Input.GetKeyDown(KeyCode.S)) ToggleShot();
-                    if (Input.GetKeyDown(KeyCode.R)) Again();
-                    if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)) Serve();
+                    for (int i = 0; i < 5; i++) if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i)) ExecuteButtonAction(() => Add(i));
+                    if (Input.GetKeyDown(KeyCode.Alpha0) || Input.GetKeyDown(KeyCode.Keypad0)) ExecuteButtonAction(Clear);
+                    if (Input.GetKeyDown(KeyCode.S)) ExecuteButtonAction(ToggleShot);
+                    if (Input.GetKeyDown(KeyCode.R) && againBtn.enabledInHierarchy) ExecuteButtonAction(Again);
+                    if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)) ExecuteButtonAction(Serve);
                 }
                 yield return null;
             }
@@ -576,8 +582,8 @@ namespace KwGame.View
                 if (idBadge.style.display == DisplayStyle.Flex && !idOk) idBadge.style.opacity = 0.55f + 0.45f * Mathf.PingPong(t * 3, 1);
                 else idBadge.style.opacity = 1;
                 Timer(1 - t / SEC, SEC - t);
-                if (Input.GetKeyDown(KeyCode.I)) CheckId();
-                if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) Scan();
+                if (Input.GetKeyDown(KeyCode.I)) ExecuteButtonAction(CheckId);
+                if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) ExecuteButtonAction(Scan);
                 yield return null;
             }
             fin = true;
@@ -688,7 +694,7 @@ namespace KwGame.View
                     else { truck.parent.Q("fragile")?.RemoveFromHierarchy(); warn.style.opacity = 1; }
                 }
                 if (frag) warn.style.opacity = Mathf.PingPong(t * 6, 1);
-                if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) Hit();
+                if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) ExecuteButtonAction(Hit);
                 yield return null;
             }
             yield return new WaitForSecondsRealtime(0.3f);

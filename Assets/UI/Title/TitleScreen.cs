@@ -1,6 +1,7 @@
 using DG.Tweening;
 using Febucci.TextAnimatorForUnity;
 using KwGame.View;
+using KwGame.Audio;
 using KwGame.Persistence;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -22,12 +23,13 @@ namespace KwGame.Title
         private Button continueButton, newGameButton, settingsButton, quitButton, apiButton;
         private Button confirmButton, cancelButton, returnFocus;
         private Label dialogTitle, dialogMessage, loadingLabel;
-        private Slider volumeSlider;
+        private Slider volumeSlider, musicVolumeSlider, effectsVolumeSlider;
         private Toggle fullscreenToggle;
         private AnimatedLabel story;
         private Tween entranceTween, dialogTween, launchTween;
         private bool launching, confirmingQuit, confirmingNewGame;
         private string saveStatus;
+        private Button[] soundButtons;
 
         [ShowInInspector, ReadOnly]
         private string SaveStatus => saveStatus;
@@ -55,9 +57,13 @@ namespace KwGame.Title
             dialogMessage = root.Q<Label>("dialogMessage");
             loadingLabel = root.Q<Label>("loadingLabel");
             volumeSlider = root.Q<Slider>("volumeSlider");
+            musicVolumeSlider = root.Q<Slider>("musicVolumeSlider");
+            effectsVolumeSlider = root.Q<Slider>("effectsVolumeSlider");
             fullscreenToggle = root.Q<Toggle>("fullscreenToggle");
 
             RefreshSaveStatus();
+            soundButtons = new[] { continueButton, newGameButton, settingsButton, quitButton, apiButton, confirmButton, cancelButton };
+            foreach (var button in soundButtons) button.clicked += PlayButtonSound;
             continueButton.clicked += ContinueGame;
             newGameButton.clicked += StartGame;
             settingsButton.clicked += ShowSettings;
@@ -66,6 +72,8 @@ namespace KwGame.Title
             confirmButton.clicked += ConfirmDialog;
             cancelButton.clicked += CloseDialog;
             volumeSlider.RegisterValueChangedCallback(ChangeVolume);
+            musicVolumeSlider.RegisterValueChangedCallback(ChangeMusicVolume);
+            effectsVolumeSlider.RegisterValueChangedCallback(ChangeEffectsVolume);
             fullscreenToggle.RegisterValueChangedCallback(ChangeFullscreen);
             root.RegisterCallback<KeyDownEvent>(HandleKey, TrickleDown.TrickleDown);
             root.RegisterCallback<NavigationMoveEvent>(BlockSettingsTabNavigation, TrickleDown.TrickleDown);
@@ -97,6 +105,7 @@ namespace KwGame.Title
             story?.Typewriter?.StopShowingText();
             story?.PauseAnimation();
             if (root == null) return;
+            foreach (var button in soundButtons) button.clicked -= PlayButtonSound;
             continueButton.clicked -= ContinueGame;
             newGameButton.clicked -= StartGame;
             settingsButton.clicked -= ShowSettings;
@@ -105,6 +114,8 @@ namespace KwGame.Title
             confirmButton.clicked -= ConfirmDialog;
             cancelButton.clicked -= CloseDialog;
             volumeSlider.UnregisterValueChangedCallback(ChangeVolume);
+            musicVolumeSlider.UnregisterValueChangedCallback(ChangeMusicVolume);
+            effectsVolumeSlider.UnregisterValueChangedCallback(ChangeEffectsVolume);
             fullscreenToggle.UnregisterValueChangedCallback(ChangeFullscreen);
             root.UnregisterCallback<KeyDownEvent>(HandleKey, TrickleDown.TrickleDown);
             root.UnregisterCallback<NavigationMoveEvent>(BlockSettingsTabNavigation, TrickleDown.TrickleDown);
@@ -117,6 +128,8 @@ namespace KwGame.Title
                     opacity => target.style.opacity = opacity, value, duration)
                 .SetTarget(target).SetUpdate(true).SetLink(gameObject);
         }
+
+        private static void PlayButtonSound() => KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.ButtonClick);
 
         private void ResizeLayout(GeometryChangedEvent evt)
         {
@@ -207,6 +220,8 @@ namespace KwGame.Title
         private void OpenSettings(Button owner)
         {
             volumeSlider.SetValueWithoutNotify(AudioListener.volume);
+            musicVolumeSlider.SetValueWithoutNotify(GameAudioManager.Instance.MusicVolume);
+            effectsVolumeSlider.SetValueWithoutNotify(GameAudioManager.Instance.EffectsVolume);
             fullscreenToggle.SetValueWithoutNotify(Screen.fullScreen);
             OpenDialog("설정", "플레이 환경을 설정하세요.", true, owner);
         }
@@ -269,6 +284,10 @@ namespace KwGame.Title
             PlayerPrefs.SetFloat(VolumeKey, evt.newValue);
             PlayerPrefs.Save();
         }
+
+        private void ChangeMusicVolume(ChangeEvent<float> evt) => GameAudioManager.Instance.SetMusicVolume(evt.newValue);
+
+        private void ChangeEffectsVolume(ChangeEvent<float> evt) => GameAudioManager.Instance.SetEffectsVolume(evt.newValue);
 
         private void ChangeFullscreen(ChangeEvent<bool> evt)
         {
