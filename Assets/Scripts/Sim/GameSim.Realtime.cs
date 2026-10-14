@@ -36,6 +36,13 @@ namespace KwGame.Sim
         void rtOpen(TkState s, int T) { if (s.sT == T) return; s.sT = T; s.so = s.p; s.sh = s.p; s.sl = s.p; }
         double limit(TkState s, double p) => s.ref0 > 0 ? clamp(p, s.ref0 * (1 - R.RT_LIMIT), s.ref0 * (1 + R.RT_LIMIT)) : p;
         double rtClose(Ticker t, TkState s, MarketPlan P) { double c = Math.Max(s.so * (1 + P.r[t.id]), t.p0 * 0.001); return t.IsStock ? limit(s, c) : c; }
+        /// 곱버스: 따라가는 종목의 시간대 등락 × −2 를 분마다 그대로 (장중에도 거울처럼)
+        double invPx(MarketState M, Ticker t, TkState s)
+        {
+            var o = M.tk[t.of]; double r = o.so > 0 ? o.p / o.so - 1 : 0;
+            double p = Math.Max(s.so * (1 - 2 * r), t.p0 * 0.001);
+            return t.IsStock ? limit(s, p) : p;
+        }
         (int a, int b) rtWindow(Ticker t, int slot)
         {
             int a = slotStartMin(slot), b = slotEndMin(slot);
@@ -49,6 +56,7 @@ namespace KwGame.Sim
                 var s = M.tk[t.id]; rtOpen(s, T);
                 var (a, b) = rtWindow(t, slot);
                 if (m < a || m >= b) continue;
+                if (t.inv && t.of != null && M.tk.Has(t.of)) { rtMove(s, invPx(M, t, s), day, m); continue; }
                 double L = b - a, u = (m - a) / L, dt = 1 / L;
                 double X1 = Math.Log(rtClose(t, s, P) / s.so), x = Math.Log(s.p / s.so), x2;
                 if (u + dt >= 1 - 1e-9) x2 = X1;
@@ -59,15 +67,19 @@ namespace KwGame.Sim
                 }
                 double p = s.so * Math.Exp(x2);
                 if (t.IsStock) p = limit(s, p);
-                int bk = day * 1000 + m / R.RT_CANDLE;
-                if (s.cb != bk)
-                {
-                    s.hist.Add(new Candle { o = s.p, h = s.p, l = s.p, c = s.p }); s.cb = bk;
-                    while (s.hist.Count > R.RT_HIST) s.hist.RemoveAt(0);
-                }
-                var k = s.hist[s.hist.Count - 1]; k.h = Math.Max(k.h, p); k.l = Math.Min(k.l, p); k.c = p;
-                s.p = p; s.sh = Math.Max(s.sh, p); s.sl = Math.Min(s.sl, p);
+                rtMove(s, p, day, m);
             }
+        }
+        void rtMove(TkState s, double p, int day, int m)
+        {
+            int bk = day * 1000 + m / R.RT_CANDLE;
+            if (s.cb != bk)
+            {
+                s.hist.Add(new Candle { o = s.p, h = s.p, l = s.p, c = s.p }); s.cb = bk;
+                while (s.hist.Count > R.RT_HIST) s.hist.RemoveAt(0);
+            }
+            var k = s.hist[s.hist.Count - 1]; k.h = Math.Max(k.h, p); k.l = Math.Min(k.l, p); k.c = p;
+            s.p = p; s.sh = Math.Max(s.sh, p); s.sl = Math.Min(s.sl, p);
         }
         /// 시간대 끝: 계획한 종가로 맞춤 (장 닫힌 시간대의 주식은 여기서 갭) → 시간대 전체 움직임
         Dictionary<string, Move> rtSnap(MarketState M, MarketPlan P, int T)
@@ -76,7 +88,7 @@ namespace KwGame.Sim
             foreach (var t in D.TKList)
             {
                 var s = M.tk[t.id]; rtOpen(s, T);
-                double o = s.so, c = rtClose(t, s, P);
+                double o = s.so, c = t.inv && t.of != null && M.tk.Has(t.of) ? invPx(M, t, s) : rtClose(t, s, P);
                 s.p = c; s.sh = Math.Max(s.sh, c); s.sl = Math.Min(s.sl, c);
                 outp[t.id] = new Move { o = o, c = c, h = s.sh, l = s.sl, r = c / o - 1 };
             }

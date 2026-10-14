@@ -110,6 +110,13 @@ namespace KwGame.Tests
             g.Apply(C("tick", "m", 30)); Assert.That(S.mk.tk["GSE"].p, Is.EqualTo(gse0), "장 전엔 주식 안 움직임");
             g.Apply(C("tick", "m", 40)); Assert.That(g.stockOpen(), Is.True, "09:10");
             Assert.That(g.clockNow(), Is.EqualTo("09:10"));
+            for (int i = 0; i < 20; i++)
+            {
+                g.Apply(C("tick", "m", 7));
+                if (!g.stockOpen()) break;
+                var gs = S.mk.tk["GSE"]; var iv = S.mk.tk["INV"];
+                Assert.That(iv.p / iv.so - 1, Is.EqualTo(-2 * (gs.p / gs.so - 1)).Within(0.0005), "장중에도 곱버스 = 갓성 × −2");
+            }
             // 곱버스: 갓성 시간대 수익률의 −2배 (+ 작은 잡음)
             int same = 0, n = 0;
             var plan = typeof(GameSim).GetMethod("planMarket", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
