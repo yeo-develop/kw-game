@@ -80,7 +80,7 @@ namespace KwGame.View
             if (G.hasPos()) Sum("평가손익", G.sgnWon(pl), UpDn(pl));
             Sum(G.stockOpen() ? "● 주식장" : "○ 주식장", G.stockOpen() ? $"열림 · 수수료 {fee * 100:0.0}%" : S.rt ? "마감 (09:00~15:30)" : "마감 (아침·점심만)", G.stockOpen() ? StkUp : StkAxis);
             Sum("코인", "24시간", Ui.Gold);
-            if (stkMsg != "") { var m = Ui.Label(stkMsg, 22, Ui.Gold, true); m.style.marginBottom = 10; body.Add(m); }
+            { var m = Ui.Label(stkMsg == "" ? " " : stkMsg, 20, Ui.Gold, true); m.style.marginBottom = 8; m.style.whiteSpace = WhiteSpace.NoWrap; body.Add(m); }   // 체결 줄은 늘 자리 차지 (주문 버튼이 밀리지 않게)
 
             if (stkTab == "detail") StkDetail(body, where, fee);
             else if (stkTab == "acct") StkAcct(body, where);

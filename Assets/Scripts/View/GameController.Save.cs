@@ -33,14 +33,6 @@ namespace KwGame.View
             var status = Ui.Label(saveMessage, 16, Ui.Dim); status.name = "saveStatus"; status.style.marginRight = 10; status.style.whiteSpace = WhiteSpace.NoWrap; saveControls.Add(status);
             var save = Q("저장", () => SaveCheckpoint(true), !CanSave); save.name = "saveGameButton";
             var title = Q("타이틀", ReturnToTitle, playing); title.name = "returnToTitleButton";
-            if (S.rt)
-            {
-                var gap = new VisualElement(); gap.style.width = 18; saveControls.Add(gap);
-                bool flowing = GameController_PhoneOk(S.pending?.t);
-                var st = Ui.Label(!flowing ? "⏸ 선택 중" : rtSpeed == 0 ? "⏸" : "▶", 18, flowing && rtSpeed > 0 ? Ui.Good : Ui.Dim); st.style.marginRight = 6; st.style.whiteSpace = WhiteSpace.NoWrap; saveControls.Add(st);
-                foreach (var (v0, l) in new[] { (0, "Ⅱ"), (1, "1x"), (2, "2x"), (4, "4x") })
-                { int v = v0; Q(l, () => { rtSpeed = v; RenderSaveControls(); }, false, rtSpeed == v ? Ui.Accent : (Color?)null); }
-            }
         }
         static bool GameController_PhoneOk(string t) => PHONE_OK.Contains(t);
 

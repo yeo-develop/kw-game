@@ -110,7 +110,7 @@ namespace KwGame.View
             stage.Add(phone);
 
             // 알림 (왼쪽, 상태 카드 아래, 3개까지)
-            toastCol = new VisualElement(); Ui.Abs(toastCol, 24, 300);   // 상태 카드 아래
+            toastCol = new VisualElement(); Ui.Abs(toastCol, 24, 330);   // 상태 카드 아래
             toastCol.style.width = 520; toastCol.style.alignItems = Align.FlexStart; toastCol.pickingMode = PickingMode.Ignore;
             stage.Add(toastCol);
 
@@ -251,6 +251,19 @@ namespace KwGame.View
             var when = L($"  {h.month}개월 {h.day}일 · {D.SLOT_NAME[Math.Min(h.slot, D.SLOT_NAME.Count - 1)]}" + (S.rt && G.stockOpen() ? " · 장중" : ""), 19, Ui.Dim); when.style.marginBottom = 5; top.Add(when);
             var sp = new VisualElement(); sp.style.flexGrow = 1; top.Add(sp);
             var loc = L(Ui.Clean(LocTitle()), 19, Ui.Dim); loc.style.marginBottom = 5; top.Add(loc);
+            // 시간 속도 (폰을 열어도 가리지 않게 상태 카드 안)
+            if (S.rt)
+            {
+                var spd = Ui.Row(); spd.style.alignItems = Align.Center; spd.style.marginTop = 8; hudBar.Add(spd);
+                bool flowing = PHONE_OK.Contains(S.pending?.t);
+                spd.Add(L(!flowing ? "⏸ 고르는 중엔 멈춤" : rtSpeed == 0 ? "⏸ 멈춤" : "▶ 시간 흐름", 16, flowing && rtSpeed > 0 ? Ui.Good : Ui.Dim));
+                var g0 = new VisualElement(); g0.style.flexGrow = 1; spd.Add(g0);
+                foreach (var (v0, l) in new[] { (0, "Ⅱ"), (1, "1x"), (2, "2x"), (4, "4x") })
+                {
+                    int v = v0; var c = Ui.Chip(l, () => { rtSpeed = v; RenderHud(G.HudSnapOf()); }, false, rtSpeed == v ? Ui.Accent : new Color(1, 1, 1, 0.06f));
+                    c.style.marginLeft = 4; c.style.marginRight = 0; c.style.paddingTop = 4; c.style.paddingBottom = 4; c.style.flexShrink = 0; c.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap; spd.Add(c);
+                }
+            }
             // 2줄: 돈
             var money = Ui.Row(); money.style.marginTop = 8; hudBar.Add(money);
             VisualElement M(string k, string v, Color c) { var b = new VisualElement(); b.style.marginRight = 22; b.Add(L(k, 16, Ui.Dim)); b.Add(L(v, 24, c, true)); return b; }

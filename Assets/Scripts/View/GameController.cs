@@ -190,10 +190,11 @@ namespace KwGame.View
             rtAcc -= m;
             var evs = G.Apply(new SimCommand("tick", "m", m));
             if (evs.Count > 0) { rtAcc = 0; LlmTick(); StartCoroutine(Play(evs)); return; }
-            RenderHud(G.HudSnapOf());
+            if (!Input.GetMouseButton(0) && Input.touchCount == 0) RenderHud(G.HudSnapOf());
             LiveChart();
             rtPhoneT += Time.unscaledDeltaTime; rtSaveT += Time.unscaledDeltaTime;
-            if (rtPhoneT >= 0.5f && !stkDragging) { rtPhoneT = 0; if (phoneOpen) RenderPhone(); RenderMini(); }
+            // 누르고 있는 동안엔 다시 그리지 않음 (누름~뗌 사이에 버튼이 바뀌면 클릭이 사라짐)
+            if (rtPhoneT >= 0.5f && !stkDragging && !Input.GetMouseButton(0) && Input.touchCount == 0) { rtPhoneT = 0; if (phoneOpen) RenderPhone(); RenderMini(); }
             if (rtSaveT >= 30f) { rtSaveT = 0; SaveCheckpoint(false); }
         }
 
