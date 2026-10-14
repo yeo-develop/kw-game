@@ -169,5 +169,15 @@ namespace KwGame.Tests
             }
             Assert.That(g2.absDay(), Is.GreaterThanOrEqualTo(3));
         }
+
+        [Test]
+        public void MissedInterestIsAlwaysTakenAwayInRealtime()
+        {
+            var bad = typeof(GameSim).GetMethod("badKind", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var rt = GameSim.Create(Data, 1, new GameSim.Opts { rt = true }); rt.S.addict = 95;
+            Assert.That(bad.Invoke(rt, null), Is.EqualTo("bad1"), "실시간: 중독도 높아도 이자 못 내면 끌려감");
+            var turn = GameSim.Create(Data, 1); turn.S.addict = 95;
+            Assert.That(bad.Invoke(turn, null), Is.EqualTo("bad2"), "턴 모드(웹 골든)는 그대로");
+        }
     }
 }

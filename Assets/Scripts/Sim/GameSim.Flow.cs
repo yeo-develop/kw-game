@@ -277,7 +277,8 @@ namespace KwGame.Sim
                 new Opt { k = "bet", l = T("pd.bet"), sub = P.betUsed ? T("pd.betUsed") : T("pd.betSub"), dis = P.betUsed },
             };
         }
-        string badKind() => S.addict >= R.ADD_SECRET ? "bad2" : "bad1";
+        /// 이자 못 냄·빚 한도 초과로 끝날 때. 실시간 모드는 항상 끌려감 (도박 중독 엔딩은 중독도 100 + 파산 = addictEnd 만)
+        string badKind() => !S.rt && S.addict >= R.ADD_SECRET ? "bad2" : "bad1";
         void paydayChoose()
         {
             var P = S.pending;

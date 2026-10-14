@@ -193,7 +193,8 @@ namespace KwGame.View
             else
             {
                 dlgName.style.display = DisplayStyle.None;
-                idleText.text = P == null ? "" : P.t == "start" ? "빚 3천만 원. 매달(7일) 이자 5%. 알바·주식·코인·도박… 갚을 방법은 많다." : Ui.Clean(LocTitle()) + " — 위에서 골라 줘";
+                idleText.text = P == null ? "" : P.t == "start" ? "빚 3천만 원. 매달(7일) 이자 5%. 알바·주식·코인·도박… 갚을 방법은 많다."
+                    : P.t == "ending" ? (S.endInfo?.ok == true ? "빚 0원. 해냈다." : "끝. 스코어보드를 보고 새 게임으로.") : Ui.Clean(LocTitle()) + " — 위에서 골라 줘";
                 idleText.style.color = Ui.Dim;
             }
         }
@@ -565,17 +566,17 @@ namespace KwGame.View
             if (E == null) return;
             Info(E.h, 32, E.ok ? Ui.Good : Ui.Bad);
             Info(E.lead, 22, Ui.Text);
+            // 버튼을 먼저 (스코어보드가 길어 상자 아래로 잘리지 않게)
+            if (P.cont) Btn("계속하기 (빚 없는 자유 모드)", () => Send("continue"), null, false, Ui.Accent);
+            Btn("새 게임", () => NewGame(UnityEngine.Random.Range(1, 1000000)), null, false, P.cont ? (Color?)null : Ui.Accent);
             var sb = E.sb;
-            Info("── 스코어보드 ──", 26, Ui.Gold);
+            Info("스코어보드", 26, Ui.Gold);
             void Row(string k, string v) { var r = Ui.Row(); r.style.justifyContent = Justify.SpaceBetween; r.style.marginBottom = 4; r.Add(Ui.Label(k, 22, Ui.Dim)); r.Add(Ui.Label(v, 22, Ui.Text, true)); panelBody.Add(r); }
             Row("버틴 날", $"{sb.days}일 ({sb.month}개월 {sb.day}일)");
             Row("남은 빚", G.won(sb.debt)); Row("갚은 빚", G.won(sb.repaid)); Row("낸 이자", G.won(sb.interest));
             Row("알바로 번 돈", G.won(sb.earned)); Row("투자 손익", G.sgnWon(sb.profit)); Row("도박 순손익", G.sgnWon(sb.gnet));
             Row("최대 자산", G.won(sb.maxAsset)); Row("도박 승/판", $"{sb.gW}/{sb.gN}"); Row("투자 승/매도", $"{sb.iW}/{sb.iN} · 청산 {sb.liq}");
             Row("갤 명성", $"{sb.fame} ({sb.rank})"); Row("중독도", $"{sb.addict}"); Row("기절 · 돌발 매수", $"{sb.faint} · {sb.impulse}");
-            panelBody.Add(new VisualElement { style = { height = 16 } });
-            if (P.cont) Btn("계속하기 (빚 없는 자유 모드)", () => Send("continue"), null, false, Ui.Accent);
-            Btn("새 게임", () => NewGame(UnityEngine.Random.Range(1, 1000000)));
         }
 
         // ---------- 폰 ----------
@@ -614,7 +615,7 @@ namespace KwGame.View
                     }
                     foreach (var room in new[] { "m", "kim", "hy" })
                     {
-                        L(room == "m" ? "── 미래 ♥" : room == "kim" ? "── 김사장" : "── 형나믿지", 22, Ui.Gold);
+                        L(room == "m" ? "미래 ♥" : room == "kim" ? "김사장" : "형나믿지", 22, Ui.Gold);
                         foreach (var m in S.kk[room].Skip(Math.Max(0, S.kk[room].Count - 5))) L($"[{m.t}] {(m.w == "me" ? "나" : m.w == "sys" ? "시스템" : m.w == "m" ? "미래" : m.w == "kim" ? "김사장" : "형")}: {m.x}", 20, m.w == "me" ? Ui.Dim : Ui.Text);
                         if (room == "m") foreach (var x in aiKakao) L(x, 20);   // LLM 카톡 (화면 전용)
                     }
