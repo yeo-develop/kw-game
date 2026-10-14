@@ -101,7 +101,8 @@ namespace KwGame.View
         IEnumerator Play(List<SimEvent> evs, int closedCoins = 0)
         {
             playing = true; FacePlayBegin();
-            panel.SetEnabled(false); panel.style.opacity = 0.45f;
+            panel.style.display = DisplayStyle.None;   // 이벤트 재생 중엔 지난 선택지를 아예 걷음 (반투명으로 남아 보이던 문제)
+            MinigameSync();                            // 알바 결과 카드도 바로 걷음
             saveControls.SetEnabled(false);
             foreach (var e in evs)
             {
@@ -145,7 +146,7 @@ namespace KwGame.View
             }
             HideDialogue();
             playing = false; FacePlayEnd();
-            panel.SetEnabled(true); panel.style.opacity = 1f;
+
             saveControls.SetEnabled(true);
             if (!evs.Any(e => e.t == "error")) SaveCheckpoint(false);
             RenderAll();

@@ -20,7 +20,7 @@ namespace KwGame.View
         // 비주얼노벨식 한 화면: 장면이 화면 전체. 위에 작은 카드들(왼쪽 상태 · 오른쪽 미니 시세 · 가운데 알림),
         // 아래 대사창(평소엔 미래 한마디 + 퀵메뉴), 고를 게 있을 때만 가운데 선택지 상자, 폰은 오른쪽에서 열고 닫음(P).
         VisualElement mini, quickBar; Label idleText;
-        static readonly Color Glass = new Color(0.05f, 0.05f, 0.09f, 0.84f);
+        static readonly Color Glass = new Color(0.05f, 0.05f, 0.09f, 0.93f);
         static VisualElement GlassBox(float pad = 16, float radius = 16)
         {
             var b = Ui.Box(Glass, pad, radius); Ui.Border(b, new Color(1, 1, 1, 0.14f), 2);

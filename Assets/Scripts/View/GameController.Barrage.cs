@@ -15,7 +15,7 @@ namespace KwGame.View
         {
             if (barrage != null) return barrage;
             barrage = new VisualElement(); Ui.Fill(barrage); barrage.pickingMode = PickingMode.Ignore;
-            stage.Insert(stage.IndexOf(dlg), barrage);   // 대사창·토스트 아래, 미래 위
+            stage.Insert(stage.IndexOf(panel), barrage);   // 선택지·대사창·토스트 아래, 미래 위 (답장 버튼을 가리지 않게)
             return barrage;
         }
 
