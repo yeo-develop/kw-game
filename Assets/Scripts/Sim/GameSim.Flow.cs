@@ -441,13 +441,14 @@ namespace KwGame.Sim
             S.st.menBad++; S.st.impulse++;
             double amt = round1k(S.cash * R.IMPULSE_CASH); bool stock = D.TK[tk].type == "stock";
             bool up = rnd() < 0.5; double mag = stock ? 0.12 + rnd() * 0.18 : 0.2 + rnd() * 0.25;
-            bool ok = false;
+            bool ok = false; double cash0 = S.cash;
             if (amt >= 10000)
             {
                 if (stock) ok = buyStock(tk, amt, R.FEE_APP) is double b && b != 0;
                 else ok = openCoin(tk, 1, 1, Math.Floor(amt / (1 + R.COIN_FEE) / 1000) * 1000) != null;
             }
             if (ok) addShock(Tnow(), tk, (up ? 1 : -1) * mag);
+            if (ok && S.rt) Emit("impBuy", "tk", tk, "amt", amt, "cash0", cash0, "cash1", S.cash, "coin", !stock);   // 화면 가운데 체결 알림 (피드백: 몰래 산 게 안 보임)
             stress(-15);
             fx("big", "text", T("imp.fx", "n", D.TK[tk].name), "kind", up ? "up" : "dn", "small", T("imp.fxSub", "a", won(amt)));
             M(fill(set.bad, V("n", D.TK[tk].name)), "flex");

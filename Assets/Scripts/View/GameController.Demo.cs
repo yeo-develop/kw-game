@@ -91,7 +91,10 @@ namespace KwGame.View
                 phoneOpen = true; phoneTab = "stock"; stkTab = "detail"; stkSel = coin; RenderAll();
                 yield return Shot(dir, "08b_stock_coin");
                 stkSel = stk; RenderAll(); yield return Shot(dir, "08c_stock_stock");
+                stkSellF = 0.35; RenderAll(); yield return null; yield return null; if (phoneSv != null) phoneSv.scrollOffset = new Vector2(0, 2000); yield return Shot(dir, "08c2_stock_sell");
                 stkTab = "acct"; RenderAll(); yield return Shot(dir, "08d_stock_acct");
+                rptArm = Time.realtimeSinceStartup; RenderAll(); yield return Shot(dir, "08f_report_arm");
+                rptArm = -10; onSent = ReportMsg; Send("report", "paid", true); yield return UntilIdle(); yield return new WaitForSeconds(0.4f); yield return Shot(dir, "08g_report_toast");
                 stkTab = "mkt";
             }
             Send("report", "paid", false); yield return UntilIdle();
@@ -143,6 +146,11 @@ namespace KwGame.View
             yield return ToHome();
             Send("debug", "k", "menhera"); yield return UntilIdle(); yield return new WaitForSeconds(1.2f);
             if (S.pending?.t == "menhera") { yield return Shot(dir, "15b_menhera"); yield return new WaitForSeconds(0.25f); yield return Shot(dir, "15c_menhera_jitter"); Send("reply", "i", S.pending.opts.FindIndex(o => o.ok)); yield return UntilIdle(); }
+            yield return ToHome();
+            {   // 돌발 풀매수 체결 알림 (화면만)
+                var fe = new SimEvent { t = "impBuy", d = new System.Collections.Generic.Dictionary<string, object> { ["tk"] = D.TKList.First(x => x.IsCoin).id, ["amt"] = 1500000.0, ["cash0"] = 3000000.0, ["cash1"] = 1500000.0, ["coin"] = true } };
+                StartCoroutine(ImpulseAlert(fe)); yield return new WaitForSeconds(0.6f); yield return Shot(dir, "15d_impulse"); yield return new WaitForSeconds(6.5f);
+            }
             yield return ToHome();
             foreach (var (fk, nm) in new[] { ("excited", "16_face_excited"), ("shocked", "17_face_shocked"), ("crying_comic", "18_face_crying_comic") })
             { faceStrong = false; HoldFace(fk, true); yield return Shot(dir, nm); }

@@ -136,6 +136,7 @@ namespace KwGame.View
                     case "gacha": if (e["junk"] != null) Toast("꽝: " + e.Str("text"), "", ArtCatalog.Junk((int)e.Num("junk"))); break;
                     case "bought": SetFace("happy"); break;
                     case "menhera": SetFace("menhera"); yield return KakaoBarrage((string[])e["msgs"]); Toast("카톡 " + ((string[])e["msgs"]).Length + "개 폭탄", "liq"); break;
+                    case "impBuy": yield return ImpulseAlert(e); break;
                     case "addictEv": if (e.Str("k") == "secret") Toast($"몰래 카지노 {G.sgnWon(e.Num("amt"))}", "liq"); break;
                     case "faint": Toast("기절!", "liq"); HoldFace("dizzy", true); break;
                     case "morning": yield return Morning(e); break;

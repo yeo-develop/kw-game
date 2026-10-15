@@ -21,7 +21,8 @@ namespace KwGame.View
         static Color UpDn(double v) => v >= 0 ? StkUp : StkDn;
 
         string stkTab = "mkt", stkSel, stkMsg = "", stkCat = "all";
-        double? stkAmt; double stkLev = 10; int stkDir = 1, stkBars = 40; bool stkLineMode;
+        float rptArm = -10;   // 유료 리포트 확인 대기 (누른 시각)
+        double? stkAmt; double stkSellF = 1; double stkLev = 10; int stkDir = 1, stkBars = 40; bool stkLineMode;
         /// 칸이 넘어가 새 봉이 생기면 마지막 봉을 자라나게 그림 (종목별로 본 봉 수 기억)
         readonly Dictionary<string, int> stkSeen = new Dictionary<string, int>();
         /// Send 직후 이번 명령의 이벤트를 받는 1회용 콜백 (주문 결과 메시지용)
@@ -70,7 +71,14 @@ namespace KwGame.View
             }
             var rs = G.rsch();
             head.Add(Ui.Chip($"무료 리포트 {rs.free}/{G.freeMax()}", () => { onSent = ReportMsg; Send("report", "paid", false); }, rs.free >= G.freeMax()));
-            { double rf = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE; head.Add(Ui.Chip($"유료 리포트 {G.man(rf)}", () => { onSent = ReportMsg; Send("report", "paid", true); }, rs.paid >= R.RSCH_PAID_MAX || S.cash < rf)); }
+            {   // 유료는 두 번 눌러야 삼 (피드백: 막 누르다 10만 원씩 증발)
+                double rf = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE; bool armed = Time.realtimeSinceStartup - rptArm < 4;
+                bool dis = rs.paid >= R.RSCH_PAID_MAX || S.cash < rf;
+                var pc = Ui.Chip(dis ? $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})" : armed ? $"{G.won(rf)} 냄? 한 번 더 누르기" : $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})",
+                    () => { if (Time.realtimeSinceStartup - rptArm < 4) { rptArm = -10; onSent = ReportMsg; Send("report", "paid", true); } else { rptArm = Time.realtimeSinceStartup; RenderAll(); } },
+                    dis, armed && !dis ? (Color?)Ui.Bad : null);
+                head.Add(pc);
+            }
 
             double pl = G.unreal();
             var sum = Ui.Row(); sum.style.flexWrap = Wrap.Wrap; sum.style.marginBottom = 10; body.Add(sum);
@@ -81,6 +89,7 @@ namespace KwGame.View
             Sum(G.stockOpen() ? "● 주식장" : "○ 주식장", G.stockOpen() ? $"열림 · 수수료 {fee * 100:0.0}%" : S.rt ? "마감 (09:00~15:30)" : "마감 (아침·점심만)", G.stockOpen() ? StkUp : StkAxis);
             Sum("코인", "24시간", Ui.Gold);
             if (G.sickName() != null) Sum("🤒 " + G.sickName(), $"손 떨림 · 체결 −{G.sickSlip() * 100:0.0}%p (코인은 배율당 {G.sickSlip() * 20:0.0}%p)", Ui.Bad);
+            ReportList(body);
             { var m = Ui.Label(stkMsg == "" ? " " : stkMsg, 20, Ui.Gold, true); m.style.marginBottom = 8; m.style.whiteSpace = WhiteSpace.NoWrap; body.Add(m); }   // 체결 줄은 늘 자리 차지 (주문 버튼이 밀리지 않게)
 
             if (stkTab == "detail") StkDetail(body, where, fee);
@@ -100,7 +109,28 @@ namespace KwGame.View
         {
             var e = evs.FirstOrDefault(x => x.t == "report");
             var tp = e != null && e["ok"] is bool ok && ok ? S.tips.FirstOrDefault(x => x.id == (int)e.Num("id")) : null;
+            bool paid = e != null && e["paid"] is bool pd && pd;
             stkMsg = tp != null ? $"리포트: {D.TK[tp.tk].name} {(tp.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.whenLabel(tp.Tr)}" : "리포트 못 받음 (오늘 다 씀 / 현금 부족)";
+            // 돈 나간 것·받은 내용이 확실히 보이게 큰 알림
+            if (tp != null) Toast((paid ? $"유료 리포트 −{G.won(S.rt ? D.RULES.RT_RSCH_FEE : D.RULES.RSCH_FEE)}\n" : "무료 리포트\n") + $"{D.TK[tp.tk].name} {(tp.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.whenLabel(tp.Tr)}", paid ? "big" : "good");
+            else Toast(stkMsg, "liq");
+        }
+
+        /// 오늘 받은 리포트 (증권사 리서치) — 받은 게 화면에 남아 있어야 또 안 삼
+        void ReportList(VisualElement body)
+        {
+            int day = G.Tnow() / D.RULES.SLOTS;
+            var list = S.tips.Where(x => x.who == "리서치" && x.T0 / D.RULES.SLOTS == day).ToList();
+            if (list.Count == 0) return;
+            var box = Ui.Row(); box.style.flexWrap = Wrap.Wrap; box.style.alignItems = Align.Center; box.style.marginBottom = 6; body.Add(box);
+            box.Add(Ui.Label("오늘 받은 리포트", 18, StkAxis, true));
+            foreach (var x in list)
+            {
+                string res = string.IsNullOrEmpty(x.res) ? "" : x.res == "hit" ? " · 적중" : " · 빗나감";
+                var c = Ui.Box(StkCard, 8, 8); c.style.marginLeft = 8; c.style.marginBottom = 4; c.style.paddingTop = 4; c.style.paddingBottom = 4;
+                c.Add(Ui.Label($"{D.TK[x.tk].name} {(x.dir > 0 ? "▲" : "▼")} {G.whenLabel(x.Tr)}{res}", 18, x.dir > 0 ? StkUp : StkDn, true));
+                box.Add(c);
+            }
         }
 
         /// 주문 보내고 결과를 메시지 + 미래 반응으로
@@ -366,7 +396,17 @@ namespace KwGame.View
             info.Add(Ui.Label($"증거금 {G.man(c.margin)} · 진입 {G.fmtP(c.entry)} · 청산가 {G.fmtP(GameSim.liqPx(c))}", 18, StkAxis));
             var pv = Ui.Label($"{G.sgnWon(pl)}\n{GameSim.pct(c.margin > 0 ? pl / c.margin : 0)}", 24, UpDn(pl), true); pv.style.marginRight = 12; pv.style.unityTextAlign = TextAnchor.MiddleRight; row.Add(pv);
             row.Add(Ui.Chip(lk ? "다음 칸부터" : "정리", () => Order("정리", "익절 ㅋㅋ 나 천재?", "…손절. 괜찮아. 괜찮아.", "close", "id", id), lk));
+            if (!(stkTab == "detail" && stkSel == c.tk)) GoChart(info, c.tk);
             return row;
+        }
+
+        /// 보유 포지션 이름 쪽을 누르면 그 종목 차트·주문으로 (피드백)
+        void GoChart(VisualElement info, string tk)
+        {
+            info.Add(Ui.Label("눌러서 차트 보기 ›", 15, Ui.Accent));
+            foreach (var ch in info.Children()) ch.pickingMode = PickingMode.Ignore;
+            info.pickingMode = PickingMode.Position;
+            info.RegisterCallback<ClickEvent>(_ => { stkSel = tk; stkTab = "detail"; stkAmt = null; stkSellF = 1; stkMsg = ""; RenderAll(); });
         }
 
         void OrderPanel(VisualElement right, Ticker t, TkState mk, string where, double fee)
@@ -452,12 +492,29 @@ namespace KwGame.View
                     if (!S.rt) box.Add(Ui.Label($"{G.Tnow() - h.t0}칸 보유", 17, StkAxis));
                 }
                 else right.Add(Ui.Label("보유 없음", 20, StkAxis));
-                var sr = Ui.Row(); right.Add(sr);
-                bool can = h != null && open;
-                var half = Ui.Button("절반 매도", () => Order("절반 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", t.id, "frac", 0.5, "where", where), null, !can, StkDn, 22);
-                half.style.flexGrow = 1; half.style.marginRight = 8; half.style.alignItems = Align.Center; sr.Add(half);
-                var all = Ui.Button("전량 매도", () => Order("전량 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", t.id, "frac", 1, "where", where), null, !can, StkDn, 22);
-                all.style.flexGrow = 1; all.style.alignItems = Align.Center; sr.Add(all);
+                // 매도: 비율 막대로 원하는 만큼 (피드백: 절반·전량만 있어서 답답) + 빠른 칩
+                bool can = h != null && h.q > 0 && open;
+                double hvNow = h != null ? h.q * mk.p : 0;
+                stkSellF = Math.Max(0.01, Math.Min(1, stkSellF));
+                var sellL = Ui.Label("", 20, can ? Ui.Text : StkAxis, true); sellL.style.marginTop = 6; right.Add(sellL);
+                void SellText() => sellL.text = h != null && h.q > 0 ? $"매도 {stkSellF * 100:0}% · {h.q * stkSellF:0.##}주 ≈ {G.won(hvNow * stkSellF)}" : "매도할 주식 없음";
+                SellText();
+                var strack = Ui.Box(StkBg, 0, 10); strack.style.height = 22; strack.style.marginTop = 6; strack.style.marginBottom = 6; Ui.Border(strack, StkLine, 2); right.Add(strack);
+                var sfill = Ui.Box(StkDn, 0, 8); sfill.style.height = Length.Percent(100); sfill.pickingMode = PickingMode.Ignore; strack.Add(sfill);
+                sfill.style.width = Length.Percent((float)stkSellF * 100);
+                if (can)
+                {
+                    void SetSell(float f, bool rerender) { stkSellF = Math.Max(0.01, Math.Round(Mathf.Clamp01(f) * 100) / 100); sfill.style.width = Length.Percent((float)stkSellF * 100); SellText(); if (rerender) RenderAll(); }
+                    strack.RegisterCallback<PointerDownEvent>(e => { stkDragging = true; strack.CapturePointer(e.pointerId); SetSell(e.localPosition.x / strack.resolvedStyle.width, false); });
+                    strack.RegisterCallback<PointerMoveEvent>(e => { if (strack.HasPointerCapture(e.pointerId)) SetSell(e.localPosition.x / strack.resolvedStyle.width, false); });
+                    strack.RegisterCallback<PointerUpEvent>(e => { stkDragging = false; if (strack.HasPointerCapture(e.pointerId)) { strack.ReleasePointer(e.pointerId); SetSell(e.localPosition.x / strack.resolvedStyle.width, true); } });
+                    strack.RegisterCallback<PointerCaptureOutEvent>(_ => stkDragging = false);
+                }
+                var sq = Ui.Row(); right.Add(sq);
+                foreach (var (f, l) in new[] { (0.1, "10%"), (0.25, "25%"), (0.5, "50%"), (1.0, "전량") })
+                { double ff = f; sq.Add(Ui.Chip(l, () => { stkSellF = ff; RenderAll(); }, !can, Math.Abs(stkSellF - ff) < 1e-9 ? (Color?)StkDn : null)); }
+                var sell = Ui.Button(stkSellF >= 1 ? "전량 매도" : $"{stkSellF * 100:0}% 매도", () => Order(stkSellF >= 1 ? "전량 매도" : "일부 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", t.id, "frac", stkSellF, "where", where), null, !can, StkDn, 24);
+                sell.style.marginTop = 4; sell.style.alignItems = Align.Center; right.Add(sell);
             }
         }
 
@@ -501,7 +558,9 @@ namespace KwGame.View
                 info.Add(Ui.Label($"{D.TK[k].name} · 주식", 22, Ui.Text, true));
                 info.Add(Ui.Label($"{G.man(x.cost)} → {G.man(v)}" + (S.rt ? "" : $" · {G.Tnow() - x.t0}칸 보유"), 18, StkAxis));
                 var pv = Ui.Label($"{G.sgnWon(v - x.cost)}\n{GameSim.pct(x.cost > 0 ? v / x.cost - 1 : 0)}", 24, UpDn(v - x.cost), true); pv.style.marginRight = 12; pv.style.unityTextAlign = TextAnchor.MiddleRight; row.Add(pv);
-                row.Add(Ui.Chip(G.stockOpen() ? "전량 매도" : "장 마감", () => Order("전량 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 1, "where", where), !G.stockOpen()));
+                row.Add(Ui.Chip(G.stockOpen() ? "절반" : "장 마감", () => Order("절반 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 0.5, "where", where), !G.stockOpen()));
+                if (G.stockOpen()) row.Add(Ui.Chip("전량", () => Order("전량 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 1, "where", where)));
+                GoChart(info, kk);
                 body.Add(row); n++;
             }
             foreach (var c in S.cps.ToList()) { body.Add(CoinRow(c)); n++; }

@@ -169,6 +169,7 @@
   "cas.odd": "홀",
   "cas.even": "짝",
   "cas.cardSame": "{a} vs {b} — 같음, 판돈 반환",
+  "cas.cardSameRt": "{a} vs {b} — 같음 = 딜러 승. 판돈 몰수",
   "cas.cardHit": "{a} → {b} 적중!",
   "cas.cardMiss": "{a} → {b} 꽝",
   "cas.jackpot": " 잭팟!!!",
@@ -567,7 +568,7 @@
    "어제 노래방에서 '돈 벌어 올게' 부른 거 기억나?"
   ],
   "hang.toast": "🥴 숙취 · 체력 −{h}",
-  "sick.toast": "{ic} {n} 걸림 ({d}일) · 알바 점수 −{p}% · 매매할 때 손 떨림",
+  "sick.toast": "{ic} {n} 걸림 ({d}일) · 잠 회복 줄어듦 · 매매할 때 손 떨림",
   "sick.feed": "{n} 걸림. {d}일 앓을 듯 (스트레스·과로 탓)",
   "sick.m": [
    "자기 목소리 왜 그래?? 아파?? 죽 사 갈까 ㅠㅠ",

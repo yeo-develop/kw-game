@@ -254,7 +254,8 @@ namespace KwGame.Tests
             Assert.That(g.sickP(), Is.GreaterThan(0.35), "스트레스 만땅·체력 바닥이면 잘 아픔");
             for (int d = 0; d < 12 && S.sick == null; d++) { S.stress = 100; S.hp = 10; NextMorning(g); }
             Assert.That(S.sick, Is.Not.Null, "스트레스 계속 높으면 결국 병 걸림");
-            Assert.That(g.sickPay(), Is.LessThan(1), "아프면 알바 점수 깎임");
+            Assert.That(g.sickSleep(), Is.LessThan(1), "아프면 잠 회복 줄어듦");
+            Assert.That(g.workMult(), Is.EqualTo(1), "실시간 모드 일당은 컨디션 상관없음 (피드백)");
             Assert.That(g.sickSlip(), Is.GreaterThan(0), "아프면 매매 손해");
 
             // 같은 돈으로 산 주식 수: 아플 때 < 안 아플 때
@@ -274,6 +275,49 @@ namespace KwGame.Tests
             Assert.That(S.pending.t, Is.EqualTo("loc"));
             Assert.That(g.Apply(C("act", "k", "l-clinic")).FirstOrDefault(e => e.t == "error"), Is.Null);
             Assert.That(S.sick, Is.Null, "수액 맞으면 나음");
+        }
+
+        [Test]
+        public void RtJobPayIs70kTo140kRegardlessOfCondition()
+        {
+            // 피드백: 알바비 7만~14만 · 컨디션 따라 돈 변동 없어도 됨
+            var g = HomeRt(808); var S = g.S; var J = Data.JOBS["cafe"];
+            Assert.That(g.jobPay(J, 0), Is.EqualTo(70000)); Assert.That(g.jobPay(J, 1), Is.EqualTo(140000));
+            S.hp = 5; S.stress = 100;
+            Assert.That(g.workMult(), Is.EqualTo(1), "체력 바닥·멘헤라여도 일당 그대로");
+            var t = GameSim.Create(Data, 808);
+            Assert.That(t.jobPay(J, 1), Is.EqualTo(J.@base + J.var), "턴 모드는 원래 일당");
+        }
+
+        [Test]
+        public void RtHiLowIsWorseThanTurnMode()
+        {
+            // 피드백: 하이로우로 돈 불리기 너무 쉬움 → 실시간은 같은 숫자 = 딜러 승, 배당 ×0.9
+            var g = HomeRt(909);
+            Assert.That(g.hlEdge(), Is.LessThan(1));
+            double ev = 0, evTurn = 0;
+            for (int a = 1; a <= 13; a++)
+            {
+                bool hi = a <= 7; int n = hi ? 13 - a : a - 1;
+                ev += n / 13.0 * GameSim.hlMult(a, hi, g.hlEdge());              // 같음 = 0
+                evTurn += n / 13.0 * GameSim.hlMult(a, hi) + 1 / 13.0;           // 같음 = 반환
+            }
+            ev /= 13; evTurn /= 13;
+            Assert.That(ev, Is.LessThan(0.82), "실시간 하이로우 기대값 확 낮음");
+            Assert.That(evTurn, Is.GreaterThan(0.9));
+        }
+
+        [Test]
+        public void ImpulseBuyAnnouncesItselfInRt()
+        {
+            // 피드백: 멘헤라 돌발 매수가 안 보임 → 체결 알림 이벤트
+            var g = HomeRt(4242); var S = g.S; S.cash = 3000000;
+            g.Apply(C("debug", "k", "impulse"));
+            Assume.That(S.pending?.t, Is.EqualTo("impulse"));
+            var evs = g.Apply(C("reply", "i", S.pending.opts.FindIndex(o => !o.ok)));
+            var e = evs.FirstOrDefault(x => x.t == "impBuy");
+            Assert.That(e, Is.Not.Null, "돌발 매수 체결 알림");
+            Assert.That(e.Num("cash0") - e.Num("cash1"), Is.GreaterThan(0), "현금 얼마 빠졌는지");
         }
 
         [Test]

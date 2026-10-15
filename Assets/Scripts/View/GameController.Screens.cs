@@ -331,16 +331,24 @@ namespace KwGame.View
             var bars = Ui.Row(); bars.style.marginTop = 10; hudBar.Add(bars);
             void Bar(string k, double v, Color c, string tail)
             {
-                var b = new VisualElement(); b.style.flexGrow = 1; b.style.flexBasis = 0; b.style.marginRight = 12;
+                var b = new VisualElement(); b.style.flexGrow = 1; b.style.flexBasis = 0; b.style.marginRight = 12; b.style.overflow = Overflow.Hidden;   // 글자가 옆 막대로 넘어가지 않게
                 b.Add(L($"{k} {v:0}{tail}", 16, Ui.Dim));
                 var tr = Ui.Box(new Color(1, 1, 1, 0.12f), 0, 5); tr.style.height = 10; tr.style.marginTop = 4;
                 var f = Ui.Box(c, 0, 5); f.style.height = Length.Percent(100); f.style.width = Length.Percent((float)Math.Max(0, Math.Min(100, v))); tr.Add(f);
                 b.Add(tr); bars.Add(b);
             }
-            Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, (h.faint ? " 기절" : "") + (G.sickName() != null ? $" 🤒{G.sickName()} {S.sickD}일" : "") + (S.rt && S.hang ? " 🍺" : ""));
+            Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, h.faint ? " 기절" : "");
             string men = h.stress >= G.menLine() ? " 멘헤라" : h.stress >= 40 ? " 불안" : "";
-            Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men + (S.rt && G.sickName() == null ? $" · 병{G.sickP() * 100:0}%" : ""));
+            Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men);
             Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");
+            // 몸 상태 줄: 병·숙취·내일 아플 확률 (막대 글자에 붙이면 옆 막대를 가려서 따로 뺌)
+            if (S.rt)
+            {
+                double sickPr = G.sickP();
+                string body = G.sickName() != null ? $"{G.sickName()} 앓는 중 · {S.sickD}일 남음" : $"내일 아플 확률 {sickPr * 100:0}%";
+                if (S.hang) body += " · 숙취";
+                hudBar.Add(L(body, 16, G.sickName() != null || sickPr >= 0.2 ? Ui.Bad : Ui.Dim, G.sickName() != null));
+            }
             // 4줄: 유품
             if (h.augs.Count > 0)
             {
@@ -571,10 +579,8 @@ namespace KwGame.View
             Info(MG_RULES.TryGetValue(P.key, out var rule) ? rule : "", 22, Ui.Text);
             if (P.setup == null)
             {
-                Info($"일당 {G.man(J.@base)}~{G.man(J.@base + J.var)}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
-                if (G.hpMult() < 1) Info($"체력이 낮아 점수 ×{G.hpMult():0.00}", 20, Ui.Bad);
-                if (S.rt && G.sickName() != null) Info($"{G.sickName()} 때문에 점수 ×{G.sickPay():0.00} (병원·약국 가거나 집에서 쉬기)", 20, Ui.Bad);
-                if (S.rt && G.menPay() < 1) Info($"멘탈이 {(G.mental() == "men" ? "나가서" : "불안해서")} 점수 ×{G.menPay():0.00} (공원·포차·PC방·쇼핑으로 회복)", 20, Ui.Bad);
+                Info($"일당 {G.man(G.jobPay(J, 0))}~{G.man(G.jobPay(J, 1))}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
+                if (G.workMult() < 1) Info($"체력이 낮아 점수 ×{G.workMult():0.00}", 20, Ui.Bad);
                 Btn("일 시작", () => Send("mgSetup"), "3·2·1 하고 바로 시작", false, Ui.Accent);
                 return;
             }
@@ -599,8 +605,9 @@ namespace KwGame.View
                 case "oddeven": Btn("홀", () => Send("bet", "stake", stake, "choice", 1), "적중 2배", cant); Btn("짝", () => Send("bet", "stake", stake, "choice", 0), "적중 2배", cant); break;
                 case "card":
                     Info($"지금 카드: {D.RK[P.A]}{D.SU[P.As]}", 30, Ui.Gold);
-                    Btn("하이 (더 높다)", () => Send("bet", "stake", stake, "choice", 1), $"×{GameSim.hlMult(P.A, true):0.00}", cant || GameSim.hlMult(P.A, true) == 0);
-                    Btn("로우 (더 낮다)", () => Send("bet", "stake", stake, "choice", 0), $"×{GameSim.hlMult(P.A, false):0.00}", cant || GameSim.hlMult(P.A, false) == 0);
+                    if (S.rt) Info("같은 숫자 나오면 딜러 승 (판돈 몰수)", 20, Ui.Bad);
+                    Btn("하이 (더 높다)", () => Send("bet", "stake", stake, "choice", 1), $"×{GameSim.hlMult(P.A, true, G.hlEdge()):0.00} · 맞힐 확률 {(13 - P.A) / 13.0 * 100:0}%", cant || GameSim.hlMult(P.A, true) == 0);
+                    Btn("로우 (더 낮다)", () => Send("bet", "stake", stake, "choice", 0), $"×{GameSim.hlMult(P.A, false, G.hlEdge()):0.00} · 맞힐 확률 {(P.A - 1) / 13.0 * 100:0}%", cant || GameSim.hlMult(P.A, false) == 0);
                     break;
                 case "slot": Btn("레버 당기기", () => Send("bet", "stake", stake, "choice", 0), "777 = 50배", cant); break;
                 case "ladder": for (int i = 0; i < 3; i++) { int k = i; Btn("ABC"[i] + " 출발", () => Send("bet", "stake", stake, "choice", k), "당첨 2.8배", cant); } break;

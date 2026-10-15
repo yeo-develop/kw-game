@@ -12,6 +12,10 @@ namespace KwGame.Sim
 
         // ---------- 알바 ----------
         public double mgHard() => 1 + (S.month - 1) * 0.08 + Math.Min(4, Math.Max(0, S.workStreak - 1)) * 0.03;
+        /// 일당 = 기본 + 성과×변동. 실시간 모드는 7만~14만 (피드백: 알바비 너무 짬)
+        public double jobPay(Job J, double sc) => S.rt ? round1k(R.RT_JOB_PAY0 + R.RT_JOB_PAYV * sc) : round1k(J.@base + J.var * sc);
+        /// 성과 배율: 턴 모드는 체력 낮으면 깎임. 실시간 모드는 컨디션 상관없이 1 (피드백: 컨디션 따라 돈 변동 없어도 됨)
+        public double workMult() => S.rt ? 1 : hpMult();
         void workStart(string key, string loc)
         {
             var J = D.JOBS[key];
@@ -33,18 +37,18 @@ namespace KwGame.Sim
             else if (P.key == "store") { double a = rnd(), b = rnd(), c = rnd(), d = rnd(), e = rnd(); su = new WorkSetup { H = H, u = new[] { a, b, c, d, e } }; }
             else if (P.key == "mart")
             {
-                int n = (int)rhu(14 * H); var drops = new List<double[]>();
+                int n = (int)rhu((S.rt ? 22 : 14) * H); var drops = new List<double[]>();   // 실시간: 피하기 너무 쉬움 → 더 많이·진상 더 자주
                 for (int i = 0; i < n; i++)
                 {
                     double t = rhu((0.04 + 0.88 * i / n + rnd() * 0.05) * 1000) / 1000;
                     double x = rhu(rnd() * 1000) / 1000;
-                    double k = rnd() < 0.3 ? 1 : 0;
+                    double k = rnd() < (S.rt ? 0.4 : 0.3) ? 1 : 0;
                     drops.Add(new[] { t, x, k });
                 }
                 su = new WorkSetup { H = H, drops = drops };
             }
             else su = new WorkSetup { H = H, w = rnd() };
-            su.hp = S.hp; su.hpm = hpMult() * (S.rt ? menPay() * sickPay() : 1);
+            su.hp = S.hp; su.hpm = workMult();
             su.practice = practice;
             P.setup = su;
             return su;
@@ -53,8 +57,8 @@ namespace KwGame.Sim
         {
             var P = S.pending; var J = D.JOBS[P.key]; string key = P.key;
             score = clamp(double.IsNaN(score) ? 0 : score, 0, 1);
-            double hm = hpMult() * (S.rt ? menPay() * sickPay() : 1), sc = score * hm;
-            double pay = round1k(J.@base + J.var * sc);
+            double hm = workMult(), sc = score * hm;
+            double pay = jobPay(J, sc);
             if (has("grind")) { pay = round1k(pay * R.GRIND_PAY); augFx("grind", T("aug.grind")); }
             S.st.work++; S.st.earned += pay; S.workStreak++;
             money(pay, "work", T("lbl.work", "n", J.name, "p", rhu(sc * 100)));
@@ -83,7 +87,9 @@ namespace KwGame.Sim
         }
 
         // ---------- 카지노 ----------
-        public static double hlMult(int a, bool hi) { int n = hi ? 13 - a : a - 1; return n <= 0 ? 0 : Math.Min(11, Math.Floor(0.95 * 12 / n * 100) / 100); }
+        public static double hlMult(int a, bool hi, double edge = 1) { int n = hi ? 13 - a : a - 1; return n <= 0 ? 0 : Math.Min(11, Math.Floor(0.95 * edge * 12 / n * 100) / 100); }
+        /// 하이로우 배당: 실시간 모드는 ×0.9 (같은 숫자 = 딜러 승과 합쳐 기대값 약 0.79)
+        public double hlEdge() => S.rt ? R.RT_HL_EDGE : 1;
         public static int ladderEnd(IList<int> rungs, int choice) { int lane = choice; foreach (var r in rungs) { if (r == lane) lane = r + 1; else if (r >= 0 && r + 1 == lane) lane = r; } return lane; }
         void casinoStart(string kind, string loc)
         {
@@ -106,8 +112,8 @@ namespace KwGame.Sim
             }
             if (kind == "card")
             {
-                int A = P.A, B = 1 + (int)Math.Floor(rnd() * 13), Bs = (int)Math.Floor(rnd() * 4); double m = hlMult(A, choice == 1);
-                if (B == A) { mult = 1; txt = T("cas.cardSame", "a", D.RK[A], "b", D.RK[B]); }
+                int A = P.A, B = 1 + (int)Math.Floor(rnd() * 13), Bs = (int)Math.Floor(rnd() * 4); double m = hlMult(A, choice == 1, hlEdge());
+                if (B == A) { mult = S.rt ? 0 : 1; txt = T(S.rt ? "cas.cardSameRt" : "cas.cardSame", "a", D.RK[A], "b", D.RK[B]); }
                 else { bool w = choice == 1 ? B > A : B < A; mult = w ? m : 0; txt = T(w ? "cas.cardHit" : "cas.cardMiss", "a", D.RK[A], "b", D.RK[B]); }
                 show = V("A", A, "As", P.As, "B", B, "Bs", Bs);
                 P.A = B; P.As = Bs;

@@ -123,7 +123,7 @@ namespace KwGame.View
         IEnumerator ResultCard(string key, WorkSetup su, double score)
         {
             var J = D.JOBS[key];
-            double pay = MathK.Round1k(J.@base + J.var * score * su.hpm);
+            double pay = G.jobPay(J, score * su.hpm);
             string g = score >= 0.95 ? "S" : score >= 0.75 ? "A" : score >= 0.5 ? "B" : score >= 0.3 ? "C" : "F";
             string cm = g == "S" ? "알바의 신. 근데 일당은 그대로임" : g == "A" ? "점장: 내일도 나와" : g == "B" ? "평범하게 착취당함" : g == "C" ? "점장 표정 안 좋음" : "잘리기 직전";
             Color gc = g == "S" || g == "A" ? Ui.Gold : g == "F" ? Ui.Bad : Ui.Text;
@@ -595,7 +595,7 @@ namespace KwGame.View
         // 일반 박스 1번에 1개, 무거운 박스는 3번 눌러야 +2. 다음 박스 3개가 미리 보임. 깨지기 쉬움 구간엔 누르면 −3.
         IEnumerator MgWare(WorkSetup su, Action<double> done)
         {
-            int GOAL = (int)MathK.RoundHalfUp(40 * su.H); const float SEC = 6;
+            int GOAL = (int)MathK.RoundHalfUp((S.rt ? 30 : 40) * su.H); float SEC = S.rt ? 7 : 6;   // 실시간: 상하차 너무 어려움 → 목표↓ 시간↑
             float fa = 0.66f - (float)su.w * 0.2f, fb = fa - 1f / 6;   // 남은 시간 비율이 (fb, fa] 이면 깨지기 쉬움
             var rng = MgRng(su);
             int n = 0, combo = 0, heavyHits = 0; bool frag = false;
@@ -707,7 +707,7 @@ namespace KwGame.View
 
         IEnumerator MgMart(WorkSetup su, Action<double> done)
         {
-            const float SEC = 9, W = 1100, AH = 600, PW = 90; const int LIVES = 5;
+            const float SEC = 9, W = 1100, AH = 600, PW = 90; int LIVES = S.rt ? 4 : 5;   // 실시간: 피하기 너무 쉬움 → 목숨↓ (박스도 더 많음)
             float hpF = 0.55f + 0.45f * Mathf.Clamp((float)su.hp, 0, 100) / 100, speed = 760 * hpF;
             float H = (float)su.H;
             var rng = MgRng(su);

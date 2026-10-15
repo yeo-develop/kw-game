@@ -283,6 +283,7 @@ namespace KwGame.Sim
             if (k == "zero") S.debt = 1000000;
             if (k == "aug") S.dbgAug = 1;
             if (k == "menhera" && S.pending?.t == "home") { S.stress = 95; Emit("debug", "k", k); menheraStart(); return; }
+            if (k == "impulse" && S.pending?.t == "home" && S.cash >= 50000) { S.stress = 95; Emit("debug", "k", k); impulseStart(); return; }
             if (k == "event" && D.EVENTS.Count > 0 && S.pending?.t == "home") { Emit("debug", "k", k); evStart(D.EVENTS[0]); return; }
             Emit("debug", "k", k);
         }
