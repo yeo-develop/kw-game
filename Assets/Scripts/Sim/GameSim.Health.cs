@@ -30,6 +30,14 @@ namespace KwGame.Sim
         }
         public int relaxCount(string k) => S.relaxN != null && S.relaxN.TryGetValue(k, out var v) ? v : 0;
 
+        /// 미래 카톡 읽씹: 안 읽은 게 쌓이면 매시간 멘탈↓, 3시간마다 재촉 (피드백: 카톡 볼 이유가 없음)
+        void readIgnored()
+        {
+            int n = S.kun["m"]; if (n < R.RT_IGNORE_N) return;
+            stress(R.RT_IGNORE_ST);
+            if (S.min % 180 == 0) { pushK("m", fpick(TA("ignore.m"))); toast(T("ignore.toast", "n", S.kun["m"]), "liq", "kakao", "m"); }
+        }
+
         // ---------- 아침: 숙취 · 병 진행 · 새로 앓기 ----------
         void healthMorning()
         {

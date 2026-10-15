@@ -7,7 +7,7 @@ namespace KwGame.Sim
     // trade.js — 주식(장 시간) · 코인(24시간·레버리지)
     public partial class GameSim
     {
-        public double stockFee(string where) => has("vip") ? 0 : where == "broker" ? R.FEE_BROKER : R.FEE_APP;
+        public double stockFee(string where) => has("vip") && !S.rt ? 0 : (where == "broker" ? R.FEE_BROKER : R.FEE_APP) * (has("vip") ? 0.5 : 1);   // 실시간: VIP = 반값 (0원이면 증권사 갈 이유가 없어짐)
         double? buyStock(string tk, double amt, double fee)
         {
             amt = Math.Floor(Math.Min(amt, S.cash) / 1000) * 1000;
@@ -32,7 +32,7 @@ namespace KwGame.Sim
                 double m = 1;
                 if (has("scalp") && h.bday == absDay()) { m += 0.2; augFx("scalp", T("aug.scalp")); }
                 if (has("hodl") && Tnow() - h.t0 >= 3 * R.SLOTS) { m += 0.3; augFx("hodl", T("aug.hodl")); }
-                if (has("inverse") && D.TK[tk].inv) { m += 0.25; augFx("inverse", T("aug.inverse")); }
+                if (has("inverse") && D.TK[tk].inv) { m += S.rt ? R.RT_INVERSE : 0.25; augFx("inverse", T("aug.inverse")); }
                 pnl *= m;
             }
             else if (pnl < 0 && has("diverse") && STK().Count(k => S.hold.Has(k) && S.hold[k].q > 0) >= 3) { pnl *= 0.6; augFx("diverse", T("aug.diverse")); }
@@ -63,7 +63,7 @@ namespace KwGame.Sim
         {
             if (!force && !S.rt && c.t0 == Tnow()) return null;
             double pnl = cpnl(c);
-            if (pnl > 0 && c.dir < 0 && has("inverse")) { pnl *= 1.25; augFx("inverse", T("aug.short")); }
+            if (pnl > 0 && c.dir < 0 && has("inverse")) { pnl *= 1 + (S.rt ? R.RT_INVERSE : 0.25); augFx("inverse", T("aug.short")); }
             double fee = rhu(c.margin * c.lev * (R.COIN_FEE + sickSlip() / 5));
             double back = rhu(Math.Max(0, c.margin + pnl + c.bonus - fee));
             S.cash += back; S.cps.Remove(c);

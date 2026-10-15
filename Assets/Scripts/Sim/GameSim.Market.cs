@@ -23,12 +23,12 @@ namespace KwGame.Sim
                 if (rnd() > (t.type == "coin" ? 0.85 : 0.9)) s.tr = -s.tr;
                 double r;
                 if (t.inv) r = (t.of != null && P.r.ContainsKey(t.of) ? -2 * P.r[t.of] : -2 * mret) - 0.001 + gauss() * t.vol * v;
-                else if (t.meme) r = rnd() < 0.46 ? 0.45 + rnd() * 0.45 : -(0.28 + rnd() * 0.3);
+                else if (t.meme) r = S.rt ? (rnd() < R.RT_MEME_UP ? 0.4 + rnd() * 0.4 : -(0.3 + rnd() * 0.3)) : rnd() < 0.46 ? 0.45 + rnd() * 0.45 : -(0.28 + rnd() * 0.3);   // 실시간: 기대값 ≈ 0 (예전엔 칸당 +8% 라 몰빵이 정답)
                 else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * v * (evening ? 1.3 : 1);
-                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? 2 : 1);
+                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1);
                 if (!(t.inv && t.of != null)) r += sh(shock, k);
                 P.r[k] = clamp(r, -0.7, 1.5);
-                double wig = t.vol * (whale ? 2 : 1) * (0.2 + rnd() * 0.6);
+                double wig = t.vol * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) * (0.2 + rnd() * 0.6);
                 double w0 = wig * rnd(); double w1 = wig * rnd();
                 P.w[k] = new[] { w0, w1 };
             }

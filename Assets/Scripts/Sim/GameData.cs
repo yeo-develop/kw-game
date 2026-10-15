@@ -28,8 +28,10 @@ namespace KwGame.Sim
         public double RT_HP_SLEEP = 35, RT_HP_REST = 20, RT_HP_REST_EVE = 10, RT_REST_ST = -8, RT_WORK_ST = 12, RT_WORK_ST_STREAK = 4, RT_DUE_ST = 2, RT_ANX_PAY = 0.9, RT_MEN_PAY = 0.7;
 
         // 실시간 모드 스트레스 관리·병 (GameSim.Health.cs): 놀거리는 같은 날 반복할수록 효과 ×RELAX_DIM, 병 확률 = (기본 + 스트레스·체력·숙취) × 운동
+        // 실시간 모드 밸런스 (피드백: OP 유품·유료 리포트)
+        public double RT_DIVI = 0.003, RT_WHALE_HIT = 0.6, RT_WHALE_VOL = 1.5, RT_MEME_UP = 0.42, RT_INSURE = 0.3, RT_INVERSE = 0.1, RT_RSCH_FEE = 100000, RT_REP_ACC = -0.12, RT_IGNORE_N = 3, RT_IGNORE_ST = 3;
         public Dictionary<string, RelaxDef> RELAX; public Dictionary<string, SickDef> SICK;
-        public double RELAX_DIM = 0.6, SICK_P0 = 0.02, SICK_ST0 = 50, SICK_ST_K = 0.006, SICK_HP = 0.1, SICK_HANG = 0.1, SICK_FIT = 0.5, SICK_FLU_ST = 80, HANG_HP = 10, PHARM_COST = 8000, CLINIC_COST = 60000, VITA_COST = 15000;
+        public double RELAX_DIM = 0.6, SICK_P0 = 0.02, SICK_ST0 = 50, SICK_ST_K = 0.006, SICK_HP = 0.2, SICK_HANG = 0.1, SICK_FIT = 0.5, SICK_FLU_ST = 80, HANG_HP = 10, PHARM_COST = 8000, CLINIC_COST = 60000, VITA_COST = 15000;
 
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;

@@ -62,7 +62,7 @@ namespace KwGame.Sim
                 if (u + dt >= 1 - 1e-9) x2 = X1;
                 else
                 {
-                    double sig = t.vol * R.INTRA * rtVol() * (P.whale && !t.IsStock ? 2 : 1) * (t.meme ? 0.4 : 1);
+                    double sig = t.vol * R.INTRA * rtVol() * (P.whale && !t.IsStock ? R.RT_WHALE_VOL : 1) * (t.meme ? 0.4 : 1);
                     x2 = x + (X1 - x) * dt / (1 - u) + gauss() * sig * Math.Sqrt(dt * (1 - u - dt) / (1 - u));
                 }
                 double p = s.so * Math.Exp(x2);
@@ -124,6 +124,7 @@ namespace KwGame.Sim
                 rtStep(S.mk, P, Tnow(), S.slot, S.min, absDay());
                 S.min++; mins--;
                 rtLiq(liqs);
+                if (S.min % 60 == 0) readIgnored();
             }
             if (liqs.Count > 0)
             {
@@ -144,7 +145,7 @@ namespace KwGame.Sim
                 if (c.margin > 0 && c.lev * c.mult * c.dir * (p / c.entry - 1) > -0.9) continue;
                 var LL = R.LIQ_LOSS; double loss = LL[0] + rnd() * (LL[1] - LL[0]);
                 double back = Math.Max(0, rhu(c.margin * (1 - loss)));
-                if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.Max(back, rhu(c.margin / 2)); }
+                if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.Max(back, rhu(c.margin * (S.rt ? R.RT_INSURE : 0.5))); }
                 S.cash += back; S.cps.Remove(c); S.st.liq++; S.st.iN++; S.realized += back - c.margin;
                 S.today.Add(new Ledger { kind = "invest", amt = back - c.margin, label = T("lbl.liq", "n", D.TK[c.tk].name, "lev", c.lev, "b", T("lbl.liqBack", "p", rhu(loss * 100))) });
                 liqs.Add(new Liq { c = c, back = back, lost = c.margin + c.bonus - back });

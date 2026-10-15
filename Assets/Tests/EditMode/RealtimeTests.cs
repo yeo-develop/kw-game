@@ -277,12 +277,22 @@ namespace KwGame.Tests
         }
 
         [Test]
+        public void IgnoringMiraiKakaoWearsDownMental()
+        {
+            // 피드백: 카톡·디시 볼 이유가 없음 → 미래 카톡 읽씹하면 멘탈 깎임
+            var g = HomeRt(4321); var S = g.S;
+            S.stress = 10; S.kun["m"] = 0; g.Apply(C("tick", "m", 120)); double calm = S.stress;
+            S.stress = 10; S.kun["m"] = 5; g.Apply(C("tick", "m", 120));
+            Assert.That(S.stress, Is.GreaterThan(calm + 4), "안 읽은 카톡이 쌓이면 시간마다 멘탈 나빠짐");
+        }
+
+        [Test]
         public void RelaxSpotsWorkButSameFunWearsOff()
         {
             var g = HomeRt(808); var S = g.S; var r = new System.Random(3);
             double Walk()
             {
-                S.stress = 80;
+                S.stress = 80; S.kun["m"] = 0;   // 카톡 읽씹 페널티 빼고
                 g.Apply(C("map")); g.Apply(C("goTo", "loc", "park"));
                 while (S.pending.t == "encounter") g.Apply(C("encounter", "ask", false));
                 Assert.That(S.pending.t, Is.EqualTo("loc"));
@@ -297,7 +307,7 @@ namespace KwGame.Tests
             // 포차는 저녁만, 부어라 마셔라 = 숙취 → 다음 날 아침 체력 깎임
             while (!g.isEve()) { g.Apply(S.pending.t == "home" ? C("tick", "m", 60) : Respond(g, r)); }
             while (S.pending.t != "home") g.Apply(Respond(g, r));
-            S.cash = 1000000; S.stress = 90;
+            S.cash = 1000000; S.stress = 90; S.kun["m"] = 0;
             g.Apply(C("map")); g.Apply(C("goTo", "loc", "bar"));
             while (S.pending.t == "encounter") g.Apply(C("encounter", "ask", false));
             Assert.That(g.Apply(C("act", "k", "l-drunk")).FirstOrDefault(e => e.t == "error"), Is.Null);

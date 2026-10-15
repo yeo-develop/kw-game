@@ -72,7 +72,7 @@ namespace KwGame.Sim
             if (isEve() && has("whale"))
             {
                 string tk = rnd() < 0.5 ? "BTK" : "TOK"; int d = P.r[tk] >= 0 ? 1 : -1;
-                S.whale = new Whale { tk = tk, dir = rnd() < 0.7 ? d : -d, T = Tnow() };
+                S.whale = new Whale { tk = tk, dir = rnd() < (S.rt ? R.RT_WHALE_HIT : 0.7) ? d : -d, T = Tnow() };
                 pushF("🐋", T("whale.feed", "n", D.TK[tk].name, "d", T(S.whale.dir > 0 ? "whale.up" : "whale.dn")), "intel");
             }
             if (has("rumor")) { var t = rollTip(SUB); tipAnnounce(t, "sub"); }
@@ -137,7 +137,7 @@ namespace KwGame.Sim
         {
             int MD = R.MONTH_DAYS;
             S.phase = "morning";
-            if (has("divi")) { double v = stockVal(); if (v >= 10000) { double d = rhu(v * 0.01); S.cash += d; pushF("💌", T("divi.feed", "d", won(d)), "money"); S.today.Add(new Ledger { kind = "div", amt = d, label = T("lbl.divi") }); augFx("divi", T("aug.divi", "d", man(d))); } }
+            if (has("divi")) { double v = stockVal(); if (v >= 10000) { double d = rhu(v * (S.rt ? R.RT_DIVI : 0.01)); S.cash += d; pushF("💌", T("divi.feed", "d", won(d)), "money"); S.today.Add(new Ledger { kind = "div", amt = d, label = T("lbl.divi") }); augFx("divi", T("aug.divi", "d", man(d))); } }
             string evT = null; bool hasEv = false;
             if (fainted()) { evT = T("morning.faint"); hasEv = true; }
             else if (rnd() < 0.4)
@@ -208,7 +208,7 @@ namespace KwGame.Sim
                     if (hist.Count > 0 && !S.rt) { var hc = hist[hist.Count - 1]; if (c.dir > 0) hc.l = Math.Min(hc.l, L * 0.998); else hc.h = Math.Max(hc.h, L * 1.002); }
                     var LL = R.LIQ_LOSS; double loss = LL[0] + rnd() * (LL[1] - LL[0]);
                     double back = Math.Max(0, rhu(c.margin * (1 - loss)));
-                    if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.Max(back, rhu(c.margin / 2)); }
+                    if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.Max(back, rhu(c.margin * (S.rt ? R.RT_INSURE : 0.5))); }
                     S.cash += back;
                     S.cps.Remove(c); S.st.liq++; S.st.iN++; S.realized += back - c.margin;
                     S.today.Add(new Ledger { kind = "invest", amt = back - c.margin, label = T("lbl.liq", "n", D.TK[c.tk].name, "lev", c.lev, "b", T("lbl.liqBack", "p", rhu(loss * 100))) });

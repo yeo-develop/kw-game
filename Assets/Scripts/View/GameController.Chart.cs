@@ -20,7 +20,7 @@ namespace KwGame.View
         static readonly Color StkAxis = new Color32(0x6b, 0x71, 0x86, 0xff);
         static Color UpDn(double v) => v >= 0 ? StkUp : StkDn;
 
-        string stkTab = "mkt", stkSel, stkMsg = "";
+        string stkTab = "mkt", stkSel, stkMsg = "", stkCat = "all";
         double? stkAmt; double stkLev = 10; int stkDir = 1, stkBars = 40; bool stkLineMode;
         /// 칸이 넘어가 새 봉이 생기면 마지막 봉을 자라나게 그림 (종목별로 본 봉 수 기억)
         readonly Dictionary<string, int> stkSeen = new Dictionary<string, int>();
@@ -70,7 +70,7 @@ namespace KwGame.View
             }
             var rs = G.rsch();
             head.Add(Ui.Chip($"무료 리포트 {rs.free}/{G.freeMax()}", () => { onSent = ReportMsg; Send("report", "paid", false); }, rs.free >= G.freeMax()));
-            head.Add(Ui.Chip($"유료 리포트 {G.man(R.RSCH_FEE)}", () => { onSent = ReportMsg; Send("report", "paid", true); }, rs.paid >= R.RSCH_PAID_MAX || S.cash < R.RSCH_FEE));
+            { double rf = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE; head.Add(Ui.Chip($"유료 리포트 {G.man(rf)}", () => { onSent = ReportMsg; Send("report", "paid", true); }, rs.paid >= R.RSCH_PAID_MAX || S.cash < rf)); }
 
             double pl = G.unreal();
             var sum = Ui.Row(); sum.style.flexWrap = Wrap.Wrap; sum.style.marginBottom = 10; body.Add(sum);
@@ -153,8 +153,15 @@ namespace KwGame.View
         // ---------- 시세 ----------
         void StkMarket(VisualElement body)
         {
+            // 분류 탭: 주식·코인 / 성격(얌전·출렁·도박) / 보유 중
+            var tabs = Ui.Row(); tabs.style.flexWrap = Wrap.Wrap; tabs.style.marginBottom = 10; body.Add(tabs);
+            foreach (var (k, n) in new[] { ("all", "전체"), ("stock", "주식"), ("coin", "코인"), ("얌전", "얌전"), ("출렁", "출렁"), ("도박", "도박"), ("mine", "보유 중") })
+            {
+                var kk = k; var ch = Ui.Chip(n, () => { stkCat = kk; RenderAll(); }, false, stkCat == k ? Ui.Accent : (Color?)null); ch.style.marginRight = 6; ch.style.marginBottom = 4; tabs.Add(ch);
+            }
+            bool Pick(Ticker t) => stkCat == "all" || (stkCat == "stock" ? !t.IsCoin : stkCat == "coin" ? t.IsCoin : stkCat == "mine" ? PosPnl(t.id).HasValue : Shake(t) == stkCat);
             VisualElement grid = null; int col = 0;
-            foreach (var t in D.TKList)
+            foreach (var t in D.TKList.Where(Pick))
             {
                 if (col++ % 2 == 0) { grid = Ui.Row(); grid.style.alignItems = Align.Stretch; body.Add(grid); }
                 var mk = S.mk.tk[t.id]; bool lk = !G.tkOpen(t.id); double r = Rr(t.id), r4 = SpanR(mk, 4);
@@ -168,7 +175,7 @@ namespace KwGame.View
                 else if (!lk && Math.Abs(r) >= 0.1) top.Add(Badge(r > 0 ? "급등" : "급락", UpDn(r)));
                 if (mk.warn) top.Add(Badge("관리종목", Ui.Bad));
                 var po = PosPnl(t.id);
-                if (po.HasValue) top.Add(Badge("보유 " + G.sgnMan(po.Value), UpDn(po.Value)));
+                if (po.HasValue) top.Add(Badge($"보유 {G.sgnMan(po.Value)} ({GameSim.pct(PosPct(t.id))})", UpDn(po.Value)));
                 if (lk) { card.Add(Ui.Label($"잠김 — 유품 '{LockName(t)}' 필요", 20, StkAxis)); }
                 else
                 {
@@ -178,6 +185,7 @@ namespace KwGame.View
                     var sp = new LineChart(mk.hist.Skip(Math.Max(0, mk.hist.Count - 16)).Select(c => c.c).Concat(new[] { mk.p }).ToList(), false, null);
                     sp.style.height = 70; sp.style.marginTop = 6; card.Add(sp);
                     card.Add(Ui.Label(S.rt ? Ui.Clean(t.d) + (mk.relist > 0 ? $" · 재상장 {mk.relist}회" : "") : $"{Ui.Clean(t.d)} · 4칸 {GameSim.pct(r4)}", 18, StkAxis));
+                    var nat = Ui.Label(Nature(t), 17, Ui.Gold); nat.style.marginTop = 4; card.Add(nat);
                     string id = t.id;
                     card.RegisterCallback<ClickEvent>(_ => { stkSel = id; stkTab = "detail"; stkAmt = null; stkMsg = ""; RenderAll(); });
                     card.RegisterCallback<PointerEnterEvent>(_ => card.style.backgroundColor = Color.Lerp(StkCard, Ui.Accent, 0.12f));
@@ -205,6 +213,20 @@ namespace KwGame.View
             double v = h != null ? h.q * S.mk.tk[k].p - h.cost : 0;
             foreach (var c in cs) v += G.cpnl(c) + c.bonus;
             return v;
+        }
+        /// 들어간 돈(주식 원금 + 코인 증거금) 대비 수익률
+        double PosPct(string k)
+        {
+            var h = S.hold.Get(k); double basis = (h?.cost ?? 0) + S.cps.Where(c => c.tk == k).Sum(c => c.margin);
+            return basis > 0 ? (PosPnl(k) ?? 0) / basis : 0;
+        }
+        /// 종목 성격 (사전 정보 없이도 알게): 출렁임 · 시장 따라감 · 거래 시간
+        static string Shake(Ticker t) => t.vol < 0.012 ? "얌전" : t.vol < 0.03 ? "출렁" : "도박";
+        string Nature(Ticker t)
+        {
+            int st = t.vol < 0.006 ? 1 : t.vol < 0.012 ? 2 : t.vol < 0.03 ? 3 : t.vol < 0.1 ? 4 : 5;
+            string mood = t.inv ? "갓성 반대로 2배" : t.IsCoin ? "코인끼리 따로 놂" : t.beta < 0 ? "시장 무너질 때 오름" : t.beta >= 1.2 ? "시장보다 크게 출렁" : t.beta >= 0.8 ? "시장 따라감" : "시장 영향 적음";
+            return $"출렁임 {new string('●', st)}{new string('○', 5 - st)} · {mood} · {(t.IsCoin ? "24시간" : "09:00~15:30")}" + (t.junk ? " · ⚠ 상폐 위험" : "") + (t.meme ? " · ⚠ 바닥가면 상폐" : "");
         }
 
         void TipCards(VisualElement body, string tk)
@@ -342,7 +364,7 @@ namespace KwGame.View
             var info = new VisualElement(); info.style.flexGrow = 1; row.Add(info);
             info.Add(Ui.Label($"{D.TK[c.tk].name} {c.lev:0}x {(c.dir > 0 ? "롱" : "숏")}{(c.mult > 1 ? " (올인 ×1.5)" : "")}", 22, c.dir > 0 ? StkUp : StkDn, true));
             info.Add(Ui.Label($"증거금 {G.man(c.margin)} · 진입 {G.fmtP(c.entry)} · 청산가 {G.fmtP(GameSim.liqPx(c))}", 18, StkAxis));
-            var pv = Ui.Label(G.sgnWon(pl), 24, UpDn(pl), true); pv.style.marginRight = 12; row.Add(pv);
+            var pv = Ui.Label($"{G.sgnWon(pl)}\n{GameSim.pct(c.margin > 0 ? pl / c.margin : 0)}", 24, UpDn(pl), true); pv.style.marginRight = 12; pv.style.unityTextAlign = TextAnchor.MiddleRight; row.Add(pv);
             row.Add(Ui.Chip(lk ? "다음 칸부터" : "정리", () => Order("정리", "익절 ㅋㅋ 나 천재?", "…손절. 괜찮아. 괜찮아.", "close", "id", id), lk));
             return row;
         }
@@ -478,7 +500,7 @@ namespace KwGame.View
                 var info = new VisualElement(); info.style.flexGrow = 1; row.Add(info);
                 info.Add(Ui.Label($"{D.TK[k].name} · 주식", 22, Ui.Text, true));
                 info.Add(Ui.Label($"{G.man(x.cost)} → {G.man(v)}" + (S.rt ? "" : $" · {G.Tnow() - x.t0}칸 보유"), 18, StkAxis));
-                var pv = Ui.Label(G.sgnWon(v - x.cost), 24, UpDn(v - x.cost), true); pv.style.marginRight = 12; row.Add(pv);
+                var pv = Ui.Label($"{G.sgnWon(v - x.cost)}\n{GameSim.pct(x.cost > 0 ? v / x.cost - 1 : 0)}", 24, UpDn(v - x.cost), true); pv.style.marginRight = 12; pv.style.unityTextAlign = TextAnchor.MiddleRight; row.Add(pv);
                 row.Add(Ui.Chip(G.stockOpen() ? "전량 매도" : "장 마감", () => Order("전량 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 1, "where", where), !G.stockOpen()));
                 body.Add(row); n++;
             }

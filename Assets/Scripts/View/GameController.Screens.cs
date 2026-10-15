@@ -377,7 +377,7 @@ namespace KwGame.View
                 double pl = G.cpnl(c) + c.bonus, p = S.mk.tk[c.tk].p, liq = GameSim.liqPx(c), gap = Math.Abs(p / liq - 1);
                 var r = Ui.Row(); r.style.marginTop = 6; r.pickingMode = PickingMode.Ignore; mini.Add(r);
                 r.Add(L($"{D.TK[c.tk].name} {c.lev:0}x {(c.dir > 0 ? "롱" : "숏")}", 18, c.dir > 0 ? StkUp : StkDn)); var s0 = new VisualElement(); s0.style.flexGrow = 1; r.Add(s0);
-                r.Add(L(G.sgnWon(pl), 18, UpDn(pl), true));
+                r.Add(L($"{G.sgnWon(pl)} ({GameSim.pct(pl / Math.Max(1, c.margin))})", 18, UpDn(pl), true));
                 if (c.lev * c.mult > 1.2 && gap < 0.05) mini.Add(L($"   ⚠ 청산가까지 {gap * 100:0.0}%", 16, Ui.Bad, true));
             }
             // 보던 종목 미니 차트

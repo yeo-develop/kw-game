@@ -10,7 +10,7 @@ namespace KwGame.Sim
         const string ANON = "ㅇㅇ", HY = "형나믿지", MATH = "수학자", RES = "리서치", SUB = "구독", PARK = "박대리", KIM_OFF = "김사장(공식)", ME_AU = "알바감남친";
 
         public Source srcOf(Tip t) => D.SRC.TryGetValue(t.who, out var s) ? s : D.SRC[SUB];
-        double repAcc(Source d) => d.tier == "rep" && has("vip") ? 0.85 : d.acc;
+        double repAcc(Source d) => !S.rt ? (d.tier == "rep" && has("vip") ? 0.85 : d.acc) : d.tier == "rep" ? d.acc + R.RT_REP_ACC + (has("vip") ? 0.07 : 0) : d.acc;   // 실시간: 증권사 리포트 적중 0.8 → 0.68 (피드백: 리포트가 너무 잘 맞음)
         List<string> WALKERS() => D.SRCList.Where(s => s.tier == "walk" && !s.bar).Select(s => s.id).ToList();
 
         Tip rollTip(string who, string oTk = null, int oDir = 0)
@@ -56,7 +56,7 @@ namespace KwGame.Sim
         public int freeMax() => has("vip") ? 2 : 1;
         Tip getReport(bool paid)
         {
-            var Rr = rsch(); double fee = R.RSCH_FEE;
+            var Rr = rsch(); double fee = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE;
             if (paid) { if (Rr.paid >= R.RSCH_PAID_MAX || S.cash < fee) return null; S.cash -= fee; Rr.paid++; S.today.Add(new Ledger { kind = "ev", amt = -fee, label = T("lbl.paidReport") }); }
             else { if (Rr.free >= freeMax()) return null; Rr.free++; }
             return rollTip(RES);
