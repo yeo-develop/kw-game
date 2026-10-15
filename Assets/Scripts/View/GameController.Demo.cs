@@ -140,6 +140,10 @@ namespace KwGame.View
             Send("debug", "k", "men"); yield return UntilIdle();
             faceHold = 0; RenderAll();
             yield return Shot(dir, "15_face_mental");
+            yield return ToHome();
+            Send("debug", "k", "menhera"); yield return UntilIdle(); yield return new WaitForSeconds(1.2f);
+            if (S.pending?.t == "menhera") { yield return Shot(dir, "15b_menhera"); yield return new WaitForSeconds(0.25f); yield return Shot(dir, "15c_menhera_jitter"); Send("reply", "i", S.pending.opts.FindIndex(o => o.ok)); yield return UntilIdle(); }
+            yield return ToHome();
             foreach (var (fk, nm) in new[] { ("excited", "16_face_excited"), ("shocked", "17_face_shocked"), ("crying_comic", "18_face_crying_comic") })
             { faceStrong = false; HoldFace(fk, true); yield return Shot(dir, nm); }
             faceStrong = false;

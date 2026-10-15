@@ -339,7 +339,7 @@ namespace KwGame.View
             }
             Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, (h.faint ? " 기절" : "") + (G.sickName() != null ? $" 🤒{G.sickName()} {S.sickD}일" : "") + (S.rt && S.hang ? " 🍺" : ""));
             string men = h.stress >= G.menLine() ? " 멘헤라" : h.stress >= 40 ? " 불안" : "";
-            Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men + (S.rt && G.sickName() == null ? $" · 아플 확률 {G.sickP() * 100:0}%" : ""));
+            Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men + (S.rt && G.sickName() == null ? $" · 병{G.sickP() * 100:0}%" : ""));
             Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");
             // 4줄: 유품
             if (h.augs.Count > 0)
