@@ -12,6 +12,7 @@ namespace KwGame.Sim
         {
             amt = Math.Floor(Math.Min(amt, S.cash) / 1000) * 1000;
             if (amt < 10000 || !stockOpen()) return null;
+            fee += sickSlip();   // 아파서 손 떨림
             double p = S.mk.tk[tk].p;
             var h = S.hold.Get(tk);
             if (h == null) { h = new Holding { q = 0, cost = 0, t0 = Tnow(), bday = 0 }; S.hold.Set(tk, h); }
@@ -23,6 +24,7 @@ namespace KwGame.Sim
         double? sellStock(string tk, double frac, double fee, bool force = false)
         {
             var h = S.hold.Get(tk); if (h == null || h.q <= 0 || (!stockOpen() && !force)) return null;
+            fee += sickSlip();
             double p = S.mk.tk[tk].p, q = h.q * frac, basis = h.cost * frac, gross = q * p;
             double pnl = gross - basis;
             if (pnl > 0)
@@ -44,7 +46,7 @@ namespace KwGame.Sim
         CoinPos openCoin(string tk, int dir, double lev, double margin)
         {
             margin = Math.Floor(margin / 1000) * 1000;
-            double fee = rhu(margin * lev * R.COIN_FEE);
+            double fee = rhu(margin * lev * (R.COIN_FEE + sickSlip() / 5));
             if (margin < 10000 || margin + fee > S.cash || !tkOpen(tk)) return null;
             lev = Math.Min(lev, D.TK[tk].maxLev);
             double mult = has("allin") && margin + fee >= S.cash * 0.95 ? 1.5 : 1;
@@ -62,7 +64,7 @@ namespace KwGame.Sim
             if (!force && !S.rt && c.t0 == Tnow()) return null;
             double pnl = cpnl(c);
             if (pnl > 0 && c.dir < 0 && has("inverse")) { pnl *= 1.25; augFx("inverse", T("aug.short")); }
-            double fee = rhu(c.margin * c.lev * R.COIN_FEE);
+            double fee = rhu(c.margin * c.lev * (R.COIN_FEE + sickSlip() / 5));
             double back = rhu(Math.Max(0, c.margin + pnl + c.bonus - fee));
             S.cash += back; S.cps.Remove(c);
             S.today.Add(new Ledger { kind = "invest", amt = back - c.margin, label = T("lbl.close", "n", D.TK[c.tk].name, "lev", c.lev, "d", T(c.dir > 0 ? "long" : "short")) }); S.realized += back - c.margin - c.bonus;

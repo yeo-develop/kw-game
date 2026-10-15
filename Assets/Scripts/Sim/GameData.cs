@@ -27,6 +27,10 @@ namespace KwGame.Sim
         // 실시간 모드 체력·멘탈: 알바 무지성 반복·집에서 쉬기만 하기 막기 (턴 모드는 위 HP_* 그대로)
         public double RT_HP_SLEEP = 35, RT_HP_REST = 20, RT_HP_REST_EVE = 10, RT_REST_ST = -8, RT_WORK_ST = 12, RT_WORK_ST_STREAK = 4, RT_DUE_ST = 2, RT_ANX_PAY = 0.9, RT_MEN_PAY = 0.7;
 
+        // 실시간 모드 스트레스 관리·병 (GameSim.Health.cs): 놀거리는 같은 날 반복할수록 효과 ×RELAX_DIM, 병 확률 = (기본 + 스트레스·체력·숙취) × 운동
+        public Dictionary<string, RelaxDef> RELAX; public Dictionary<string, SickDef> SICK;
+        public double RELAX_DIM = 0.6, SICK_P0 = 0.02, SICK_ST0 = 50, SICK_ST_K = 0.006, SICK_HP = 0.1, SICK_HANG = 0.1, SICK_FIT = 0.5, SICK_FLU_ST = 80, HANG_HP = 10, PHARM_COST = 8000, CLINIC_COST = 60000, VITA_COST = 15000;
+
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;
     }
@@ -48,6 +52,8 @@ namespace KwGame.Sim
     {
         public string id, tier, ic, name, npc, line;
         public double acc, pd, trust, ret, cost;
+        /// bar = 포차 옆 테이블 (길거리 만남엔 안 나옴)
+        public bool bar;
         public double? pre, up;
         public double[] mag; public int[] lag;
         public bool stock, coin, meme;
@@ -55,7 +61,12 @@ namespace KwGame.Sim
 
     public class Aug { public string id, cat, ic, name, d, fl; public int tier; }
     public class Item { public string id, type, ic, name, d, line; public double p; public double? st; }
-    public class Loc { public string id, name, ic, bg, npc, hint; public double[] pos; public int[] open; }
+    /// rt = 실시간 모드에만 있는 장소 (공원·포차·병원)
+    public class Loc { public string id, name, ic, bg, npc, hint; public double[] pos; public int[] open; public bool rt; }
+    /// 놀거리 한 번: 돈 · 멘탈 · 체력 · 숙취 확률 · 운동(내일 병 확률↓) · 정보 들을 확률
+    public class RelaxDef { public double cost, st, hp, hang, tip; public bool fit; }
+    /// 병: 알바 점수 배율 · 매매 손떨림(체결가 손해) · 잠 회복 배율 · 아침마다 멘탈 · 앓는 날 [최소, 최대]
+    public class SickDef { public string name, ic; public double pay, slip, sleep, st; public int[] d; }
     public class RandEv { public string t; public double cash, st, fame, hp; }
     public class KQDef { public string q, ok, good, bad; public string[] no; }
     /// 돌발 이벤트 (unity_events.json). lines = [who, text, face?] 목록, who: m·me·kim·nar

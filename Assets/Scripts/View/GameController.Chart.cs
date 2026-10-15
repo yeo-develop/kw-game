@@ -59,7 +59,7 @@ namespace KwGame.View
 
         void StockApp(VisualElement body, string where)
         {
-            var R = D.RULES; double fee = G.stockFee(where);
+            var R = D.RULES; double fee = G.stockFee(where) + G.sickSlip();   // 아프면 손 떨림만큼 더 잃음
             // 위: 시세 띠 (전 종목 등락이 흘러감). 실시간 차트 화면엔 관심종목 목록이 있어서 생략
             if (!(S.rt && stkTab == "detail")) body.Add(TickerTape());
 
@@ -80,6 +80,7 @@ namespace KwGame.View
             if (G.hasPos()) Sum("평가손익", G.sgnWon(pl), UpDn(pl));
             Sum(G.stockOpen() ? "● 주식장" : "○ 주식장", G.stockOpen() ? $"열림 · 수수료 {fee * 100:0.0}%" : S.rt ? "마감 (09:00~15:30)" : "마감 (아침·점심만)", G.stockOpen() ? StkUp : StkAxis);
             Sum("코인", "24시간", Ui.Gold);
+            if (G.sickName() != null) Sum("🤒 " + G.sickName(), $"손 떨림 · 체결 −{G.sickSlip() * 100:0.0}%p (코인은 배율당 {G.sickSlip() * 20:0.0}%p)", Ui.Bad);
             { var m = Ui.Label(stkMsg == "" ? " " : stkMsg, 20, Ui.Gold, true); m.style.marginBottom = 8; m.style.whiteSpace = WhiteSpace.NoWrap; body.Add(m); }   // 체결 줄은 늘 자리 차지 (주문 버튼이 밀리지 않게)
 
             if (stkTab == "detail") StkDetail(body, where, fee);
@@ -350,7 +351,7 @@ namespace KwGame.View
         {
             var R = D.RULES; bool isC = t.IsCoin, open = isC || G.stockOpen();
             if (isC && stkLev > t.maxLev) stkLev = t.maxLev;
-            double maxAmt = Math.Max(0, Math.Floor((isC ? S.cash / (1 + stkLev * R.COIN_FEE) : S.cash) / 10000) * 10000);
+            double maxAmt = Math.Max(0, Math.Floor((isC ? S.cash / (1 + stkLev * (R.COIN_FEE + G.sickSlip() / 5)) : S.cash) / 10000) * 10000);
             if (stkAmt == null) stkAmt = Math.Round(maxAmt * 0.25 / 10000) * 10000;
             stkAmt = Math.Max(0, Math.Min(stkAmt.Value, maxAmt));
             double amt = stkAmt.Value;
@@ -406,7 +407,7 @@ namespace KwGame.View
                     right.Add(Ui.Label($"{(S.rt ? "이번 시간대" : "이번 칸")} 청산 확률 ≈ {odds * 100:0}%", 22, odds >= 0.3 ? StkUp : Ui.Gold, true));
                     right.Add(RiskBar((float)odds));
                 }
-                right.Add(Ui.Label($"수수료 {G.won(amt * stkLev * R.COIN_FEE)}" + (stkLev > 1 ? $" · 펀딩비 {(S.rt ? "시간대당" : "칸당")} {G.won(amt * stkLev * R.FUNDING)}" : ""), 18, StkAxis));
+                right.Add(Ui.Label($"수수료 {G.won(amt * stkLev * (R.COIN_FEE + G.sickSlip() / 5))}" + (stkLev > 1 ? $" · 펀딩비 {(S.rt ? "시간대당" : "칸당")} {G.won(amt * stkLev * R.FUNDING)}" : ""), 18, StkAxis));
                 if (G.has("allin")) right.Add(Ui.Label("올인 유품: 현금 95% 이상 넣으면 손익 ×1.5", 18, Ui.Gold));
                 var go = Ui.Button($"{(stkDir > 0 ? "롱" : "숏")} {stkLev:0}x 진입", () =>
                     Order("진입", stkDir > 0 ? "롱 가즈아아아" : "숏 잡았다. 떨어져라 떨어져라", null, "open", "tk", t.id, "dir", stkDir, "lev", stkLev, "amt", stkAmt ?? 0),

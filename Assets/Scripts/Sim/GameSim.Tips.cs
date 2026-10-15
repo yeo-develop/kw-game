@@ -11,7 +11,7 @@ namespace KwGame.Sim
 
         public Source srcOf(Tip t) => D.SRC.TryGetValue(t.who, out var s) ? s : D.SRC[SUB];
         double repAcc(Source d) => d.tier == "rep" && has("vip") ? 0.85 : d.acc;
-        List<string> WALKERS() => D.SRCList.Where(s => s.tier == "walk").Select(s => s.id).ToList();
+        List<string> WALKERS() => D.SRCList.Where(s => s.tier == "walk" && !s.bar).Select(s => s.id).ToList();
 
         Tip rollTip(string who, string oTk = null, int oDir = 0)
         {

@@ -44,7 +44,7 @@ namespace KwGame.Sim
                 su = new WorkSetup { H = H, drops = drops };
             }
             else su = new WorkSetup { H = H, w = rnd() };
-            su.hp = S.hp; su.hpm = hpMult() * (S.rt ? menPay() : 1);
+            su.hp = S.hp; su.hpm = hpMult() * (S.rt ? menPay() * sickPay() : 1);
             su.practice = practice;
             P.setup = su;
             return su;
@@ -53,7 +53,7 @@ namespace KwGame.Sim
         {
             var P = S.pending; var J = D.JOBS[P.key]; string key = P.key;
             score = clamp(double.IsNaN(score) ? 0 : score, 0, 1);
-            double hm = hpMult() * (S.rt ? menPay() : 1), sc = score * hm;
+            double hm = hpMult() * (S.rt ? menPay() * sickPay() : 1), sc = score * hm;
             double pay = round1k(J.@base + J.var * sc);
             if (has("grind")) { pay = round1k(pay * R.GRIND_PAY); augFx("grind", T("aug.grind")); }
             S.st.work++; S.st.earned += pay; S.workStreak++;

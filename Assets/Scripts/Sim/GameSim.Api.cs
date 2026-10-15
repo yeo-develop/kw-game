@@ -61,7 +61,7 @@ namespace KwGame.Sim
         void restHome()
         {
             S.workStreak = 0;
-            if (S.rt) { stress(R.RT_REST_ST); hp(isEve() ? R.RT_HP_REST_EVE : R.RT_HP_REST, T("why.rest")); }   // 저녁 쉬기 = 일찍 잠 (자정 수면 회복은 따로)
+            if (S.rt) { stress(R.RT_REST_ST); hp(isEve() ? R.RT_HP_REST_EVE : R.RT_HP_REST, T("why.rest")); sickRest(); }   // 저녁 쉬기 = 일찍 잠 (자정 수면 회복은 따로)
             else { stress(-22); hp(isEve() ? R.HP_REST_EVE : R.HP_REST, T("why.rest")); }
             face("tired");
             M(fpick(TA("rest.m")), "tired");
@@ -83,6 +83,8 @@ namespace KwGame.Sim
                 case "l-cafe": case "l-store": case "l-ware": case "l-mart": workStart(k.Substring(2), key); return true;
                 case "l-pcgame": actDone(doPc("game")); return true;
                 case "l-pcramen": actDone(doPc("ramen")); return true;
+                case "l-walk": case "l-jog": case "l-hanriver": case "l-soju": case "l-drunk": actDone(doRelax(k.Substring(2))); return true;
+                case "l-pharm": case "l-clinic": case "l-vita": actDone(doClinic(k.Substring(2))); return true;
                 case "l-shop": S.pending = new Pending("shop") { bought = 0 }; return true;
                 case "l-relic": relicShopStart(); return true;
                 case "l-scratch": scratchStart(key); return true;
@@ -213,7 +215,7 @@ namespace KwGame.Sim
                     {
                         string locK = c.Str("loc");
                         if (locK == "home") { toHome(); return; }
-                        if (locK == null || !D.LOCS.TryGetValue(locK, out var L) || !L.open.Contains(S.slot)) { err("closed"); return; }
+                        if (locK == null || !D.LOCS.TryGetValue(locK, out var L) || !L.open.Contains(S.slot) || (L.rt && !S.rt)) { err("closed"); return; }
                         string w = !string.IsNullOrEmpty(S.tg) ? null : encounterRoll();
                         if (w != null) encounterStart(w, locK); else visit(locK);
                         return;

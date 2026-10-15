@@ -148,6 +148,7 @@ namespace KwGame.Sim
                 if (e.fame != 0) fame(e.fame);
                 if (e.hp != 0) S.hp = clamp(S.hp + e.hp, 0, R.HP_MAX);
             }
+            healthMorning();
             if (!hasEv && S.hp < 40) { evT = T("morning.lowHp"); hasEv = true; }
             else if (!hasEv && S.stress < 20) { evT = T("morning.fresh"); hasEv = true; }
             S.stress = clamp(S.stress - 6, 0, 100);
@@ -580,7 +581,8 @@ namespace KwGame.Sim
                 S.slot = 0; S.day++; S.yday = S.today; S.today = new List<Ledger>();
                 if (S.day > R.MONTH_DAYS) { S.day = 1; S.month++; }
                 S.needMorning = true;
-                S.hp = clamp(S.hp + (S.rt ? R.RT_HP_SLEEP : R.HP_SLEEP), 0, R.HP_MAX);
+                S.hp = clamp(S.hp + (S.rt ? R.RT_HP_SLEEP * sickSleep() : R.HP_SLEEP), 0, R.HP_MAX);
+                if (S.rt) S.relaxN = new Dictionary<string, int>();
                 if (S.gday != d0)
                 {
                     if (S.addict >= R.ADD_SECRET) { S.stress = clamp(S.stress + R.ADD_WITHDRAW, 0, 100); pushK("m", fpick(TA("add.withdraw"))); }

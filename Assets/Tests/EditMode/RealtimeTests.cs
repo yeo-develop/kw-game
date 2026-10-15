@@ -223,6 +223,89 @@ namespace KwGame.Tests
             Assert.That(S.mk.tk[K].p, Is.GreaterThanOrEqualTo(t.p0 * 0.5), "재상장가로 리셋");
         }
 
+        static GameSim HomeRt(int seed)
+        {
+            var g = GameSim.Create(Data, seed, new GameSim.Opts { rt = true });
+            g.Apply(C("start")); g.Apply(C("pickRelic", "i", System.Math.Max(0, g.S.pending.offer.FindIndex(id => id != "ginseng"))));
+            var r = new System.Random(seed);
+            while (g.S.pending.t != "home") g.Apply(Respond(g, r));
+            return g;
+        }
+        static void NextMorning(GameSim g)
+        {
+            var r = new System.Random(1); int d0 = g.absDay();
+            for (int i = 0; i < 500 && g.absDay() == d0; i++)
+            {
+                var P = g.S.pending;
+                var evs = g.Apply(P.t == "home" ? C("tick", "m", 120) : P.t == "map" ? C("goTo", "loc", "home") : P.t == "loc" ? C("leave") : Respond(g, r));
+                Assert.That(evs.FirstOrDefault(e => e.t == "error"), Is.Null);
+            }
+            for (int i = 0; i < 50 && g.S.pending.t != "home"; i++) g.Apply(Respond(g, r));
+        }
+
+        [Test]
+        public void StressMakesYouSickAndSicknessHurtsWorkAndTrades()
+        {
+            // 피드백: 스트레스 수치가 무의미 → 높으면 병 걸리고, 병은 알바·투자 효율을 깎아야 함
+            var g = HomeRt(555); var S = g.S;
+            S.stress = 0; S.hp = 100;
+            Assert.That(g.sickP(), Is.LessThan(0.05), "멀쩡하면 거의 안 아픔");
+            S.stress = 100; S.hp = 10;
+            Assert.That(g.sickP(), Is.GreaterThan(0.35), "스트레스 만땅·체력 바닥이면 잘 아픔");
+            for (int d = 0; d < 12 && S.sick == null; d++) { S.stress = 100; S.hp = 10; NextMorning(g); }
+            Assert.That(S.sick, Is.Not.Null, "스트레스 계속 높으면 결국 병 걸림");
+            Assert.That(g.sickPay(), Is.LessThan(1), "아프면 알바 점수 깎임");
+            Assert.That(g.sickSlip(), Is.GreaterThan(0), "아프면 매매 손해");
+
+            // 같은 돈으로 산 주식 수: 아플 때 < 안 아플 때
+            S.cash = 2000000; g.Apply(C("tick", "m", System.Math.Max(1, 600 - S.min)));
+            while (S.pending.t != "home") g.Apply(Respond(g, new System.Random(2)));
+            Assume.That(g.stockOpen(), Is.True);
+            var buy = typeof(GameSim).GetMethod("buyStock", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            buy.Invoke(g, new object[] { "GSE", 1000000.0, 0.0 }); double qSick = S.hold["GSE"].q; S.hold.Remove("GSE");
+            string sk = S.sick; S.sick = null;
+            buy.Invoke(g, new object[] { "GSE", 1000000.0, 0.0 }); double qOk = S.hold["GSE"].q; S.hold.Remove("GSE");
+            S.sick = sk;
+            Assert.That(qSick, Is.LessThan(qOk * 0.995), "아프면 같은 돈에 덜 삼");
+
+            // 병원 수액 = 바로 나음
+            S.cash = 1000000; g.Apply(C("map")); g.Apply(C("goTo", "loc", "hosp"));
+            while (S.pending.t == "encounter") g.Apply(C("encounter", "ask", false));
+            Assert.That(S.pending.t, Is.EqualTo("loc"));
+            Assert.That(g.Apply(C("act", "k", "l-clinic")).FirstOrDefault(e => e.t == "error"), Is.Null);
+            Assert.That(S.sick, Is.Null, "수액 맞으면 나음");
+        }
+
+        [Test]
+        public void RelaxSpotsWorkButSameFunWearsOff()
+        {
+            var g = HomeRt(808); var S = g.S; var r = new System.Random(3);
+            double Walk()
+            {
+                S.stress = 80;
+                g.Apply(C("map")); g.Apply(C("goTo", "loc", "park"));
+                while (S.pending.t == "encounter") g.Apply(C("encounter", "ask", false));
+                Assert.That(S.pending.t, Is.EqualTo("loc"));
+                Assert.That(g.Apply(C("act", "k", "l-walk")).FirstOrDefault(e => e.t == "error"), Is.Null);
+                double d = 80 - S.stress;
+                for (int i = 0; i < 50 && S.pending.t != "home"; i++) g.Apply(S.pending.t == "loc" ? C("leave") : Respond(g, r));
+                return d;
+            }
+            double a = Walk(), b = Walk();
+            Assert.That(a, Is.GreaterThanOrEqualTo(10), "산책 = 멘탈 회복");
+            Assert.That(b, Is.LessThan(a), "같은 날 또 하면 덜 먹힘");
+            // 포차는 저녁만, 부어라 마셔라 = 숙취 → 다음 날 아침 체력 깎임
+            while (!g.isEve()) { g.Apply(S.pending.t == "home" ? C("tick", "m", 60) : Respond(g, r)); }
+            while (S.pending.t != "home") g.Apply(Respond(g, r));
+            S.cash = 1000000; S.stress = 90;
+            g.Apply(C("map")); g.Apply(C("goTo", "loc", "bar"));
+            while (S.pending.t == "encounter") g.Apply(C("encounter", "ask", false));
+            Assert.That(g.Apply(C("act", "k", "l-drunk")).FirstOrDefault(e => e.t == "error"), Is.Null);
+            Assert.That(S.stress, Is.LessThanOrEqualTo(50), "술 = 멘탈 대폭 회복");
+            Assert.That(S.hang, Is.True, "부어라 마셔라 = 숙취 확정");
+            Assert.That(g.sickP(), Is.GreaterThan(g.D.RULES.SICK_P0), "숙취면 아플 확률 오름");
+        }
+
         [Test]
         public void MissedInterestIsAlwaysTakenAwayInRealtime()
         {

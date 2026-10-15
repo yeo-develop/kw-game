@@ -215,7 +215,7 @@ namespace KwGame.Sim
                     case "map":
                         {
                             string loc = plan != null && plan.go != null ? (string)plan.go[1] : "home";
-                            var openL = D.LOCList.Where(l => l.open.Contains(S.slot)).Select(l => l.id).ToList();
+                            var openL = D.LOCList.Where(l => l.open.Contains(S.slot) && (!l.rt || S.rt)).Select(l => l.id).ToList();
                             if (loc == "rand") loc = openL.Count > 0 ? bpick(openL) : "home";
                             if (!openL.Contains(loc)) loc = "home";
                             if (plan != null && plan.go != null) plan.go = new object[] { "went", loc, plan.go[2] };

@@ -123,6 +123,8 @@ namespace KwGame.Sim
         public News news; public Whale whale; public List<LottoTicket> lotto = new List<LottoTicket>(); public int paidMonth; public bool insUsed; public HomeLine hl;
         public int faint = -1, cleared = 0; public Dictionary<string, int> endSeen = new Dictionary<string, int>(); public List<string> resume; public RelicOffer relicOffer; public int gday;
         public Stats st = new Stats();
+        // 실시간 모드 병·숙취·운동·오늘 놀거리 횟수 (GameSim.Health.cs)
+        public string sick; public int sickD; public bool hang, fit; public Dictionary<string, int> relaxN = new Dictionary<string, int>();
         public string tg = ""; public int tgT; public Dictionary<string, int> tutSeen = new Dictionary<string, int>(); public int mgN;
         public bool llm; public NewsFact nfact; public List<NewsLog> nlog = new List<NewsLog>(); public int[] nstr = { 0, 0, 0 };   // LLM 뉴스 (GameSim.Llm.cs)
         public Pending pending; public List<string> flow = new List<string>(); public string ending; public EndInfo endInfo;

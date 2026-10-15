@@ -38,6 +38,18 @@ namespace KwGame.Sim
                     return new List<LocOpt> {
                         new LocOpt { k = "l-pcgame", ic = "🕹️", l = T("lo.pcgame"), sub = T("lo.pcgameSub"), dis = S.cash < 10000 },
                         new LocOpt { k = "l-pcramen", ic = "🍜", l = T("lo.pcramen"), sub = T("lo.pcramenSub"), dis = S.cash < 6000 } };
+                case "park":
+                    return new[] { ("walk", "🚶"), ("jog", "🏃"), ("hanriver", "🍜") }.Select(x => relaxOpt(x.Item1, x.Item2)).ToList();
+                case "bar":
+                    return new[] { ("soju", "🍶"), ("drunk", "🍻") }.Select(x => relaxOpt(x.Item1, x.Item2)).ToList();
+                case "hosp":
+                    {
+                        var sd = sickDef();
+                        return new List<LocOpt> {
+                            new LocOpt { k = "l-clinic", ic = "💉", l = T("lo.clinic", "c", won(R.CLINIC_COST)), sub = sd != null ? T("lo.clinicSub", "n", sd.name) : T("lo.notSick"), dis = sd == null || S.cash < R.CLINIC_COST },
+                            new LocOpt { k = "l-pharm", ic = "💊", l = T("lo.pharm", "c", won(R.PHARM_COST)), sub = sd != null ? T("lo.pharmSub", "d", S.sickD) : T("lo.notSick"), dis = sd == null || S.cash < R.PHARM_COST },
+                            new LocOpt { k = "l-vita", ic = "🧃", l = T("lo.vita", "c", won(R.VITA_COST)), sub = S.fit ? T("lo.vitaHave") : T("lo.vitaSub", "p", rhu(sickP() * 100), "q", rhu(sickP() * R.SICK_FIT * 100)), dis = S.fit || S.cash < R.VITA_COST } };
+                    }
                 case "shop":
                     return new List<LocOpt> {
                         new LocOpt { k = "l-shop", ic = "👗", l = T("lo.shop"), sub = T("lo.shopSub") },
@@ -52,6 +64,15 @@ namespace KwGame.Sim
             return new List<LocOpt>();
         }
 
+        LocOpt relaxOpt(string k, string ic)
+        {
+            var d = R.RELAX[k]; int n = relaxCount(k);
+            string sub = T("lo.relaxSub", "s", rhu(-d.st * Math.Pow(R.RELAX_DIM, n)), "h", (d.hp >= 0 ? "+" : "") + JsFmt.Num(d.hp))
+                + (d.fit ? T("lo.fit") : "") + (d.hang > 0 ? T("lo.hang", "p", rhu(d.hang * 100)) : "") + (d.tip > 0 ? T("lo.tipChance", "p", rhu(d.tip * 100)) : "")
+                + (n > 0 ? T("lo.dim", "n", n) : "");
+            return new LocOpt { k = "l-" + k, ic = ic, l = T("lo." + k) + (d.cost > 0 ? " (" + won(d.cost) + ")" : T("lo.free")), sub = sub, dis = S.cash < d.cost };
+        }
+
         // ---------- 게임방 ----------
         bool doPc(string kind)
         {
@@ -60,10 +81,10 @@ namespace KwGame.Sim
             S.cash -= cost; S.st.pc++; S.workStreak = 0;
             S.today.Add(new Ledger { kind = "pc", amt = -cost, label = T(kind == "game" ? "lbl.pcgame" : "lbl.pcramen") });
             hp(-hpCost(kind == "game" ? "pcgame" : "pcramen"));
-            if (kind == "ramen") { stress(-12); M(T("pc.ramen"), "happy"); }
+            if (kind == "ramen") { stress(relaxSt("pcramen", -12)); M(T("pc.ramen"), "happy"); }
             else
             {
-                stress(-20);
+                stress(relaxSt("pcgame", -20));
                 var e = pick(D.PC_EV);
                 if (e.st != 0) stress(e.st); if (e.hp != 0) hp(e.hp); if (e.fame != 0) fame(e.fame); if (e.cash != 0) S.cash += e.cash;
                 N("🎮 " + e.t);
@@ -133,7 +154,7 @@ namespace KwGame.Sim
             if (it.type == "outfit") { S.owned.Set(id, 1); S.outfit = id; } else S.props.Set(id, 1);
             Emit("bought", "id", id);
             bubble(it.line, 2600, "happy");
-            stress(it.st.HasValue && it.st.Value != 0 ? it.st.Value : -8);
+            { double ist = it.st.HasValue && it.st.Value != 0 ? it.st.Value : -8; stress(ist < 0 ? relaxSt("shop", ist) : ist); }
             galReact("shop", V("item", it.name, "conv", conv(it.p)), 2);
             pushK("m", T("shop.k", "ic", it.ic));
         }

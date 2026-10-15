@@ -337,9 +337,9 @@ namespace KwGame.View
                 var f = Ui.Box(c, 0, 5); f.style.height = Length.Percent(100); f.style.width = Length.Percent((float)Math.Max(0, Math.Min(100, v))); tr.Add(f);
                 b.Add(tr); bars.Add(b);
             }
-            Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, h.faint ? " 기절" : "");
+            Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, (h.faint ? " 기절" : "") + (G.sickName() != null ? $" 🤒{G.sickName()} {S.sickD}일" : "") + (S.rt && S.hang ? " 🍺" : ""));
             string men = h.stress >= G.menLine() ? " 멘헤라" : h.stress >= 40 ? " 불안" : "";
-            Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men);
+            Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men + (S.rt && G.sickName() == null ? $" · 아플 확률 {G.sickP() * 100:0}%" : ""));
             Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");
             // 4줄: 유품
             if (h.augs.Count > 0)
@@ -448,7 +448,7 @@ namespace KwGame.View
                 case "map":
                     Title("어디 갈까?");
                     Btn("집으로", () => Send("goTo", "loc", "home"));
-                    foreach (var L in D.LOCList)
+                    foreach (var L in D.LOCList.Where(L => !L.rt || S.rt))
                     {
                         bool open = L.open.Contains(S.slot);
                         Btn(L.name, () => Send("goTo", "loc", L.id), open ? L.hint : $"닫힘 ({string.Join("·", L.open.Select(x => D.SLOT_NAME[x]))}만)", !open);
@@ -573,7 +573,8 @@ namespace KwGame.View
             {
                 Info($"일당 {G.man(J.@base)}~{G.man(J.@base + J.var)}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
                 if (G.hpMult() < 1) Info($"체력이 낮아 점수 ×{G.hpMult():0.00}", 20, Ui.Bad);
-                if (S.rt && G.menPay() < 1) Info($"멘탈이 {(G.mental() == "men" ? "나가서" : "불안해서")} 점수 ×{G.menPay():0.00} (쇼핑·PC방·미래 달래기로 회복)", 20, Ui.Bad);
+                if (S.rt && G.sickName() != null) Info($"{G.sickName()} 때문에 점수 ×{G.sickPay():0.00} (병원·약국 가거나 집에서 쉬기)", 20, Ui.Bad);
+                if (S.rt && G.menPay() < 1) Info($"멘탈이 {(G.mental() == "men" ? "나가서" : "불안해서")} 점수 ×{G.menPay():0.00} (공원·포차·PC방·쇼핑으로 회복)", 20, Ui.Bad);
                 Btn("일 시작", () => Send("mgSetup"), "3·2·1 하고 바로 시작", false, Ui.Accent);
                 return;
             }

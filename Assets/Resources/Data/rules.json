@@ -127,7 +127,77 @@
   "RT_WORK_ST_STREAK": 4,
   "RT_DUE_ST": 2,
   "RT_ANX_PAY": 0.9,
-  "RT_MEN_PAY": 0.7
+  "RT_MEN_PAY": 0.7,
+  "RELAX": {
+   "walk": {
+    "cost": 0,
+    "st": -12,
+    "hp": -2,
+    "tip": 0.25
+   },
+   "jog": {
+    "cost": 0,
+    "st": -10,
+    "hp": -8,
+    "fit": true
+   },
+   "hanriver": {
+    "cost": 8000,
+    "st": -16,
+    "hp": 8
+   },
+   "soju": {
+    "cost": 20000,
+    "st": -28,
+    "hp": -5,
+    "hang": 0.35
+   },
+   "drunk": {
+    "cost": 60000,
+    "st": -45,
+    "hp": -12,
+    "hang": 1,
+    "tip": 0.5
+   }
+  },
+  "SICK": {
+   "cold": {
+    "name": "감기",
+    "ic": "🤧",
+    "pay": 0.8,
+    "slip": 0.01,
+    "sleep": 0.8,
+    "st": 2,
+    "d": [
+     2,
+     3
+    ]
+   },
+   "flu": {
+    "name": "몸살",
+    "ic": "🤒",
+    "pay": 0.6,
+    "slip": 0.025,
+    "sleep": 0.6,
+    "st": 4,
+    "d": [
+     3,
+     5
+    ]
+   }
+  },
+  "RELAX_DIM": 0.6,
+  "SICK_P0": 0.02,
+  "SICK_ST0": 50,
+  "SICK_ST_K": 0.006,
+  "SICK_HP": 0.1,
+  "SICK_HANG": 0.1,
+  "SICK_FIT": 0.5,
+  "SICK_FLU_ST": 80,
+  "HANG_HP": 10,
+  "PHARM_COST": 8000,
+  "CLINIC_COST": 60000,
+  "VITA_COST": 15000
  },
  "SLOT_NAME": [
   "아침",
