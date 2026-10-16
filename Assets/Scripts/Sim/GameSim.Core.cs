@@ -102,7 +102,7 @@ namespace KwGame.Sim
         public IEnumerable<string> TKS() => D.TKList.Select(t => t.id);
         public IEnumerable<string> STK() => D.TKList.Where(t => t.type == "stock").Select(t => t.id);
         public bool has(string id) => S != null && S.augs.Contains(id);
-        public double rate() => R.RATE - (has("loanbro") ? 0.01 : 0);
+        public double rate() => (S.rt ? R.RT_RATE : R.RATE) - (has("loanbro") ? 0.01 : 0);
         public double interestDue() => round1k(S.debt * rate());
         public double menLine() => has("posi") ? 90 : 70;
         public string mental() => S.stress >= menLine() ? "men" : S.stress >= 40 ? "anx" : "calm";

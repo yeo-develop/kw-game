@@ -10,7 +10,7 @@ namespace KwGame.Sim
         const string ANON = "ㅇㅇ", HY = "형나믿지", MATH = "수학자", RES = "리서치", SUB = "구독", PARK = "박대리", KIM_OFF = "김사장(공식)", ME_AU = "알바감남친";
 
         public Source srcOf(Tip t) => D.SRC.TryGetValue(t.who, out var s) ? s : D.SRC[SUB];
-        double repAcc(Source d) => !S.rt ? (d.tier == "rep" && has("vip") ? 0.85 : d.acc) : d.tier == "rep" ? d.acc + R.RT_REP_ACC + (has("vip") ? 0.07 : 0) : d.acc;   // 실시간: 증권사 리포트 적중 0.8 → 0.68 (피드백: 리포트가 너무 잘 맞음)
+        double repAcc(Source d) => !S.rt ? (d.tier == "rep" && has("vip") ? 0.85 : d.acc) : d.tier == "rep" ? d.acc + R.RT_REP_ACC + (has("vip") ? R.RT_VIP_ACC : 0) : d.acc;   // 실시간: 증권사 리포트 적중 0.8 → 0.68 (피드백: 리포트가 너무 잘 맞음)
         List<string> WALKERS() => D.SRCList.Where(s => s.tier == "walk" && !s.bar).Select(s => s.id).ToList();
 
         Tip rollTip(string who, string oTk = null, int oDir = 0)

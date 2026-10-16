@@ -17,10 +17,10 @@ namespace KwGame.Sim
             var S = new GameState
             {
                 seed = seed, rng = unchecked((uint)seed), fx = unchecked((uint)(seed ^ 0x2545F491)),
-                debt = r.DEBT0, cash = r.CASH0, hp = r.HP_MAX,
+                debt = r.DEBT0, cash = opts != null && opts.rt ? r.RT_CASH0 : r.CASH0, hp = r.HP_MAX,
             };
             S.owned.Set("hoodie", 1);
-            S.st.maxDebt = r.DEBT0; S.st.maxAsset = r.CASH0; S.st.minDebt = r.DEBT0;
+            S.st.maxDebt = r.DEBT0; S.st.maxAsset = S.cash; S.st.minDebt = r.DEBT0;
             g.S = S;
             S.optTut = opts != null && opts.tut;
             S.rt = opts != null && opts.rt; S.min = r.RT_DAY0;

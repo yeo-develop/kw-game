@@ -31,7 +31,9 @@ namespace KwGame.Sim
         // 실시간 모드 밸런스 (피드백: OP 유품·유료 리포트)
         public double RT_DIVI = 0.003, RT_WHALE_HIT = 0.6, RT_WHALE_VOL = 1.5, RT_MEME_UP = 0.42, RT_INSURE = 0.3, RT_INVERSE = 0.1, RT_RSCH_FEE = 100000, RT_REP_ACC = -0.12, RT_IGNORE_N = 3, RT_IGNORE_ST = 3;
         // 알바·하이로우 (피드백: 알바비 7만~14만 · 컨디션 따라 일당 안 바뀜 · 하이로우 너무 쉬움 → 같은 숫자면 딜러 승 + 배당 ×0.9)
-        public double RT_JOB_PAY0 = 70000, RT_JOB_PAYV = 70000, RT_HL_EDGE = 0.9;
+        public double RT_JOB_PAY0 = 70000, RT_JOB_PAYV = 70000, RT_HL_EDGE = 0.9, RT_VIP_ACC = 0.07, RT_CASH0 = 300000;
+        /// 실시간 주 이자율. 바꾸면 하드코딩된 '5%' 문구도 같이: GameController.Screens.cs · scenes.json(150만) · tutorial.json · augments.json(loanbro 5→4%)
+        public double RT_RATE = 0.05;
         public Dictionary<string, RelaxDef> RELAX; public Dictionary<string, SickDef> SICK;
         public double RELAX_DIM = 0.6, SICK_P0 = 0.02, SICK_ST0 = 50, SICK_ST_K = 0.006, SICK_HP = 0.2, SICK_HANG = 0.1, SICK_FIT = 0.5, SICK_FLU_ST = 80, HANG_HP = 10, PHARM_COST = 8000, CLINIC_COST = 60000, VITA_COST = 15000;
 

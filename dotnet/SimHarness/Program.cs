@@ -13,6 +13,35 @@ static class P {
     return true;
   }
   static int Main(string[] a) {
+    // ./unity simtest balance [판 수] [전략,..] — 실시간 밸런스 봇 (현재 Resources/Data)
+    if (a.Length > 0 && a[0] == "balance") {
+      // BAL_RULES='{"RT_X":1}' = rules.json 덮어써서 실험 (파일은 안 바꿈)
+      string patch = Environment.GetEnvironmentVariable("BAL_RULES");
+      var BD = GameData.Load(Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "../../../../../Assets/Resources/Data"), "*.json").Select(f => {
+        string txt = File.ReadAllText(f);
+        if (patch != null && Path.GetFileName(f) == "rules.json") { var j = JObject.Parse(txt); ((JObject)j["RULES"]).Merge(JObject.Parse(patch)); txt = j.ToString(); }
+        return new KeyValuePair<string,string>(Path.GetFileName(f), txt); }));
+      int n = a.Length > 1 ? int.Parse(a[1]) : 60;
+      var strats = a.Length > 2 ? a[2].Split(',') : new[] { "work", "smart", "gamble", "random" };
+      RtBots.ForceRelic = Environment.GetEnvironmentVariable("BAL_FORCE");
+      string tr = Environment.GetEnvironmentVariable("BAL_TRACE");
+      if (tr != null) { RtBots.Trace = Console.WriteLine; var rr = RtBots.Run(BD, int.Parse(tr) * 104729, strats[0]); Console.WriteLine($"{rr.end} d{rr.day} errs {rr.errs} {rr.lastErr}"); return 0; }
+      if (Environment.GetEnvironmentVariable("BAL_RELIC") != null) {
+        foreach (var st in strats) {
+          var L = Enumerable.Range(1, n).Select(s => RtBots.Run(BD, s * 104729, st)).ToList();
+          foreach (var g in L.GroupBy(x => x.relic).OrderBy(g => g.Key))
+            Console.WriteLine($"{st} {g.Key,-9} n={g.Count(),3} 클리어 {(double)g.Count(x => x.end == "clear") / g.Count():P0} 평균 {(g.Any(x => x.end == "clear") ? g.Where(x => x.end == "clear").Average(x => x.day) : 0):F1}일 배드 {(double)g.Count(x => x.end != "clear" && x.end != "none") / g.Count():P0} 남은빚 {g.Average(x => x.end == "clear" ? 0 : x.debt) / 1e4:F0}만");
+        }
+        return 0;
+      }
+      foreach (var st in strats) {
+        var mg = (Environment.GetEnvironmentVariable("MG") ?? "0.55,0.85").Split(',').Select(double.Parse).ToArray();
+        Console.WriteLine(RtBots.Summarize(BD, st, n, 1, 70, mg[0], mg[1]));
+        if (Environment.GetEnvironmentVariable("BAL_SEEDS") != null)
+          Console.WriteLine("  못 깬 시드: " + string.Join(",", Enumerable.Range(1, n).Where(s => RtBots.Run(BD, s * 104729, st).end != "clear")));
+      }
+      return 0;
+    }
     string root = Environment.GetEnvironmentVariable("GOLDEN_ROOT") ?? Path.Combine(AppContext.BaseDirectory, "../../../../../Assets/Tests/EditMode/Golden");
     uint s = 1; var o = new List<uint>(); for (int i=0;i<5;i++) o.Add(Rng.Next(ref s));
     Console.WriteLine("seed1: " + string.Join(",", o) + " state " + s);

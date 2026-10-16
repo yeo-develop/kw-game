@@ -134,6 +134,7 @@ case "$cmd" in
   ./unity build [mac|windows|webgl] [-development] [-outputPath 경로]
   ./unity run                     맥 빌드 실행
   ./unity simtest [필터]           Unity 없이 sim 골든·봇 검증 (번들 dotnet, 1초 내외; GOLDEN_ROOT=폴더 로 다른 벡터)
+  ./unity simtest balance [판] [전략,..]  실시간 밸런스 봇 (docs/UNITY.md §3.1, BAL_RULES='{..}' 로 실험)
   ./unity sync-data [git ref]     web/src/data/*.json → Assets/Resources/Data (기본: 작업 트리)
   ./unity sync-golden [git ref]   골든 픽스처(data+vectors) → Assets/Tests/EditMode/Golden (기본 4ff230c)
   ./unity sync-llm                LLM 녹화 응답 픽스처(+data) → Assets/Tests/EditMode/Llm (web/tests/llm/gen.mjs 뒤에)
