@@ -111,7 +111,7 @@
   "RT_HIST": 160,
   "RT_VOL": 2,
   "RT_LIMIT": 0.3,
-  "RT_SPEED": 2,
+  "RT_SPEED": 1,
   "RT_REST": 180,
   "RT_ACT": 120,
   "RT_WORK": 300,
