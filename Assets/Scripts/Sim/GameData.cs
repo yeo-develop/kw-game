@@ -48,6 +48,8 @@ namespace KwGame.Sim
         public bool inv, meme;
         /// inv 가 따라가는 종목 (없으면 시장 전체 반대). junk = 관리종목·상장폐지 대상. cat = 화면 분류. nmag = 뉴스 크기 배수
         public string of, cat; public bool junk; public double nmag = 1;
+        /// 실시간: 이 날(absDay)부터 상장. 0 = 처음부터. 초보 과부하 줄이려고 주차마다 늘림
+        public int day;
         public bool IsCoin => type == "coin";
         public bool IsStock => type == "stock";
     }

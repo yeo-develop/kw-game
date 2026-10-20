@@ -273,7 +273,7 @@ namespace KwGame.Sim
             double x = r.NextDouble();
             if (x < 0.5) return C("tick", "m", r.Next(1, 40));
             if (x < 0.58) return C("rest");
-            if (x < 0.7 && G.stockOpen()) { var ks = G.STK().ToList(); return C("buy", "tk", ks[r.Next(ks.Count)], "amt", S.cash * 0.3, "where", "app"); }
+            if (x < 0.7 && G.stockOpen()) { var ks = G.STK().Where(G.tkOpen).ToList(); return C("buy", "tk", ks[r.Next(ks.Count)], "amt", S.cash * 0.3, "where", "app"); }
             if (x < 0.8) { var cs = D.TKList.Where(t => t.IsCoin && G.tkOpen(t.id)).ToList(); var t0 = cs[r.Next(cs.Count)]; return C("open", "tk", t0.id, "dir", r.Next(2) * 2 - 1, "lev", new[] { 1, 5, 25, 50 }[r.Next(4)], "amt", S.cash * 0.2); }
             if (x < 0.85) return C("closeCoins");
             if (x < 0.88 && G.stockOpen()) { var h = S.hold.Keys.FirstOrDefault(); if (h != null) return C("sell", "tk", h, "frac", 1, "where", "app"); }

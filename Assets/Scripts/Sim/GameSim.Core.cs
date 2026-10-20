@@ -111,7 +111,9 @@ namespace KwGame.Sim
         public double loanCap() => R.LOAN_CAP[(int)clamp(S.month, 1, 3) - 1];
         public bool stockOpen() => S.rt ? S.min >= R.RT_STOCK[0] && S.min < R.RT_STOCK[1] : R.STOCK_SLOTS.Contains(S.slot);
         public bool isEve() => S.slot == R.SLOTS - 1;
-        public bool tkOpen(string k) => string.IsNullOrEmpty(D.TK[k].@lock) || has(D.TK[k].@lock);
+        public bool tkOpen(string k) => tkListed(k) && (string.IsNullOrEmpty(D.TK[k].@lock) || has(D.TK[k].@lock));
+        /// 실시간 주차별 상장. 이미 들고 있는 종목은 (옛 저장) 팔 수 있게 열어 둠
+        public bool tkListed(string k) => !S.rt || absDay() >= D.TK[k].day || S.hold.Has(k) || S.cps.Any(c => c.tk == k);
         public double stockVal() { double a = 0; foreach (var k in STK()) { var h = S.hold.Get(k); a = a + (h != null ? h.q * S.mk.tk[k].p : 0); } return a; }
         public double cpnl(CoinPos c, double? p = null) => Math.Max(-c.margin, c.margin * c.lev * c.mult * c.dir * ((p ?? S.mk.tk[c.tk].p) / c.entry - 1));
         public double cEq(CoinPos c) => c.margin + cpnl(c) + c.bonus;

@@ -151,6 +151,24 @@ namespace KwGame.Tests
         }
 
         [Test]
+        public void TickersListWeekByWeek()
+        {
+            var g = GameSim.Create(Data, 31, new GameSim.Opts { rt = true });
+            g.Apply(C("start")); g.Apply(C("pickRelic", "i", 0));
+            var S = g.S;
+            string[] Open() => g.D.TKList.Where(t => g.tkOpen(t.id)).Select(t => t.id).OrderBy(x => x).ToArray();
+            Assert.That(Open(), Is.EqualTo(new[] { "BTK", "GSE", "GUK" }), "1일차: 주식 2 · 코인 1");
+            S.min = g.D.RULES.RT_STOCK[0] + 30;
+            g.Apply(C("buy", "tk", "GSE", "amt", 100000, "where", "app")); Assert.That(S.hold.Has("GSE"), "열린 종목은 삼");
+            g.Apply(C("buy", "tk", "BAT", "amt", 100000, "where", "app")); Assert.That(S.hold.Has("BAT"), Is.False, "아직 상장 전 종목은 못 삼");
+            S.month = 2; S.day = 1; Assert.That(Open(), Does.Contain("BAT").And.Contain("GLD").And.Contain("TOK").And.Not.Contain("TAL"), "2주차");
+            S.month = 3; Assert.That(Open(), Does.Contain("TAL").And.Contain("INV").And.Not.Contain("JHS"), "3주차");
+            S.month = 4; Assert.That(Open(), Does.Contain("JHS").And.Contain("GAE").And.Not.Contain("MMC"), "4주차 (멍멍은 유품)");
+            S.month = 1; S.hold.Set("JHS", new Holding { q = 1, cost = 470 });
+            Assert.That(g.tkOpen("JHS"), "들고 있는 종목은 팔 수 있게 열림");
+        }
+
+        [Test]
         public void OldTurnSaveMissingNewTickersContinuesInRealtime()
         {
             var g = GameSim.Create(Data, 99, new GameSim.Opts { rt = false });

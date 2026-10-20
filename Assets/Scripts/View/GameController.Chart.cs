@@ -191,7 +191,7 @@ namespace KwGame.View
             }
             bool Pick(Ticker t) => stkCat == "all" || (stkCat == "stock" ? !t.IsCoin : stkCat == "coin" ? t.IsCoin : stkCat == "mine" ? PosPnl(t.id).HasValue : Shake(t) == stkCat);
             VisualElement grid = null; int col = 0;
-            foreach (var t in D.TKList.Where(Pick))
+            foreach (var t in D.TKList.Where(x => G.tkListed(x.id) && Pick(x)))
             {
                 if (col++ % 2 == 0) { grid = Ui.Row(); grid.style.alignItems = Align.Stretch; body.Add(grid); }
                 var mk = S.mk.tk[t.id]; bool lk = !G.tkOpen(t.id); double r = Rr(t.id), r4 = SpanR(mk, 4);

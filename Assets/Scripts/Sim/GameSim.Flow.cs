@@ -71,7 +71,7 @@ namespace KwGame.Sim
             var P = curPlan();
             if (isEve() && has("whale"))
             {
-                string tk = rnd() < 0.5 ? "BTK" : "TOK"; int d = P.r[tk] >= 0 ? 1 : -1;
+                string tk = rnd() < 0.5 && tkOpen("TOK") ? "TOK" : "BTK"; int d = P.r[tk] >= 0 ? 1 : -1;
                 S.whale = new Whale { tk = tk, dir = rnd() < (S.rt ? R.RT_WHALE_HIT : 0.7) ? d : -d, T = Tnow() };
                 pushF("🐋", T("whale.feed", "n", D.TK[tk].name, "d", T(S.whale.dir > 0 ? "whale.up" : "whale.dn")), "intel");
             }

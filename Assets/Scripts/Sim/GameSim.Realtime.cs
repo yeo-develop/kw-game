@@ -188,6 +188,13 @@ namespace KwGame.Sim
                 }
             }
             foreach (var kv in S.mk.tk) kv.Value.ref0 = kv.Value.p;
+            var nu = D.TKList.Where(t => t.day == absDay()).ToList();   // 주차별 신규 상장
+            if (nu.Count > 0)
+            {
+                string ns = string.Join(", ", nu.Select(t => t.ic + " " + t.name));
+                pushF("🔔", T("rt.list", "n", ns), "news"); toast(T("rt.list", "n", ns), "news", "news");
+                pushK("m", T("rt.listM"));
+            }
         }
         void delist(Ticker t)
         {

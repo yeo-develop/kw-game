@@ -11,7 +11,7 @@ namespace KwGame.Sim
         double? buyStock(string tk, double amt, double fee)
         {
             amt = Math.Floor(Math.Min(amt, S.cash) / 1000) * 1000;
-            if (amt < 10000 || !stockOpen()) return null;
+            if (amt < 10000 || !stockOpen() || !tkOpen(tk)) return null;
             fee += sickSlip();   // 아파서 손 떨림
             double p = S.mk.tk[tk].p;
             var h = S.hold.Get(tk);
