@@ -66,6 +66,26 @@
    "b": "worry",
    "m": "wave",
    "blush": 2
+  },
+  "yami": {
+   "e": "dot",
+   "b": "worry",
+   "m": "smirk",
+   "tears": 1,
+   "bags": 1
+  },
+  "pout": {
+   "e": "half",
+   "b": "angry",
+   "m": "frown",
+   "blush": 1
+  },
+  "love": {
+   "e": "wide",
+   "b": "up",
+   "m": "open",
+   "blush": 2,
+   "tooth": 1
   }
  }
 }

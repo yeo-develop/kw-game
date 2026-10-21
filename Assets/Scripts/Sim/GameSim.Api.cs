@@ -285,6 +285,13 @@ namespace KwGame.Sim
             if (k == "menhera" && S.pending?.t == "home") { S.stress = 95; Emit("debug", "k", k); menheraStart(); return; }
             if (k == "impulse" && S.pending?.t == "home" && S.cash >= 50000) { S.stress = 95; Emit("debug", "k", k); impulseStart(); return; }
             if (k == "event" && D.EVENTS.Count > 0 && S.pending?.t == "home") { Emit("debug", "k", k); evStart(D.EVENTS[0]); return; }
+            // 엔딩 바로 보기 (데모 스크린샷·확인용): end_<kind> · end_rich = 빚 0 + 총자산 RT_RICH 로 클리어
+            if (k != null && k.StartsWith("end_"))
+            {
+                string kind = k.Substring(4);
+                if (kind == "rich") { S.cash = Math.Max(S.cash, R.RT_RICH); S.debt = 0; kind = "clear"; }
+                if (D.ENDINGS.ContainsKey(kind)) { Emit("debug", "k", k); ending(kind); return; }
+            }
             Emit("debug", "k", k);
         }
     }

@@ -141,6 +141,10 @@
   "RT_DUE_ST": 2,
   "RT_ANX_PAY": 0.9,
   "RT_MEN_PAY": 0.7,
+  "RT_FAINT_END": 3,
+  "RT_MEN_END_BAD": 10,
+  "RT_MEN_END_ST": 100,
+  "RT_RICH": 50000000,
   "RELAX": {
    "walk": {
     "cost": 0,

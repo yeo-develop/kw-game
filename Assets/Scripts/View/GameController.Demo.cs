@@ -152,7 +152,8 @@ namespace KwGame.View
                 StartCoroutine(ImpulseAlert(fe)); yield return new WaitForSeconds(0.6f); yield return Shot(dir, "15d_impulse"); yield return new WaitForSeconds(6.5f);
             }
             yield return ToHome();
-            foreach (var (fk, nm) in new[] { ("excited", "16_face_excited"), ("shocked", "17_face_shocked"), ("crying_comic", "18_face_crying_comic") })
+            foreach (var (fk, nm) in new[] { ("excited", "16_face_excited"), ("shocked", "17_face_shocked"), ("crying_comic", "18_face_crying_comic"),
+                (ArtCatalog.FaceSprite("flex"), "18b_face_flex"), (ArtCatalog.FaceSprite("love"), "18c_face_love"), (ArtCatalog.FaceSprite("yami"), "18d_face_yami"), (ArtCatalog.FaceSprite("pout"), "18e_face_pout"), (ArtCatalog.FaceSprite("shy"), "18f_face_shy") })
             { faceStrong = false; HoldFace(fk, true); yield return Shot(dir, nm); }
             faceStrong = false;
             // LLM: 여기까지 첫 판은 설정대로(기본 켜짐) llmMode 로 돌았음. 뉴스 요청이 꼭 나오게 집에서 쉬기로 15칸 더 (실제 워커 호출 → 키 없으면 no_key → sim 내장 뉴스)
@@ -172,6 +173,15 @@ namespace KwGame.View
                 var r = Bots.Run(D, sd, strat);
                 G = r.game; G.Hud = true; RenderAll();
                 Debug.Log($"[shot] {nm}: ending={S.endInfo?.kind} cg={cgKey}");
+                yield return Shot(dir, nm);
+            }
+            // 실시간 전용 엔딩 (클리어 rich · 과로 bad3 · 멘헤라 bad4): 봇으론 드물어서 debug 로 바로 띄움
+            foreach (var (dk, nm) in new[] { ("end_rich", "12b_ending_clear_rich"), ("end_bad3", "12c_ending_bad3"), ("end_bad4", "12d_ending_bad4") })
+            {
+                G = GameSim.Create(D, 7, new GameSim.Opts { rt = true }); G.Hud = true;
+                G.Apply(new SimCommand("start")); G.Apply(new SimCommand("pickRelic", "i", 0)); G.Apply(new SimCommand("debug", "k", dk));
+                RenderAll();
+                Debug.Log($"[shot] {nm}: ending={S.endInfo?.kind}/{S.endInfo?.variant} cg={cgKey}");
                 yield return Shot(dir, nm);
             }
             llmFlavor = false;   // 아래 화면 재생은 수백 칸을 몰아치므로 연출 요청 끔 (재생 판은 llmMode 아님 = 골든 해시 그대로)

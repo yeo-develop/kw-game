@@ -7,13 +7,15 @@ from rembg import remove, new_session
 
 _session = None
 
-def clean_cutout(src):
+def clean_cutout(src, keep_fx=False):
+    """keep_fx: 하트·오라 같은 효과 그림도 남김 — isnet 마스크에 '배경색과 충분히 다른 픽셀'을 더한다 (표정 연출이 효과에 달린 love·mental·yami용)"""
     global _session
     _session = _session or new_session("isnet-anime")
     rgb = Image.open(src).convert("RGB")
     a = np.array(remove(rgb, session=_session, only_mask=True)).astype(np.float32) / 255
     p = np.array(rgb).astype(np.float32)
     bg = np.median(np.concatenate([p[0], p[-1], p[:, 0], p[:, -1]]), axis=0)
+    if keep_fx: a = np.maximum(a, np.clip((np.linalg.norm(p - bg, axis=2) - 22) / 40, 0, 1))
     a = np.where(a < 0.05, 0, np.where(a > 0.95, 1, a))
     m = (a > 0) & (a < 1)
     out = p.copy()

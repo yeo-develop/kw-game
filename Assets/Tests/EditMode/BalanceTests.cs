@@ -86,6 +86,15 @@ namespace KwGame.Tests
         }
 
         [Test]
+        public void OverworkAndMenheraEndingsStayRare()
+        {
+            // bad3(기절 3번 = 과로) · bad4(멘헤라 나쁜 답장 6번 + 스트레스 꽉 참) 는 쉬고 카톡 읽으면 피함 → 정석·알바 봇은 0, 도박 봇은 가끔
+            foreach (var st in new[] { "work", "smart", "smart0", "gamble" }) Assert.That(Sum(st).End("bad3"), Is.EqualTo(0), st + " 과로 엔딩");
+            foreach (var st in new[] { "work", "smart", "smart0" }) Assert.That(Sum(st).End("bad4"), Is.EqualTo(0), st + " 멘헤라 엔딩");
+            Assert.That(Sum("gamble").End("bad4"), Is.LessThan(0.1), "도박 봇은 대부분 이자로 끌려감 (멘헤라 엔딩은 가끔)");
+        }
+
+        [Test]
         public void RandomPlayDoesNotClear()
         {
             var s = Sum("random");

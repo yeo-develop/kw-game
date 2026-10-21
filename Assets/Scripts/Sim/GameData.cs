@@ -34,6 +34,8 @@ namespace KwGame.Sim
         public double RT_JOB_PAY0 = 70000, RT_JOB_PAYV = 70000, RT_HL_EDGE = 0.9, RT_VIP_ACC = 0.07, RT_CASH0 = 300000;
         /// 실시간 주 이자율. 바꾸면 하드코딩된 '5%' 문구도 같이: GameController.Screens.cs · scenes.json(150만) · tutorial.json · augments.json(loanbro 5→4%)
         public double RT_RATE = 0.05;
+        /// 실시간 엔딩 추가분: bad3 = 기절 N번째(과로) · bad4 = 멘헤라 나쁜 답장 연속 N번(착한 답장이면 리셋, 마지막 답장 직전 스트레스 꽉 참) · 클리어 rich = 갚는 순간 총자산(현금+보유) 이상
+        public double RT_FAINT_END = 3, RT_MEN_END_BAD = 10, RT_MEN_END_ST = 100, RT_RICH = 50000000;
         public Dictionary<string, RelaxDef> RELAX; public Dictionary<string, SickDef> SICK;
         public double RELAX_DIM = 0.6, SICK_P0 = 0.02, SICK_ST0 = 50, SICK_ST_K = 0.006, SICK_HP = 0.2, SICK_HANG = 0.1, SICK_FIT = 0.5, SICK_FLU_ST = 80, HANG_HP = 10, PHARM_COST = 8000, CLINIC_COST = 60000, VITA_COST = 15000;
 

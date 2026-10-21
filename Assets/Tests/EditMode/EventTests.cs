@@ -14,7 +14,7 @@ namespace KwGame.Tests
         static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json")
             .Select(f => new KeyValuePair<string, string>(Path.GetFileName(f), File.ReadAllText(f))));
         static readonly string[] WHO = { "m", "me", "kim", "nar" };
-        static readonly string[] FACES = { "neutral", "happy", "smug", "sad", "panic", "tired", "angry", "menhera", "flex", "cry", "shy" };
+        static readonly string[] FACES = { "neutral", "happy", "smug", "sad", "panic", "tired", "angry", "menhera", "flex", "cry", "shy", "yami", "pout", "love" };
 
         [Test]
         public void EventDataIsWellFormed()

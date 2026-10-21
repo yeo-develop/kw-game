@@ -11,7 +11,7 @@ namespace KwGame.Sim
     {
         public class Result
         {
-            public int seed; public string strat, end = "none";
+            public int seed; public string strat, end = "none", variant = "";
             public int day, steps, errs, works, faints, menheras, sickDays;
             public int sells; public double sellRet;
             public double debt, cash, earned, interest, repaid, gnet, invest;
@@ -21,8 +21,12 @@ namespace KwGame.Sim
         {
             public string strat; public int n;
             public double sellRet, sells, clear, bad, alive, clearDay, clear28, p25, p50, p75, badDay, debtEnd, earnPerDay, gnet, invest, errs, faints, menheras, sickDays;
+            /// 엔딩 종류(+변형)별 비율: clear · clear/gamble · clear/rich · bad1 · bad2 · bad3(과로) · bad4(멘헤라)
+            public Dictionary<string, double> ends = new Dictionary<string, double>();
+            public double End(string kind) => ends.Where(kv => kv.Key == kind || kv.Key.StartsWith(kind + "/")).Sum(kv => kv.Value);
             public override string ToString() =>
-                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1} · 에러 {errs:F1}";
+                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1} · 에러 {errs:F1}"
+                + (ends.Count > 0 ? "\n        엔딩 " + string.Join(" · ", ends.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value:P1}")) : "");
         }
 
         public const string RES = "리서치", PARK = "박대리";
@@ -63,6 +67,7 @@ namespace KwGame.Sim
                 sells = L.Average(x => x.sells), sellRet = L.Sum(x => x.sellRet) / Math.Max(1, L.Sum(x => x.sells)),
                 gnet = L.Average(x => x.gnet), invest = L.Average(x => x.invest), errs = L.Average(x => x.errs),
                 faints = L.Average(x => x.faints), menheras = L.Average(x => x.menheras), sickDays = L.Average(x => x.sickDays),
+                ends = L.Where(x => x.end != "none").GroupBy(x => x.end + (x.variant != "" ? "/" + x.variant : "")).ToDictionary(g => g.Key, g => (double)g.Count() / L.Count),
             };
         }
 
@@ -88,7 +93,7 @@ namespace KwGame.Sim
                 if (Trace != null && G.absDay() != traceDay) { traceDay = G.absDay(); Trace($"d{traceDay} 빚 {S.debt / 1e4:F0} 현금 {S.cash / 1e4:F0} 주식 {G.holdVal() / 1e4:F0} hp {S.hp:F0} st {S.stress:F0} 병 {S.sick} 유품 {string.Join(",", S.augs)}"); }
             }
             if (S.pending != null && S.pending.t != "ending" && G.absDay() <= maxDays) { res.errs++; res.lastErr = "step cap @" + S.pending.t; }   // 6만 수 안에 70일을 못 채움 = 봇이 헛돎
-            if (S.ending != null) res.end = S.ending;
+            if (S.ending != null) { res.end = S.ending; res.variant = S.endInfo?.variant ?? ""; }
             res.day = G.absDay(); res.debt = S.debt; res.cash = S.cash; res.earned = S.st.earned; res.interest = S.st.interest;
             res.repaid = S.st.repaid; res.gnet = S.st.gnet; res.invest = S.realized; res.faints = (int)S.st.faint;
             res.menheras = (int)(S.st.menOk + S.st.menBad); res.relic = S.augs.FirstOrDefault();

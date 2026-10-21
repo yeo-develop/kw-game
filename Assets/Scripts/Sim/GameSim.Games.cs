@@ -66,7 +66,7 @@ namespace KwGame.Sim
             galReact("work", V("amt", man(pay) + D.U("won"), "int", man(interestDue()) + D.U("won"), "pct", JsFmt.ToFixed(pay / Math.Max(1, interestDue()) * 100, 1), "conv", conv(pay)), 2);
             stress(S.rt ? R.RT_WORK_ST + R.RT_WORK_ST_STREAK * Math.Min(S.workStreak - 1, 4) : 5 + 2 * Math.Min(S.workStreak - 1, 4));
             if (hm < 1) bubble(T("work.tired", "p", rhu((1 - hm) * 100)), 2500, "tired");
-            else if (S.workStreak >= 5) bubble(T("work.slave", "n", S.workStreak), 2500, "angry");
+            else if (S.workStreak >= 5) bubble(T("work.slave", "n", S.workStreak), 2500, "pout");
             if (sc >= 0.7) M(T("work.good", "pay", won(pay), "c", conv(pay), "x50", man(pay * 50)), "smug");
             else M(T("work.bad", "pay", won(pay), "c", conv(pay)), "angry");
             pushK("m", T(key == "ware" ? "work.kWare" : "work.k"));
@@ -297,7 +297,7 @@ namespace KwGame.Sim
             if (tot >= 1e6) addict(R.Gain("bigwin"));
             pushF("🔮", T("lotto.feed", "w", string.Join("·", win), "r", tot != 0 ? T("lotto.feedWin", "a", won(tot)) : T("lotto.feedNone")), "money");
             Emit("lottoDraw", "win", win, "rows", rows, "tot", tot, "conv", tot != 0 ? conv(tot) : "");
-            if (tot >= 1e7) { fx("flex", "amt", tot); galReact("bigwin", V("amt", sgnMan(tot), "conv", conv(tot)), 3); stress(-30); M(T("lotto.first"), "flex"); hideDlg(); }
+            if (tot >= 1e7) { fx("flex", "amt", tot); galReact("bigwin", V("amt", sgnMan(tot), "conv", conv(tot)), 3); stress(-30); M(T("lotto.first"), "love"); hideDlg(); }
         }
     }
 }

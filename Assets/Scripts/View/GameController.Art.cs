@@ -7,10 +7,11 @@ namespace KwGame.View
     // 장면 그림: 배경 · CG · 미래 스탠딩(표정) · NPC/김사장 초상. 키 → 파일은 ArtCatalog, 여기는 "지금 무엇을 띄울지"만 고른다.
     //
     // 미래 표정 (docs/UNITY.md §9):
-    //  1) 평소(이벤트 재생이 끝나고 몇 초 뒤) = 상태 표정: 기절→dizzy · 멘헤라(stress ≥ menLine)→mental · stress ≥ 55→crying
+    //  1) 평소(이벤트 재생이 끝나고 몇 초 뒤) = 상태 표정: 기절→dizzy · 야미(stress ≥ yamiLine 90)→yami(없으면 mental) · 멘헤라(stress ≥ menLine)→mental · stress ≥ 55→crying
     //     · 불안(stress ≥ 40) 또는 체력 < HP_LOW→tired · 그 외→base   (web sim moodFace 를 스프라이트 7종에 맞게 늘림)
     //  2) sim 이벤트의 face 키(say·bubble·face·scene)는 ArtCatalog.FACE 표로 바꿔 띄우고, 재생이 끝난 뒤 3초 유지 후 1)로 돌아감
-    //  3) 강한 연출(재생 묶음이 끝날 때까지 다른 face 키에 안 덮임): 큰 수익 fx flex→excited · 큰 손실 fx crack→shocked
+    //     새 표정 shy·flex·yami·pout·love 는 전용 그림이 없으면 예전 그림으로 (ArtCatalog.FaceSprite)
+    //  3) 강한 연출(재생 묶음이 끝날 때까지 다른 face 키에 안 덮임): 큰 수익 fx flex→flex(선글라스, LOVE_AMT↑ 면 love) · 큰 손실 fx crack→shocked
     //     · 청산 fx ash→crying_comic · 기절→dizzy
     //  4) 그 밖: 김사장 대사(얼굴 지정 없음)·주갤 반응 토스트→annoyed · 소소한 수익(카지노/경마/복권 당첨)·유품 획득→smug
     //     · 아침 결산(밤잠 뒤)→pajama
@@ -75,7 +76,7 @@ namespace KwGame.View
                 case "loan": kimKey = "kim_base"; break;
                 case "map": bg = "map"; miraiOn = false; break;
                 case "encounter": bg = "map"; npcKey = D.SRC.TryGetValue(P.id, out var src) ? src.npc : null; break;
-                case "ending": cgKey = S.endInfo != null ? "ending_" + S.endInfo.kind : null; toastCol.Clear(); break;
+                case "ending": cgKey = S.endInfo != null ? ArtCatalog.EndingCg(S.endInfo.kind, S.endInfo.variant) : null; toastCol.Clear(); break;
                 default:
                     {
                         string key = P.t == "loc" ? P.key : S.visit?.key;
@@ -92,6 +93,7 @@ namespace KwGame.View
         {
             var h = G.HudSnapOf();
             if (h.faint) return "dizzy";
+            if (h.stress >= G.yamiLine()) return ArtCatalog.FaceSprite("yami");
             if (h.stress >= G.menLine()) return "mental";
             if (h.stress >= 55) return "crying";
             if (h.stress >= 40 || h.hp < D.RULES.HP_LOW) return "tired";

@@ -118,7 +118,7 @@ namespace KwGame.Sim
             var P = S.pending; var o = P.opts.FirstOrDefault(x => x.k == k);
             if (o == null || o.dis) return false;
             S.pending = null;
-            if (k == "no") { stress(12); addict(-3); M(fpick(TA("add.temptNoM")), "angry"); hideDlg(); after("home"); return true; }
+            if (k == "no") { stress(12); addict(-3); M(fpick(TA("add.temptNoM")), "pout"); hideDlg(); after("home"); return true; }
             double stake = Math.Min(S.cash, temptStake()), before = S.cash; bool win = rnd() < 0.49; double net = win ? stake : -stake;
             S.cash += net; S.st.gamble++; S.st.tempt++; S.st.gN++; if (win) S.st.gW++; S.st.gnet += net; S.workStreak = 0;
             S.today.Add(new Ledger { kind = "gamble", amt = net, label = T("lbl.tempt") });
@@ -261,7 +261,7 @@ namespace KwGame.Sim
             else if (rows.Count > 0 && Math.Abs(total) >= Math.Max(800000, eq0 * 0.25))
             {
                 scene("room", "night", evening, "face", "neutral", "mode", "home");
-                if (total > 0) { fx("flex", "amt", total); galReact("bigwin", V("amt", sgnMan(total), "conv", conv(total)), 2); stress(-10); M(T("tick.bigUp", "s", D.SLOT_NAME[S.slot], "a", sgnWon(total), "c", conv(total)), "flex"); }
+                if (total > 0) { fx("flex", "amt", total); galReact("bigwin", V("amt", sgnMan(total), "conv", conv(total)), 2); stress(-10); M(T("tick.bigUp", "s", D.SLOT_NAME[S.slot], "a", sgnWon(total), "c", conv(total)), total >= LOVE_AMT ? "love" : "flex"); }
                 else { fx("crack", "amt", total); galReact("bigloss", V("amt", sgnMan(total), "conv", conv(total)), 2); stress(16); M(T("tick.bigDn", "a", sgnWon(total), "c", conv(total)), "cry"); }
                 hideDlg();
             }
@@ -394,11 +394,12 @@ namespace KwGame.Sim
         {
             S.menKey = Tnow().ToString(); S.menCool = Tnow() + 3;
             int si = (int)Math.Floor(rnd() * D.MEN_SETS.Count); var set = D.MEN_SETS[si];
-            Emit("menhera", "msgs", set.msgs);
+            string mf = S.stress >= yamiLine() ? "yami" : "menhera";   // 스트레스 90↑ = 야미 (눈에 빛 없음)
+            Emit("menhera", "msgs", set.msgs, "face", mf);
             foreach (var m in set.msgs) pushK("m", m);
             galReact("menhera", null, 2);
             N(T("men.n", "n", set.msgs.Length));
-            M(set.last, "menhera");
+            M(set.last, mf);
             var opts = new List<Opt> { new Opt { l = set.ok, ok = true }, new Opt { l = set.no[0] }, new Opt { l = set.no[1] } };
             for (int i = opts.Count - 1; i > 0; i--) { int j = (int)Math.Floor(rnd() * (i + 1)); var tmp = opts[i]; opts[i] = opts[j]; opts[j] = tmp; }
             for (int i = 0; i < opts.Count; i++) opts[i].k = "rep" + i;
@@ -410,9 +411,11 @@ namespace KwGame.Sim
             if (c == null) return false;
             S.pending = null;
             pushK("me", c.l);
-            if (c.ok) { S.st.menOk++; stress(-45); M(set.good, "happy"); }
-            else { S.st.menBad++; stress(-20); M(set.bad, "angry"); }
+            double st0 = S.stress;
+            if (c.ok) { S.st.menOk++; S.menRun = 0; stress(-45); M(set.good, "happy"); }
+            else { S.st.menBad++; S.menRun++; stress(-20); M(set.bad, "yami"); }
             hideDlg();
+            if (!c.ok) menBadEnd(st0);
             return true;
         }
         void impulseStart()
@@ -437,8 +440,8 @@ namespace KwGame.Sim
             if (c == null) return false;
             S.pending = null;
             pushK("me", c.l);
-            if (c.ok) { S.st.menOk++; stress(-35); M(fill(set.good, V("n", D.TK[tk].name)), "happy"); hideDlg(); return true; }
-            S.st.menBad++; S.st.impulse++;
+            if (c.ok) { S.st.menOk++; S.menRun = 0; stress(-35); M(fill(set.good, V("n", D.TK[tk].name)), "happy"); hideDlg(); return true; }
+            S.st.menBad++; S.menRun++; S.st.impulse++; double st0 = S.stress;
             double amt = round1k(S.cash * R.IMPULSE_CASH); bool stock = D.TK[tk].type == "stock";
             bool up = rnd() < 0.5; double mag = stock ? 0.12 + rnd() * 0.18 : 0.2 + rnd() * 0.25;
             bool ok = false; double cash0 = S.cash;
@@ -454,7 +457,17 @@ namespace KwGame.Sim
             M(fill(set.bad, V("n", D.TK[tk].name)), "flex");
             pushF("🛒", T("imp.feed", "n", D.TK[tk].name, "a", won(amt)), "money");
             hideDlg();
+            menBadEnd(st0);
             return true;
+        }
+
+        /// 실시간 bad4: 멘헤라(돌발 매수 포함)를 연달아 RT_MEN_END_BAD 번 나쁘게 받아쳤는데, 마지막에 받기 직전 스트레스가 꽉 차 있었으면 → 미래 폭주 엔딩.
+        /// 한 번 전 단계에서 경고 토스트 (피할 수 있게: 착한 답장 1번이면 연속 0 + 스트레스 −45)
+        void menBadEnd(double st0)
+        {
+            if (!S.rt) return;   // 턴 모드 = 웹 골든 그대로
+            if (S.menRun >= R.RT_MEN_END_BAD && st0 >= R.RT_MEN_END_ST) { Emit("hideUi"); N(T("end.menMax")); ending("bad4"); return; }
+            if (S.menRun >= R.RT_MEN_END_BAD - 1) { toast(T("men.warn"), "liq", "kakao", "m"); pushK("m", fpick(TA("men.warnK"))); }
         }
 
         // ---------- 끝 ----------
@@ -482,14 +495,23 @@ namespace KwGame.Sim
             string lead, variant = "";
             if (kind == "clear")
             {
-                variant = S.st.gnet > 0 && S.st.gnet >= S.st.earned ? "gamble" : "";
-                lead = T(variant != "" ? "end.clearGamble" : S.stress < 60 ? "end.clearHappy" : "end.clearMeh", v) + "\n\n" +
+                // 변형 우선순위: gamble(도박으로 갚음) > rich(실시간 · 갚는 순간 총자산 RT_RICH↑) > 보통. 도박 클리어는 '어떻게' 갚았는지가 더 드문 이야기라 먼저
+                double assets = rhu(S.cash + holdVal()); v["a"] = won(assets);
+                variant = S.st.gnet > 0 && S.st.gnet >= S.st.earned ? "gamble" : S.rt && assets >= R.RT_RICH ? "rich" : "";
+                lead = T(variant == "gamble" ? "end.clearGamble" : variant == "rich" ? "end.clearRich" : S.stress < 60 ? "end.clearHappy" : "end.clearMeh", v) + "\n\n" +
                     (decor.Count > 0 ? string.Join("\n", decor.Select(k => D.DECOR_END.TryGetValue(k, out var s) ? s : null).Where(s => !string.IsNullOrEmpty(s))) : T("end.noDecor"));
             }
             else if (kind == "bad1")
             {
                 variant = S.galFame >= D.FAME["gall"] ? "gall" : "sea";
                 lead = (S.debt > R.DEBT_CAP ? T("end.capPre") : "") + T(variant == "gall" ? "end.bad1Gall" : "end.bad1", v);
+            }
+            else if (kind == "bad3") lead = T("end.bad3", "f", S.st.faint, "c", won(S.st.faint * R.HP_FAINT_COST), "d", won(S.debt));
+            else if (kind == "bad4")
+            {
+                // 포지션 들고 있으면 미래가 폰 뺏어 전부 시장가 매도(화면 연출만), 아니면 쪽지 남기고 코인 리딩방으로 가출
+                variant = hasPos() ? "sell" : "run";
+                lead = T(variant == "sell" ? "end.bad4Sell" : "end.bad4", "n", S.st.menBad, "h", won(holdVal()), "d", won(S.debt));
             }
             else
             {
@@ -503,7 +525,7 @@ namespace KwGame.Sim
             S.endInfo = new EndInfo
             {
                 kind = kind, variant = variant, tag = E.tag, ok = E.ok, h = pickV(E.hv, E.h), bg = pickV(E.bgv, E.bg),
-                face = kind == "clear" ? (S.stress < 60 ? "happy" : "tired") : E.face, lead = lead, days = absDay(), rank = rankOf(S.galFame).name,
+                face = variant == "rich" ? "flex" : kind == "clear" ? (S.stress < 60 ? "happy" : "tired") : E.face, lead = lead, days = absDay(), rank = rankOf(S.galFame).name,
                 noChar = E.noCharV != null && E.noCharV.TryGetValue(variant, out var nc) && nc != 0, night = kind == "clear", sb = sb, cont = kind == "clear"
             };
             pushK("sys", T("end.k", "h", S.endInfo.h));
@@ -534,6 +556,10 @@ namespace KwGame.Sim
             pushK("m", T("faint.k"));
             galReact("faint", null, 2);
             hideDlg();
+            // 실시간 bad3: RT_FAINT_END 번째 기절 = 과로로 입원 엔딩. 한 번 전엔 경고 (자거나 쉬면 피함)
+            if (!S.rt) return;
+            if (S.st.faint >= R.RT_FAINT_END) { Emit("hideUi"); N(T("end.faintMax", "n", S.st.faint)); ending("bad3"); }
+            else if (S.st.faint >= R.RT_FAINT_END - 1) { toast(T("faint.warn"), "liq"); pushK("m", T("faint.warnK")); }
         }
 
         // ---------- 단계 ----------

@@ -106,6 +106,10 @@ namespace KwGame.Sim
         public double interestDue() => round1k(S.debt * rate());
         public double menLine() => has("posi") ? 90 : 70;
         public string mental() => S.stress >= menLine() ? "men" : S.stress >= 40 ? "anx" : "calm";
+        /// 얀데레(야미) 단계: 멘헤라 선 + 20 (보통 90, 긍정일기장이면 100 = 꽉 찼을 때만). 표정만 바뀜 (mental() 은 그대로 3단계)
+        /// 이만큼 한 번에 벌면 미래 표정 love (하트 눈·침). 그 밑 큰 수익은 flex (선글라스)
+        public const double LOVE_AMT = 3000000;
+        public double yamiLine() => Math.Min(100, menLine() + 20);
         public int absDay() => (S.month - 1) * R.MONTH_DAYS + S.day;
         public int Tnow() => (absDay() - 1) * R.SLOTS + S.slot;
         public double loanCap() => R.LOAN_CAP[(int)clamp(S.month, 1, 3) - 1];
@@ -133,7 +137,7 @@ namespace KwGame.Sim
         public double todayPnl() { double a = 0; foreach (var x in S.today) if (x.kind == "invest" || x.kind == "gamble") a = a + x.amt; return a; }
         public bool todayLiq() => S.today.Any(x => (x.label ?? "").Contains(D.S("liqWord")));
         public int wroteToday() => S.wrote.TryGetValue(absDay(), out var n) ? n : 0;
-        public string moodFace() { var m = mental(); return m == "men" ? "menhera" : m == "anx" || S.hp < R.HP_LOW ? "tired" : S.stress < 25 ? "happy" : "neutral"; }
+        public string moodFace() { var m = mental(); return S.stress >= yamiLine() ? "yami" : m == "men" ? "menhera" : m == "anx" || S.hp < R.HP_LOW ? "tired" : S.stress < 25 ? "happy" : "neutral"; }
         /// 실시간 모드: 멘탈 나쁘면 알바 성과도 깎임 (불안 ×0.9 · 멘헤라 ×0.7)
         public double menPay() { var m = mental(); return m == "men" ? R.RT_MEN_PAY : m == "anx" ? R.RT_ANX_PAY : 1; }
         public double hpMult() { double lo = R.HP_LOW; return S.hp >= lo ? 1 : 0.4 + 0.6 * S.hp / lo; }

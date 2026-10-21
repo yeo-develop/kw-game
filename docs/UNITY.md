@@ -95,6 +95,10 @@ BAL_TRACE=4 ./unity simtest balance 1 smart    # 시드 하나 하루씩 + 매�
 | gamble | 4% | – | 95% (평균 8일) | 턴 모드 v3.3b 2.6% / 97.4% 와 같은 모양 |
 | random | 0% | – | 39% (평균 63일) | |
 
+실시간 전용 엔딩 추가분 (2026-10-21, 턴 모드엔 없음 = 웹 골든 그대로): 클리어 변형 `rich`(갚는 순간 현금+보유 ≥ `RT_RICH` 5천만, 우선순위 gamble > rich > 보통) · `bad3` 과로(기절 `RT_FAINT_END` 3번째, 2번째에 경고) · `bad4` 멘헤라(멘헤라·돌발 매수를 **연속으로** 나쁘게 받아친 게 `RT_MEN_END_BAD` 10번째이고 그 답장 직전 스트레스 ≥ `RT_MEN_END_ST` 100; 착한 답장 1번이면 연속 `S.menRun` 0, 9번째에 경고; 폰에 포지션 있으면 변형 `sell`, 없으면 `run`).
+`RT_MEN_END_BAD` 는 카톡 안 읽고 막 답장하는 random 봇 기준으로 맞춤 (150판 bad4: 6 → 86% · 7 → 65% · 8 → 49% · 9 → 39% · 10 → 28%).
+300판 (10): work·smart·smart0·gamble 은 전과 같음 (bad3·bad4 0%) · random 배드 51% (bad4 27.3% · bad1 23.3%, 평균 50일), 생존 49% (전: bad1 35%, 생존 65%). 봇은 기절을 안 해서 bad3 0%.
+
 조정: `RT_CASH0` 30만 → 200만 (실시간 시작 현금, 인트로 카드 '남은 돈'도 같이 — 처음 하는 사람이 첫 주 이자에 밑천을 다 뺏겨 70일 안에 29%만 빠져나오던 것) · 이자율 `RT_RATE` · VIP 적중 보너스 `RT_VIP_ACC` 키 분리 (값은 그대로 0.05 · 0.07 — VIP 보너스를 0.03 으로 낮춰도 300판 중앙 26 → 27일이라 의미 없어서 되돌림. VIP 강제 시 중앙 26~27일, 다른 유품 28~35일: 무료 리포트 2개라 2티어 중 제일 셈).
 거의 안 움직인 손잡이: `RT_VOL` 1.4~2 (중앙 40~43일), 이자 4~5% (중앙 41~43일). 정석 속도는 하루에 받는 좋은 정보 수가 정한다 (무료 리포트 2개인 VIP 만 튐). 카지노 기대값: 홀짝 .985 · 슬롯 .967 · 사다리 .928 · 하이로우 .792 · 즉석 .81.
 
@@ -165,17 +169,19 @@ Builds/Mac/롱잡고알바감.app/Contents/MacOS/롱잡고알바감 -screen-widt
 | 김사장 | 클리어 장면(scenes.clear) | `kim_farewell` |
 | CG | 오프닝 김사장 등장 ~ 퇴장 | `opening_visit` |
 | CG | 오프닝 규칙 카드 뒤 ~ 첫 유품 고르기 | `opening_box` |
-| CG | 엔딩 화면(스코어보드 왼쪽 무대 전체) | `ending_clear` / `ending_bad1` / `ending_bad2` (endInfo.kind) |
+| CG | 엔딩 화면(스코어보드 왼쪽 무대 전체) | `ending_<kind>_<variant>` 그림이 있으면 그것(`ending_clear_gamble`·`ending_clear_rich`·`ending_bad1_gall`·`ending_bad2_loop` …, 경고 없이 확인), 없으면 `ending_<kind>` (clear·bad1·bad2·bad3·bad4) |
 | 유품 | HUD 유품 슬롯(7개 + 나머지 수, 툴팁=이름) · 유품 고르기 · 유품 상점 진열 · 방금 뽑기 결과 · 획득 토스트 | `Icons/Relics/<id>` |
 | 꽝 | 뽑기 꽝 토스트 · 방금 뽑기 결과 | `Icons/Junk/<RELIC_JUNK 순서>` |
 
 **미래 표정 규칙** (GameController.Art.cs, web `moodFace` + 이벤트 face 키를 스프라이트 11종으로)
 
 1. 평소(이벤트 재생 끝 + 3초 뒤) = 상태 표정, 위에서부터 먼저 맞는 것:
-   기절 중 → `dizzy` · 멘헤라(stress ≥ menLine 70, 긍정일기장 90) → `mental` · stress ≥ 55 → `crying` · 불안(stress ≥ 40) 또는 체력 < HP_LOW → `tired` · 그 외 → `base`
+   기절 중 → `dizzy` · 야미(stress ≥ yamiLine = menLine + 20 → 90, 긍정일기장 100) → `yami` · 멘헤라(stress ≥ menLine 70, 긍정일기장 90) → `mental` · stress ≥ 55 → `crying` · 불안(stress ≥ 40) 또는 체력 < HP_LOW → `tired` · 그 외 → `base`
 2. sim 이벤트 face 키 (say·bubble·face·scene·tip) → 표:
-   neutral·shy → base, happy·flex → excited, smug → smug, sad·cry → crying, panic → shocked, tired → tired, angry → annoyed, menhera → mental.
+   neutral → base, happy → excited, smug → smug, sad·cry → crying, panic → shocked, tired → tired, angry → annoyed, menhera → mental,
+   전용 그림: shy → `shy`, flex → `flex`(선글라스), yami → `yami`, pout → `pout`(볼 빵빵), love → `love`(하트 눈). 그림이 없으면 예전 대체(shy→base, flex→excited, yami→mental, pout→annoyed, love→excited).
+   sim 쪽: 멘헤라 시작은 stress ≥ 90 이면 yami, 나쁜 답장은 항상 yami · 작은 손실·유혹 거절·알바 5연속 → pout · 큰 수익 300만↑(LOVE_AMT)·잭팟·빚또 1등 → love.
    재생이 끝난 뒤 3초 유지하고 1)로 돌아감.
-3. 강한 연출 (그 재생 묶음 동안 2)의 face 키에 안 덮임): 큰 수익 `fx flex` → excited · 큰 손실 `fx crack` → shocked · 청산 `fx ash` → crying_comic · 기절 → dizzy.
+3. 강한 연출 (그 재생 묶음 동안 2)의 face 키에 안 덮임): 큰 수익 `fx flex` → flex (300만↑ love, 그림 없으면 excited) · 큰 손실 `fx crack` → shocked · 청산 `fx ash` → crying_comic · 기절 → dizzy.
 4. 그 밖: 김사장 대사(face 지정 없음) → annoyed · 주갤 반응 토스트(app=gall, 내 글 정산) → annoyed · 카지노/경마 이김·즉석 복권 당첨·유품 획득 → smug · 쇼핑(bought) → excited · 멘헤라 폭탄 → mental · 아침 결산(밤잠 뒤) → pajama.
 5. 지도 화면엔 미래를 안 띄움(web 과 같음). 지도에서 미래가 말하면 다시 나타남.

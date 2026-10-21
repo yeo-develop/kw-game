@@ -133,5 +133,7 @@ namespace KwGame.Sim
         public List<string> evSeen = new List<string>(); public int? evCool, evT;   // 돌발 이벤트 (GameSim.Events.cs, 다이제스트 밖)
         // 실시간 모드 (GameSim.Realtime.cs, 다이제스트 밖): 하루 중 분(08:00 = 480), 행동이 아직 못 쓴 시간, 지금 행동이 쓸 시간
         public bool rt; public int min, owe, actMin;
+        /// 멘헤라·돌발 매수를 연달아 나쁘게 받아친 횟수 (착한 답장이면 0). 실시간 bad4 판정용 (다이제스트 밖, 저장엔 들어감)
+        public int menRun;
     }
 }

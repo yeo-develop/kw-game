@@ -94,7 +94,7 @@ namespace KwGame.Sim
                 S.st.bigWin++; fame(1);
                 fx("flex", "amt", net); galReact(ctx.jackpot ? "jackpot" : "bigwin", gctx, 3); pushK("m", T("bigwin.k"));
                 stress(-15);
-                var a = fpick(D.ML["bigwin"]); M(a + tail(), "flex");
+                var a = fpick(D.ML["bigwin"]); M(a + tail(), ctx.jackpot || net >= LOVE_AMT ? "love" : "flex");
             }
             else if (net > 0)
             {
@@ -112,7 +112,7 @@ namespace KwGame.Sim
             else if (net < 0)
             {
                 galReact("loss", gctx, 2); stress(8 * lm);
-                var a = fpick(D.ML["loss"]); M(a + tail(), "angry");
+                var a = fpick(D.ML["loss"]); M(a + tail(), "pout");
             }
             else M(T("react.even"), "tired");
             hideDlg();
