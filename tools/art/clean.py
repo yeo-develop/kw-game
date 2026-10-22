@@ -22,5 +22,11 @@ def clean_cutout(src, keep_fx=False):
     out[m] = np.clip((p[m] - (1 - a[m, None]) * bg) / a[m, None], 0, 255)
     return Image.fromarray(np.dstack([out, a * 255]).astype(np.uint8), "RGBA")
 
+def add_fx(char, src):
+    """NovelAI Remove BG 결과(char)는 하트·오라 효과까지 지운다 → 원본(src)에서 배경색과 다른 픽셀을 캐릭터 뒤에 다시 깐다"""
+    fx = clean_cutout(src, keep_fx=True).resize(char.size)
+    fx.alpha_composite(char.convert("RGBA"))
+    return fx
+
 if __name__ == "__main__":
     clean_cutout(sys.argv[1]).save(sys.argv[2])

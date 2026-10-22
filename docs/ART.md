@@ -5,11 +5,11 @@
 - **원본 (git 아님):** 로컬 `art/` (gitignore) + R2 `serin-assets/kw-game/art-src/` (같은 폴더 구조, webp). 다시 받기: `npx wrangler r2 object get serin-assets/kw-game/art-src/<경로> --file <경로> --remote`.
 - 탈락작은 각 폴더 `rejects/`, 고르기 전 후보는 `cg/candidates/`, 첫 시안은 `mirai/raw/`·`mirai/base_candidates/`.
 
-## 목록 (88장)
+## 목록 (90장)
 | 구분 | Assets/Resources/Art | 크기 | 파일 |
 |---|---|---|---|
 | 미래 스탠딩 16 | Characters/Mirai | 높이 1080 PNG | base, excited, mental(멘헤라·지뢰계, 10-22 다시 그림), yami(최상위 멘헤라·스트레스 90+), crying, crying_comic(오열), annoyed, pout(삐짐), shy, flex(선글라스), love(하트눈·큰 수익), shocked, smug, tired, pajama, dizzy(기절) — `mirai_` 접두 |
-| 김사장·NPC 16 | Characters/NPC | 높이 1080 PNG | kim_base, kim_menace, kim_farewell + data/npcs.json 키(broker, dealer, race, lotto, pc, bank, shop, work, taxi, cousin, pckid, hench, suit) |
+| 김사장·NPC 18 | Characters/NPC | 높이 1080 PNG | kim_base, kim_menace, kim_farewell + data/npcs.json 키(broker, dealer, race, lotto, pc, bank, shop, work, taxi, cousin, pckid, hench, suit, imo(포차 이모), pharm(약사)) |
 | 배경 19 | Backgrounds | 1216×832 JPG | room_day, room_night + 장소 키(broker, bank, casino, work, pc, shop, lotto, race, park, bar, hosp) + 알바(cafe, store, ware, mart) + 엔딩(sea, gall) |
 | CG 11 | CG | 1216×832 JPG | opening_visit(김사장 방문), opening_box(유품 상자), ending_clear, ending_bad1(끌려감), ending_bad2(도박), ending_bad3(과로·병원), ending_bad4(멘헤라) + 변형 ending_clear_gamble, ending_clear_rich, ending_bad1_gall, ending_bad2_loop |
 | 유품 17 | Icons/Relics | 256 PNG | data/augments.json AUGS id와 같은 이름 |
@@ -18,7 +18,7 @@
 새 표정·엔딩 그림이 없으면 조용히 예전 그림으로 대체 (View/ArtCatalog.cs `FaceSprite`·`EndingCg`). 아직 안 그린 선택 그림:
 - 엔딩 변형 CG `ending_bad4_sell`·`ending_bad4_run`·`ending_bad1_sea`·`ending_bad2_casino` — 넣으면 자동으로 씀 (없으면 `ending_<kind>`).
 
-isnet-anime는 반짝이·땀방울 같은 효과 그림도 대부분 남긴다. 하트·오라처럼 큰 효과는 지우므로 love·mental·yami는 `clean_cutout(src, keep_fx=True)`(배경색과 다른 픽셀도 남김)로 잘랐다. 10-22에 추가한 스탠딩 6장은 NovelAI Remove BG 대신 이 로컬 방식이다(`art/nobg/`에 없음).
+isnet-anime는 반짝이·땀방울 같은 효과 그림도 대부분 남긴다. 하트·오라처럼 큰 효과는 지우므로 love·mental·yami는 `clean_cutout(src, keep_fx=True)`(배경색과 다른 픽셀도 남김)로 잘랐다. Remove BG의 `generated`는 하트·오라·얇은 소품(국자)을 지우고, 가끔 얼굴을 다시 그린다(flex 선글라스가 사라짐). 그래서 `export.py`의 `FX`(love·mental·yami·imo)는 `generated` 뒤에 원본의 효과 픽셀을 다시 깔고(`clean.add_fx`), flex는 `masked` 결과를 `nobg/`에 둔다. 버린 결과는 `art/nobg/raw/`.
 
 ## 다시 뽑을 때 (NovelAI V4.5 Full)
 - Base Prompt·UC는 사용자 설정(아티스트 믹스) 그대로. 장면은 Character Prompt 칸에 쓴다.

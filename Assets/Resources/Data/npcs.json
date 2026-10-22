@@ -139,6 +139,26 @@
     "stache",
     "glasses"
    ]
+  },
+  "imo": {
+   "name": "포차 이모",
+   "body": "#c0563a",
+   "hair": "#3a2626",
+   "hs": "perm",
+   "acc": [
+    "apron"
+   ]
+  },
+  "pharm": {
+   "name": "약사 선생님",
+   "body": "#f2f2f2",
+   "hair": "#1a1a1a",
+   "hs": "bun",
+   "acc": [
+    "glasses",
+    "tag"
+   ],
+   "tag": "약국"
   }
  }
 }

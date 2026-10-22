@@ -6,19 +6,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 A, U = f"{ROOT}/art", f"{ROOT}/Assets/Resources/Art"
 
 import subprocess, tempfile
-from clean import clean_cutout  # 캐릭터: isnet-anime
+from clean import clean_cutout, add_fx  # 캐릭터: isnet-anime
 
 def vision_cutout(src):  # 아이콘: macOS Vision 전경 마스크 (물건은 이쪽이 깔끔)
     out = tempfile.mktemp(suffix=".png")
     subprocess.run(["/tmp/cutout", src, out], check=True, capture_output=True)
     return Image.open(out).convert("RGBA")
 
-FX = {"mirai_love", "mirai_mental", "mirai_yami"}  # 하트·오라 효과가 표정의 핵심 → keep_fx
+FX = {"mirai_love", "mirai_mental", "mirai_yami", "imo"}  # 하트·오라 효과(·이모 국자처럼 Remove BG가 지우는 얇은 소품)를 원본에서 되살림 → keep_fx
 
 def save_char(src, dst):  # 높이 1080, 원본 캔버스 유지(표정 바꿔도 위치 고정)
     # 1순위: NovelAI Director Tools "Remove BG"의 generated 결과(art/nobg/<이름>.png, 장당 65 Anlas) — 가장 깨끗함
     nb = f"{A}/nobg/{os.path.basename(src)[:-5]}.png"
-    im = Image.open(nb).convert("RGBA") if os.path.exists(nb) else clean_cutout(src, keep_fx=os.path.basename(src)[:-5] in FX)
+    fx = os.path.basename(src)[:-5] in FX
+    im = (add_fx(Image.open(nb), src) if fx else Image.open(nb).convert("RGBA")) if os.path.exists(nb) else clean_cutout(src, keep_fx=fx)
     im.resize((round(im.width * 1080 / im.height), 1080), Image.LANCZOS).save(dst, optimize=True)
 
 def save_icon(src, dst):  # 내용만 잘라 정사각 256
