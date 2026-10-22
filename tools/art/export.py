@@ -28,7 +28,8 @@ def save_icon(src, dst):  # 내용만 잘라 정사각 256
     c.resize((256, 256), Image.LANCZOS).save(dst, optimize=True)
 
 jobs = [("mirai/set_v1/mirai_*.webp", "Characters/Mirai", save_char), ("npc/*.webp", "Characters/NPC", save_char),
-        ("relic/*.webp", "Icons/Relics", save_icon), ("relic/junk/*.webp", "Icons/Junk", save_icon)]
+        ("relic/*.webp", "Icons/Relics", save_icon), ("relic/junk/*.webp", "Icons/Junk", save_icon),
+        ("minigame/*.webp", "Icons/Minigame", save_icon)]
 for pat, sub, fn in jobs:
     os.makedirs(f"{U}/{sub}", exist_ok=True)
     for p in glob.glob(f"{A}/{pat}"):

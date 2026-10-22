@@ -71,7 +71,7 @@ namespace KwGame.View
             string v = string.IsNullOrEmpty(variant) ? null : "ending_" + kind + "_" + variant;
             return v != null && has(v) ? v : "ending_" + kind;
         }
-        /// 미니게임 그림 (Icons/Minigame/<키>). 아직 없는 그림이 많아서 없으면 경고 없이 null → 색 도형으로 그림
+        /// 미니게임 그림 (Icons/Minigame/<키>). player(나)처럼 일부러 안 그린 키도 있어서 없으면 경고 없이 null → 색 도형으로 그림
         public static Sprite Minigame(string key)
         {
             string path = "Icons/Minigame/" + key;
