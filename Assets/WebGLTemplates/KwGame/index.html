@@ -20,6 +20,12 @@
     <div id="wrap"><canvas id="unity-canvas" tabindex="-1"></canvas></div>
     <div id="loading"><div>{{{ PRODUCT_NAME }}} 불러오는 중…</div><div id="bar"><div id="fill"></div></div><div id="err"></div></div>
     <script>
+      // 일부 Windows Chrome(D3D 드라이버)에서 invalidateFramebuffer 가 그린 내용까지 날려 화면 일부가 흑백 노이즈로 깨짐.
+      // 성능 힌트일 뿐이라 꺼도 결과는 같음 (Unity WebGL 팀 권장 우회).
+      if (window.WebGL2RenderingContext) {
+        WebGL2RenderingContext.prototype.invalidateFramebuffer = function () {};
+        WebGL2RenderingContext.prototype.invalidateSubFramebuffer = function () {};
+      }
       var buildUrl = "Build";
       var config = {
         dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
