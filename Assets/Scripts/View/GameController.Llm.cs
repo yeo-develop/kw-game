@@ -67,7 +67,7 @@ namespace KwGame.View
             string line = res.Value<string>("line"), kakao = res.Value<string>("kakao");
             bool inTime = homeShownT != T || Time.realtimeSinceStartup - homeShownAt <= LINE_WAIT;
             if (line != null && inTime && G.Tnow() == T) { aiLine = (T, line); if (!playing && S.pending?.t == "home") RenderAll(); }
-            if (kakao != null) { aiKakao.Add($"[{G.clockNow()}] 미래: {kakao}"); if (aiKakao.Count > 5) aiKakao.RemoveAt(0); Toast("미래 카톡: " + kakao, "bubble"); }
+            if (kakao != null) { aiKakao.Add($"[{G.clockNow()}] 미래: {kakao}"); if (aiKakao.Count > 5) aiKakao.RemoveAt(0); KakaoPop("m", kakao); }
         }
         void OnGall(GameSim g, JObject res)
         {

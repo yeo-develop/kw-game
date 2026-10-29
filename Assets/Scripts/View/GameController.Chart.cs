@@ -548,7 +548,7 @@ namespace KwGame.View
 
             var ph = Ui.Row(); ph.style.marginBottom = 6; body.Add(ph);
             ph.Add(Ui.Label("보유 포지션", 22, Ui.Gold, true));
-            if (S.cps.Any(c => S.rt || c.t0 != G.Tnow())) { var b = Ui.Chip("코인 전부 정리", () => Order("코인 정리", "다 정리함. 이제 현금이 왕", "다 정리함… 현금이라도 남았네", "closeCoins")); b.style.marginLeft = 12; ph.Add(b); }
+            if (S.cps.Any(c => S.rt || c.t0 != G.Tnow())) { var b = Ui.Chip("코인 전부 정리", () => Order("코인 정리", "다 정리했어. 이제 현금이 왕이야", "다 정리했어… 현금이라도 남았네", "closeCoins")); b.style.marginLeft = 12; ph.Add(b); }
             int n = 0;
             foreach (var k in G.STK().Where(k => S.hold.Has(k)).ToList())
             {
@@ -564,7 +564,7 @@ namespace KwGame.View
                 body.Add(row); n++;
             }
             foreach (var c in S.cps.ToList()) { body.Add(CoinRow(c)); n++; }
-            if (n == 0) body.Add(Ui.Label("없음. 미래: \"현금 들고 있으면 인플레이션한테 지는 거임\" (빚은 더 빨리 큼)", 20, StkAxis));
+            if (n == 0) body.Add(Ui.Label("없음. 미래: \"현금 들고 있으면 인플레이션한테 지는 거야\" (빚은 더 빨리 큼)", 20, StkAxis));
         }
     }
 

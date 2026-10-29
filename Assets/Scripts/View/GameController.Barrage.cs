@@ -164,6 +164,49 @@ namespace KwGame.View
             dim.RemoveFromHierarchy();
         }
 
+        /// 병 걸린 순간: 열 오르는 카드 (일당·체결·잠 효과까지). 나으면 토스트만.
+        IEnumerator SickAlert(string k)
+        {
+            if (string.IsNullOrEmpty(k) || D.RULES.SICK == null || !D.RULES.SICK.TryGetValue(k, out var d)) { SickSync(); yield break; }
+            SickSync();
+            var dim = new VisualElement(); Ui.Fill(dim); dim.style.backgroundColor = new Color(0.12f, 0.2f, 0.04f, 0.5f); dim.style.alignItems = Align.Center; dim.style.justifyContent = Justify.Center;
+            var card = Ui.Box(new Color(0.06f, 0.08f, 0.04f, 0.97f), 36, 22); card.style.width = 720; card.style.alignItems = Align.Center; Ui.Border(card, SickC, 5);
+            card.Add(Ui.Label("몸 상태 알림", 22, new Color(0.8f, 1f, 0.7f), true));
+            var ic = Ui.Label($"{38 + d.st * 0.3f + (1 - (float)d.pay) * 3:0.0}℃", 84, Bad2, true); ic.style.marginTop = 6; card.Add(ic);   // 이모지는 폰트에 없음 → 체온으로
+            var h = Ui.Label($"{d.name} 걸림", 54, SickC, true); card.Add(h);
+            var fx = $"{S.sickD}일 동안 · 일당 −{(1 - d.pay) * 100:0}%";
+            if (d.slip > 0) fx += $" · 손 떨려서 체결 −{d.slip * 100:0.0}%p";
+            if (d.sleep < 1) fx += " · 잠 회복 ↓";
+            var f = Ui.Label(fx, 24, Ui.Text, true); f.style.marginTop = 10; f.style.whiteSpace = WhiteSpace.Normal; f.style.unityTextAlign = TextAnchor.MiddleCenter; card.Add(f);
+            card.Add(Ui.Label("약국·병원 가거나 푹 쉬면 빨리 나음", 20, Ui.Dim));
+            var hint = Ui.Label("클릭 / Space", 18, Ui.Dim); hint.style.marginTop = 14; card.Add(hint);
+            dim.Add(card); stage.Add(dim);
+            HoldFace("dizzy", true);
+            float tt = 0;
+            while (tt < 0.5f) { tt += Time.unscaledDeltaTime; float p = EaseOut(tt / 0.5f); card.style.scale = new Scale(Vector3.one * Mathf.Lerp(0.7f, 1f, p)); card.style.rotate = new Rotate(new Angle(Mathf.Sin(tt * 30) * 4 * (1 - p))); yield return null; }
+            card.style.rotate = new Rotate(new Angle(0));
+            yield return null;
+            float wait = autoSkipDialog ? 0.3f : 5f; tt = 0;
+            while (tt < wait && !AnyPress()) { tt += Time.unscaledDeltaTime; ic.style.opacity = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(tt * 4)); card.style.translate = new Translate(Mathf.Sin(tt * 2.1f) * 6, Mathf.Sin(tt * 1.3f) * 4); yield return null; }   // 어질어질
+            dim.RemoveFromHierarchy();
+        }
+
+        // 아픈 동안: 화면 가장자리에 열 오른 듯 초록빛 테두리가 숨 쉬듯 (클릭은 통과)
+        static readonly Color Bad2 = new Color32(0xff, 0x7a, 0x5c, 0xff);
+        static readonly Color SickC = new Color32(0x9c, 0xd6, 0x4a, 0xff);
+        VisualElement sickFx;
+        void SickSync()
+        {
+            bool on = S != null && G.sickName() != null;
+            if (!on) { sickFx?.RemoveFromHierarchy(); sickFx = null; return; }
+            if (sickFx != null) return;
+            sickFx = new VisualElement(); Ui.Fill(sickFx); sickFx.pickingMode = PickingMode.Ignore;
+            Ui.Border(sickFx, new Color(0.45f, 0.7f, 0.15f, 0.35f), 36); sickFx.style.backgroundColor = new Color(0.4f, 0.6f, 0.1f, 0.05f);
+            stage.Insert(stage.IndexOf(dlg), sickFx);
+            var me = sickFx;
+            me.schedule.Execute(() => me.style.opacity = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 1.8f)).Every(50);
+        }
+
         /// 멘헤라가 끝났으면 탄막·어둠 걷기 (RenderAll 에서)
         void BarrageSync()
         {

@@ -81,7 +81,7 @@ async function handle(req: Request, env: Env, path: Path): Promise<Response> {
     if (e instanceof Anthropic.RateLimitError) return fail("upstream_rate_limited", 503);
     if (e instanceof Anthropic.APIConnectionTimeoutError) return fail("timeout", 504);
     if (e instanceof Anthropic.APIConnectionError) return fail("network", 502);
-    if (e instanceof Anthropic.APIError) { console.log(JSON.stringify({ path, status: e.status, type: e.type })); return fail("upstream", 502, `status ${e.status ?? "?"}`); }
+    if (e instanceof Anthropic.APIError) { console.log(JSON.stringify({ path, status: e.status, type: e.type, msg: String(e.message).slice(0, 200) })); return fail("upstream", 502, `status ${e.status ?? "?"}`); }
     console.log(JSON.stringify({ path, err: String(e).slice(0, 200) }));
     return fail("bad_output", 502);
   }

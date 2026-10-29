@@ -91,6 +91,7 @@ namespace KwGame.View
             Action<double> done = v => score = v;
             IEnumerator game = key == "cafe" ? MgCafe(su, done) : key == "store" ? MgStore(su, done) : key == "mart" ? MgMart(su, done) : MgWare(su, done);
             if (autoSkipDialog) { game.MoveNext(); yield break; }
+            yield return HowTo(key);
             yield return Countdown();
             yield return game;
             yield return ResultCard(key, su, score);
@@ -110,6 +111,146 @@ namespace KwGame.View
                 mg.Add(l);
                 yield return Tween(0.42f, p => { l.style.scale = new Scale(Vector3.one * Mathf.Lerp(1.6f, 1f, EaseOut(p * 2.5f))); l.style.opacity = p < 0.75f ? 1 : 1 - (p - 0.75f) / 0.25f; });
                 l.RemoveFromHierarchy();
+            }
+        }
+
+        // ---------- 시작 전 조작 안내 (마리오파티식: 글 대신 조작 키 + 움직이는 시연) ----------
+
+        static readonly HashSet<string> mgHowSeen = new HashSet<string>();
+        static readonly Dictionary<string, string[][]> MG_HOW = new Dictionary<string, string[][]>
+        {   // { 키, 설명 } 3줄
+            ["cafe"] = new[] { new[] { "보기", "주문을 잠깐만 보여 줌 → 외우기" }, new[] { "1~5", "음료 담기 · S 샷 · 0 비우기" }, new[] { "Enter", "서빙! 까먹으면 R (1번)" } },
+            ["store"] = new[] { new[] { "보기", "바늘이 왔다 갔다" }, new[] { "Space", "초록 칸에서 삑! (노랑 = PERFECT)" }, new[] { "I", "소주는 신분증 먼저" } },
+            ["ware"] = new[] { new[] { "Space", "연타로 박스 올리기" }, new[] { "손 떼!", "빨간 '깨지기 쉬움' 땐 1초 쉬기" }, new[] { "6초", "무거운 박스는 3번" } },
+            ["mart"] = new[] { new[] { "← →", "좌우로 피하기 (드래그도 됨)" }, new[] { "!", "위에 경고 뜨면 미리 비키기" }, new[] { "박카스", "먹으면 ♥ 회복 · 뒤로 갈수록 빨라짐" } },
+        };
+
+        /// 카드 한 장: 왼쪽 = 시연 (계속 움직임), 오른쪽 = 조작 3줄. 한 번 본 게임은 2.5초 뒤 저절로 시작.
+        IEnumerator HowTo(string key)
+        {
+            var dim = Ui.Box(new Color(0, 0, 0, 0.55f)); Ui.Fill(dim); dim.style.alignItems = Align.Center; dim.style.justifyContent = Justify.Center;
+            var card = Ui.Box(MgCard, 36, 24); card.style.width = 1240; Ui.Border(card, Ui.Gold, 3);
+            var ttl = Ui.Label("이렇게 해요", 30, Ui.Gold, true); ttl.style.marginBottom = 16; card.Add(ttl);
+            var row = Ui.Row(); card.Add(row);
+            var demo = Ui.Box(new Color(0.08f, 0.08f, 0.1f, 1), 0, 16); demo.style.width = 560; demo.style.height = 320; demo.style.overflow = Overflow.Hidden; Ui.Border(demo, MgLine, 2);
+            row.Add(demo);
+            var steps = new VisualElement(); steps.style.flexGrow = 1; steps.style.marginLeft = 32; steps.style.justifyContent = Justify.Center; row.Add(steps);
+            if (MG_HOW.TryGetValue(key, out var how))
+                for (int i = 0; i < how.Length; i++)
+                {
+                    var r = Ui.Row(); r.style.alignItems = Align.Center; r.style.marginBottom = 18;
+                    var n = Ui.Label($"{i + 1}", 26, Ui.Bg, true); n.style.backgroundColor = Ui.Gold; Ui.Radius(n, 20); n.style.width = 40; n.style.height = 40; n.style.unityTextAlign = TextAnchor.MiddleCenter; r.Add(n);
+                    var k = KeyCap(how[i][0]); k.style.fontSize = 26; k.style.marginLeft = 14; k.style.marginRight = 14; r.Add(k);
+                    var l = Ui.Label(how[i][1], 26, Ui.Text, true); l.style.flexShrink = 1; l.style.whiteSpace = WhiteSpace.Normal; r.Add(l);
+                    steps.Add(r);
+                }
+            bool seen = mgHowSeen.Contains(key); mgHowSeen.Add(key);
+            var go = Ui.Label(seen ? "곧 시작…  (클릭 / Space 로 바로)" : "준비됐으면 클릭 / Space", 24, Ui.Dim, true); go.style.marginTop = 8; go.style.alignSelf = Align.Center; card.Add(go);
+            dim.Add(card); mg.Add(dim);
+
+            var tick = HowDemo(key, demo);
+            float t = 0;
+            while (true)
+            {
+                t += Time.unscaledDeltaTime; tick(t);
+                go.style.opacity = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(t * 3));
+                if (t > 0.5f && AnyPress()) break;
+                if (seen && t > 2.5f) break;
+                yield return null;
+            }
+            dim.RemoveFromHierarchy();
+            yield return null;   // 누른 Space 가 게임 첫 입력으로 넘어가지 않게
+        }
+
+        /// 시연 판을 그리고, 매 프레임 t(초) 로 움직이는 함수를 돌려줌
+        Action<float> HowDemo(string key, VisualElement d)
+        {
+            const float W = 560, H = 320;
+            Label Txt(string s, float size, Color c) { var l = Ui.Label(s, size, c, true); l.pickingMode = PickingMode.Ignore; l.style.position = Position.Absolute; l.style.unityTextOutlineColor = Color.black; l.style.unityTextOutlineWidth = 1.5f; d.Add(l); return l; }
+            VisualElement Put(VisualElement v, float x, float y) { v.style.position = Position.Absolute; v.style.left = x; v.style.top = y; d.Add(v); return v; }
+            switch (key)
+            {
+                case "mart":
+                {
+                    var floor = Ui.Box(new Color32(0x3a, 0x34, 0x2a, 0xff)); Ui.Abs(floor, 0, null, 0, 0); floor.style.height = 18; d.Add(floor);
+                    var pl = Put(Icon("player", Ui.Accent, "나", 70), 0, H - 18 - 70);
+                    var box = Put(Icon("box", BoxC, null, 60), 0, -80);
+                    var warn = Txt("!", 44, Ui.Gold);
+                    var keyL = Txt("←", 40, Ui.Text); var keyR = Txt("→", 40, Ui.Text); keyL.style.left = 16; keyR.style.left = W - 50; keyL.style.top = keyR.style.top = 20;
+                    return t =>
+                    {
+                        float c = t % 2.4f; int k = (int)(t / 2.4f);
+                        float bx = (k % 2 == 0 ? 0.3f : 0.65f) * (W - 60);
+                        warn.style.left = bx + 18; warn.style.top = 6; warn.style.opacity = c < 0.8f ? Mathf.PingPong(t * 8, 1) : 0;
+                        box.style.left = bx; box.style.top = c < 0.8f ? -80 : Mathf.Lerp(-60, H, (c - 0.8f) / 1.2f);
+                        // 경고 보고 반대쪽으로 비킴
+                        float safe = bx < W / 2 ? W - 140 : 60, from = bx;
+                        float px = Mathf.Lerp(from, safe, EaseOut(Mathf.Clamp01((c - 0.3f) / 0.7f)));
+                        pl.style.left = px;
+                        bool right = safe > from, moving = c > 0.3f && c < 1.0f;
+                        keyL.style.color = moving && !right ? Ui.Gold : Ui.Dim; keyR.style.color = moving && right ? Ui.Gold : Ui.Dim;
+                    };
+                }
+                case "store":
+                {
+                    var bar = Ui.Box(new Color(1, 1, 1, 0.1f), 0, 10); Ui.Abs(bar, 40, 150, 40); bar.style.height = 40; d.Add(bar);
+                    var zone = Ui.Box(Ui.Good, 0, 8); Ui.Abs(zone, 300, 150); zone.style.width = 110; zone.style.height = 40; d.Add(zone);
+                    var perf = Ui.Box(Ui.Gold, 0, 4); Ui.Abs(perf, 345, 150); perf.style.width = 20; perf.style.height = 40; d.Add(perf);
+                    var needle = Ui.Box(Color.white, 0, 3); needle.style.position = Position.Absolute; needle.style.top = 136; needle.style.width = 8; needle.style.height = 68; d.Add(needle);
+                    var item = Put(Icon("item_ramen", PRODUCT_C[0], "컵라면", 80), W / 2 - 40, 30);
+                    var sp = KeyCap("Space"); sp.style.fontSize = 28; Put(sp, W / 2 - 50, 240);
+                    var beep = Txt("삑!", 54, Ui.Gold); beep.style.left = W / 2 + 70; beep.style.top = 50;
+                    return t =>
+                    {
+                        float c = t % 2f, nx = 40 + Mathf.PingPong(t * 520, W - 88);
+                        bool hit = c > 1.2f && c < 1.6f;
+                        if (hit) nx = 351;
+                        needle.style.left = nx;
+                        beep.style.opacity = hit ? 1 : 0;
+                        sp.style.backgroundColor = hit ? (Color)Ui.Good : new Color(0, 0, 0, 0.55f);
+                        item.style.scale = new Scale(Vector3.one * (hit ? 1.15f : 1));
+                    };
+                }
+                case "ware":
+                {
+                    var stack = new List<VisualElement>();
+                    for (int i = 0; i < 5; i++) { var b = Put(Icon("box", BoxC, null, 56), 360, H - 20 - 56 * (i + 1)); stack.Add(b); }
+                    var frag = Put(Icon("box", Ui.Bad, "깨짐", 70), 120, 120);
+                    var sp = KeyCap("Space"); sp.style.fontSize = 30; Put(sp, 90, 40);
+                    var say = Txt("", 34, Ui.Gold); say.style.left = 70; say.style.top = 230;
+                    return t =>
+                    {
+                        float c = t % 4f;
+                        bool fragile = c > 2.6f && c < 3.6f, tap = !fragile && Mathf.Repeat(t, 0.18f) < 0.08f;
+                        int n = fragile ? 5 : Mathf.Clamp((int)(c / 0.5f) + 1, 1, 5);
+                        for (int i = 0; i < 5; i++) stack[i].style.opacity = i < n ? 1 : 0;
+                        frag.style.opacity = fragile ? 1 : 0;
+                        sp.style.backgroundColor = tap ? (Color)Ui.Gold : new Color(0, 0, 0, 0.55f);
+                        sp.style.scale = new Scale(Vector3.one * (tap ? 0.9f : 1));
+                        say.text = fragile ? "손 떼!" : "연타!"; say.style.color = fragile ? Ui.Bad : Ui.Gold;
+                    };
+                }
+                default:   // cafe
+                {
+                    var order = Ui.Box(new Color(1, 1, 1, 0.92f), 10, 12); order.style.flexDirection = FlexDirection.Row; Put(order, 30, 30);
+                    order.Add(Icon(DRINK_KEY[0], DRINK_C[0], null, 64)); order.Add(Icon(DRINK_KEY[1], DRINK_C[1], null, 64));
+                    var tray = Ui.Row(); Put(tray, 300, 170);
+                    var c0 = Icon(DRINK_KEY[0], DRINK_C[0], null, 80); var c1 = Icon(DRINK_KEY[1], DRINK_C[1], null, 80); tray.Add(c0); tray.Add(c1);
+                    var k1 = KeyCap("1"); k1.style.fontSize = 28; Put(k1, 320, 120); var k2 = KeyCap("2"); k2.style.fontSize = 28; Put(k2, 400, 120);
+                    var ent = KeyCap("Enter"); ent.style.fontSize = 28; Put(ent, 330, 270);
+                    var ok = Txt("서빙!", 50, Ui.Good); ok.style.left = 60; ok.style.top = 200;
+                    return t =>
+                    {
+                        float c = t % 4f;
+                        order.style.opacity = c < 1.2f ? 1 : 0.15f;   // 잠깐만 보여 줌
+                        c0.style.opacity = c > 1.6f ? 1 : 0; c1.style.opacity = c > 2.2f ? 1 : 0;
+                        k1.style.backgroundColor = c > 1.4f && c < 1.8f ? (Color)Ui.Gold : new Color(0, 0, 0, 0.55f);
+                        k2.style.backgroundColor = c > 2.0f && c < 2.4f ? (Color)Ui.Gold : new Color(0, 0, 0, 0.55f);
+                        bool serve = c > 2.8f && c < 3.8f;
+                        ent.style.backgroundColor = serve ? (Color)Ui.Good : new Color(0, 0, 0, 0.55f);
+                        ok.style.opacity = serve ? 1 : 0;
+                    };
+                }
             }
         }
 
@@ -396,7 +537,7 @@ namespace KwGame.View
             {
                 if (oi >= NO || reUsed || !hidden) return;
                 reUsed = true; hidden = false; peekLeft = 1.5f; patience -= PATIENCE * 0.15f; msg.text = "손님: (한숨) …다시 말씀드릴게요";
-                Bubble("아 죄송함다 ㅎ 귀가 빚 때문에 막힘", "tired"); Show();
+                Bubble("아 죄송해요 ㅎ 귀가 빚 때문에 막혔나 봐", "tired"); Show();
             }
             void Finish(bool right, string stampText, string line)
             {
@@ -420,12 +561,12 @@ namespace KwGame.View
                 if (oi >= NO) return;
                 bool match = true; for (int i = 0; i < 5; i++) if (tray[i] != orders[oi][i]) match = false;
                 bool shotOk = shot == (oi == shotOrder), right = match && shotOk;
-                Bubble(right ? "오 맞았다. 근데 팁은 없음 ㅅㅂ" : "아 몰라 다 아아로 통일해", right ? "smug" : "angry");
+                Bubble(right ? "오 맞았다! 근데 팁은 없네 흥" : "아 몰라 다 아아로 통일해", right ? "smug" : "angry");
                 Finish(right, right ? "완료" : "땡", right ? "손님: 감사합니다~" : match ? (shot ? "손님: 샷 추가 안 했는데요? 잠 못 자요" : "손님: 샷 추가 했다고요;;") : "손님: 이거 제가 시킨 거 아닌데요?");
             }
             void Leave()
             {
-                Bubble("손님 나감 ㅋㅋ 오히려 좋아", "smug");
+                Bubble("손님 나갔다 ㅋㅋ 오히려 좋아", "smug");
                 Finish(false, "이탈", "손님: 됐어요 딴 데 갈게요 (별점 1개)");
             }
 
@@ -563,7 +704,7 @@ namespace KwGame.View
                 else
                 {
                     Flash(Ui.Bad); Shake(meter); Beep(Ui.Bad); Judge(under ? "미성년자 판매?!" : "MISS", Ui.Bad, 64);
-                    Bubble(under ? "미성년자한테 소주 팔면 우리 빚 2배임" : "바코드도 나 싫어함 ㅋ", under ? "panic" : "tired");
+                    Bubble(under ? "미성년자한테 소주 팔면 우리 빚 2배야!" : "바코드도 나 싫어하나 봐 ㅠ", under ? "panic" : "tired");
                 }
                 MgHud(combo, (double)hits / NB);
                 speed += 30 * H; Zone();
@@ -652,7 +793,7 @@ namespace KwGame.View
                 {
                     n = Math.Max(0, n - 3); for (int i = 0; i < 3 && truck.childCount > 0; i++) truck.RemoveAt(truck.childCount - 1);
                     combo = 0; heavyHits = 0;
-                    Draw(); Flash(Ui.Bad); Shake(mash, 22); Float(right, "-3 쨍그랑", 200, 160, Ui.Bad, 54); Bubble("야 그거 유리라고 ㅅㅂ (−3)", "angry");
+                    Draw(); Flash(Ui.Bad); Shake(mash, 22); Float(right, "-3 쨍그랑", 200, 160, Ui.Bad, 54); Bubble("자기야 그거 유리라고!! (−3)", "angry");
                     right.style.backgroundColor = new Color(0, 0, 0, 0);
                     MgHud(combo, Math.Min(1, (double)n / GOAL));
                     return;
@@ -673,7 +814,7 @@ namespace KwGame.View
                 if (combo % 10 == 0) Judge(combo >= 20 ? $"{combo} COMBO!! 허리 불탐" : $"{combo} COMBO!", Ui.Gold);
                 right.style.backgroundColor = new Color(1, 0.55f, 0.1f, Mathf.Min(0.24f, combo * 0.008f));
                 MgHud(combo, Math.Min(1, (double)n / GOAL));
-                if (prev < 12 && n >= 12) Bubble("허리 나감 ㅅㅂ", "angry");
+                if (prev < 12 && n >= 12) Bubble("허리 나갔어 ㅠㅠ", "angry");
                 if (prev < 26 && n >= 26) Bubble("박스 = 1틱 박스 = 1틱 박스 = 1틱", "tired");
             }
 
@@ -703,7 +844,8 @@ namespace KwGame.View
 
         // ---------- 🛒 마트 창고: 피하기 ----------
         // 떨어지기 0.6초 전 위에 경고, 떨어지는 동안 바닥에 그림자. 아슬하게 피하면 콤보. 가끔 박카스 → 먹으면 하트 1개 회복.
-        class Drop { public float t, x, y = -80, vx; public bool k, heal, on, done, passed, warned; public VisualElement el, shadow, warn; }
+        // 똥피하기 중후반 느낌: 뒤로 갈수록 빨라지고(×1→1.7) 박스가 몰려옴, 일부는 내 머리 위를 노림(aim).
+        class Drop { public float t, x, y = -80, vx; public bool k, heal, aim, on, done, passed, warned; public VisualElement el, shadow, warn; }
 
         IEnumerator MgMart(WorkSetup su, Action<double> done)
         {
@@ -741,6 +883,11 @@ namespace KwGame.View
 
             var objs = new List<Drop>();
             foreach (var d in su.drops) objs.Add(new Drop { t = (float)d[0] * SEC, x = 20 + (float)d[1] * (W - 100), k = d[2] > 0 });
+            for (int i = 0; i < 16; i++)   // 추가 박스: 뒤로 갈수록 촘촘 (√u → 끝쪽에 몰림)
+            {
+                float u = Mathf.Sqrt((float)rng.NextDouble());
+                objs.Add(new Drop { t = SEC * (0.2f + 0.76f * u), x = 20 + (float)rng.NextDouble() * (W - 100), aim = rng.NextDouble() < 0.4 });
+            }
             if (rng.NextDouble() < 0.55) objs.Add(new Drop { t = SEC * (0.35f + 0.4f * (float)rng.NextDouble()), x = 20 + (float)rng.NextDouble() * (W - 100), heal = true });
             float x = W / 2 - PW / 2; int hits = 0, combo = 0;
             void Lives() { lives.text = new string('♥', Math.Max(0, LIVES - hits)); lost.text = new string('♥', Math.Min(LIVES, hits)); }
@@ -776,6 +923,7 @@ namespace KwGame.View
                         if (!o.warned && t >= o.t - 0.6f)
                         {
                             o.warned = true;
+                            if (o.aim) o.x = Mathf.Clamp(x + PW / 2 - 35 + ((float)rng.NextDouble() - 0.5f) * 60, 0, W - 70);
                             o.warn = Ui.Label(o.heal ? "+" : o.k ? "빵빵!" : "!", o.k ? 30 : 48, o.heal ? Ui.Good : o.k ? Ui.Bad : Ui.Gold, true);
                             Ui.Abs(o.warn, o.x + 18, 6); o.warn.pickingMode = PickingMode.Ignore;
                             o.warn.style.unityTextOutlineColor = Color.black; o.warn.style.unityTextOutlineWidth = 1.5f;
@@ -792,7 +940,7 @@ namespace KwGame.View
                         arena.Add(o.el);
                         o.vx = o.k ? (x > o.x ? 1 : -1) * 120 : 0;
                     }
-                    float vy = o.heal ? 330 * H : (o.k ? 520 : 400) * H;
+                    float vy = (o.heal ? 330 : o.k ? 520 : 400) * H * (1 + 0.7f * t / SEC);
                     float prevY = o.y;
                     o.y += vy * dt; o.x = Mathf.Clamp(o.x + o.vx * dt, 0, W - 70);
                     o.el.style.left = o.x; o.el.style.top = o.y;

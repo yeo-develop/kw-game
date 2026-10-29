@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using KwGame.Sim;
 using Newtonsoft.Json.Linq;
+using DG.Tweening;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -136,6 +137,60 @@ namespace KwGame.View
         {
             var b = Ui.Chip(text, a, false, bg); b.Q<Label>().style.color = fg; b.style.marginBottom = 0; Ui.Border(b, new Color(0, 0, 0, 0.12f), 1);
             return b;
+        }
+
+        // ---------- 카톡 알림 (PC 카톡처럼 오른쪽 아래에서 올라옴, 누르면 그 방 열림) ----------
+        VisualElement kkPopCol;
+        readonly HashSet<KMsg> kkPopped = new HashSet<KMsg>();
+        GameSim kkPopFor;
+
+        /// sim 의 "kakao" 이벤트마다: 그 방에서 아직 안 띄운 상대 메시지를 띄움 (새 게임·불러오기 직후 쌓인 건 건너뜀)
+        void KakaoNotify(string room)
+        {
+            if (kkPopFor != G) { kkPopFor = G; kkPopped.Clear(); foreach (var L in S.kk.Values) foreach (var m in L) kkPopped.Add(m); return; }
+            if (room == null || !S.kk.TryGetValue(room, out var msgs)) return;
+            foreach (var m in msgs)
+            {
+                if (!kkPopped.Add(m) || m.w == "me" || m.w == "sys") continue;
+                if (phoneOpen && phoneTab == "kakao" && kkRoom == room) continue;   // 이미 그 방을 보고 있음
+                KakaoPop(room, m.x);
+            }
+        }
+
+        void KakaoPop(string room, string text)
+        {
+            if (kkPopCol == null)
+            {
+                kkPopCol = new VisualElement(); Ui.Abs(kkPopCol, null, null, 24, 24); kkPopCol.style.width = 460;
+                kkPopCol.style.flexDirection = FlexDirection.ColumnReverse; kkPopCol.pickingMode = PickingMode.Ignore;
+                stage.Add(kkPopCol);
+            }
+            kkPopCol.BringToFront();
+            var r = ROOMS.First(x => x.k == room);
+            var card = new VisualElement(); card.style.flexDirection = FlexDirection.Row; card.style.alignItems = Align.Center;
+            card.style.backgroundColor = Color.white; Ui.Radius(card, 10); Ui.Pad(card, 14); card.style.marginTop = 10;
+            Ui.Border(card, new Color(0, 0, 0, 0.12f), 1);
+            var pic = new VisualElement(); pic.style.width = pic.style.height = 64; Ui.Radius(pic, 22); pic.style.backgroundColor = r.c; pic.style.flexShrink = 0; pic.style.overflow = Overflow.Hidden;
+            var sp = room == "m" ? ArtCatalog.Mirai("base") : null;
+            if (sp != null) { pic.style.backgroundImage = new StyleBackground(sp); pic.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover); pic.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Top); }
+            else { var ini = Ui.Label(r.n.Substring(0, 1), 28, Color.white, true); ini.style.unityTextAlign = TextAnchor.MiddleCenter; ini.style.flexGrow = 1; pic.Add(ini); }
+            card.Add(pic);
+            var col = new VisualElement(); col.style.marginLeft = 14; col.style.flexShrink = 1; col.style.flexGrow = 1;
+            var top = Ui.Row(); top.style.justifyContent = Justify.SpaceBetween;
+            top.Add(Ui.Label(r.n, 20, Ink, true)); top.Add(Ui.Label("카카오톡", 15, Ink2));
+            col.Add(top);
+            var body = Ui.Label(text.Length > 60 ? text.Substring(0, 60) + "…" : text, 20, Ink); body.style.whiteSpace = WhiteSpace.Normal; body.style.marginTop = 4; col.Add(body);
+            card.Add(col);
+            card.RegisterCallback<ClickEvent>(_ => { card.RemoveFromHierarchy(); phoneOpen = true; phoneTab = "kakao"; kkRoom = room; Send("read", "what", "kakao", "room", room); RenderAll(); });
+            kkPopCol.Insert(0, card);
+            while (kkPopCol.childCount > 3) kkPopCol.RemoveAt(kkPopCol.childCount - 1);
+            card.style.opacity = 0; card.style.translate = new Translate(0, 40);
+            var seq = DOTween.Sequence().SetTarget(card).SetLink(gameObject).SetUpdate(true);
+            seq.Append(DOTween.To(() => 0f, v => { card.style.opacity = v; card.style.translate = new Translate(0, 40 * (1 - v)); }, 1f, 0.25f).SetEase(Ease.OutCubic));
+            seq.AppendInterval(5f);
+            seq.Append(DOTween.To(() => 1f, v => card.style.opacity = v, 0f, 0.3f));
+            seq.OnComplete(() => card.RemoveFromHierarchy());
+            card.RegisterCallback<DetachFromPanelEvent>(_ => seq.Kill());
         }
 
         // ---------- 카톡 ----------
