@@ -211,6 +211,7 @@ namespace KwGame.View
             {
                 rtDirty = false; rtPhoneT = 0; rtWasOpen = G.stockOpen();
                 RenderHud(G.HudSnapOf());
+                if (G.v4 && S.pending?.t == "watch") RenderPanel();   // 장 보기 상자: 시각·장 열림
                 if (phoneOpen) RenderPhone();
                 RenderMini();
             }

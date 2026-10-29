@@ -124,7 +124,7 @@ namespace KwGame.Sim
                 rtStep(S.mk, P, Tnow(), S.slot, S.min, absDay());
                 S.min++; mins--;
                 rtLiq(liqs);
-                if (S.min % 60 == 0) readIgnored();
+                if (S.min % 60 == 0 && (!v4 || S.pending?.t == "watch")) readIgnored();   // v4: 행동으로 몇 시간 건너뛸 땐 읽씹 페널티 안 쌓음 (장 볼 때만)
             }
             if (liqs.Count > 0)
             {

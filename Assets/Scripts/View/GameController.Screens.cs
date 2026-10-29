@@ -304,7 +304,8 @@ namespace KwGame.View
             // 1줄: 어디 · 언제
             var top = Ui.Row(); top.style.alignItems = Align.FlexEnd; hudBar.Add(top);
             top.Add(L(S.rt ? G.clockNow() : D.SLOT_NAME[Math.Min(h.slot, D.SLOT_NAME.Count - 1)], 34, G.stockOpen() && S.rt ? StkUp : Ui.Text, true));
-            var when = L($"  {h.month}개월 {h.day}일 · {D.SLOT_NAME[Math.Min(h.slot, D.SLOT_NAME.Count - 1)]}" + (S.rt && G.stockOpen() ? " · 장중" : ""), 19, Ui.Dim); when.style.marginBottom = 5; top.Add(when);
+            string dayTxt = G.v4 ? $"{G.absDay()}일째 ({"월화수목금토일"[(h.day - 1) % 7]})" : $"{h.month}개월 {h.day}일";   // v4: 1주 = 월~일, 토·일 휴장
+            var when = L($"  {dayTxt} · {(G.v4 ? new[] { "오전", "오후", "밤" } : D.SLOT_NAME.ToArray())[Math.Min(h.slot, 2)]}" + (S.rt && G.stockOpen() ? " · 장중" : ""), 19, Ui.Dim); when.style.marginBottom = 5; top.Add(when);
             var sp = new VisualElement(); sp.style.flexGrow = 1; top.Add(sp);
             var loc = L(Ui.Clean(LocTitle()), 19, Ui.Dim); loc.style.marginBottom = 5; top.Add(loc);
             // v4: 장 · 만기 D-day · 미래 호감 · 오늘 부탁 (시간은 장 볼 때만 흐름)
