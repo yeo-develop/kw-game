@@ -237,6 +237,7 @@ namespace KwGame.View
             BarrageSync();
             MinigameSync();
             LayoutForMode();
+            CoachMaybe();
         }
 
         /// 대사가 없을 때 대사창: 집이면 미래 한마디, 밖이면 지금 있는 곳

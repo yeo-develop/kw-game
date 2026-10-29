@@ -222,6 +222,7 @@ namespace KwGame.View
         {
             if (dlgText == null) return;
             RtUpdate();
+            if (CoachKeys()) return;
             if (!waiting && mg == null && G != null && S.pending?.t != "start")
             {
                 if (Input.GetKeyDown(KeyCode.P) || (phoneOpen && Input.GetKeyDown(KeyCode.Escape))) TogglePhone();
