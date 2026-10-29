@@ -418,7 +418,7 @@ namespace KwGame.View
             stkAmt = Math.Max(0, Math.Min(stkAmt.Value, maxAmt));
             double amt = stkAmt.Value;
 
-            right.Add(Ui.Label(isC ? "코인 주문 · 24시간" : open ? $"주식 주문 · 수수료 {fee * 100:0.0}%" : "주식 주문 · 장 마감", 22, open ? Ui.Gold : StkAxis, true));
+            right.Add(Ui.Label(isC ? "코인 주문 · 24시간" : open ? $"주식 주문 · 수수료 {fee * 100:0.0}%" : G.v4 && G.stockOpen() ? "주식 주문 · 장 보기 칸에서만" : "주식 주문 · 장 마감", 22, open ? Ui.Gold : StkAxis, true));
             var amtL = Ui.Label(G.won(amt), 40, Ui.Text, true); amtL.style.marginTop = 8; right.Add(amtL);
             right.Add(Ui.Label(isC ? "증거금" : "매수 금액", 18, StkAxis));
 

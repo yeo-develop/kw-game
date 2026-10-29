@@ -236,6 +236,8 @@ namespace KwGame.Sim
                 foreach (var p in src.Properties()) dst[p.Name] = p.Value.DeepClone();
             }
             into("V4_RULES", "RULES"); into("V4_STR", "STR"); into("V4_SCENES", "SCENES"); into("V4_ENDINGS", "ENDINGS");
+            if (j["V4_LOCS"] is JObject vl && j["LOCS"] is JObject locs)   // 장소는 필드만 덮음 (설명 등)
+                foreach (var p in vl.Properties()) if (locs[p.Name] is JObject L0 && p.Value is JObject L1) foreach (var f in L1.Properties()) L0[f.Name] = f.Value.DeepClone();
             if (j["V4_EVENTS"] is JArray ev) { if (!(j["EVENTS"] is JArray e0)) j["EVENTS"] = e0 = new JArray(); foreach (var x in ev) e0.Add(x.DeepClone()); }
         }
 
