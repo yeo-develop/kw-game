@@ -63,13 +63,21 @@ namespace KwGame.View
         /// npcs.json 키 또는 kim_base·kim_menace·kim_farewell
         public static Sprite Npc(string key) => key == null ? null : Load("Characters/NPC/" + key);
         public static Sprite Cg(string key) => key == null ? null : Load("CG/" + key);
-        /// 엔딩 CG: 변형 그림(ending_<kind>_<variant>)이 있으면 그것, 없으면 ending_<kind>
+        static readonly System.Collections.Generic.Dictionary<string, string> ALIAS = new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["ending_clear_lonely"] = "ending_bad4_run",   // 미래가 쪽지 남기고 캐리어 끌고 나감
+            ["ending_bad1_duo"] = "ending_bad1",
+            ["ending_bad1_sea"] = "ending_bad1",
+        };
+        /// 엔딩 CG: 변형 그림(ending_<kind>_<variant>)이 있으면 그것, 없으면 ALIAS, 그것도 없으면 ending_<kind> (없으면 null = 배경만)
         public static string EndingCg(string kind, string variant) => EndingCg(kind, variant, k => Has("CG/" + k));
         public static string EndingCg(string kind, string variant, System.Func<string, bool> has)
         {
             if (kind == null) return null;
             string v = string.IsNullOrEmpty(variant) ? null : "ending_" + kind + "_" + variant;
-            return v != null && has(v) ? v : "ending_" + kind;
+            if (v != null && has(v)) return v;
+            if (v != null && ALIAS.TryGetValue(v, out var a) && has(a)) return a;   // v4 새 변형: 아직 전용 그림 없으면 뜻 맞는 그림으로
+            return has("ending_" + kind) ? "ending_" + kind : null;
         }
         /// 미니게임 그림 (Icons/Minigame/<키>). player(나)처럼 일부러 안 그린 키도 있어서 없으면 경고 없이 null → 색 도형으로 그림
         public static Sprite Minigame(string key)

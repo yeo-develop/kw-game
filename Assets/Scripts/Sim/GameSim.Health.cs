@@ -17,7 +17,7 @@ namespace KwGame.Sim
         /// 내일 아침 앓아누울 확률 (지금 상태 기준)
         public double sickP()
         {
-            if (!S.rt || R.SICK == null) return 0;
+            if (!S.rt || R.SICK == null || v4) return 0;   // v4: 병 없음
             double p = R.SICK_P0 + Math.Max(0, S.stress - R.SICK_ST0) * R.SICK_ST_K + (S.hp < R.HP_LOW ? R.SICK_HP : 0) + (S.hang ? R.SICK_HANG : 0);
             return clamp(p * (S.fit ? R.SICK_FIT : 1), 0, 0.9);
         }

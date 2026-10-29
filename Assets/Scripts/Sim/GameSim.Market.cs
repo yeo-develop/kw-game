@@ -14,7 +14,8 @@ namespace KwGame.Sim
             M = M ?? S.mk;
             if (rnd() > 0.9) M.reg = -M.reg;
             double v = rtVol();
-            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) * v + sh(shock, "MKT");
+            int ch = v4 ? chapter() - 1 : -1; if (ch >= 0) v *= R.V4_CH_VOL[ch];   // v4 장별 시장 국면
+            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) * v + sh(shock, "MKT") + (ch >= 0 ? R.V4_CH_MKT[ch] : 0);
             bool whale = evening && S.mk == M && has("whale");
             var P = new MarketPlan { whale = whale };
             foreach (var t in D.TKList)
@@ -25,8 +26,9 @@ namespace KwGame.Sim
                 if (t.inv) r = (t.of != null && P.r.ContainsKey(t.of) ? -2 * P.r[t.of] : -2 * mret) - 0.001 + gauss() * t.vol * v;
                 else if (t.meme) r = S.rt ? (rnd() < R.RT_MEME_UP ? 0.4 + rnd() * 0.4 : -(0.3 + rnd() * 0.3)) : rnd() < 0.46 ? 0.45 + rnd() * 0.45 : -(0.28 + rnd() * 0.3);   // 실시간: 기대값 ≈ 0 (예전엔 칸당 +8% 라 몰빵이 정답)
                 else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * v * (evening ? 1.3 : 1);
-                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1);
+                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) + (ch >= 0 ? R.V4_CH_COIN[ch] : 0);
                 if (!(t.inv && t.of != null)) r += sh(shock, k);
+                if (t.IsStock && weekend()) r = 0;   // v4 주말 휴장: 국장은 안 움직임
                 P.r[k] = clamp(r, -0.7, 1.5);
                 double wig = t.vol * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) * (0.2 + rnd() * 0.6);
                 double w0 = wig * rnd(); double w1 = wig * rnd();

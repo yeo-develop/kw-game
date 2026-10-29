@@ -44,6 +44,7 @@ namespace KwGame.Sim
                 case "spend": spend(); break;
                 case "paydayMsg": M(T("pd.next", "m", S.month + 1), "smug"); hideDlg(); break;
                 case "tutInit": if (S.optTut) S.tg = "home"; break;
+                case "v4Start": v4Morning(); break;
                 default: throw new Exception("unknown step " + k);
             }
         }
@@ -176,7 +177,9 @@ namespace KwGame.Sim
             var tod = S.today.Where(x => x.kind == "div" || x.kind == "ev").ToList();
             Emit("morning", "month", S.month, "day", S.day, "dd", MD - S.day, "paid", S.paidMonth == S.month || S.debt <= 0, "due", interestDue(), "cash", S.cash, "hv", holdVal(), "hp", S.hp, "addict", S.addict,
                 "Y", Y, "net", net, "netConv", net != 0 ? conv(net) : T("conv0"), "ev", evT ?? "", "tod", tod,
-                "best", S.posts.Where(p => p.best).Skip(Math.Max(0, S.posts.Count(p => p.best) - 2)).Select(p => V("au", p.au, "title", p.title, "up", p.up)).ToList(), "mline", mline);
+                "best", S.posts.Where(p => p.best).Skip(Math.Max(0, S.posts.Count(p => p.best) - 2)).Select(p => V("au", p.au, "title", p.title, "up", p.up)).ToList(), "mline", mline,
+                "v4", v4, "ch", chapter(), "left", daysLeft(), "wk", weekend(), "part", S.part);
+            v4Morning();
         }
 
         // ---------- 칸 끝: 펀딩비 → 시세 → 청산 → 정보 결과 → 알림 ----------
@@ -308,7 +311,7 @@ namespace KwGame.Sim
                 if (o.k == "pay") { money(-due, "interest", T("lbl.interest")); S.st.interest += due; pushF("🧾", T("pd.feed", "m", S.month, "d", won(due)), "money"); KIM(T("pd.paid")); return paydayPaid(); }
                 if (o.k == "sell") { double t = closeAll(); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); paydayChoose(); return true; }
                 if (o.k == "loan") { double shortA = Math.Max(0, due - S.cash), have = S.cash; if (have != 0) money(-have, "interest", T("lbl.interestAll")); addDebt(shortA, T("lbl.interestLoan")); S.st.interest += due; KIM(T("pd.loaned", "s", won(shortA))); return paydayPaid(); }
-                if (o.k == "bet") { P.betUsed = true; KIM(T("pd.betAsk")); P.stage = "side"; P.opts = new List<Opt> { new Opt { k = "odd", l = T("cas.odd") }, new Opt { k = "even", l = T("cas.even") } }; return true; }
+                if (o.k == "bet") { P.betUsed = true; greedD(8); KIM(T("pd.betAsk")); P.stage = "side"; P.opts = new List<Opt> { new Opt { k = "odd", l = T("cas.odd") }, new Opt { k = "even", l = T("cas.even") } }; return true; }
             }
             if (P.stage == "side")
             {
@@ -352,6 +355,7 @@ namespace KwGame.Sim
         void paydayEnd()
         {
             if (S.debt <= 0 && S.cleared == 0) { ending("clear"); return; }
+            if (v4 && absDay() >= R.V4_DAYS && S.cleared == 0) { maturityEnd(); return; }
             kim(false); face("tired");
             N(T("pd.monthEnd", "m", S.month, "d", won(S.debt), "i", won(interestDue())));
             hideDlg();
@@ -412,8 +416,8 @@ namespace KwGame.Sim
             S.pending = null;
             pushK("me", c.l);
             double st0 = S.stress;
-            if (c.ok) { S.st.menOk++; S.menRun = 0; stress(-45); M(set.good, "happy"); }
-            else { S.st.menBad++; S.menRun++; stress(-20); M(set.bad, "yami"); }
+            if (c.ok) { S.st.menOk++; S.menRun = 0; stress(-45); affD(4); M(set.good, "happy"); }
+            else { S.st.menBad++; S.menRun++; stress(-20); affD(-5); M(set.bad, "yami"); }
             hideDlg();
             if (!c.ok) menBadEnd(st0);
             return true;
@@ -440,8 +444,8 @@ namespace KwGame.Sim
             if (c == null) return false;
             S.pending = null;
             pushK("me", c.l);
-            if (c.ok) { S.st.menOk++; S.menRun = 0; stress(-35); M(fill(set.good, V("n", D.TK[tk].name)), "happy"); hideDlg(); return true; }
-            S.st.menBad++; S.menRun++; S.st.impulse++; double st0 = S.stress;
+            if (c.ok) { S.st.menOk++; S.menRun = 0; stress(-35); affD(3); M(fill(set.good, V("n", D.TK[tk].name)), "happy"); hideDlg(); return true; }
+            S.st.menBad++; S.menRun++; S.st.impulse++; double st0 = S.stress; greedD(5); affD(-3);
             double amt = round1k(S.cash * R.IMPULSE_CASH); bool stock = D.TK[tk].type == "stock";
             bool up = rnd() < 0.5; double mag = stock ? 0.12 + rnd() * 0.18 : 0.2 + rnd() * 0.25;
             bool ok = false; double cash0 = S.cash;
@@ -475,7 +479,7 @@ namespace KwGame.Sim
         void checkEnd()
         {
             if (S.debt <= 0 && S.cleared == 0) { ending("clear"); return; }
-            if (S.debt > R.DEBT_CAP) { Emit("hideUi"); N(T("end.cap", "d", won(S.debt))); ending(badKind()); return; }
+            if (S.debt > R.DEBT_CAP * debtScale()) { Emit("hideUi"); N(T("end.cap", "d", won(S.debt))); ending(badKind()); return; }
         }
         bool addictEnd() { if (S.addict >= 100 && broke()) { Emit("hideUi"); N(T("end.addictMax")); ending("bad2"); return true; } return false; }
         public Scoreboard scoreboard(string kind) => new Scoreboard
@@ -513,11 +517,13 @@ namespace KwGame.Sim
                 variant = hasPos() ? "sell" : "run";
                 lead = T(variant == "sell" ? "end.bad4Sell" : "end.bad4", "n", S.st.menBad, "h", won(holdVal()), "d", won(S.debt));
             }
+            else if (kind == "heist") { variant = ""; lead = ""; }
             else
             {
                 variant = S.st.work >= 20 ? "loop" : "casino";
                 lead = (S.st.minDebt <= R.DEBT0 * 0.7 && S.debt > S.st.minDebt ? T("end.bad2Flash", v) : "") + T(variant == "loop" ? "end.bad2Loop" : "end.bad2", v);
             }
+            v4EndVariant(kind, ref variant, ref lead);
             if (S.galFame >= D.FAME["legend"]) lead += T("end.legend", "n", JsFmt.Loc(3000 + S.galFame * 37));
             else if (variant == "gall") lead += T("end.gallFame", "f", S.galFame);
             var sb = scoreboard(kind);
@@ -534,6 +540,7 @@ namespace KwGame.Sim
         bool continueGame()
         {
             if (S.pending == null || S.pending.t != "ending" || !S.pending.cont) return false;
+            if (v4 && S.part == 1) return part2Start();
             S.cleared = 1; S.ending = null; S.pending = null; S.phase = "home";
             S.flow = S.resume != null && S.resume.Count > 0 ? S.resume : new List<string> { "loopTop" }; S.resume = null;
             Emit("continued");
@@ -581,7 +588,7 @@ namespace KwGame.Sim
                 after(AFTER_SLOT); return;
             }
             if (S.addict >= R.ADD_TEMPT && S.temptT != Tnow() && rnd() < 0.3) { temptStart(); return; }
-            if (evCheck()) return;
+            if (storyCheck() || evCheck()) return;
             homeLine(); S.pending = new Pending("home");
         }
         void menCheck()
@@ -589,7 +596,7 @@ namespace KwGame.Sim
             if (fainted()) return;
             if (mental() == "men" && S.menKey != Tnow().ToString() && !(S.menCool.HasValue && S.menCool.Value > Tnow()))
             {
-                if (S.cash >= 50000 && rnd() < R.IMPULSE_P) impulseStart(); else menheraStart();
+                if (S.cash >= 50000 && rnd() < R.IMPULSE_P + (v4 ? S.greed / 200 : 0)) impulseStart(); else menheraStart();
             }
         }
         void endSlot()
@@ -605,6 +612,7 @@ namespace KwGame.Sim
             if (S.slot >= R.SLOTS)
             {
                 int d0 = absDay();
+                v4DayEnd();
                 S.slot = 0; S.day++; S.yday = S.today; S.today = new List<Ledger>();
                 if (S.day > R.MONTH_DAYS) { S.day = 1; S.month++; }
                 S.needMorning = true;

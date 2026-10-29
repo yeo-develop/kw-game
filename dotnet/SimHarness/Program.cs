@@ -19,7 +19,8 @@ static class P {
       string patch = Environment.GetEnvironmentVariable("BAL_RULES");
       var BD = GameData.Load(Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "../../../../../Assets/Resources/Data"), "*.json").Select(f => {
         string txt = File.ReadAllText(f);
-        if (patch != null && Path.GetFileName(f) == "rules.json") { var j = JObject.Parse(txt); ((JObject)j["RULES"]).Merge(JObject.Parse(patch)); txt = j.ToString(); }
+        if (patch != null && Path.GetFileName(f) == "rules.json") { var j = JObject.Parse(txt); ((JObject)j["RULES"]).Merge(JObject.Parse(patch), new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Replace }); txt = j.ToString(); }
+        if (patch != null && Path.GetFileName(f) == "unity_v4.json") { var j = JObject.Parse(txt); ((JObject)j["V4_RULES"]).Merge(JObject.Parse(patch), new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Replace }); txt = j.ToString(); }   // v4 규칙은 rules.json 위에 덮이니 같이
         return new KeyValuePair<string,string>(Path.GetFileName(f), txt); }));
       int n = a.Length > 1 ? int.Parse(a[1]) : 60;
       var strats = a.Length > 2 ? a[2].Split(',') : new[] { "work", "smart", "gamble", "random" };

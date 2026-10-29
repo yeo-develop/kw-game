@@ -39,6 +39,24 @@ namespace KwGame.View
                 saveControls.Add(b); return b;
             }
             bool eve = G.isEve();
+            if (G.v4)
+            {
+                // v4: 행동 하나 = 칸 하나 (오전·오후·밤). 빚 갚기·대출은 시간 안 쓰니 작은 칩으로
+                string wh = G.weekend() ? "주말 휴장 · 코인만" : eve ? "밤 · 코인만" : "시세 보며 실시간 매매";
+                A("장", new Color(0.9f, 0.3f, 0.35f), "장 보기", wh, () => Send("watch"), !home);
+                A("미", new Color(0.95f, 0.4f, 0.6f), "미래랑 놀기", S.dateN == 0 ? $"호감 +{D.RULES.V4_DATE_AFF:0} · 멘탈 회복" : "오늘 또? 호감 +2", () => Send("date"), !home);
+                A("→", new Color(0.25f, 0.5f, 0.95f), "외출", "알바·카지노·한강…", () => Send("map"), !home);
+                A("Z", new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", eve ? $"체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"체력 +{D.RULES.RT_HP_REST}", () => Send("rest"), !home);
+                bool canPay4 = home && S.cash >= 10000 && S.debt > 0;
+                Q($"빚 갚기 ({G.man(S.debt)})", () => Send("repayOpen"), !canPay4, canPay4 ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null);
+                Q("대출", () => Send("loanOpen"), !home);
+                int un4 = G.kUnread();
+                A("P", new Color(0.95f, 0.4f, 0.6f), phoneOpen ? "폰 닫기" : "폰", un4 > 0 ? $"카톡 {un4}" : "", TogglePhone, false, phoneOpen ? Ui.Accent : (Color?)null);
+                var sp4 = new VisualElement(); sp4.style.flexGrow = 1; saveControls.Add(sp4);
+                var save4 = Q("저장", () => SaveCheckpoint(true), !CanSave); save4.name = "saveGameButton";
+                var title4 = Q("타이틀", ReturnToTitle, playing); title4.name = "returnToTitleButton";
+                return;
+            }
             A("→", new Color(0.25f, 0.5f, 0.95f), "외출", "알바·증권사·카지노…", () => Send("map"), !home);
             A("Z", new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", S.rt ? (eve ? $"내일 아침까지 · 체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"{D.RULES.RT_REST / 60}시간 · 체력 +{D.RULES.RT_HP_REST}") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)}", () => Send("rest"), !home).tooltip = (S.rt ? (eve ? "자정까지 잠 · " : $"{D.RULES.RT_REST / 60}시간 · ") : "") + (S.rt ? $"체력 +{(eve ? D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP : D.RULES.RT_HP_REST)} · 멘탈 {D.RULES.RT_REST_ST:0}" + (G.sickName() != null ? $" · {G.sickName()} 반쯤 확률로 하루 빨리 나음" : "") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22");
             bool canPay = home && S.cash >= 10000 && S.debt > 0;

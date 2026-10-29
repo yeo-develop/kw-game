@@ -13,7 +13,8 @@ namespace KwGame.Tests
     public class EndingTests
     {
         static GameData _data;
-        static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json")
+        static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json").Where(f => Path.GetFileName(f) != "unity_v4.json")   // v4 이전 실시간 규칙 (v4 는 V4Tests)
+
             .Select(f => new KeyValuePair<string, string>(Path.GetFileName(f), File.ReadAllText(f))));
         static SimCommand C(string t, params object[] kv) => new SimCommand(t, kv);
         static void Call(GameSim g, string m) => typeof(GameSim).GetMethod(m, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(g, null);
@@ -57,7 +58,9 @@ namespace KwGame.Tests
             Assert.That(ArtCatalog.FaceSprite("menhera", _ => true), Is.EqualTo("mental"));
             Assert.That(ArtCatalog.FaceSprite("nope", _ => true), Is.Null);
             Assert.That(ArtCatalog.EndingCg("clear", "gamble", _ => true), Is.EqualTo("ending_clear_gamble"));
-            Assert.That(ArtCatalog.EndingCg("clear", "gamble", _ => false), Is.EqualTo("ending_clear"), "변형 CG 없으면 종류 CG");
+            Assert.That(ArtCatalog.EndingCg("clear", "gamble", k => k == "ending_clear"), Is.EqualTo("ending_clear"), "변형 CG 없으면 종류 CG");
+            Assert.That(ArtCatalog.EndingCg("clear", "lonely", k => k == "ending_bad4_run" || k == "ending_clear"), Is.EqualTo("ending_bad4_run"), "v4 변형은 뜻 맞는 그림으로");
+            Assert.That(ArtCatalog.EndingCg("heist", "", _ => false), Is.Null, "그림 없으면 배경만");
             Assert.That(ArtCatalog.EndingCg("bad3", "", _ => true), Is.EqualTo("ending_bad3"));
         }
 

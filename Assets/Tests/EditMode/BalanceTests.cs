@@ -17,7 +17,8 @@ namespace KwGame.Tests
     {
         const int N = 40;
         static GameData _data;
-        static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json")
+        static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json").Where(f => Path.GetFileName(f) != "unity_v4.json")   // v4 이전 실시간 규칙 (v4 는 V4Tests)
+
             .Select(f => new KeyValuePair<string, string>(Path.GetFileName(f), File.ReadAllText(f))));
         static readonly Dictionary<string, RtBots.Summary> cache = new Dictionary<string, RtBots.Summary>();
         static RtBots.Summary Sum(string strat, double lo = 0.55, double hi = 0.85, string relic = null)

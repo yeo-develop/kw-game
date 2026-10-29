@@ -60,7 +60,7 @@ namespace KwGame.Sim
             double hm = workMult(), sc = score * hm;
             double pay = jobPay(J, sc);
             if (has("grind")) { pay = round1k(pay * R.GRIND_PAY); augFx("grind", T("aug.grind")); }
-            S.st.work++; S.st.earned += pay; S.workStreak++;
+            S.st.work++; S.st.earned += pay; S.workStreak++; promHit("work");
             money(pay, "work", T("lbl.work", "n", J.name, "p", rhu(sc * 100)));
             hp(-jobHp(J), T("why.work"));
             galReact("work", V("amt", man(pay) + D.U("won"), "int", man(interestDue()) + D.U("won"), "pct", JsFmt.ToFixed(pay / Math.Max(1, interestDue()) * 100, 1), "conv", conv(pay)), 2);

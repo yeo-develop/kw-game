@@ -46,7 +46,7 @@ namespace KwGame.Sim
         (int a, int b) rtWindow(Ticker t, int slot)
         {
             int a = slotStartMin(slot), b = slotEndMin(slot);
-            if (t.IsStock) { a = Math.Max(a, R.RT_STOCK[0]); b = Math.Min(b, R.RT_STOCK[1]); }
+            if (t.IsStock) { a = Math.Max(a, R.RT_STOCK[0]); b = Math.Min(b, R.RT_STOCK[1]); if (weekend()) b = a; }   // v4 주말 휴장
             return (a, b);
         }
         void rtStep(MarketState M, MarketPlan P, int T, int slot, int m, int day)
@@ -152,7 +152,7 @@ namespace KwGame.Sim
             }
         }
         /// 행동이 쓴 시간
-        int actMinutes() { int m = S.actMin > 0 ? S.actMin : R.RT_ACT; S.actMin = 0; return m; }
+        int actMinutes() { int m = v4 ? slotLeft() : S.actMin > 0 ? S.actMin : R.RT_ACT; S.actMin = 0; return m; }   // v4: 행동 하나 = 칸 끝까지
         static int rtActMin(string k) => k == "l-cafe" || k == "l-store" || k == "l-ware" || k == "l-mart" ? -1 : 0;
         void setActMin(string k) => S.actMin = rtActMin(k) < 0 ? R.RT_WORK : R.RT_ACT;
         void spend()
@@ -163,7 +163,7 @@ namespace KwGame.Sim
         bool tickCmd(SimCommand c)
         {
             if (!S.rt) return false;
-            if (!TICK_OK.Contains(S.pending?.t)) return true;   // 선택 대기 중엔 시간 멈춤
+            if (v4 ? S.pending?.t != "watch" : !TICK_OK.Contains(S.pending?.t)) return true;   // 선택 대기 중엔 시간 멈춤 (v4: 장 볼 때만 흐름)
             int m = (int)clamp(c.Int("m", 1), 1, 120);
             if (clockRun(m)) { S.pending = null; S.visit = null; Emit("slotOver"); }
             return true;

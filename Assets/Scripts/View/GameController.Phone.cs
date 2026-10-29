@@ -211,7 +211,7 @@ namespace KwGame.View
             }
 
             // 글쓰기 (말머리 버튼)
-            var wr = Ui.Row(); wr.style.flexWrap = Wrap.Wrap; wr.style.marginBottom = 8; body.Add(wr);
+            var wr = Ui.Row(); wr.style.flexWrap = Wrap.Wrap; wr.style.marginBottom = 8; if (!G.v4) body.Add(wr);   // v4: 주갤은 찌라시 보는 곳 (글쓰기 숨김)
             var wl = Ui.Label("글쓰기", 16, Ink2, true); wl.style.marginRight = 8; wr.Add(wl);
             foreach (var gw in (D.J["GW"] as JArray) ?? new JArray())
             {

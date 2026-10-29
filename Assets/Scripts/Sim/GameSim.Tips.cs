@@ -53,7 +53,7 @@ namespace KwGame.Sim
         }
         public List<Tip> activeTips(string tk = null) => S.tips.Where(t => string.IsNullOrEmpty(t.res) && t.Tr >= Tnow() && (tk == null || t.tk == tk)).ToList();
         public Rsch rsch() { if (S.rsch == null || S.rsch.d != absDay()) S.rsch = new Rsch { d = absDay() }; return S.rsch; }
-        public int freeMax() => has("vip") ? 2 : 1;
+        public int freeMax() => (has("vip") ? 2 : 1) + (v4 ? 1 : 0);   // v4: 증권사(박대리)가 없으니 무료 리포트 하나 더
         Tip getReport(bool paid)
         {
             var Rr = rsch(); double fee = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE;

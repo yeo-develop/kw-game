@@ -15,7 +15,7 @@ namespace KwGame.View
     // 화면 구성: HUD(위) · 장면+대사창(왼쪽) · 행동 패널(오른쪽) · 폰(장면 위 오버레이) · 모달(아침 결산·규칙) · 토스트
     public partial class GameController
     {
-        static readonly string[] PHONE_OK = { "home", "map", "loc", "brokerTrade" };
+        static readonly string[] PHONE_OK = { "home", "map", "loc", "brokerTrade", "watch" };
 
         // 비주얼노벨식 한 화면: 장면이 화면 전체. 위에 작은 카드들(왼쪽 상태 · 오른쪽 미니 시세 · 가운데 알림),
         // 아래 대사창(평소엔 미래 한마디 + 퀵메뉴), 고를 게 있을 때만 가운데 선택지 상자, 폰은 오른쪽에서 열고 닫음(P).
@@ -307,8 +307,29 @@ namespace KwGame.View
             var when = L($"  {h.month}개월 {h.day}일 · {D.SLOT_NAME[Math.Min(h.slot, D.SLOT_NAME.Count - 1)]}" + (S.rt && G.stockOpen() ? " · 장중" : ""), 19, Ui.Dim); when.style.marginBottom = 5; top.Add(when);
             var sp = new VisualElement(); sp.style.flexGrow = 1; top.Add(sp);
             var loc = L(Ui.Clean(LocTitle()), 19, Ui.Dim); loc.style.marginBottom = 5; top.Add(loc);
+            // v4: 장 · 만기 D-day · 미래 호감 · 오늘 부탁 (시간은 장 볼 때만 흐름)
+            if (G.v4)
+            {
+                var v4r = Ui.Row(); v4r.style.alignItems = Align.Center; v4r.style.marginTop = 6; hudBar.Add(v4r);
+                string chName = new[] { "빚 공동체", "불장", "과열", "만기" }[G.chapter() - 1];
+                v4r.Add(L($"{(S.part > 1 ? "2부 " : "")}{G.chapter()}장 {chName}", 19, Ui.Accent, true));
+                v4r.Add(L($"  · 만기 D-{G.daysLeft()}" + (G.weekend() ? " · 주말 휴장" : ""), 19, G.daysLeft() <= 3 ? Ui.Bad : Ui.Gold, true));
+                var p = G.promNow(); string ps = G.promState();
+                if (p != null) hudBar.Add(L($"미래 부탁: {p.hud} " + (ps == "bad" ? "✗ 어김" : ps == "todo" ? "· 아직" : "✓"), 18, ps == "bad" ? Ui.Bad : ps == "todo" ? Ui.Gold : Ui.Good, true));
+                if (S.pending?.t == "watch")
+                {
+                    var spd = Ui.Row(); spd.style.alignItems = Align.Center; spd.style.marginTop = 6; hudBar.Add(spd);
+                    spd.Add(L(rtSpeed == 0 ? "⏸ 멈춤" : "▶ 장 보는 중 (시간 흐름)", 16, rtSpeed > 0 ? Ui.Good : Ui.Dim));
+                    var g0 = new VisualElement(); g0.style.flexGrow = 1; spd.Add(g0);
+                    foreach (var (v0, l) in new[] { (0, "Ⅱ"), (1, "1x"), (2, "2x"), (4, "4x") })
+                    {
+                        int v = v0; var c = Ui.Chip(l, () => { rtSpeed = v; RenderHud(G.HudSnapOf()); }, false, rtSpeed == v ? Ui.Accent : new Color(1, 1, 1, 0.06f));
+                        c.style.marginLeft = 4; c.style.marginRight = 0; c.style.paddingTop = 4; c.style.paddingBottom = 4; c.style.flexShrink = 0; c.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap; spd.Add(c);
+                    }
+                }
+            }
             // 시간 속도 (폰을 열어도 가리지 않게 상태 카드 안)
-            if (S.rt)
+            else if (S.rt)
             {
                 var spd = Ui.Row(); spd.style.alignItems = Align.Center; spd.style.marginTop = 8; hudBar.Add(spd);
                 bool flowing = PHONE_OK.Contains(S.pending?.t);
@@ -340,9 +361,10 @@ namespace KwGame.View
             Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, h.faint ? " 기절" : "");
             string men = h.stress >= G.menLine() ? " 멘헤라" : h.stress >= 40 ? " 불안" : "";
             Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men);
+            if (G.v4) Bar("호감", S.aff, S.aff >= D.RULES.V4_AFF_GOOD ? new Color(1f, 0.45f, 0.65f) : S.aff < 30 ? Ui.Bad : Ui.Gold, "");
             Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");
-            // 몸 상태 줄: 병·숙취·내일 아플 확률 (막대 글자에 붙이면 옆 막대를 가려서 따로 뺌)
-            if (S.rt)
+            // 몸 상태 줄: 병·숙취·내일 아플 확률 (막대 글자에 붙이면 옆 막대를 가려서 따로 뺌). v4 는 병 없음
+            if (S.rt && !G.v4)
             {
                 double sickPr = G.sickP();
                 string body = G.sickName() != null ? $"{G.sickName()} 앓는 중 · {S.sickD}일 남음" : $"내일 아플 확률 {sickPr * 100:0}%";
@@ -435,7 +457,7 @@ namespace KwGame.View
             {
                 case "start":
                     Title("롱잡고알바감");
-                    Info("빚 3천만 원. 매달(7일) 이자 5%. 알바·주식·코인·도박… 갚을 방법은 많다.", 26, Ui.Text);
+                    Info(G.v4 ? "빚 3천만 원. 만기 28일. 매주(7일) 이자 5%.\n하루 세 번: 장 보기 · 알바 · 미래랑 놀기 중에 골라." : "빚 3천만 원. 매달(7일) 이자 5%. 알바·주식·코인·도박… 갚을 방법은 많다.", 26, Ui.Text);
                     Btn("새 게임 시작", () => Send("start"), $"시드 {S.seed}", false, Ui.Accent);
                     Btn($"AI 뉴스·대사 (Claude): {(LlmSettings.On ? "켜짐" : "꺼짐")}", () => LlmToggle(!LlmSettings.On),
                         string.IsNullOrEmpty(LlmSettings.Url) ? "서버 URL 없음" : (LlmSettings.On ? "끄면 내장 문구만 씀" : "켜면 뉴스·대사를 AI 가 씀 (실패하면 내장 문구)"), string.IsNullOrEmpty(LlmSettings.Url));
@@ -453,10 +475,16 @@ namespace KwGame.View
                 case "home":   // 집은 선택지 상자 없이 대사창 퀵메뉴로 (지도 · 쉬기 · 대출)
                     Title($"집 · {D.SLOT_NAME[S.slot]}");
                     break;
+                case "watch":
+                    Title(G.weekend() ? "장 보기 · 주말 (코인만)" : G.stockOpen() ? "장 보기 · 장중" : "장 보기 · 장 닫힘 (코인만)");
+                    Info($"{G.clockNow()} · 이 칸 끝({GameSim.clockOf(G.slotEndMin(S.slot))})까지 시세가 실시간으로 움직여요. 폰(P)으로 사고팔기.", 22, Ui.Text);
+                    Btn("폰 열기 / 닫기", TogglePhone);
+                    Btn("그만 보기 (남은 시간 넘기기)", () => Send("watchEnd"), null, false, Ui.Panel);
+                    break;
                 case "map":
                     Title("어디 갈까?");
                     Btn("집으로", () => Send("goTo", "loc", "home"));
-                    foreach (var L in D.LOCList.Where(L => !L.rt || S.rt))
+                    foreach (var L in D.LOCList.Where(L => (!L.rt || S.rt) && !G.locHidden(L.id)))
                     {
                         bool open = L.open.Contains(S.slot);
                         Btn(L.name, () => Send("goTo", "loc", L.id), open ? L.hint : $"닫힘 ({string.Join("·", L.open.Select(x => D.SLOT_NAME[x]))}만)", !open);
@@ -631,7 +659,7 @@ namespace KwGame.View
             Info(E.h, 32, E.ok ? Ui.Good : Ui.Bad);
             Info(E.lead, 22, Ui.Text);
             // 버튼을 먼저 (스코어보드가 길어 상자 아래로 잘리지 않게)
-            if (P.cont) Btn("계속하기 (빚 없는 자유 모드)", () => Send("continue"), null, false, Ui.Accent);
+            if (P.cont) Btn(G.v4 && S.part == 1 ? "2부: 아빠의 차용증 →" : "계속하기 (빚 없는 자유 모드)", () => Send("continue"), G.v4 && S.part == 1 ? "김사장이 또 문을 두드린다" : null, false, Ui.Accent);
             Btn("새 게임", () => NewGame(UnityEngine.Random.Range(1, 1000000)), null, false, P.cont ? (Color?)null : Ui.Accent);
             var sb = E.sb;
             Info("스코어보드", 26, Ui.Gold);

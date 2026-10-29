@@ -55,6 +55,7 @@ namespace KwGame.Sim
             if (c.bonus != 0) S.kimpDay = absDay();
             S.cash -= margin + fee; S.cps.Add(c); S.st.invest++; S.workStreak = 0; S.invIn = S.invIn + margin; S.realized -= fee;
             if (lev >= R.ADD_COIN_LEV) { double f = Math.Min(1, margin / Math.Max(1, S.cash + margin + fee)); addict(R.Gain("coin") * (0.1 + 0.9 * f * f) * (has("addict") ? 1.5 : 1)); }
+            if (v4) { promHit("coin"); greedD(lev >= 25 ? 8 : lev >= 10 ? 4 : 0); }
             if (mult > 1) augFx("allin", T("aug.allin"));
             if (c.bonus != 0) augFx("kimp", T("aug.kimp", "m", man(c.bonus)));
             return c;

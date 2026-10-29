@@ -124,7 +124,7 @@ namespace KwGame.Sim
                 case "map":
                     {
                         var L = wantLoc; wantLoc = null;
-                        if (strat == "random") { var open = D.LOCList.Where(x => x.open.Contains(S.slot) && (!x.rt || S.rt)).ToList(); return open.Count == 0 || r.NextDouble() < 0.1 ? C("goTo", "loc", "home") : C("goTo", "loc", open[r.Next(open.Count)].id); }
+                        if (strat == "random") { var open = D.LOCList.Where(x => x.open.Contains(S.slot) && (!x.rt || S.rt) && !G.locHidden(x.id)).ToList(); return open.Count == 0 || r.NextDouble() < 0.1 ? C("goTo", "loc", "home") : C("goTo", "loc", open[r.Next(open.Count)].id); }
                         return L != null && D.LOCS.TryGetValue(L, out var Lc) && Lc.open.Contains(S.slot) ? C("goTo", "loc", L) : C("goTo", "loc", "home");
                     }
                 case "loc":
@@ -156,6 +156,13 @@ namespace KwGame.Sim
                 case "relicShop": return C("relicDone");
                 case "repay": { double a = Math.Min(repayAmt, P.mx); repayAmt = 0; return C("repay", "amt", Math.Max(0, Math.Floor(a / 10000) * 10000)); }
                 case "brokerTrade": return C("brokerClose");
+                case "watch":
+                    {
+                        // v4 장 보기: 매매할 게 있으면 하고, 아니면 시계를 흘림 (칸 끝나면 알아서 나감). 아침 장 열리기 전엔 9시까지
+                        var t = strat == "random" ? (r.NextDouble() < 0.1 ? C("watchEnd") : null) : Trade(); if (t != null) return t;
+                        if (strat != "random" && !(Smart && PendingBuy() != null) && (S.min >= R.RT_STOCK[0] || !Smart)) return C("watchEnd");
+                        return C("tick", "m", Math.Max(1, Math.Min(60, G.slotEndMin(S.slot) - S.min)));
+                    }
                 case "loan":
                     {
                         double want = Smart ? (P.took == 0 ? 3000000 : P.took < 4000000 ? 1000000 : 0)
@@ -173,7 +180,8 @@ namespace KwGame.Sim
                 case "payday":
                     {
                         if (P.stage == "side") return C("payday", "k", "odd");
-                        if (P.stage == "repay") return C("payday", "k", "keep");
+                        if (P.stage == "repay") return C("payday", "k", G.v4 && G.daysLeft() <= 0 ? "repayAll" : "keep");
+                        if (G.v4 && G.daysLeft() <= 0 && P.opts.Any(o => o.k == "sell" && !o.dis)) return C("payday", "k", "sell");
                         foreach (var k in new[] { "pay", "sell", "loan", "bet" }) if (P.opts.Any(o => o.k == k && !o.dis)) return C("payday", "k", k);
                         return null;
                     }
@@ -198,10 +206,11 @@ namespace KwGame.Sim
             if (strat != "gamble" && !Smart && S.debt > 0 && S.cash - keep >= 100000) { repayAmt = Math.Min(S.debt, S.cash - keep); return C("repayOpen"); }
             bool eve = S.slot == R.SLOTS - 1;
             int left = G.slotEndMin(S.slot) - S.min;
+            if (G.v4) return HomeV4(eve);
             // 장 열리기 전 아침: 살 리포트가 있으면 9시까지 기다림
             if (Smart && S.min < R.RT_STOCK[0] && PendingBuy() != null) return C("tick", "m", R.RT_STOCK[0] - S.min);
             // 오전 장중엔 증권사 박대리 정보 (하루 한 번)
-            if (Smart && S.slot == 0 && G.stockOpen() && S.repT != G.Tnow() && S.hp >= 50 && S.min <= 600) return Go("broker", "l-tip");
+            if (Smart && S.slot == 0 && G.stockOpen() && S.repT != G.Tnow() && S.hp >= 50 && S.min <= 600 && !G.locHidden("broker")) return Go("broker", "l-tip");
             // 몸 관리
             if (S.hp < 32) return C("rest");
             if (S.stress >= 58 || (G.Query(() => G.sickP()) >= 0.15 && !eve))
@@ -225,6 +234,34 @@ namespace KwGame.Sim
             if (S.hp >= 40 && (!eve || left >= R.RT_WORK - 60)) return Go("work", "l-cafe");
             if (eve) return C("rest");
             return C("tick", "m", Math.Max(1, Math.Min(60, left)));
+        }
+        /// v4: 행동 하나 = 칸 하나 (시계는 장 볼 때만). smart = 아침엔 장 보며 리포트 매매 · 부탁 지킴 · 저녁엔 미래랑 놀거나 쉼
+        SimCommand HomeV4(bool eve)
+        {
+            // 만기 직전: 들고 있는 거 정리해서 갚을 수 있는 만큼 갚음 (빚 절반 밑이면 엔딩이 달라짐)
+            if (G.daysLeft() <= 1 && strat != "random")
+            {
+                if (G.stockOpen() && S.hold.Count > 0) return C("sell", "tk", S.hold.Keys.First(), "frac", 1, "where", "app");
+                if (S.cps.Count > 0) return C("closeCoins");
+                double spare = S.cash - Due - 50000;
+                if (S.debt > 0 && spare >= 100000) { repayAmt = Math.Min(S.debt, spare); return C("repayOpen"); }
+            }
+            var pr = G.promNow(); bool careful = Careful;
+            if (S.hp < 32) return C("rest");
+            if (careful && pr != null && pr.@do == "date" && !S.promDone && (eve || S.stress >= 50)) return C("date");
+            if (S.stress >= 58) return careful || r.NextDouble() < 0.5 ? C("date") : C("rest");
+            if (strat == "gamble")
+            {
+                if (S.debt > 0 && S.cash >= S.debt + Due) { repayAmt = S.debt; return C("repayOpen"); }
+                if (S.cash < 3000000 && S.debt + R.LOAN_AMTS[0] <= G.loanCap() && loanT != G.Tnow()) { loanT = G.Tnow(); return C("loanOpen"); }
+                if (S.cash < 100000 && S.hp >= 45) return Go("work", "l-cafe");
+                if (S.slot >= 1 && S.cash >= 10000) return Go("casino", new[] { "l-oddeven", "l-slot" }[r.Next(2)]);
+                if (S.cash >= 10000) return Go("lotto", "l-lotto");
+            }
+            if (Smart && S.slot <= 1 && !G.weekend() && (PendingBuy() != null || S.hold.Count > 0)) return C("watch");
+            if (eve) return careful && S.aff < 70 ? C("date") : C("rest");
+            if (S.hp >= 40) return Go("work", "l-cafe");
+            return C("rest");
         }
         Tip PendingBuy() => G.activeTips().FirstOrDefault(x => Follow(x) && x.dir > 0 && x.Tr >= G.Tnow() && !tipDone.Contains(x.id));
         SimCommand Go(string loc, string act) { wantLoc = loc; wantAct = act; return C("map"); }
@@ -276,6 +313,7 @@ namespace KwGame.Sim
         SimCommand RandomHome()
         {
             double x = r.NextDouble();
+            if (G.v4 && x < 0.5) return x < 0.2 ? C("watch") : x < 0.3 ? C("date") : C("map");
             if (x < 0.5) return C("tick", "m", r.Next(1, 40));
             if (x < 0.58) return C("rest");
             if (x < 0.7 && G.stockOpen()) { var ks = G.STK().Where(G.tkOpen).ToList(); return C("buy", "tk", ks[r.Next(ks.Count)], "amt", S.cash * 0.3, "where", "app"); }

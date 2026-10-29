@@ -135,5 +135,7 @@ namespace KwGame.Sim
         public bool rt; public int min, owe, actMin;
         /// 멘헤라·돌발 매수를 연달아 나쁘게 받아친 횟수 (착한 답장이면 0). 실시간 bad4 판정용 (다이제스트 밖, 저장엔 들어감)
         public int menRun;
+        // v4 리디자인 (GameSim.V4.cs, docs/V4.md, 다이제스트 밖): 미래 호감 · 욕심(숨김) · 몇 부 · 오늘 부탁(id, 어김, 해냄) · 본 장 카드 · 오늘 놀아준 횟수
+        public double aff = -1, greed; public int part = 1; public string prom; public bool promBad, promDone; public int chSeen, dateN;
     }
 }

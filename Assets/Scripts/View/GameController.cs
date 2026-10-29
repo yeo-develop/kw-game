@@ -141,7 +141,10 @@ namespace KwGame.View
                     case "faint": Toast("기절!", "liq"); HoldFace("dizzy", true); break;
                     case "morning": yield return Morning(e); break;
                     case "opening": yield return PlayScene("opening"); break;
-                    case "ending": if (e.Str("kind") == "clear") yield return PlayScene("clear"); break;
+                    case "story": yield return PlayScene(e.Str("key")); break;
+                    case "aff": Toast($"미래 호감 {(e.Num("d") > 0 ? "+" : "")}{e.Num("d"):0} → {e.Num("v"):0}", e.Num("d") > 0 ? "good" : "liq"); break;
+                    case "watch": if (!phoneOpen) TogglePhone(); break;
+                    case "ending": if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely")) yield return PlayScene("clear"); break;
                     case "error": Debug.LogWarning("[sim] " + e.Str("msg")); break;
                 }
             }
@@ -187,10 +190,11 @@ namespace KwGame.View
         void RtUpdate()
         {
             if (G == null || !S.rt || playing || waiting || rtSpeed == 0 || mg != null || modal.style.display == DisplayStyle.Flex || !PHONE_OK.Contains(S.pending?.t)) return;
+            if (G.v4 && S.pending?.t != "watch") return;   // v4: 장 볼 때만 시간이 흐름
             // 타이머는 매 프레임 쌓음 (예전엔 시계가 1분 갈 때만 쌓여서 폰 글자가 8초에 한 번꼴로만 바뀜)
             float dt = Time.unscaledDeltaTime;
             rtPhoneT += dt; rtSaveT += dt;
-            rtAcc += dt * (float)D.RULES.RT_SPEED * rtSpeed;
+            rtAcc += dt * (float)(G.v4 ? D.RULES.V4_WATCH_SPEED : D.RULES.RT_SPEED) * rtSpeed;
             int m = Mathf.Min(30, (int)rtAcc);
             if (m >= 1)
             {
@@ -311,7 +315,13 @@ namespace KwGame.View
             modal.style.display = DisplayStyle.Flex;
             HoldFace("pajama");   // 밤잠 자고 일어난 아침
             var card = Card(900);
-            card.Add(Ui.Label($"☀ {e.Num("month")}개월차 {e.Num("day")}일 아침", 40, Ui.Gold, true));
+            if (e["v4"] is bool v4 && v4)
+            {
+                string[] chn = { "빚 공동체", "불장", "과열", "만기" }; int ch = (int)e.Num("ch");
+                card.Add(Ui.Label($"☀ {(e.Num("part") > 1 ? "2부 · " : "")}{ch}장 {chn[Math.Max(0, Math.Min(3, ch - 1))]} · {(e.Num("month") - 1) * D.RULES.MONTH_DAYS + e.Num("day")}일째 아침", 40, Ui.Gold, true));
+                card.Add(Ui.Label($"원금 만기까지 {e.Num("left")}일" + (e["wk"] is bool wk && wk ? " · 오늘은 주말 (국장 휴장)" : ""), 26, Ui.Accent));
+            }
+            else card.Add(Ui.Label($"☀ {e.Num("month")}개월차 {e.Num("day")}일 아침", 40, Ui.Gold, true));
             card.Add(Ui.Label(e["paid"] is bool p && p ? "이번 달 이자 냄" : $"이자일까지 D-{e.Num("dd")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Dim));
             var Y = e["Y"] as List<Dictionary<string, object>>;
             if (Y != null && Y.Count > 0)

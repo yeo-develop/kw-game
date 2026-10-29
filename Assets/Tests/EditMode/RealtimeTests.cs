@@ -11,7 +11,8 @@ namespace KwGame.Tests
     public class RealtimeTests
     {
         static GameData _data;
-        static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json")
+        static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json").Where(f => Path.GetFileName(f) != "unity_v4.json")   // v4 이전 실시간 규칙 (v4 는 V4Tests)
+
             .Select(f => new KeyValuePair<string, string>(Path.GetFileName(f), File.ReadAllText(f))));
 
         static SimCommand C(string t, params object[] kv) => new SimCommand(t, kv);

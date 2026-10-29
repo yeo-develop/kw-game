@@ -24,6 +24,7 @@ namespace KwGame.Sim
             g.S = S;
             S.optTut = opts != null && opts.tut;
             S.rt = opts != null && opts.rt; S.min = r.RT_DAY0;
+            if (S.rt && r.V4 > 0) S.aff = r.V4_AFF0;
             S.mk = g.initMarket(); S.news = g.genNews();
             S.pending = new Pending("start");
             g.ev.Clear();
@@ -47,7 +48,7 @@ namespace KwGame.Sim
             try { return f(); } finally { S.rng = r0; S.fx = f0; ev = e0; }
         }
 
-        static readonly string[] PHONE_OK = { "home", "map", "loc", "brokerTrade" };
+        static readonly string[] PHONE_OK = { "home", "map", "loc", "brokerTrade", "watch" };
         static readonly string[] PHONE_CMDS = { "buy", "sell", "open", "close", "closeCoins", "report", "kqReply", "post", "upvote" };
         bool err(string msg) { Emit("error", "msg", msg); return false; }
 
@@ -79,7 +80,7 @@ namespace KwGame.Sim
                 case "l-tip": actDone(brokerTip()); return true;
                 case "l-payint": actDone(payEarly()); return true;
                 case "l-repay": if (!repayStart(key)) actDone(false); return true;
-                case "l-oddeven": case "l-card": case "l-slot": case "l-ladder": casinoStart(k.Substring(2), key); return true;
+                case "l-oddeven": case "l-card": case "l-slot": case "l-ladder": promHit("gamble"); greedD(5); casinoStart(k.Substring(2), key); return true;
                 case "l-cafe": case "l-store": case "l-ware": case "l-mart": workStart(k.Substring(2), key); return true;
                 case "l-pcgame": actDone(doPc("game")); return true;
                 case "l-pcramen": actDone(doPc("ramen")); return true;
@@ -87,8 +88,8 @@ namespace KwGame.Sim
                 case "l-pharm": case "l-clinic": case "l-vita": actDone(doClinic(k.Substring(2))); return true;
                 case "l-shop": S.pending = new Pending("shop") { bought = 0 }; return true;
                 case "l-relic": relicShopStart(); return true;
-                case "l-scratch": scratchStart(key); return true;
-                case "l-lotto": lottoStart(key); return true;
+                case "l-scratch": promHit("gamble"); scratchStart(key); return true;
+                case "l-lotto": promHit("gamble"); lottoStart(key); return true;
                 case "l-race": raceStart(key); return true;
             }
             return err("act " + k);
@@ -176,7 +177,7 @@ namespace KwGame.Sim
                     Emit("opening");
                     pushK("m", T("open.k3"));
                     galReact("start", null, 4);
-                    after("tutInit", "loopTop");
+                    after("tutInit", "v4Start", "loopTop");
                     relicStart(T("aug.reasonStart"));
                     return;
                 case "relic":
@@ -201,8 +202,10 @@ namespace KwGame.Sim
                     if (t == "continue") { if (!continueGame()) err("continue"); return; }
                     break;
                 case "home":
-                    if (t == "rest") { S.pending = null; if (S.rt) S.actMin = isEve() ? Math.Max(1, slotEndMin(S.slot) - S.min) : R.RT_REST; restHome(); slotUsed(); return; }
+                    if (t == "rest") { S.pending = null; if (v4) S.actMin = slotLeft(); else if (S.rt) S.actMin = isEve() ? Math.Max(1, slotEndMin(S.slot) - S.min) : R.RT_REST; restHome(); slotUsed(); return; }
                     if (t == "map") { S.pending = new Pending("map"); return; }
+                    if (v4 && t == "watch") { watchStart(); return; }
+                    if (v4 && t == "date") { S.pending = null; dateHome(); return; }
                     if (t == "loanOpen") { S.pending = new Pending("loan") { took = 0 }; return; }
                     if (t == "repayOpen") { repayStart("home"); return; }   // 집에서 바로 원금 상환 (김사장 계좌로 이체, 시간 안 씀)
                     break;
@@ -215,7 +218,8 @@ namespace KwGame.Sim
                     {
                         string locK = c.Str("loc");
                         if (locK == "home") { toHome(); return; }
-                        if (locK == null || !D.LOCS.TryGetValue(locK, out var L) || !L.open.Contains(S.slot) || (L.rt && !S.rt)) { err("closed"); return; }
+                        if (locK == null || !D.LOCS.TryGetValue(locK, out var L) || !L.open.Contains(S.slot) || (L.rt && !S.rt) || locHidden(locK)) { err("closed"); return; }
+                        if (isEve()) promHit("out");
                         string w = !string.IsNullOrEmpty(S.tg) ? null : encounterRoll();
                         if (w != null) encounterStart(w, locK); else visit(locK);
                         return;
@@ -227,6 +231,9 @@ namespace KwGame.Sim
                 case "loc":
                     if (t == "act") { act(c.Str("k")); return; }
                     if (t == "leave") { bool used = S.visit.used; S.visit = null; if (used) slotUsed(); else toHome(); return; }
+                    break;
+                case "watch":
+                    if (t == "watchEnd") { watchEnd(); return; }
                     break;
                 case "brokerTrade":
                     if (t == "brokerClose") { bool used = S.st.invest > P.n0; if (used) hp(-hpCost("trade")); actDone(used); return; }

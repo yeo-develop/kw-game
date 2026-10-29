@@ -18,7 +18,7 @@ namespace KwGame.Sim
             return () => Rng.Float(ref a);
         }
         bool evFits(EvDef e) =>
-            (e.slots == null || e.slots.Contains(S.slot)) && absDay() >= Math.Max(1, e.minDay) && S.cash >= e.minCash && S.addict >= e.minAddict;
+            e.day == 0 && (e.slots == null || e.slots.Contains(S.slot)) && absDay() >= Math.Max(1, e.minDay) && S.cash >= e.minCash && S.addict >= e.minAddict;
 
         /// homeStep 에서 호출. 이벤트를 띄웠으면 true (pending = event)
         bool evCheck()
@@ -86,6 +86,15 @@ namespace KwGame.Sim
             if (r.hp != 0) { hp(r.hp); bits.Add("체력 " + (r.hp > 0 ? "+" : "") + JsFmt.Num(r.hp)); }
             if (r.fame != 0) fame(r.fame);
             if (r.addict != 0) { addict(r.addict); if (r.addict > 0) bits.Add("도박 중독도 +" + JsFmt.Num(r.addict)); }
+            if (r.aff != 0) { affD(r.aff); bits.Add(r.aff > 0 ? "미래 호감 +" + JsFmt.Num(r.aff) : "미래 호감 " + JsFmt.Num(r.aff)); }
+            if (r.greed != 0) greedD(r.greed);
+            if (r.debtPct != 0)
+            {
+                double d = round1k(S.debt * r.debtPct);
+                if (d > 0) addDebt(d, ev.title);
+                else if (d < 0) { S.debt = Math.Max(0, S.debt + d); S.st.minDebt = Math.Min(S.st.minDebt, S.debt); S.today.Add(new Ledger { kind = "debt", amt = -d, label = ev.title }); Emit("debt", "d", d); }
+                bits.Add("빚 " + (d > 0 ? "+" : "-") + won(Math.Abs(d)));
+            }
             if (r.res != null) say(who, r.res, r.face);
             string tail = bits.Count > 0 ? " (" + string.Join(" · ", bits) + ")" : "";
             pushF("🎲", ev.title + tail, "money");

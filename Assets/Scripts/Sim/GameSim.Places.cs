@@ -26,7 +26,7 @@ namespace KwGame.Sim
                             new LocOpt { k = "l-repay", ic = "💳", l = T("lo.repay"), sub = T("lo.debt", "d", man(S.debt)), dis = S.cash < 10000 } };
                     }
                 case "casino":
-                    return new[] { ("oddeven", "🎲"), ("card", "🃏"), ("slot", "🎰"), ("ladder", "🪜") }
+                    return new[] { ("oddeven", "🎲"), ("card", "🃏"), ("slot", "🎰"), ("ladder", "🪜") }.Where(x => !v4 || x.Item1 == "oddeven" || x.Item1 == "slot")   // v4: 홀짝·슬롯만
                         .Select(x => new LocOpt { k = "l-" + x.Item1, ic = x.Item2, l = T("lo." + x.Item1), sub = T("lo.nolimit") + hc("casino"), dis = S.cash < 10000 }).ToList();
                 case "work":
                     return D.JOBList.Select(J => new LocOpt
@@ -57,7 +57,7 @@ namespace KwGame.Sim
                 case "lotto":
                     return new List<LocOpt> {
                         new LocOpt { k = "l-scratch", ic = "🪙", l = T("lo.scratch"), sub = T("lo.scratchSub"), dis = S.cash < 5000 },
-                        new LocOpt { k = "l-lotto", ic = "🔮", l = T("lo.lotto"), sub = T("lo.lottoSub"), dis = S.cash < 10000 } };
+                        new LocOpt { k = "l-lotto", ic = "🔮", l = T("lo.lotto"), sub = T("lo.lottoSub"), dis = S.cash < 10000 } }.Where(o => !v4 || o.k == "l-lotto").ToList();   // v4: 빚또만
                 case "race":
                     return new List<LocOpt> { new LocOpt { k = "l-race", ic = "🏇", l = T("lo.race", "d", absDay()), sub = T("lo.raceSub") + hc("race"), dis = S.cash < 10000 } };
             }

@@ -39,6 +39,13 @@ namespace KwGame.Sim
         public Dictionary<string, RelaxDef> RELAX; public Dictionary<string, SickDef> SICK;
         public double RELAX_DIM = 0.6, SICK_P0 = 0.02, SICK_ST0 = 50, SICK_ST_K = 0.006, SICK_HP = 0.2, SICK_HANG = 0.1, SICK_FIT = 0.5, SICK_FLU_ST = 80, HANG_HP = 10, PHARM_COST = 8000, CLINIC_COST = 60000, VITA_COST = 15000;
 
+        // v4 리디자인 (docs/V4.md, unity_v4.json V4_RULES). V4 = 0 이면 예전 실시간 그대로
+        public int V4 = 0, V4_DAYS = 28, V4_WEEKDAYS = 5;
+        public double V4_WATCH_SPEED = 2, V4_AFF0 = 50, V4_AFF_GOOD = 60, V4_AFF_HEIST = 85, V4_GREED_HEIST = 50, V4_DATE_AFF = 6, V4_DATE_ST = -12, V4_PROM_OK = 8, V4_PROM_BAD = -10, V4_GREED_DECAY = 3, V4_PART2_DEBT = 100000000;
+        /// 장(=달)별 시장 국면: 시장 수익률 가산(칸당) · 코인 가산 · 변동성 배수. 1장 횡보 · 2장 불장 · 3장 과열 · 4장 폭락
+        public double[] V4_CH_MKT = { 0, 0.006, 0.004, -0.012 }, V4_CH_COIN = { 0, 0.015, 0.01, -0.025 }, V4_CH_VOL = { 1, 1, 1.5, 1.3 };
+        public string[] V4_HIDE_LOCS = { };
+
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;
     }
@@ -80,8 +87,10 @@ namespace KwGame.Sim
     public class RandEv { public string t; public double cash, st, fame, hp; }
     public class KQDef { public string q, ok, good, bad; public string[] no; }
     /// 돌발 이벤트 (unity_events.json). lines = [who, text, face?] 목록, who: m·me·kim·nar
-    public class EvDef { public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay; public double minCash, minAddict; public List<EvOpt> opts; }
-    public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict; public EvOpt fail; }
+    /// day = v4 이야기 이벤트: 그 날(absDay, 2부도 1부터) 집에 오면 무조건 (랜덤 풀엔 안 들어감). part = 몇 부 이야기인지 (0 = 아무 때나)
+    public class EvDef { public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay, day, part; public double minCash, minAddict; public List<EvOpt> opts; }
+    /// v4: aff = 미래 호감 · greed = 욕심 · debtPct = 빚 비율 변화 (−0.3 = 30% 탕감)
+    public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict, aff, greed, debtPct; public EvOpt fail; }
     public class MenSet { public string[] msgs; public string last, ok, good, bad; public string[] no; }
     public class ImpulseSet { public string line, ok, good, bad; public string[] no; }
     public class EndingDef
@@ -142,6 +151,7 @@ namespace KwGame.Sim
 
         public static GameData FromJObject(JObject j)
         {
+            mergeV4(j);
             var d = new GameData { J = j };
             d.RULES = j["RULES"].ToObject<Rules>();
             foreach (var p in ((JObject)j["TK"]).Properties())
@@ -208,6 +218,19 @@ namespace KwGame.Sim
             d.STR = (JObject)j["STR"];
             foreach (var p in ((JObject)j["NPCS"]).Properties()) d.NPC_NAME[p.Name] = (string)p.Value["name"];
             return d;
+        }
+
+        /// unity_v4.json (v4 리디자인, docs/V4.md): V4_* 키를 같은 이름의 원본 객체에 덮어씀 (파일 병합은 최상위 키 통째 교체라 따로)
+        static void mergeV4(JObject j)
+        {
+            void into(string from, string to)
+            {
+                if (!(j[from] is JObject src)) return;
+                if (!(j[to] is JObject dst)) { j[to] = dst = new JObject(); }
+                foreach (var p in src.Properties()) dst[p.Name] = p.Value.DeepClone();
+            }
+            into("V4_RULES", "RULES"); into("V4_STR", "STR"); into("V4_SCENES", "SCENES"); into("V4_ENDINGS", "ENDINGS");
+            if (j["V4_EVENTS"] is JArray ev) { if (!(j["EVENTS"] is JArray e0)) j["EVENTS"] = e0 = new JArray(); foreach (var x in ev) e0.Add(x.DeepClone()); }
         }
 
         public string S(string key)
