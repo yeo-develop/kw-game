@@ -32,7 +32,7 @@ namespace KwGame.Sim
                     return D.JOBList.Select(J => new LocOpt
                     {
                         k = "l-" + J.id, ic = J.ic, l = J.name,
-                        sub = T("lo.pay", "a", man(J.@base * (has("grind") ? R.GRIND_PAY : 1)), "b", man((J.@base + J.var) * (has("grind") ? R.GRIND_PAY : 1)), "h", jobHp(J)) + (S.hp <= jobHp(J) ? T("lo.faintRisk") : S.hp < R.HP_LOW ? T("lo.tiredPen") : "")
+                        sub = T("lo.pay", "a", man((S.rt ? jobPay(J, 0) : J.@base) * (has("grind") ? R.GRIND_PAY : 1)), "b", man((S.rt ? jobPay(J, 1) : J.@base + J.var) * (has("grind") ? R.GRIND_PAY : 1)), "h", jobHp(J)) + (S.hp <= jobHp(J) ? T("lo.faintRisk") : S.hp < R.HP_LOW ? T("lo.tiredPen") : "")
                     }).ToList();
                 case "pc":
                     return new List<LocOpt> {

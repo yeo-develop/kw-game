@@ -15,7 +15,7 @@ namespace KwGame.Sim
             if (rnd() > 0.9) M.reg = -M.reg;
             double v = rtVol();
             int ch = v4 ? chapter() - 1 : -1; if (ch >= 0) v *= R.V4_CH_VOL[ch];   // v4 장별 시장 국면
-            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) * v + sh(shock, "MKT") + (ch >= 0 ? R.V4_CH_MKT[ch] : 0);
+            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) * v + sh(shock, "MKT") + (ch >= 0 ? R.V4_CH_MKT[ch] * p2reg() : 0);
             bool whale = evening && S.mk == M && has("whale");
             var P = new MarketPlan { whale = whale };
             foreach (var t in D.TKList)
@@ -26,9 +26,9 @@ namespace KwGame.Sim
                 if (t.inv) r = (t.of != null && P.r.ContainsKey(t.of) ? -2 * P.r[t.of] : -2 * mret) - 0.001 + gauss() * t.vol * v;
                 else if (t.meme) r = S.rt ? (rnd() < R.RT_MEME_UP ? 0.4 + rnd() * 0.4 : -(0.3 + rnd() * 0.3)) : rnd() < 0.46 ? 0.45 + rnd() * 0.45 : -(0.28 + rnd() * 0.3);   // 실시간: 기대값 ≈ 0 (예전엔 칸당 +8% 라 몰빵이 정답)
                 else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * v * (evening ? 1.3 : 1);
-                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) + (ch >= 0 ? R.V4_CH_COIN[ch] : 0);
+                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) + (ch >= 0 ? R.V4_CH_COIN[ch] * p2reg() : 0);
                 if (!(t.inv && t.of != null)) r += sh(shock, k);
-                if (t.IsStock && weekend()) r = 0;   // v4 주말 휴장: 국장은 안 움직임
+                r = wkGap(t, r);   // v4 주말 휴장: 국장은 안 움직이고 월요일 오전에 몰아서
                 P.r[k] = clamp(r, -0.7, 1.5);
                 double wig = t.vol * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) * (0.2 + rnd() * 0.6);
                 double w0 = wig * rnd(); double w1 = wig * rnd();
@@ -90,10 +90,11 @@ namespace KwGame.Sim
         News genNews()
         {
             if (S.llm) return genNewsLlm();
-            if (rnd() > 0.32) return null;
+            if (rnd() > (v4 ? R.V4_NEWS_P : 0.32)) return null;
             var pool = TKS().Where(k => k != "INV" && tkOpen(k)).Concat(new[] { "MKT" }).ToList();
             string tk = pick(pool);
             var nw = pick(D.NEWS[tk]);
+            if (v4) { int want = newsDir(); var same = D.NEWS[tk].Where(x => x.dir == want).ToList(); if (same.Count > 0) nw = pick(same); }   // v4: 장별 국면 = 뉴스 방향 편향
             D.TK.TryGetValue(tk, out var t);
             double mag = (tk == "MKT" ? 0.02 + rnd() * 0.02 : t.type == "stock" ? 0.05 + rnd() * 0.07 : t.meme ? 0.4 : 0.07 + rnd() * 0.09) * (t != null ? t.nmag : 1);
             var n = new News { tk = tk, h = nw.h, dir = nw.dir, r = nw.dir * mag, fake = rnd() < 0.3 };

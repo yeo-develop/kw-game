@@ -12,17 +12,31 @@ namespace KwGame.Sim
         public bool v4 => S != null && S.rt && R.V4 > 0;
         public int chapter() => (int)clamp(S.month, 1, 4);
         public bool weekend() => v4 && S.day > R.V4_WEEKDAYS;
+        double p2reg() => S.part > 1 ? R.V4_P2_REGIME : 1;
         public int daysLeft() => Math.Max(0, R.V4_DAYS - absDay());
         /// 2부는 빚 1억 → 한도·상한·만기 판정도 같은 비율로
         public double debtScale() => v4 && S.part > 1 ? R.V4_PART2_DEBT / R.DEBT0 : 1;
         public double debtStart() => R.DEBT0 * debtScale();
         public bool locHidden(string id) => v4 && R.V4_HIDE_LOCS != null && R.V4_HIDE_LOCS.Contains(id);
+        /// 국장 주문 가능: v4 는 장 보기 칸에서만 (행동 → 소재 → 본 행동). 코인은 어디서나
+        public bool stockTradeOk() => stockOpen() && (!v4 || S.pending?.t == "watch");
+        /// 칸 시작 속보: 이번 칸 시세에 들어갈 뉴스를 먼저 보여 줌 (가짜일 수도). STONKS 식 '뉴스 보고 판단'
+        void newsFlash()
+        {
+            var n = S.news; if (!v4 || n == null || S.nflashT == Tnow()) return;
+            S.nflashT = Tnow();
+            pushF("🚨", T("v4.newsFlash", "h", n.h), "news"); toast(T("v4.newsFlash", "h", n.h), "news", "news");
+        }
+        /// 장별 뉴스 방향 편향 (국면 = 확률). 좋은 뉴스가 나올 확률
+        int newsDir() => rnd() < R.V4_CH_NEWSUP[chapter() - 1] ? 1 : -1;
         /// 칸 남은 시간 (v4: 행동 하나 = 칸 하나)
         int slotLeft() => Math.Max(1, slotEndMin(S.slot) - S.min);
 
+        /// 호감 변화. 오를 땐 높을수록 덜 오름 (×(1 − 호감/V4_AFF_SOFT)) → 공짜로 100 찍지 못하게
         void affD(double d)
         {
             if (!v4 || d == 0) return;
+            if (d > 0) d *= Math.Max(0.1, 1 - S.aff / R.V4_AFF_SOFT);
             double b = S.aff; S.aff = clamp(rhu(S.aff + d), 0, 100);
             if (S.aff != b) Emit("aff", "d", S.aff - b, "v", S.aff);
         }
@@ -65,8 +79,9 @@ namespace KwGame.Sim
         void promJudge()
         {
             var p = promNow(); if (p == null) return;
+            if (p.avoid == "coin" && S.cps.Count > 0) S.promBad = true;   // 코인 금지 = 자정에 들고 있어도 어김
             bool kept = !S.promBad && (p.@do == null || S.promDone);
-            if (kept) { affD(R.V4_PROM_OK); stress(-5); pushK("m", p.endOk); }
+            if (kept) { affD(p.@do != null ? R.V4_PROM_OK : R.V4_PROM_OK / 2); stress(-5); pushK("m", p.endOk); }   // 하지 마 부탁은 가만있어도 지켜지니 절반
             else { affD(R.V4_PROM_BAD); stress(10); pushK("m", p.endBad); }
             S.prom = null;
         }
@@ -79,12 +94,14 @@ namespace KwGame.Sim
             int key = S.part * 10 + chapter();
             if (S.day == 1 && S.chSeen != key) { S.chSeen = key; Emit("story", "key", (S.part > 1 ? "p2ch" : "ch") + chapter()); }
             promPick();
-            if (S.greed >= 60) pushK("m", fpick(TA("v4.greedK")));
+            if (S.greed >= R.V4_GREED_HEIST) pushK("m", fpick(TA("v4.greedK2")));        // 털기 문턱 넘음
+            else if (S.greed >= R.V4_GREED_HEIST - 15) pushK("m", fpick(TA("v4.greedK")));   // 슬슬
         }
         void v4DayEnd()
         {
             if (!v4) return;
             promJudge();
+            if (S.dateN == 0) affD(-R.V4_AFF_DECAY);   // 하루 종일 안 놀아 주면 식음
             S.dateN = 0;
         }
 
@@ -99,7 +116,7 @@ namespace KwGame.Sim
             face("happy");
             M(fpick(TA(S.aff >= R.V4_AFF_GOOD ? "v4.dateHi" : "v4.dateLo")), "happy");
             hideDlg();
-            promHit("date");
+            promHit("date"); if (isEve()) promHit("datenight");
             S.actMin = slotLeft(); slotUsed();
         }
         void watchStart() { S.pending = new Pending("watch") { n0 = S.st.invest }; Emit("watch"); }
@@ -121,13 +138,30 @@ namespace KwGame.Sim
             return true;
         }
 
+        /// 이자일 "전량 매도" = 급매 손해 (주식 평가액의 V4_FIRESALE)
+        double fireSale(double stockV)
+        {
+            if (!v4 || stockV <= 0) return 0;
+            double cut = round1k(stockV * R.V4_FIRESALE);
+            if (cut > 0) money(-cut, "invest", T("v4.fireSale"));
+            return cut;
+        }
+        /// 주말 갭: 주말 국장 움직임을 쌓아 뒀다가 월요일 오전에 (금요일에 들고 갈까 = 위험)
+        double wkGap(Ticker t, double r)
+        {
+            if (!v4 || !t.IsStock) return r;
+            if (weekend()) { S.wkGap[t.id] = (S.wkGap.TryGetValue(t.id, out var g) ? g : 0) + r; return 0; }
+            if (S.day == 1 && S.slot == 0 && S.wkGap.TryGetValue(t.id, out var g2)) { S.wkGap.Remove(t.id); return r + g2; }
+            return r;
+        }
+
         // ---------- 엔딩 ----------
         /// 만기(28일째 이자일 뒤)에 빚이 남았을 때: 빚 절반 이하 + 호감 → 같이 원양어선 · 절반 넘음 + 호감 아주 높음(V4_AFF_HEIST) → 미래가 김사장 털기 · 나머지 → 혼자 끌려감
         void maturityEnd()
         {
             kim(false);
             N(T("v4.maturityN", "d", won(S.debt)));
-            ending(S.aff >= R.V4_AFF_HEIST && S.greed >= R.V4_GREED_HEIST && S.debt > debtStart() * 0.5 ? "heist" : "bad1");
+            ending(S.aff >= R.V4_AFF_HEIST && S.greed >= R.V4_GREED_HEIST && S.debt > debtStart() * R.V4_DUO_DEBT ? "heist" : "bad1");
         }
         /// ending() 끝에서 v4 변형 덮어쓰기
         void v4EndVariant(string kind, ref string variant, ref string lead)
@@ -141,7 +175,7 @@ namespace KwGame.Sim
                 variant = good ? "true" : "lonely";
                 lead = T(good ? (S.part > 1 ? "v4.end.true2" : "v4.end.true") : "v4.end.lonely", v);
             }
-            else if (kind == "bad1" && absDay() >= R.V4_DAYS && S.debt <= debtStart() * 0.5)
+            else if (kind == "bad1" && absDay() >= R.V4_DAYS && S.debt <= debtStart() * R.V4_DUO_DEBT)
             {
                 variant = good ? "duo" : "sea";
                 lead = T(good ? "v4.end.duo" : "v4.end.half", v);

@@ -25,8 +25,32 @@ static class P {
       int n = a.Length > 1 ? int.Parse(a[1]) : 60;
       var strats = a.Length > 2 ? a[2].Split(',') : new[] { "work", "smart", "gamble", "random" };
       RtBots.ForceRelic = Environment.GetEnvironmentVariable("BAL_FORCE");
+      RtBots.Part2 = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("BAL_PART2"));
       string tr = Environment.GetEnvironmentVariable("BAL_TRACE");
       if (tr != null) { RtBots.Trace = Console.WriteLine; var rr = RtBots.Run(BD, int.Parse(tr) * 104729, strats[0]); Console.WriteLine($"{rr.end} d{rr.day} errs {rr.errs} {rr.lastErr}"); return 0; }
+      if (Environment.GetEnvironmentVariable("BAL_MKT") != null) {
+        // 시장 국면 진단: 쉬기만 하면서 28일 → 장 시작(1·8·15·22일 아침)과 끝의 종목별 평균 가격 비 (판 n개 평균)
+        var sums = new Dictionary<string, double[]>();
+        for (int sd = 1; sd <= n; sd++) {
+          var g = GameSim.Create(BD, sd * 104729, new GameSim.Opts { rt = true }); g.Apply(new SimCommand("start"));
+          var p0 = new Dictionary<string, double>(); int lastCh = 0;
+          for (int i = 0; i < 4000 && g.S.pending != null && g.S.pending.t != "ending"; i++) {
+            var P = g.S.pending; int ch = g.absDay() >= 29 ? 5 : g.chapter();
+            if (P.t == "home" && g.S.slot == 0 && ch != lastCh) {
+              foreach (var t in BD.TKList) { double px = g.S.mk.tk[t.id].p; if (lastCh > 0 && p0.ContainsKey(t.id)) { if (!sums.ContainsKey(t.id)) sums[t.id] = new double[4]; sums[t.id][lastCh - 1] += Math.Log(px / p0[t.id]); } p0[t.id] = px; }
+              lastCh = ch;
+            }
+            SimCommand c = P.t == "home" ? new SimCommand("rest") : P.t == "relic" ? new SimCommand("pickRelic", "i", 0) : P.t == "event" ? new SimCommand("evPick", "k", P.opts.First(o => !o.dis).k)
+              : P.t == "menhera" || P.t == "impulse" ? new SimCommand("reply", "i", 0) : P.t == "payday" ? new SimCommand("payday", "k", P.stage == "repay" ? "keep" : P.opts.FirstOrDefault(o => !o.dis)?.k ?? "pay") : P.t == "tempt" ? new SimCommand("tempt", "k", "no") : null;
+            if (c == null) break;
+            if (P.t == "payday" && P.stage == "choose") g.S.cash = Math.Max(g.S.cash, P.due + 1);
+            if (P.t == "payday" && g.absDay() >= 28) { foreach (var t in BD.TKList) if (p0.ContainsKey(t.id)) { if (!sums.ContainsKey(t.id)) sums[t.id] = new double[4]; sums[t.id][3] += Math.Log(g.S.mk.tk[t.id].p / p0[t.id]); } p0.Clear(); }
+            g.Apply(c);
+          }
+        }
+        foreach (var kv in sums) Console.WriteLine($"{kv.Key,-6} beta {BD.TK[kv.Key].beta,4} " + string.Join("  ", kv.Value.Select((v, i) => $"{i + 1}장 {Math.Exp(v / n) - 1,7:P1}")));
+        return 0;
+      }
       if (Environment.GetEnvironmentVariable("BAL_RELIC") != null) {
         foreach (var st in strats) {
           var L = Enumerable.Range(1, n).Select(s => RtBots.Run(BD, s * 104729, st)).ToList();

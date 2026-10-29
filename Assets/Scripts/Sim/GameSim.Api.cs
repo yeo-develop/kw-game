@@ -166,6 +166,7 @@ namespace KwGame.Sim
             {
                 if (!PHONE_OK.Contains(pt)) { err("phone@" + (pt ?? "undefined")); return; }
                 if (t == "open" && !tkOpen(c.Str("tk"))) { err("locked"); return; }
+                if (v4 && pt != "watch" && (t == "report" || ((t == "buy" || t == "sell") && D.TK.TryGetValue(c.Str("tk") ?? "", out var tt) && tt.IsStock))) { err("watchOnly"); return; }   // v4: 국장 주문·리포트는 장 보기 칸에서만
                 phone(c); return;
             }
             switch (pt)

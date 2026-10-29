@@ -77,7 +77,7 @@ namespace KwGame.Sim
                 pushF("🐋", T("whale.feed", "n", D.TK[tk].name, "d", T(S.whale.dir > 0 ? "whale.up" : "whale.dn")), "intel");
             }
             if (has("rumor")) { var t = rollTip(SUB); tipAnnounce(t, "sub"); }
-            kqExpire(); kqMaybe(); hyMaybe(); gallTick();
+            kqExpire(); kqMaybe(); hyMaybe(); gallTick(); newsFlash();
             addictTick();
         }
         void addictTick()
@@ -309,7 +309,7 @@ namespace KwGame.Sim
                 var o = P.opts.FirstOrDefault(x => x.k == ck); if (o == null || o.dis) return false;
                 double due = P.due;
                 if (o.k == "pay") { money(-due, "interest", T("lbl.interest")); S.st.interest += due; pushF("🧾", T("pd.feed", "m", S.month, "d", won(due)), "money"); KIM(T("pd.paid")); return paydayPaid(); }
-                if (o.k == "sell") { double t = closeAll(); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); paydayChoose(); return true; }
+                if (o.k == "sell") { double sv = stockVal(); double t = closeAll(); t -= fireSale(sv); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); paydayChoose(); return true; }
                 if (o.k == "loan") { double shortA = Math.Max(0, due - S.cash), have = S.cash; if (have != 0) money(-have, "interest", T("lbl.interestAll")); addDebt(shortA, T("lbl.interestLoan")); S.st.interest += due; KIM(T("pd.loaned", "s", won(shortA))); return paydayPaid(); }
                 if (o.k == "bet") { P.betUsed = true; greedD(8); KIM(T("pd.betAsk")); P.stage = "side"; P.opts = new List<Opt> { new Opt { k = "odd", l = T("cas.odd") }, new Opt { k = "even", l = T("cas.even") } }; return true; }
             }

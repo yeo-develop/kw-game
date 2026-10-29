@@ -90,7 +90,7 @@ namespace KwGame.Tests
             var g = New(); var S = g.S;
             double a0 = S.aff; int s0 = S.slot;
             Go(g, "date"); ToHome(g);
-            Assert.That(S.aff, Is.EqualTo(a0 + Data.RULES.V4_DATE_AFF).Within(0.01));
+            Assert.That(S.aff, Is.EqualTo(a0 + Data.RULES.V4_DATE_AFF * (1 - a0 / Data.RULES.V4_AFF_SOFT)).Within(0.51), "높을수록 덜 오르는 만큼");
             Assert.That(S.slot, Is.EqualTo(s0 + 1));
         }
 
@@ -116,7 +116,8 @@ namespace KwGame.Tests
             Go(g, "date"); ToHome(g);
             Assert.That(S.promDone, Is.True);
             while (S.slot != 0 || S.day == 1) { Go(g, "rest"); ToHome(g); }
-            Assert.That(S.aff, Is.GreaterThanOrEqualTo(a0 + Data.RULES.V4_DATE_AFF + Data.RULES.V4_PROM_OK - 0.01));
+            double afterDate = a0 + Data.RULES.V4_DATE_AFF * (1 - a0 / Data.RULES.V4_AFF_SOFT);
+            Assert.That(S.aff, Is.GreaterThan(afterDate + 1), "놀아 준 것 + 부탁 지킨 보상");
         }
 
         /// 28일째 밤: 이자 내고 나면 만기 결산
@@ -194,6 +195,100 @@ namespace KwGame.Tests
                     Assert.That(r.errs, Is.EqualTo(0), $"{st} seed {s}: {r.lastErr}");
                     Assert.That(r.end, Is.Not.EqualTo("none"), $"{st} seed {s}: 28일 안에 끝나야 함 (만기)");
                 }
+        }
+
+        [Test]
+        public void StockOrdersAndReportsOnlyWhileWatching()
+        {
+            var g = New(); var S = g.S;
+            S.slot = 1; S.min = 720; S.cash = 5000000;
+            var stk = Data.TKList.First(t => t.IsStock && g.tkOpen(t.id) && !t.inv);
+            var e = g.Apply(C("buy", "tk", stk.id, "amt", 100000, "where", "app"));
+            Assert.That(e.Any(x => x.t == "error"), "집에선 국장 주문 안 됨");
+            Assert.That(g.Apply(C("report", "paid", false)).Any(x => x.t == "error"), "리포트도 장 보기에서만");
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 100000);   // 코인은 어디서나
+            Go(g, "watch");
+            Go(g, "buy", "tk", stk.id, "amt", 100000, "where", "app");
+            Go(g, "report", "paid", false);
+            Assert.That(S.hold.Has(stk.id));
+        }
+
+        [Test]
+        public void NewsFlashShowsBeforeTheSlotMoves()
+        {
+            var g = New(); var S = g.S;
+            bool seen = false;
+            for (int i = 0; i < 12 && !seen; i++)
+            {
+                Go(g, "rest"); ToHome(g);
+                seen = S.feed.Any(f => f.x.StartsWith("속보"));
+            }
+            Assert.That(seen, "칸 시작 속보가 피드에 뜸");
+        }
+
+        [Test]
+        public void WeekendStockMovesLandOnMondayAndPaydaySellIsAFireSale()
+        {
+            var g = New(); var S = g.S;
+            var stk = Data.TKList.First(t => t.IsStock && !t.inv);
+            S.wkGap[stk.id] = 0.1; S.day = 1; S.slot = 0; S.mplan = null;
+            double p0 = S.mk.tk[stk.id].p;
+            Go(g, "rest"); ToHome(g);   // 월요일 오전 칸 = 갭 반영
+            Assert.That(S.wkGap.ContainsKey(stk.id), Is.False, "월요일 오전에 갭 소진");
+            var h = New(); var T = h.S;
+            T.month = 1; T.day = 7; T.slot = 2; T.min = h.slotStartMin(2); T.cash = 0; T.debt = 30000000;
+            T.hold[stk.id] = new Holding { q = 1000, cost = 1000 * T.mk.tk[stk.id].p };
+            double sv = h.stockVal();
+            Go(h, "rest");
+            Assert.That(T.pending.t, Is.EqualTo("payday"));
+            Go(h, "payday", "k", "sell");
+            Assert.That(T.today.Any(l => l.label == h.T("v4.fireSale") && l.amt < 0), "이자일 전량 매도 = 급매 손해");
+            Assert.That(T.cash, Is.LessThan(sv * 0.85));
+        }
+
+        [Test]
+        public void AffectionDecaysWithoutDatesAndGainsSoftCap()
+        {
+            var g = New(); var S = g.S;
+            S.aff = 60; S.prom = null;
+            for (int i = 0; i < 3; i++) { Go(g, "rest"); ToHome(g); }
+            Assert.That(S.aff, Is.LessThan(60), "하루 종일 안 놀아 주면 식음");
+            var h = New(); h.S.aff = 100; h.S.prom = null;
+            Go(h, "date"); ToHome(h);
+            Assert.That(h.S.aff, Is.LessThanOrEqualTo(100));
+            var k = New(); k.S.aff = 90; k.S.prom = null; double a0 = k.S.aff;
+            Go(k, "date"); ToHome(k);
+            Assert.That(k.S.aff - a0, Is.LessThan(Data.RULES.V4_DATE_AFF), "높을수록 덜 오름");
+        }
+
+        [Test]
+        public void HoldingCoinsAtMidnightBreaksNoCoinPromise()
+        {
+            var g = New(); var S = g.S;
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
+            S.prom = null; S.cash = 5000000;
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 100000);
+            S.prom = "nocoin"; S.promBad = false;   // 부탁 전부터 들고 있던 코인
+            double a0 = S.aff;
+            while (S.slot != 0 || S.day == 1) { Go(g, "rest"); ToHome(g); }
+            Assert.That(S.aff, Is.LessThan(a0), "자정에 코인 들고 있으면 어김");
+        }
+
+        /// 밸런스 범위 (판 수 적게, 범위 넓게 — 정확한 값은 docs/V4.md §7 300판)
+        [Test]
+        public void BalanceBandsHold()
+        {
+            RtBots.Summary Sum(string st) => RtBots.Summarize(Data, st, 40, 1, 40);
+            var pro = Sum("pro"); var work = Sum("work"); var gamble = Sum("gamble"); var casual = Sum("casual");
+            TestContext.WriteLine(pro); TestContext.WriteLine(casual); TestContext.WriteLine(work); TestContext.WriteLine(gamble);
+            Assert.That(pro.clear, Is.InRange(0.2, 0.7), "잘하는 사람은 꽤 깸");
+            Assert.That(pro.clear + pro.End("bad1/duo"), Is.GreaterThanOrEqualTo(0.6));
+            Assert.That(casual.clear + casual.End("bad1/duo"), Is.InRange(0.15, 0.7));
+            Assert.That(work.clear, Is.EqualTo(0), "알바만으론 못 깸");
+            Assert.That(gamble.bad, Is.GreaterThanOrEqualTo(0.75), "도박 몰빵은 대부분 망함");
+            Assert.That(pro.errs + work.errs + gamble.errs + casual.errs, Is.EqualTo(0));
+            foreach (var a in new[] { "watch", "work", "date" }) Assert.That(pro.acts.TryGetValue(a, out var v) ? v : 0, Is.GreaterThan(0.1), $"pro 가 {a} 를 씀 (죽은 선택지 없음)");
         }
     }
 }

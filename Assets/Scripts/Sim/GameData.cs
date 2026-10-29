@@ -41,10 +41,16 @@ namespace KwGame.Sim
 
         // v4 리디자인 (docs/V4.md, unity_v4.json V4_RULES). V4 = 0 이면 예전 실시간 그대로
         public int V4 = 0, V4_DAYS = 28, V4_WEEKDAYS = 5;
-        public double V4_WATCH_SPEED = 2, V4_AFF0 = 50, V4_AFF_GOOD = 60, V4_AFF_HEIST = 85, V4_GREED_HEIST = 50, V4_DATE_AFF = 6, V4_DATE_ST = -12, V4_PROM_OK = 8, V4_PROM_BAD = -10, V4_GREED_DECAY = 3, V4_PART2_DEBT = 100000000;
+        public double V4_WATCH_SPEED = 2, V4_AFF0 = 50, V4_AFF_GOOD = 60, V4_AFF_HEIST = 85, V4_GREED_HEIST = 50, V4_DATE_AFF = 6, V4_DATE_ST = -12, V4_PROM_OK = 8, V4_PROM_BAD = -10, V4_AFF_SOFT = 120, V4_AFF_DECAY = 4, V4_DUO_DEBT = 0.5, V4_GREED_DECAY = 3, V4_PART2_DEBT = 100000000;
         /// 장(=달)별 시장 국면: 시장 수익률 가산(칸당) · 코인 가산 · 변동성 배수. 1장 횡보 · 2장 불장 · 3장 과열 · 4장 폭락
         public double[] V4_CH_MKT = { 0, 0.006, 0.004, -0.012 }, V4_CH_COIN = { 0, 0.015, 0.01, -0.025 }, V4_CH_VOL = { 1, 1, 1.5, 1.3 };
         public string[] V4_HIDE_LOCS = { };
+        /// 장별 좋은 뉴스 확률 · 칸마다 뉴스 확률 · 이자일 급매 손해 · 직종 배율
+        public double[] V4_CH_NEWSUP = { 0.5, 0.7, 0.6, 0.25 };
+        public double V4_NEWS_P = 0.5, V4_FIRESALE = 0.2;
+        /// 2부: 알바 경력 배율 · 국면 세기 배율 (빚 1억이라 1부 수치로는 못 갚음)
+        public double V4_P2_PAY = 1, V4_P2_REGIME = 1;
+        public Dictionary<string, double> V4_JOB_MULT;
 
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;

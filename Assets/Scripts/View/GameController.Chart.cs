@@ -70,10 +70,10 @@ namespace KwGame.View
                 var kk = k; head.Add(Ui.Chip(n, () => { stkTab = kk; stkMsg = ""; RenderAll(); }, false, stkTab == k ? Ui.Accent : (Color?)null));
             }
             var rs = G.rsch();
-            head.Add(Ui.Chip($"무료 리포트 {rs.free}/{G.freeMax()}", () => { onSent = ReportMsg; Send("report", "paid", false); }, rs.free >= G.freeMax()));
+            head.Add(Ui.Chip($"무료 리포트 {rs.free}/{G.freeMax()}", () => { onSent = ReportMsg; Send("report", "paid", false); }, rs.free >= G.freeMax() || G.v4 && S.pending?.t != "watch"));
             {   // 유료는 두 번 눌러야 삼 (피드백: 막 누르다 10만 원씩 증발)
                 double rf = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE; bool armed = Time.realtimeSinceStartup - rptArm < 4;
-                bool dis = rs.paid >= R.RSCH_PAID_MAX || S.cash < rf;
+                bool dis = rs.paid >= R.RSCH_PAID_MAX || S.cash < rf || G.v4 && S.pending?.t != "watch";
                 var pc = Ui.Chip(dis ? $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})" : armed ? $"{G.won(rf)} 냄? 한 번 더 누르기" : $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})",
                     () => { if (Time.realtimeSinceStartup - rptArm < 4) { rptArm = -10; onSent = ReportMsg; Send("report", "paid", true); } else { rptArm = Time.realtimeSinceStartup; RenderAll(); } },
                     dis, armed && !dis ? (Color?)Ui.Bad : null);
@@ -411,7 +411,7 @@ namespace KwGame.View
 
         void OrderPanel(VisualElement right, Ticker t, TkState mk, string where, double fee)
         {
-            var R = D.RULES; bool isC = t.IsCoin, open = isC || G.stockOpen();
+            var R = D.RULES; bool isC = t.IsCoin, open = isC || G.stockTradeOk();   // v4: 국장은 장 보기 칸에서만
             if (isC && stkLev > t.maxLev) stkLev = t.maxLev;
             double maxAmt = Math.Max(0, Math.Floor((isC ? S.cash / (1 + stkLev * (R.COIN_FEE + G.sickSlip() / 5)) : S.cash) / 10000) * 10000);
             if (stkAmt == null) stkAmt = Math.Round(maxAmt * 0.25 / 10000) * 10000;
@@ -479,7 +479,7 @@ namespace KwGame.View
             else
             {
                 var buy = Ui.Button("매수", () => Order("매수", "가즈아. 이건 우상향이다 (희망)", null, "buy", "tk", t.id, "amt", stkAmt ?? 0, "where", where),
-                    open ? $"{G.won(amt)} · 수수료 {G.won(amt * fee)}" : S.rt ? "장 마감 (09:00~15:30)" : "장 마감 (아침·점심만)", amt < 10000 || !open, StkUp, 28);
+                    open ? $"{G.won(amt)} · 수수료 {G.won(amt * fee)}" : G.v4 && G.stockOpen() ? "장 보기 칸에서만 주문" : S.rt ? "장 마감 (09:00~15:30)" : "장 마감 (아침·점심만)", amt < 10000 || !open, StkUp, 28);
                 buy.style.marginTop = 12; buy.style.alignItems = Align.Center; right.Add(buy);
                 var h = S.hold.Get(t.id);
                 if (h != null && h.q > 0)
@@ -558,8 +558,8 @@ namespace KwGame.View
                 info.Add(Ui.Label($"{D.TK[k].name} · 주식", 22, Ui.Text, true));
                 info.Add(Ui.Label($"{G.man(x.cost)} → {G.man(v)}" + (S.rt ? "" : $" · {G.Tnow() - x.t0}칸 보유"), 18, StkAxis));
                 var pv = Ui.Label($"{G.sgnWon(v - x.cost)}\n{GameSim.pct(x.cost > 0 ? v / x.cost - 1 : 0)}", 24, UpDn(v - x.cost), true); pv.style.marginRight = 12; pv.style.unityTextAlign = TextAnchor.MiddleRight; row.Add(pv);
-                row.Add(Ui.Chip(G.stockOpen() ? "절반" : "장 마감", () => Order("절반 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 0.5, "where", where), !G.stockOpen()));
-                if (G.stockOpen()) row.Add(Ui.Chip("전량", () => Order("전량 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 1, "where", where)));
+                row.Add(Ui.Chip(G.stockTradeOk() ? "절반" : G.v4 && G.stockOpen() ? "장 보기에서" : "장 마감", () => Order("절반 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 0.5, "where", where), !G.stockTradeOk()));
+                if (G.stockTradeOk()) row.Add(Ui.Chip("전량", () => Order("전량 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", kk, "frac", 1, "where", where)));
                 GoChart(info, kk);
                 body.Add(row); n++;
             }
