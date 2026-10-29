@@ -235,6 +235,7 @@ namespace KwGame.View
             RenderMini();
             RenderSaveControls();
             BarrageSync();
+            SickSync();
             MinigameSync();
             LayoutForMode();
             CoachMaybe();
@@ -605,16 +606,17 @@ namespace KwGame.View
             ["cafe"] = "주문표대로 음료를 담고 서빙. 손님은 주문을 잠깐만 보여 주고 폰 봄 → 까먹으면 R (주문당 1번, 인내심 깎임). '샷 추가' 주문엔 S. 손님 인내심 바닥나면 그냥 나감.\n1~5 음료 · 0 비우기 · S 샷 · Enter 서빙 · 손님 3명",
             ["store"] = "바늘이 초록 구간에 왔을 때 삑! 4개 찍기. 가운데 노란 칸이면 PERFECT. 찍을수록 바늘은 빨라지고 구간은 좁아지고 흔들림. 소주는 신분증(I) 먼저.\nSpace / 클릭 · I 신분증",
             ["ware"] = "연타로 박스 올리기. 무거운 박스는 3번 쳐야 올라감(+2). 중간에 깨지기 쉬움 박스가 오면 1초 동안 손 떼기 (치면 −3, 콤보 끊김). 허리는 소모품.\nSpace / 클릭 연타 · 6초",
-            ["mart"] = "떨어지는 박스와 돌진하는 진상 카트 피하기. 위에 뜨는 경고 보고 미리 피하기, 아슬하게 피하면 콤보. 박카스 먹으면 목숨 +1. 9초 버티기, 맞을 때마다 일당 깎임.\n← → / A D / 화면 드래그 · 목숨 5개",
+            ["mart"] = "떨어지는 박스와 돌진하는 진상 카트 피하기. 위에 뜨는 경고 보고 미리 피하기, 아슬하게 피하면 콤보. 박카스 먹으면 목숨 +1. 9초 버티기, 맞을 때마다 일당 깎임.\n← → / A D / 화면 드래그 · 목숨 4개 · 뒤로 갈수록 빨라짐",
         };
 
         void RenderWork(Pending P)
         {
             var J = D.JOBS[P.key];
             Title(J.name);
-            Info(MG_RULES.TryGetValue(P.key, out var rule) ? rule : "", 22, Ui.Text);
             if (P.setup == null)
             {
+                Info(MG_RULES.TryGetValue(P.key, out var rule) ? rule : "", 22, Ui.Text);
+                Info("시작하면 조작법을 그림으로 한 번 더 보여 줘요", 20, Ui.Dim);
                 Info($"일당 {G.man(G.jobPay(J, 0))}~{G.man(G.jobPay(J, 1))}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
                 if (G.workMult() < 1) Info($"체력이 낮아 점수 ×{G.workMult():0.00}", 20, Ui.Bad);
                 Btn("일 시작", () => Send("mgSetup"), "3·2·1 하고 바로 시작", false, Ui.Accent);

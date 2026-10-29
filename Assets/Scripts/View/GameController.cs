@@ -115,7 +115,9 @@ namespace KwGame.View
                     case "scene": SetScene(e.Str("bg"), e.Str("face"), e["night"] is bool nt && nt); break;
                     case "face": SetFace(e.Str("f")); break;
                     case "kim": ShowKim(e["on"] is bool on && on); break;
+                    case "kakao": KakaoNotify(e.Str("room")); break;
                     case "npc": stageTitle.text = Ui.Clean(e.Str("kind") != null && D.NPC_NAME.TryGetValue(e.Str("kind"), out var nn) ? nn : LocTitle()); ShowNpc(e.Str("kind")); break;
+                    case "toast" when e.Str("kind") == "kim" && e.Str("app") == "kakao": break;   // 김사장 카톡은 카톡 알림창으로 (KakaoNotify)
                     case "toast": Toast(e.Str("text"), e.Str("kind")); if (e.Str("app") == "gall") HoldFace("annoyed"); break;
                     case "bubble": Toast("미래: " + e.Str("text"), "bubble"); SetFace(e.Str("face")); break;
                     case "tip": if (e.Str("bubble") != null) { Toast("미래: " + e.Str("bubble"), "bubble"); SetFace(e.Str("face")); } break;
@@ -137,6 +139,7 @@ namespace KwGame.View
                     case "bought": SetFace("happy"); break;
                     case "menhera": SetFace(e.Str("face") ?? "menhera"); yield return KakaoBarrage((string[])e["msgs"]); Toast("카톡 " + ((string[])e["msgs"]).Length + "개 폭탄", "liq"); break;
                     case "impBuy": yield return ImpulseAlert(e); break;
+                    case "sick": yield return SickAlert(e.Str("k")); break;
                     case "addictEv": if (e.Str("k") == "secret") Toast($"몰래 카지노 {G.sgnWon(e.Num("amt"))}", "liq"); break;
                     case "faint": Toast("기절!", "liq"); HoldFace("dizzy", true); break;
                     case "morning": yield return Morning(e); break;
