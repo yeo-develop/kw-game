@@ -147,16 +147,17 @@ namespace KwGame.Sim
             return cut;
         }
         /// 주말 갭: 주말 국장 움직임을 쌓아 뒀다가 월요일 오전에 (금요일에 들고 갈까 = 위험)
-        double wkGap(Ticker t, double r)
+        /// 같은 칸 계획을 다시 짜도 갭이 두 번 쌓이거나 사라지지 않게 칸마다 한 번만 (S.gapT)
+        double wkGap(Ticker t, double r, MarketState M)
         {
-            if (!v4 || !t.IsStock) return r;
+            if (!v4 || !t.IsStock || M != S.mk || S.gapT == Tnow()) return r;
             if (weekend()) { S.wkGap[t.id] = (S.wkGap.TryGetValue(t.id, out var g) ? g : 0) + r; return 0; }
             if (S.day == 1 && S.slot == 0 && S.wkGap.TryGetValue(t.id, out var g2)) { S.wkGap.Remove(t.id); return r + g2; }
             return r;
         }
 
         // ---------- 엔딩 ----------
-        /// 만기(28일째 이자일 뒤)에 빚이 남았을 때: 빚 절반 이하 + 호감 → 같이 원양어선 · 절반 넘음 + 호감 아주 높음(V4_AFF_HEIST) → 미래가 김사장 털기 · 나머지 → 혼자 끌려감
+        /// 만기(28일째 이자일 뒤)에 빚이 남았을 때: 빚 V4_DUO_DEBT(60%) 이하 + 호감 → 같이 원양어선 · 그보다 많음 + 호감·욕심 아주 높음(V4_AFF_HEIST·V4_GREED_HEIST) → 미래가 김사장 털기 · 나머지 → 혼자 끌려감
         void maturityEnd()
         {
             kim(false);
@@ -187,7 +188,7 @@ namespace KwGame.Sim
         bool part2Start()
         {
             S.part = 2; S.cleared = 0; S.ending = null; S.endInfo = null; S.pending = null; S.phase = "home";
-            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.chSeen = 0; S.prom = null; S.dateN = 0;
+            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear();
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;
             S.today = new List<Ledger>(); S.resume = null;
             foreach (var kv in S.mk.tk) { kv.Value.ref0 = kv.Value.p; kv.Value.sT = int.MinValue; }

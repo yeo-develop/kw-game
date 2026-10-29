@@ -28,12 +28,13 @@ namespace KwGame.Sim
                 else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * v * (evening ? 1.3 : 1);
                 else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) + (ch >= 0 ? R.V4_CH_COIN[ch] * p2reg() : 0);
                 if (!(t.inv && t.of != null)) r += sh(shock, k);
-                r = wkGap(t, r);   // v4 주말 휴장: 국장은 안 움직이고 월요일 오전에 몰아서
+                r = wkGap(t, r, M);   // v4 주말 휴장: 국장은 안 움직이고 월요일 오전에 몰아서
                 P.r[k] = clamp(r, -0.7, 1.5);
                 double wig = t.vol * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) * (0.2 + rnd() * 0.6);
                 double w0 = wig * rnd(); double w1 = wig * rnd();
                 P.w[k] = new[] { w0, w1 };
             }
+            if (v4 && M == S.mk) S.gapT = Tnow();
             return P;
         }
         Dictionary<string, Move> applyMarket(MarketPlan P, MarketState M = null)

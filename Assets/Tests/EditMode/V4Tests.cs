@@ -232,7 +232,7 @@ namespace KwGame.Tests
         {
             var g = New(); var S = g.S;
             var stk = Data.TKList.First(t => t.IsStock && !t.inv);
-            S.wkGap[stk.id] = 0.1; S.day = 1; S.slot = 0; S.mplan = null;
+            S.wkGap[stk.id] = 0.1; S.day = 1; S.slot = 0; S.mplan = null; S.gapT = -1;   // 새 월요일 오전 칸처럼 (같은 칸 재계획은 갭을 안 건드림)
             double p0 = S.mk.tk[stk.id].p;
             Go(g, "rest"); ToHome(g);   // 월요일 오전 칸 = 갭 반영
             Assert.That(S.wkGap.ContainsKey(stk.id), Is.False, "월요일 오전에 갭 소진");

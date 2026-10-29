@@ -321,6 +321,7 @@ namespace KwGame.Sim
             if (keep && pr != null && !S.promDone)
             {
                 if (pr.@do == "date" && (eve || G.weekend() || S.stress >= 50)) return C("date");
+                if (pr.@do == "datenight" && eve) return C("date");
                 if (pr.@do == "work" && !eve && S.hp >= 40 && !(S.slot == 0 && PendingBuy() != null)) return Go("work", "l-cafe");
             }
             if (S.stress >= 60) return S.dateN == 0 && S.aff < 85 ? C("date") : Go("park", "l-walk");
@@ -331,7 +332,7 @@ namespace KwGame.Sim
             if (eve)
             {
                 if (S.aff < (pro ? 70 : 65)) return C("date");   // 호감은 엔딩 문턱(60)보다 조금 위로만 — 남는 밤은 야간 알바
-                return S.hp >= 55 && !(keep && pr?.avoid == "out") ? Go("work", "l-cafe") : C("rest");
+                return S.hp >= 55 ? Go("work", "l-cafe") : C("rest");
             }
             if (G.weekend() && S.aff < 70 && S.dateN == 0) return C("date");
             return S.hp >= 40 ? Go("work", "l-cafe") : C("rest");
@@ -346,7 +347,6 @@ namespace KwGame.Sim
             if (ch == 4) return D.TKList.FirstOrDefault(t => t.inv && G.tkOpen(t.id))?.id;
             return null;
         }
-        bool Bull => RideTk() != null;
         double Spare => Math.Floor((S.cash - Due * 1.05 - 300000) / 1000) * 1000;
         bool RideWanted() => RideTk() is string k && (D.TK[k].IsCoin ? !S.cps.Any(c => c.tk == k) : !S.hold.Has(k)) && Spare >= 500000;
         Tip PendingBuy() => G.activeTips().FirstOrDefault(x => Follow(x) && x.dir > 0 && x.Tr >= G.Tnow() && !tipDone.Contains(x.id));
