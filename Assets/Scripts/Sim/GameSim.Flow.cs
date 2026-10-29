@@ -517,7 +517,7 @@ namespace KwGame.Sim
                 variant = hasPos() ? "sell" : "run";
                 lead = T(variant == "sell" ? "end.bad4Sell" : "end.bad4", "n", S.st.menBad, "h", won(holdVal()), "d", won(S.debt));
             }
-            else if (kind == "heist") { variant = ""; lead = ""; }
+            else if (kind == "heist" || kind == "heistFail") { variant = ""; lead = ""; }
             else
             {
                 variant = S.st.work >= 20 ? "loop" : "casino";

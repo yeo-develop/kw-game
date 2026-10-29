@@ -17,6 +17,8 @@ export const NewsReq = z.object({
   strengths: z.array(z.enum(STRENGTHS)).min(1).max(3),
   recent: z.array(NewsLog).max(6),
   arcs: z.array(z.object({ id: short(24), tk: short(8), step: int.nullable(), h: short(160), slotId: int })).max(6),
+  // v4 (선택): 장 국면 · 부 · 김사장 금고 털기 준비 단계
+  ch: int.min(1).max(4).optional(), part: int.min(1).max(9).optional(), kim: int.min(0).max(3).optional(),
 });
 export type NewsReq = z.infer<typeof NewsReq>;
 
@@ -26,6 +28,8 @@ export const LineReq = z.object({
   debt: num, cash: num, hold: num, todayPnl: num, interest: num, dday: int.min(0).max(7), paid: z.boolean(),
   hp: num, stress: num, addict: num, mood: short(16), relics: z.array(short(20)).max(20),
   recent: z.array(short(120)).max(6),
+  // v4 (선택): 장 · 미래 호감 · 털기 준비 단계 · 털기 각오 · 오늘 부탁
+  ch: int.min(1).max(4).optional(), aff: num.optional(), kim: int.min(0).max(3).optional(), ready: z.boolean().optional(), prom: short(20).optional(),
 });
 export type LineReq = z.infer<typeof LineReq>;
 

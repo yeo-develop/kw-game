@@ -317,6 +317,12 @@ namespace KwGame.View
                 v4r.Add(L($"  · 만기 D-{G.daysLeft()}" + (G.weekend() ? " · 주말 휴장" : ""), 19, G.daysLeft() <= 3 ? Ui.Bad : Ui.Gold, true));
                 var p = G.promNow(); string ps = G.promState();
                 if (p != null) hudBar.Add(L($"미래 부탁: {p.hud} " + (ps == "bad" ? "✗ 어김" : ps == "todo" ? "· 아직" : "✓"), 18, ps == "bad" ? Ui.Bad : ps == "todo" ? Ui.Gold : Ui.Good, true));
+                // 털기 루트: 준비 단계 + 미래 각오 (성공 조건 = 호감 V4_AFF_HEIST · 욕심 V4_GREED_HEIST, 숫자 대신 뭐가 모자란지만)
+                if (S.heist > 0)
+                {
+                    string mind = S.aff < D.RULES.V4_AFF_HEIST ? "아직 날 덜 믿음 (호감)" : S.greed < D.RULES.V4_GREED_HEIST ? "아직 겁먹음 (욕심)" : "단단함";
+                    hudBar.Add(L($"금고 털기 준비 {S.heist}/3 · 미래 각오: {mind}" + (S.heistGo ? " · 오늘 밤 턴다" : ""), 18, G.heistOk() ? Ui.Good : Ui.Gold, true));
+                }
                 if (S.pending?.t == "watch")
                 {
                     var spd = Ui.Row(); spd.style.alignItems = Align.Center; spd.style.marginTop = 6; hudBar.Add(spd);

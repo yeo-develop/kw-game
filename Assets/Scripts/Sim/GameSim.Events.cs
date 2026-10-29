@@ -88,6 +88,7 @@ namespace KwGame.Sim
             if (r.addict != 0) { addict(r.addict); if (r.addict > 0) bits.Add("도박 중독도 +" + JsFmt.Num(r.addict)); }
             if (r.aff != 0) { affD(r.aff); bits.Add(r.aff > 0 ? "미래 호감 +" + JsFmt.Num(r.aff) : "미래 호감 " + JsFmt.Num(r.aff)); }
             if (r.greed != 0) greedD(r.greed);
+            if (r.debt > 0) { addDebt(r.debt, ev.title); bits.Add("빚 +" + won(r.debt)); }
             if (r.debtPct != 0)
             {
                 double d = round1k(S.debt * r.debtPct);
@@ -95,6 +96,8 @@ namespace KwGame.Sim
                 else if (d < 0) { S.debt = Math.Max(0, S.debt + d); S.st.minDebt = Math.Min(S.st.minDebt, S.debt); S.today.Add(new Ledger { kind = "debt", amt = -d, label = ev.title }); Emit("debt", "d", d); }
                 bits.Add("빚 " + (d > 0 ? "+" : "-") + won(Math.Abs(d)));
             }
+            if (r.heist >= 0 && v4 && S.heist != r.heist) { S.heist = r.heist; Emit("heist", "v", S.heist); bits.Add(S.heist > 0 ? "털기 준비 " + S.heist + "/3" : "털기 계획 접음"); }
+            if (r.go && v4) S.heistGo = true;
             if (r.res != null) say(who, r.res, r.face);
             string tail = bits.Count > 0 ? " (" + string.Join(" · ", bits) + ")" : "";
             pushF("🎲", ev.title + tail, "money");

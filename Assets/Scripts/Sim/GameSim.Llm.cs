@@ -33,17 +33,22 @@ namespace KwGame.Sim
 
         /// 이번 칸 끝에 굴릴 뉴스 요청 (newsReq). 없으면 null. 호스트(view)가 LLM 에 보낼 JSON 그대로.
         public JObject NewsReq() => Query(newsReq);
-        JObject newsReq()
+        /// v4: 다음 칸 요청을 한 칸 미리 (칸이 행동 하나로 금방 끝나서, 지금 칸 요청만으론 답이 늦음). v4 가 아니면 null
+        public JObject NewsReqNext() => Query(() => v4 ? newsReq(Tnow() + 1) : null);
+        JObject newsReq() => newsReq(Tnow());
+        /// 칸 G 끝에 굴릴 뉴스 요청. v4 는 로그를 G−2 칸까지만 봄 → 한 칸 전에 미리 물어도 칸 G 에 다시 물었을 때와 같은 값
+        JObject newsReq(int G)
         {
             if (!S.llm) return null;
-            int G = Tnow(); var h = hstream(G);
-            if (h() >= 0.32) return null;
+            var h = hstream(G);
+            if (h() >= (v4 ? R.V4_NEWS_P : 0.32)) return null;
             var P = newsPool();
+            int day = G / R.SLOTS + 1, ch = (int)clamp((day - 1) / R.MONTH_DAYS + 1, 1, 4);
             double pp = 0;
-            foreach (var k in P) { var L = D.NEWS[k]; pp += (double)L.Count(x => x.dir > 0) / L.Count; }
-            pp /= P.Count;
+            if (v4) pp = R.V4_CH_NEWSUP[ch - 1];   // 장별 국면 = 호재 확률 (내장 생성기 newsDir 과 같은 값)
+            else { foreach (var k in P) { var L = D.NEWS[k]; pp += (double)L.Count(x => x.dir > 0) / L.Count; } pp /= P.Count; }
             int dir = h() < pp ? 1 : -1; bool fake = h() < 0.3; int tier = (int)Math.Floor(h() * 3);
-            var log = S.nlog ?? new List<NewsLog>();
+            var log = (S.nlog ?? new List<NewsLog>()).Where(x => !v4 || x.slotId <= G - 2).ToList();
             var last = log.Skip(Math.Max(0, log.Count - CAP_WIN)).ToList();
             var ok = P.Where(k => last.Count(x => x.tk == k) < CAP_N).ToList();
             if (ok.Count == 0) ok = P;
@@ -57,9 +62,9 @@ namespace KwGame.Sim
                 if (a != null) { a.tk = x.tk; a.step = x.step; a.h = x.h; a.slotId = x.slotId; }
                 else arcs.Add(new NewsLog { arc = x.arc, tk = x.tk, step = x.step, h = x.h, slotId = x.slotId });
             }
-            return new JObject
+            var q = new JObject
             {
-                ["slotId"] = G, ["month"] = S.month, ["day"] = absDay(), ["slot"] = S.slot, ["dir"] = dir, ["fake"] = fake, ["tier"] = tier,
+                ["slotId"] = G, ["month"] = (day - 1) / R.MONTH_DAYS + 1, ["day"] = day, ["slot"] = G % R.SLOTS, ["dir"] = dir, ["fake"] = fake, ["tier"] = tier,
                 ["tickers"] = new JArray(ok.Select(tkInfo)), ["strengths"] = strengths,
                 ["recent"] = new JArray(log.Skip(Math.Max(0, log.Count - RECENT)).Select(x => new JObject
                 {
@@ -70,6 +75,9 @@ namespace KwGame.Sim
                     ["id"] = a.arc, ["tk"] = a.tk, ["step"] = jn(a.step), ["h"] = a.h, ["slotId"] = a.slotId,
                 })),
             };
+            // v4: 이야기 맥락 (장 국면 · 2부 · 김사장 털기 준비 단계) → 기사에 국면 분위기·김사장 캐피탈 소문을 섞게
+            if (v4) { q["ch"] = ch; q["part"] = S.part; q["kim"] = S.heist; }
+            return q;
         }
 
         public static string CleanText(JToken v, int max)
@@ -81,8 +89,11 @@ namespace KwGame.Sim
         /// 명령 newsFact 검증 → S.nfact (틀리면 false, 상태 그대로)
         bool newsFact(SimCommand c)
         {
-            var q = newsReq();
-            if (q == null || c.Num("slotId") != (int)q["slotId"] || c.Num("dir") != (int)q["dir"]) return false;
+            // 지금 칸, 또는 (v4) 다음 칸 사실
+            double sid = c.Num("slotId");
+            if (sid != Tnow() && !(v4 && sid == Tnow() + 1)) return false;
+            var q = newsReq((int)sid);
+            if (q == null || c.Num("dir") != (int)q["dir"]) return false;
             var tkv = c.J["ticker"]; if (tkv == null || tkv.Type != JTokenType.String) return false;
             string tk = (string)tkv;
             if (!q["tickers"].Any(x => (string)x["k"] == tk)) return false;
@@ -95,7 +106,8 @@ namespace KwGame.Sim
             string arc = av != null && av.Type == JTokenType.String && ArcRx.IsMatch((string)av) ? (string)av : null;
             double n = c.Num("arcStep");
             int? step = arc == null ? (int?)null : (!double.IsNaN(n) && !double.IsInfinity(n) && Math.Floor(n) == n && n >= 1 && n <= ARC_MAX ? (int)n : 1);
-            S.nfact = new NewsFact { slotId = (int)q["slotId"], tk = tk, s = Array.IndexOf(STRENGTHS, str), h = h, body = body, src = src, ev = ev0, arc = arc, step = step };
+            var f = new NewsFact { slotId = (int)q["slotId"], tk = tk, s = Array.IndexOf(STRENGTHS, str), h = h, body = body, src = src, ev = ev0, arc = arc, step = step };
+            if (f.slotId == Tnow()) S.nfact = f; else S.nfactN = f;
             return true;
         }
 
@@ -111,7 +123,7 @@ namespace KwGame.Sim
         {
             var q = newsReq();
             var f = S.nfact != null && q != null && S.nfact.slotId == (int)q["slotId"] ? S.nfact : null;
-            S.nfact = null;
+            S.nfact = S.nfactN != null && S.nfactN.slotId == Tnow() + 1 ? S.nfactN : null; S.nfactN = null;   // v4: 미리 받아 둔 다음 칸 사실을 올림
             if (q == null) return null;
             int dir = (int)q["dir"]; bool fake = (bool)q["fake"];
             News n;

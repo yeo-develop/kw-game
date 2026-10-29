@@ -25,7 +25,9 @@ namespace KwGame.Sim
         {
             var n = S.news; if (!v4 || n == null || S.nflashT == Tnow()) return;
             S.nflashT = Tnow();
-            pushF("🚨", T("v4.newsFlash", "h", n.h), "news"); toast(T("v4.newsFlash", "h", n.h), "news", "news");
+            // AI 기사면 출처·본문까지 (가짜 30% 는 기사 속 단서로 가려냄 → 칸 끝에 [오보] 정정)
+            pushF("🚨", T("v4.newsFlash", "h", n.h), "news", n.llm ? new List<string> { T("news.src", "s", n.src, "b", n.body) } : null);
+            toast(T("v4.newsFlash", "h", n.h), "news", "news");
         }
         /// 장별 뉴스 방향 편향 (국면 = 확률). 좋은 뉴스가 나올 확률
         int newsDir() => rnd() < R.V4_CH_NEWSUP[chapter() - 1] ? 1 : -1;
@@ -90,7 +92,7 @@ namespace KwGame.Sim
         void v4Morning()
         {
             if (!v4) return;
-            greedD(-R.V4_GREED_DECAY);
+            greedD(-(S.heist > 0 ? R.V4_GREED_DECAY_HEIST : R.V4_GREED_DECAY));   // 털기 계획 중엔 욕심이 잘 안 식음
             int key = S.part * 10 + chapter();
             if (S.day == 1 && S.chSeen != key) { S.chSeen = key; Emit("story", "key", (S.part > 1 ? "p2ch" : "ch") + chapter()); }
             promPick();
@@ -131,7 +133,7 @@ namespace KwGame.Sim
         bool storyCheck()
         {
             if (!v4 || D.EVENTS.Count == 0 || fainted() || S.ending != null) return false;
-            var ev = D.EVENTS.FirstOrDefault(e => e.day == absDay() && (e.part == 0 || e.part == S.part) && (e.slots == null || e.slots.Contains(S.slot)) && !S.evSeen.Contains(e.id + "@" + S.part));
+            var ev = D.EVENTS.FirstOrDefault(e => e.day == absDay() && (e.part == 0 || e.part == S.part) && (e.slots == null || e.slots.Contains(S.slot)) && S.heist >= e.heistMin && !S.evSeen.Contains(e.id + "@" + S.part));
             if (ev == null) return false;
             S.evSeen.Add(ev.id + "@" + S.part); S.evT = Tnow();
             evStart(ev);
@@ -157,13 +159,16 @@ namespace KwGame.Sim
         }
 
         // ---------- 엔딩 ----------
-        /// 만기(28일째 이자일 뒤)에 빚이 남았을 때: 빚 V4_DUO_DEBT(60%) 이하 + 호감 → 같이 원양어선 · 그보다 많음 + 호감·욕심 아주 높음(V4_AFF_HEIST·V4_GREED_HEIST) → 미래가 김사장 털기 · 나머지 → 혼자 끌려감
+        /// 만기(28일째 이자일 뒤)에 빚이 남았을 때. 털기 루트(이야기 이벤트 4개)를 끝까지 타고 "턴다"를 골랐으면 빚과 상관없이 털기:
+        /// 호감 V4_AFF_HEIST(믿고 따라옴) + 욕심 V4_GREED_HEIST(끝까지 감) 둘 다면 성공 `heist`, 아니면 `heistFail`. 그 밖엔 bad1 (빚 60% 이하면 같이/혼자 원양어선)
         void maturityEnd()
         {
             kim(false);
             N(T("v4.maturityN", "d", won(S.debt)));
-            ending(S.aff >= R.V4_AFF_HEIST && S.greed >= R.V4_GREED_HEIST && S.debt > debtStart() * R.V4_DUO_DEBT ? "heist" : "bad1");
+            if (S.heistGo) { ending(heistOk() ? "heist" : "heistFail"); return; }
+            ending("bad1");
         }
+        public bool heistOk() => S.aff >= R.V4_AFF_HEIST && S.greed >= R.V4_GREED_HEIST;
         /// ending() 끝에서 v4 변형 덮어쓰기
         void v4EndVariant(string kind, ref string variant, ref string lead)
         {
@@ -181,14 +186,14 @@ namespace KwGame.Sim
                 variant = good ? "duo" : "sea";
                 lead = T(good ? "v4.end.duo" : "v4.end.half", v);
             }
-            else if (kind == "heist") lead = T("v4.end.heist", v);
+            else if (kind == "heist" || kind == "heistFail") lead = T("v4.end." + kind, v);
         }
 
         // ---------- 2부 (B안: 아빠의 차용증) ----------
         bool part2Start()
         {
             S.part = 2; S.cleared = 0; S.ending = null; S.endInfo = null; S.pending = null; S.phase = "home";
-            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear();
+            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;
             S.today = new List<Ledger>(); S.resume = null;
             foreach (var kv in S.mk.tk) { kv.Value.ref0 = kv.Value.p; kv.Value.sT = int.MinValue; }

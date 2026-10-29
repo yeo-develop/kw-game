@@ -14,7 +14,7 @@ namespace KwGame.Sim
             public int seed; public string strat, end = "none", variant = "";
             public int day, steps, errs, works, faints, menheras, sickDays;
             public int sells; public double sellRet;
-            public double debt, cash, earned, interest, repaid, gnet, invest, aff, greed, promOk, promN;
+            public double debt, cash, earned, interest, repaid, gnet, invest, aff, greed, promOk, promN; public int heistMax; public bool heistGo;
             public string lastErr, relic;
             /// v4 행동(칸) 사용 횟수: watch · work · date · rest · casino · lotto · park · 기타
             public Dictionary<string, int> acts = new Dictionary<string, int>();
@@ -22,7 +22,7 @@ namespace KwGame.Sim
         public class Summary
         {
             public string strat; public int n;
-            public double aff, greed, promRate, sellRet, sells, clear, bad, alive, clearDay, clear28, p25, p50, p75, badDay, debtEnd, earnPerDay, gnet, invest, errs, faints, menheras, sickDays;
+            public double[] heist = new double[4]; public double aff, greed, promRate, sellRet, sells, clear, bad, alive, clearDay, clear28, p25, p50, p75, badDay, debtEnd, earnPerDay, gnet, invest, errs, faints, menheras, sickDays;
             /// 엔딩 종류(+변형)별 비율: clear · clear/gamble · clear/rich · bad1 · bad2 · bad3(과로) · bad4(멘헤라)
             public Dictionary<string, double> ends = new Dictionary<string, double>();
             /// 행동별 평균 비율 (v4)
@@ -31,7 +31,8 @@ namespace KwGame.Sim
             public override string ToString() =>
                 $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1} · 에러 {errs:F1}"
                 + (ends.Count > 0 ? "\n        엔딩 " + string.Join(" · ", ends.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value:P1}")) : "")
-                + (aff > 0 ? $"\n        호감 {aff:F0} · 욕심 {greed:F0} · 부탁 지킴 {promRate:P0}" : "") + (acts.Count > 0 ? "\n        행동 " + string.Join(" · ", acts.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:P0}")) : "");
+                + (aff > 0 ? $"\n        호감 {aff:F0} · 욕심 {greed:F0} · 부탁 지킴 {promRate:P0}" : "")
+                + (heist[0] > 0 ? $"\n        털기 루트 1단계 {heist[0]:P0} · 2단계 {heist[1]:P0} · 3단계 {heist[2]:P0} · 턴다 {heist[3]:P0}" : "") + (acts.Count > 0 ? "\n        행동 " + string.Join(" · ", acts.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:P0}")) : "");
         }
 
         public const string RES = "리서치", PARK = "박대리";
@@ -43,10 +44,10 @@ namespace KwGame.Sim
         /// v4 2부(빚 1억)부터 시작 (하네스 BAL_PART2)
         public static bool Part2;
         int traceDay;
-        readonly GameData D; readonly string strat; readonly Random r; readonly double mgLo, mgHi;
+        readonly GameData D; readonly string strat; readonly bool heistRoute; readonly Random r; readonly double mgLo, mgHi;
         GameSim G; GameState S => G.S; Rules R => D.RULES;
         string wantLoc, wantAct; double repayAmt;
-        int lastSickT = -1; bool seeded; int bullLoan; int loanT = -1, lottoT = -1;
+        int lastSickT = -1; bool seeded; int bullLoan; int loanT = -1, lottoT = -1, casinoT = -1;
         readonly HashSet<int> tipDone = new HashSet<int>();
         /// v4 속보 매매: 칸 시작 속보 보고 산 종목 → 산 칸 번호 (그 칸 끝나기 전엔 안 팖). 가짜인지는 봇도 모름
         readonly Dictionary<string, int> newsPos = new Dictionary<string, int>(); int newsT = -1;
@@ -54,8 +55,9 @@ namespace KwGame.Sim
 
         RtBots(GameData d, int seed, string strat, double mgLo, double mgHi)
         {
+            heistRoute = strat.EndsWith("+heist"); if (heistRoute) strat = strat.Substring(0, strat.Length - 6);   // "pro+heist" = pro 인데 털기 루트를 끝까지 탐
             D = d; this.strat = strat; r = new Random(seed * 7919 + 13); this.mgLo = mgLo; this.mgHi = mgHi;
-            res = new Result { seed = seed, strat = strat };
+            res = new Result { seed = seed, strat = strat + (heistRoute ? "+heist" : "") };
         }
 
         public static Result Run(GameData data, int seed, string strat, int maxDays = 70, double mgLo = 0.55, double mgHi = 0.85)
@@ -77,6 +79,7 @@ namespace KwGame.Sim
                 gnet = L.Average(x => x.gnet), invest = L.Average(x => x.invest), errs = L.Average(x => x.errs),
                 faints = L.Average(x => x.faints), menheras = L.Average(x => x.menheras), sickDays = L.Average(x => x.sickDays),
                 ends = L.Where(x => x.end != "none").GroupBy(x => x.end + (x.variant != "" ? "/" + x.variant : "")).ToDictionary(g => g.Key, g => (double)g.Count() / L.Count),
+                heist = new[] { L.Average(x => x.heistMax >= 1 ? 1.0 : 0), L.Average(x => x.heistMax >= 2 ? 1.0 : 0), L.Average(x => x.heistMax >= 3 ? 1.0 : 0), L.Average(x => x.heistGo ? 1.0 : 0) },
                 aff = L.Average(x => x.aff), greed = L.Average(x => x.greed), promRate = L.Sum(x => x.promOk) / Math.Max(1, L.Sum(x => x.promN)),
                 acts = L.SelectMany(x => x.acts.Keys).Distinct().ToDictionary(k => k, k => L.Average(x => { double n = x.acts.Values.Sum(); return n > 0 && x.acts.TryGetValue(k, out var v) ? v / n : 0; })),
             };
@@ -120,6 +123,7 @@ namespace KwGame.Sim
             if (ak != null && G.v4) res.acts[ak] = (res.acts.TryGetValue(ak, out var n0) ? n0 : 0) + 1;
             foreach (var e in G.Apply(c)) if (e.t == "error") { res.errs++; res.lastErr = c.t + " @" + (S.pending?.t ?? "-"); }
             if (ps0 != null && G.absDay() != d0) { res.promN++; if (ps0 == "ok") res.promOk++; }   // 자정 넘긴 명령 직전 부탁 상태
+            res.heistMax = Math.Max(res.heistMax, S.heist); res.heistGo |= S.heistGo;
         }
 
         /// smart0 = smart 인데 김사장 종잣돈 없이 시작 (처음 하는 사람)
@@ -162,6 +166,7 @@ namespace KwGame.Sim
                 case "casino":
                     {
                         // 도박 봇 = 매판 올인 (턴 모드 bots 와 같음), 하이로우는 유리한 쪽
+                        if (heistRoute && S.heist > 0 && casinoT != G.Tnow() && S.cash >= 50000) { casinoT = G.Tnow(); return C("bet", "stake", 50000, "choice", r.Next(2)); }   // 털기 루트: 욕심 채우러 한 판만
                         if (strat != "gamble" || S.cash < 10000) return C("casinoLeave");
                         int ch = P.kind == "card" ? (P.A <= 7 ? 1 : 0) : P.kind == "ladder" ? r.Next(3) : r.Next(2);
                         return C("bet", "stake", Math.Floor(S.cash / 10000) * 10000, "choice", ch);
@@ -201,6 +206,12 @@ namespace KwGame.Sim
                     {
                         var o = P.opts.Where(x => !x.dis).ToList();
                         var ev = D.EVENTS.FirstOrDefault(e => e.id == P.evId);
+                        if (ev != null && heistRoute)
+                        {
+                            // 털기 루트: 다음 단계로 가는 선택지 (없으면 아래 보통 고르기)
+                            for (int i = 0; i < ev.opts.Count; i++)
+                                if ((ev.opts[i].go || ev.opts[i].heist > S.heist) && !P.opts[i].dis) return C("evPick", "k", P.opts[i].k);
+                        }
                         if (ev != null && (strat == "pro" || (strat == "casual" && r.NextDouble() < 0.5)))
                         {
                             // 호감·현금·멘탈을 대충 더해 제일 좋아 보이는 걸 (확률 선택지는 기대값)
@@ -318,6 +329,8 @@ namespace KwGame.Sim
                 if (x < 0.8) return C("watch");
                 return C("rest");
             }
+            // 털기 루트: 미래 각오(욕심)가 모자라면 카지노 한 판 (도박 금지 부탁인 날은 참음)
+            if (heistRoute && S.heist > 0 && S.greed < R.V4_GREED_HEIST + 5 && S.slot >= 1 && S.cash >= 100000 && pr?.avoid != "gamble") return Go("casino", "l-oddeven");
             if (keep && pr != null && !S.promDone)
             {
                 if (pr.@do == "date" && (eve || G.weekend() || S.stress >= 50)) return C("date");
@@ -331,7 +344,7 @@ namespace KwGame.Sim
             if (stockSlot && (DaysToPay <= 2 && S.cash < Due * 1.05 && S.hold.Count > 0 || PendingBuy() != null || S.hold.Count > 0 || (pro && RideWanted()) || S.slot == 0 && G.rsch().free < G.freeMax())) return C("watch");
             if (eve)
             {
-                if (S.aff < (pro ? 70 : 65)) return C("date");   // 호감은 엔딩 문턱(60)보다 조금 위로만 — 남는 밤은 야간 알바
+                if (S.aff < (heistRoute && S.heist > 0 ? 80 : pro ? 70 : 65)) return C("date");   // 호감은 엔딩 문턱(60)보다 조금 위로만 — 남는 밤은 야간 알바 (털기 루트면 미래가 믿고 따라오게 80)
                 return S.hp >= 55 ? Go("work", "l-cafe") : C("rest");
             }
             if (G.weekend() && S.aff < 70 && S.dateN == 0) return C("date");

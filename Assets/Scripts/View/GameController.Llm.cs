@@ -36,9 +36,10 @@ namespace KwGame.View
         void LlmTick()
         {
             if (!LlmSettings.On || S == null) return;
-            var q = G.NewsReq();
-            if (q != null)
+            // v4 는 칸이 행동 하나로 금방 끝나서 다음 칸 것도 미리 물음 (칸 시작 속보가 거의 늘 AI 기사가 되게)
+            foreach (var q in new[] { G.NewsReq(), G.NewsReqNext() })
             {
+                if (q == null) continue;
                 int sid = (int)q["slotId"]; var g = G;
                 if (newsAsked.Add(sid)) StartCoroutine(LlmClient.Post("/news", q, 12f, res => OnNews(g, sid, res)));
             }
@@ -86,7 +87,14 @@ namespace KwGame.View
             return aiLine.T == T && aiLine.line != null ? aiLine.line : S.hl?.t;
         }
 
-        JObject LineSummary() => new JObject
+        JObject LineSummary()
+        {
+            var j = LineBase();
+            // v4: 장 · 호감 · 털기 준비 · 오늘 부탁 → 미래 대사·카톡이 이야기를 따라가게 (털기 루트면 금고 떡밥)
+            if (G.v4) { j["ch"] = G.chapter(); j["aff"] = S.aff; j["kim"] = S.heist; j["ready"] = G.heistOk(); j["prom"] = G.promNow()?.hud ?? ""; }
+            return j;
+        }
+        JObject LineBase() => new JObject
         {
             ["month"] = S.month, ["day"] = S.day, ["slot"] = S.slot,
             ["debt"] = S.debt, ["cash"] = S.cash, ["hold"] = G.holdVal(), ["todayPnl"] = G.todayPnl(), ["interest"] = G.interestDue(),

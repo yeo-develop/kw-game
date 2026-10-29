@@ -126,7 +126,7 @@ namespace KwGame.Sim
         // 실시간 모드 병·숙취·운동·오늘 놀거리 횟수 (GameSim.Health.cs)
         public string sick; public int sickD; public bool hang, fit; public Dictionary<string, int> relaxN = new Dictionary<string, int>();
         public string tg = ""; public int tgT; public Dictionary<string, int> tutSeen = new Dictionary<string, int>(); public int mgN;
-        public bool llm; public NewsFact nfact; public List<NewsLog> nlog = new List<NewsLog>(); public int[] nstr = { 0, 0, 0 };   // LLM 뉴스 (GameSim.Llm.cs)
+        public bool llm; public NewsFact nfact, nfactN; public List<NewsLog> nlog = new List<NewsLog>(); public int[] nstr = { 0, 0, 0 };   // LLM 뉴스 (GameSim.Llm.cs)
         public Pending pending; public List<string> flow = new List<string>(); public string ending; public EndInfo endInfo;
         // JS 에서 처음엔 undefined 인 보조 필드
         public bool optTut; public int? kimpDay, kimBig, menCool, temptT, gT, repT; public double invIn; public Visit visit; public int dbgAug;
@@ -136,7 +136,7 @@ namespace KwGame.Sim
         /// 멘헤라·돌발 매수를 연달아 나쁘게 받아친 횟수 (착한 답장이면 0). 실시간 bad4 판정용 (다이제스트 밖, 저장엔 들어감)
         public int menRun;
         // v4 리디자인 (GameSim.V4.cs, docs/V4.md, 다이제스트 밖): 미래 호감 · 욕심(숨김) · 몇 부 · 오늘 부탁(id, 어김, 해냄) · 본 장 카드 · 오늘 놀아준 횟수
-        public double aff = -1, greed; public int part = 1; public string prom; public bool promBad, promDone; public int chSeen, dateN, nflashT = -1, gapT = -1;
+        public double aff = -1, greed; public int part = 1; public string prom; public bool promBad, promDone; public int chSeen, dateN, nflashT = -1, gapT = -1, heist; public bool heistGo;   // heist = 털기 준비 단계(0~3), heistGo = 만기 밤에 턴다
         /// v4 주말 갭: 주말 동안 쌓인 국장 수익률 (월요일 오전에 반영)
         public Dictionary<string, double> wkGap = new Dictionary<string, double>();
     }

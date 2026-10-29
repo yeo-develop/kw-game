@@ -41,7 +41,7 @@ namespace KwGame.Sim
 
         // v4 리디자인 (docs/V4.md, unity_v4.json V4_RULES). V4 = 0 이면 예전 실시간 그대로
         public int V4 = 0, V4_DAYS = 28, V4_WEEKDAYS = 5;
-        public double V4_WATCH_SPEED = 2, V4_AFF0 = 50, V4_AFF_GOOD = 60, V4_AFF_HEIST = 85, V4_GREED_HEIST = 50, V4_DATE_AFF = 6, V4_DATE_ST = -12, V4_PROM_OK = 8, V4_PROM_BAD = -10, V4_AFF_SOFT = 120, V4_AFF_DECAY = 4, V4_DUO_DEBT = 0.5, V4_GREED_DECAY = 3, V4_PART2_DEBT = 100000000;
+        public double V4_WATCH_SPEED = 2, V4_AFF0 = 50, V4_AFF_GOOD = 60, V4_AFF_HEIST = 85, V4_GREED_HEIST = 50, V4_DATE_AFF = 6, V4_DATE_ST = -12, V4_PROM_OK = 8, V4_PROM_BAD = -10, V4_AFF_SOFT = 120, V4_AFF_DECAY = 4, V4_DUO_DEBT = 0.5, V4_GREED_DECAY = 3, V4_GREED_DECAY_HEIST = 1, V4_PART2_DEBT = 100000000;
         /// 장(=달)별 시장 국면: 시장 수익률 가산(칸당) · 코인 가산 · 변동성 배수. 1장 횡보 · 2장 불장 · 3장 과열 · 4장 폭락
         public double[] V4_CH_MKT = { 0, 0.006, 0.004, -0.012 }, V4_CH_COIN = { 0, 0.015, 0.01, -0.025 }, V4_CH_VOL = { 1, 1, 1.5, 1.3 };
         public string[] V4_HIDE_LOCS = { };
@@ -94,9 +94,9 @@ namespace KwGame.Sim
     public class KQDef { public string q, ok, good, bad; public string[] no; }
     /// 돌발 이벤트 (unity_events.json). lines = [who, text, face?] 목록, who: m·me·kim·nar
     /// day = v4 이야기 이벤트: 그 날(absDay, 2부도 1부터) 집에 오면 무조건 (랜덤 풀엔 안 들어감). part = 몇 부 이야기인지 (0 = 아무 때나)
-    public class EvDef { public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay, day, part; public double minCash, minAddict; public List<EvOpt> opts; }
+    public class EvDef { public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay, day, part, heistMin; public double minCash, minAddict; public List<EvOpt> opts; }
     /// v4: aff = 미래 호감 · greed = 욕심 · debtPct = 빚 비율 변화 (−0.3 = 30% 탕감)
-    public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict, aff, greed, debtPct; public EvOpt fail; }
+    public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict, aff, greed, debtPct, debt; public int heist = -1; public bool go; public EvOpt fail; }   // heist: 털기 단계로 (−1 = 그대로) · go: 만기 밤에 턴다
     public class MenSet { public string[] msgs; public string last, ok, good, bad; public string[] no; }
     public class ImpulseSet { public string line, ok, good, bad; public string[] no; }
     public class EndingDef

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using KwGame.Sim;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -121,11 +122,12 @@ namespace KwGame.Tests
         }
 
         /// 28일째 밤: 이자 내고 나면 만기 결산
-        static GameSim AtMaturity(double debt, double aff, double greed = 0)
+        static GameSim AtMaturity(double debt, double aff, double greed = 0, bool go = false)
         {
             var g = New(); var S = g.S;
             S.month = 4; S.day = 7; S.slot = 2; S.min = g.slotStartMin(2); S.paidMonth = 3;
             S.debt = debt; S.aff = aff; S.greed = greed; S.cash = 20000000;
+            if (go) { S.heist = 3; S.heistGo = true; }
             Go(g, "rest");
             for (int i = 0; i < 10 && S.pending?.t != "ending"; i++)
             {
@@ -144,9 +146,72 @@ namespace KwGame.Tests
             var b = AtMaturity(10000000, 30);
             Assert.That((b.S.ending, b.S.endInfo.variant), Is.EqualTo(("bad1", "sea")), "절반 이하 + 호감 없음 = 혼자");
             var c = AtMaturity(25000000, 90, 60);
-            Assert.That(c.S.ending, Is.EqualTo("heist"), "절반 넘음 + 호감·욕심 높음 = 미래가 김사장 털기");
-            var d = AtMaturity(25000000, 90, 0);
-            Assert.That(d.S.ending, Is.EqualTo("bad1"), "욕심 없으면 털진 않음");
+            Assert.That(c.S.ending, Is.EqualTo("bad1"), "털기 루트를 안 탔으면 호감·욕심이 높아도 안 텀");
+        }
+
+        [Test]
+        public void HeistRouteEndsBySuccessOrCapture()
+        {
+            var R = Data.RULES;
+            Assert.That(AtMaturity(25000000, R.V4_AFF_HEIST + 5, R.V4_GREED_HEIST + 5, go: true).S.ending, Is.EqualTo("heist"), "믿음 + 각오 = 성공");
+            Assert.That(AtMaturity(10000000, R.V4_AFF_HEIST + 5, R.V4_GREED_HEIST + 5, go: true).S.ending, Is.EqualTo("heist"), "턴다고 했으면 빚이 적어도 텀");
+            Assert.That(AtMaturity(25000000, R.V4_AFF_HEIST - 10, R.V4_GREED_HEIST + 5, go: true).S.ending, Is.EqualTo("heistFail"), "호감 모자람 = 잡힘");
+            var f = AtMaturity(25000000, R.V4_AFF_HEIST + 5, 0, go: true);
+            Assert.That(f.S.ending, Is.EqualTo("heistFail"), "욕심(각오) 모자람 = 잡힘");
+            Assert.That(Data.ENDINGS["heistFail"].ok, Is.False);
+            Assert.That(f.S.endInfo.lead, Does.Contain("CCTV"));
+        }
+
+        [Test]
+        public void HeistStoryStepsUnlockInOrder()
+        {
+            // 11일째 오후 = 금고 이야기 → 첫 선택지로 털기 1단계
+            var g = New(); var S = g.S;
+            S.month = 2; S.day = 4; S.slot = 1; S.min = g.slotStartMin(1); S.pending = null; S.flow = new List<string> { "home" };
+            g.Apply(C("debug", "k", "noop"));
+            Assert.That(S.pending?.evId, Is.EqualTo("v4_h1_safe"));
+            Go(g, "evPick", "k", "ev0");
+            Assert.That(S.heist, Is.EqualTo(1));
+            // 17일째 아침 비번 이야기는 1단계가 있어야
+            var h = New(); var H = h.S;
+            H.month = 3; H.day = 3; H.slot = 0; H.min = h.slotStartMin(0); H.pending = null; H.flow = new List<string> { "home" };
+            h.Apply(C("debug", "k", "noop"));
+            Assert.That(H.pending?.evId, Is.Not.EqualTo("v4_h2_code"), "루트 안 탔으면 비번 이야기 없음");
+            var k = New(); var K = k.S; K.heist = 1;
+            K.month = 3; K.day = 3; K.slot = 0; K.min = k.slotStartMin(0); K.pending = null; K.flow = new List<string> { "home" };
+            k.Apply(C("debug", "k", "noop"));
+            Assert.That(K.pending?.evId, Is.EqualTo("v4_h2_code"));
+            // 23일째 도주 차량: 현금 없으면 김사장 돈으로 사는 길
+            var m = New(); var M = m.S; M.heist = 2; M.cash = 0; double d0 = M.debt;
+            M.month = 4; M.day = 2; M.slot = 0; M.min = m.slotStartMin(0); M.pending = null; M.flow = new List<string> { "home" };
+            m.Apply(C("debug", "k", "noop"));
+            Assert.That(M.pending?.evId, Is.EqualTo("v4_h3_car"));
+            Assert.That(M.pending.opts[0].dis, "현금 200만 없으면 현금 구매는 막힘");
+            Go(m, "evPick", "k", "ev1");
+            Assert.That((M.heist, M.debt - d0), Is.EqualTo((3, 2000000.0)));
+        }
+
+        [Test]
+        public void LlmNewsIsAskedOneSlotAheadAndUsed()
+        {
+            var g = New(); var S = g.S;
+            g.Apply(C("llmMode", "on", true));
+            JObject q = null;
+            for (int i = 0; i < 30 && q == null; i++) { q = g.NewsReqNext(); if (q == null) { Go(g, "rest"); ToHome(g); } }
+            Assert.That(q, Is.Not.Null, "30칸 안에 다음 칸 뉴스 요청이 있음");
+            int sid = (int)q["slotId"];
+            Assert.That(sid, Is.EqualTo(g.Tnow() + 1));
+            var ev = g.Apply(new SimCommand(new JObject
+            {
+                ["t"] = "newsFact", ["slotId"] = sid, ["dir"] = q["dir"], ["ticker"] = q["tickers"][0]["k"], ["strength"] = q["strengths"][0],
+                ["event"] = "테스트 사건", ["headline"] = "미리 받은 테스트 속보", ["body"] = "본문 한 줄.", ["source"] = "테스트일보",
+            }));
+            Assert.That(ev.Any(e => e.t == "error"), Is.False, "다음 칸 사실을 받아 둠");
+            Go(g, "rest"); ToHome(g);
+            Assert.That(g.Tnow(), Is.EqualTo(sid));
+            Assert.That(JToken.DeepEquals(g.NewsReq(), q), "한 칸 전에 물은 요청 = 그 칸에 다시 물은 요청");
+            Go(g, "rest"); ToHome(g);
+            Assert.That(S.feed.Any(f => f.x.Contains("미리 받은 테스트 속보")), "그 칸 끝 뉴스 = 받아 둔 AI 기사 (다음 칸 시작 속보)");
         }
 
         [Test]
