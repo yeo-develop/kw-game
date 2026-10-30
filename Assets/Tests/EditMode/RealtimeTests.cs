@@ -98,6 +98,27 @@ namespace KwGame.Tests
             Assert.That(liveLiq, Is.GreaterThan(0));
         }
 
+        [TestCase(539, false)]
+        [TestCase(540, true)]
+        [TestCase(929, true)]
+        [TestCase(930, false)]
+        [TestCase(931, false)]
+        public void StockOrdersRespectTheRegularSessionBoundary(int minute, bool open)
+        {
+            var g = HomeRt(777);
+            g.S.min = minute;
+            g.S.slot = minute < 720 ? 0 : 1;
+            double cash = g.S.cash;
+            Assert.That(g.stockOpen(), Is.EqualTo(open));
+            var events = g.Apply(C("buy", "tk", "GSE", "amt", 10000, "where", "app"));
+            Assert.That(g.S.hold.Has("GSE"), Is.EqualTo(open), "장 밖에서는 주식을 살 수 없어야 한다");
+            Assert.That(g.S.cash, Is.EqualTo(open ? cash - 10000 : cash));
+            var trade = events.Single(e => e.t == "trade");
+            Assert.That((bool)trade["ok"], Is.EqualTo(open));
+            Assert.That(trade["amt"], Is.EqualTo(open ? (object)10000.0 : null));
+            Assert.That(events.Any(e => e.t == "error"), Is.False);
+        }
+
         [Test]
         public void StockMarketHoursAndInverseFollowsGse()
         {

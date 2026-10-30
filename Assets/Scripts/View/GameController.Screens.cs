@@ -88,6 +88,8 @@ namespace KwGame.View
             dialogueAnimation.hideFlags = HideFlags.DontSave;
             dialogueAnimation.Settings.defaultAppearanceTags = new[] { "fade" };
             dlgText = new AnimatedLabel { name = "dialogueText", TimingSettings = dialogueTiming, AnimationSettings = dialogueAnimation };
+            // Advanced 모드에서는 AnimatedLabel의 한글 글리프 매핑이 어긋난다.
+            dlgText.style.unityTextGenerator = TextGeneratorType.Standard;
             dlgText.style.fontSize = 32; dlgText.style.color = Ui.Text;
             dlgText.style.whiteSpace = WhiteSpace.Normal;
             dlgText.style.marginTop = 10;
@@ -136,16 +138,27 @@ namespace KwGame.View
             return c;
         }
 
+        RulesScreen rulesScreen;
+
         IEnumerator RulesCard()
         {
             modal.Clear(); modal.style.display = DisplayStyle.Flex;
-            var card = Card(1200);
-            card.Add(Ui.Label("게임 규칙", 40, Ui.Gold, true));
-            foreach (var t in (D.J["RULES_TEXT"] as JArray) ?? new JArray()) { var l = Ui.Label((string)t, 26); l.style.marginTop = 10; card.Add(l); }
-            card.Add(Ui.Label("(클릭해서 계속)", 20, Ui.Dim));
-            modal.Add(card);
-            yield return WaitClick();
-            modal.style.display = DisplayStyle.None;
+            var layout = Resources.Load<VisualTreeAsset>("UI/Rules/RulesScreen");
+            var screen = new RulesScreen(layout, D.RULES,
+                ((D.J["RULES_TEXT"] as JArray) ?? new JArray()).Select(t => Ui.Clean((string)t)));
+            rulesScreen = screen;
+            modal.Add(screen.View);
+            try
+            {
+                while (!screen.ContinueRequested && !autoSkipDialog) yield return null;
+                // Consume the submit frame before the next opening dialogue starts.
+                yield return null;
+            }
+            finally
+            {
+                screen.Dispose(); rulesScreen = null;
+                modal.style.display = DisplayStyle.None;
+            }
         }
 
         /// 장면 자막 카드 (인트로 회상): 큰 제목 + 설명 + 그려지는 차트 (up = 불장, crash = 오르다 폭락)
@@ -165,7 +178,7 @@ namespace KwGame.View
             modal.Add(card);
             if (sc != null && !autoSkipDialog)
             {
-                for (float a = 0; a < 1.6f; a += Time.unscaledDeltaTime) { sc.t = a / 1.6f; sc.MarkDirtyRepaint(); if (Input.GetMouseButtonDown(0)) break; yield return null; }
+                for (float a = 0; a < 1.6f; a += Time.unscaledDeltaTime) { sc.t = a / 1.6f; sc.MarkDirtyRepaint(); if (Input.GetMouseButtonDown(0) || DialogueSkipHeld) break; yield return null; }
                 yield return null;
             }
             if (sc != null) { sc.t = 1; sc.MarkDirtyRepaint(); }
@@ -216,13 +229,14 @@ namespace KwGame.View
         {
             var P = S?.pending;
             bool mgFull = P?.t == "work" && P.setup != null;
+            bool selectingWork = workScreen != null;
             DisplayStyle Show(bool b) => b ? DisplayStyle.Flex : DisplayStyle.None;
-            hudBar.style.display = Show(!mgFull);
-            mini.style.display = Show(!mgFull && S?.rt == true && P?.t != "start" && S.phase != "opening");
-            dlg.style.display = Show(!mgFull);
-            panel.style.display = Show(!mgFull && P != null && P.t != "home");
+            hudBar.style.display = Show(!mgFull && !selectingWork);
+            mini.style.display = Show(!mgFull && !selectingWork && S?.rt == true && P?.t != "start" && S.phase != "opening");
+            dlg.style.display = Show(!mgFull && !selectingWork);
+            panel.style.display = Show(!mgFull && !selectingWork && P != null && P.t != "home");
             panel.style.left = Length.Percent(phoneOpen ? 26 : 50);   // 폰 열리면 선택지는 왼쪽으로
-            phone.style.display = Show(!mgFull && phoneOpen);
+            phone.style.display = Show(!mgFull && !selectingWork && phoneOpen);
         }
 
         // ---------- 공통 ----------
@@ -427,6 +441,7 @@ namespace KwGame.View
 
         void RenderPanel()
         {
+            CloseWorkSelection();
             panelBody.Clear();
             var P = S.pending;
             SetIdle();
@@ -469,6 +484,7 @@ namespace KwGame.View
                     foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("encounter", "ask", k == "enc-ask"), o.sub, o.dis); }
                     break;
                 case "loc":
+                    if (P.key == "work") { ShowWorkSelection(); break; }
                     Title(LocTitle());
                     if (D.GREET.TryGetValue(P.key, out var gl) && gl.Count > 0 && P.first) Info(gl[0], 22);
                     foreach (var o in G.Query(() => G.locOpts(P.key))) { var k = o.k; Btn(o.l, () => Send("act", "k", k), o.sub, o.dis); }

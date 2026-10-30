@@ -1,0 +1,67 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="WorkScreen.uss" />
+    <ui:VisualElement name="workRoot" class="work-root">
+        <ui:VisualElement class="work-status">
+            <ui:Label name="dateLabel" text="1개월 1일" class="work-date" />
+            <ui:Label name="clockLabel" text="08:00" class="work-clock" />
+            <ui:Label name="cashLabel" text="현금 300,000원" class="work-cash" />
+            <ui:Label name="hpLabel" text="체력 95" class="work-hp" />
+            <ui:Label name="dueLabel" text="이자 납부 D-6" class="work-due" />
+        </ui:VisualElement>
+        <ui:VisualElement name="workPanel" class="work-panel">
+            <ui:VisualElement class="work-heading">
+                <ui:VisualElement class="work-heading-copy">
+                    <ui:Label text="일하기" class="work-title" />
+                    <ui:Label text="오늘 할 알바를 골라보세요." class="work-subtitle" />
+                </ui:VisualElement>
+                <ui:Label name="durationBadge" text="5시간 소요" class="work-duration-badge" />
+                <ui:Button name="closeButton" text="×" tooltip="나가기" class="work-close" />
+            </ui:VisualElement>
+            <ui:ScrollView name="workScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="work-scroll">
+                <ui:VisualElement name="jobList" class="work-jobs">
+                    <ui:Button name="cafeCard" class="work-card work-card-selected">
+                        <ui:VisualElement class="work-card-art work-art-cafe" picking-mode="Ignore" />
+                        <ui:VisualElement class="work-card-copy" picking-mode="Ignore">
+                            <ui:VisualElement class="work-title-line" picking-mode="Ignore"><ui:Label name="cafeTitle" text="카페 알바" class="work-card-title" picking-mode="Ignore" /><ui:Label name="cafeCheck" text="선택됨" class="work-check" picking-mode="Ignore" /></ui:VisualElement>
+                            <ui:Label text="주문 기억 · 음료 만들기" class="work-card-activity" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="work-card-metrics" picking-mode="Ignore"><ui:Label name="cafePay" text="70,000 ~ 140,000원" class="work-card-pay" picking-mode="Ignore" /><ui:Label name="cafeHp" text="체력 −28" class="work-card-hp" picking-mode="Ignore" /></ui:VisualElement>
+                    </ui:Button>
+                    <ui:Button name="storeCard" class="work-card">
+                        <ui:VisualElement class="work-card-art work-art-store" picking-mode="Ignore" />
+                        <ui:VisualElement class="work-card-copy" picking-mode="Ignore">
+                            <ui:VisualElement class="work-title-line" picking-mode="Ignore"><ui:Label name="storeTitle" text="편의점 알바" class="work-card-title" picking-mode="Ignore" /><ui:Label name="storeCheck" class="work-check" picking-mode="Ignore" /></ui:VisualElement>
+                            <ui:Label text="타이밍 맞추기 · 바코드 찍기" class="work-card-activity" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="work-card-metrics" picking-mode="Ignore"><ui:Label name="storePay" text="70,000 ~ 140,000원" class="work-card-pay" picking-mode="Ignore" /><ui:Label name="storeHp" text="체력 −28" class="work-card-hp" picking-mode="Ignore" /></ui:VisualElement>
+                    </ui:Button>
+                    <ui:Button name="wareCard" class="work-card">
+                        <ui:VisualElement class="work-card-art work-art-ware" picking-mode="Ignore" />
+                        <ui:VisualElement class="work-card-copy" picking-mode="Ignore">
+                            <ui:VisualElement class="work-title-line" picking-mode="Ignore"><ui:Label name="wareTitle" text="상하차" class="work-card-title" picking-mode="Ignore" /><ui:Label name="wareCheck" class="work-check" picking-mode="Ignore" /></ui:VisualElement>
+                            <ui:Label text="연타 · 위험할 때 멈추기" class="work-card-activity" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="work-card-metrics" picking-mode="Ignore"><ui:Label name="warePay" text="70,000 ~ 140,000원" class="work-card-pay" picking-mode="Ignore" /><ui:Label name="wareHp" text="체력 −40" class="work-card-hp" picking-mode="Ignore" /></ui:VisualElement>
+                    </ui:Button>
+                    <ui:Button name="martCard" class="work-card work-last-card">
+                        <ui:VisualElement class="work-card-art work-art-mart" picking-mode="Ignore" />
+                        <ui:VisualElement class="work-card-copy" picking-mode="Ignore">
+                            <ui:VisualElement class="work-title-line" picking-mode="Ignore"><ui:Label name="martTitle" text="마트 창고 (피하기)" class="work-card-title" picking-mode="Ignore" /><ui:Label name="martCheck" class="work-check" picking-mode="Ignore" /></ui:VisualElement>
+                            <ui:Label text="박스와 카트 피하기" class="work-card-activity" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="work-card-metrics" picking-mode="Ignore"><ui:Label name="martPay" text="70,000 ~ 140,000원" class="work-card-pay" picking-mode="Ignore" /><ui:Label name="martHp" text="체력 −32" class="work-card-hp" picking-mode="Ignore" /></ui:VisualElement>
+                    </ui:Button>
+                </ui:VisualElement>
+            </ui:ScrollView>
+            <ui:VisualElement class="work-preview">
+                <ui:VisualElement class="work-preview-item"><ui:Label text="예상 종료" class="work-preview-label" /><ui:Label name="timePreview" text="08:00 → 13:00" class="work-preview-value" /></ui:VisualElement>
+                <ui:VisualElement class="work-preview-item"><ui:Label text="체력" class="work-preview-label" /><ui:Label name="hpPreview" text="95 → 67" class="work-preview-value work-card-hp" /></ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="conditionHint" text="일당은 성과에 따라 달라져요. 선택 후 조작법을 안내해요." class="work-condition" />
+            <ui:VisualElement class="work-footer">
+                <ui:Button name="backButton" text="나가기" class="work-back" />
+                <ui:Button name="startButton" text="이 알바 선택하기 →" class="work-start" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

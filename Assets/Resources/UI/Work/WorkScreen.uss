@@ -1,0 +1,82 @@
+.work-host { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.work-root { flex-grow: 1; align-items: center; justify-content: center; padding: 112px 24px 28px; background-color: rgba(6, 10, 17, 0.72); color: rgb(244, 241, 235); -unity-font-definition: url("project://database/Assets/Resources/Fonts/Pretendard-Regular.ttf"); }
+.work-status { position: absolute; left: 40px; right: 40px; top: 24px; flex-direction: row; align-items: center; padding: 12px 8px; }
+.work-date { font-size: 22px; color: rgb(166, 179, 201); margin-right: 24px; }
+.work-clock { font-size: 32px; -unity-font-style: bold; margin-right: 32px; }
+.work-cash { flex-grow: 1; font-size: 24px; color: rgb(125, 224, 178); }
+.work-hp { font-size: 24px; color: rgb(125, 224, 178); margin-right: 32px; }
+.work-due { font-size: 22px; color: rgb(255, 207, 127); }
+.work-panel { width: 1100px; max-width: 100%; max-height: 100%; flex-shrink: 1; padding: 26px; border-width: 1px; border-color: rgb(76, 87, 107); border-radius: 16px; background-color: rgba(15, 20, 29, 0.98); }
+.work-heading { flex-direction: row; align-items: flex-start; flex-shrink: 0; margin-bottom: 24px; }
+.work-heading-copy { flex-grow: 1; flex-shrink: 1; margin-right: 18px; }
+.work-title { font-size: 38px; -unity-font-style: bold; color: rgb(255, 213, 144); }
+.work-subtitle { font-size: 21px; color: rgb(173, 186, 207); margin-top: 6px; white-space: normal; }
+.work-duration-badge { padding: 10px 14px; border-width: 1px; border-color: rgb(64, 77, 98); border-radius: 8px; font-size: 20px; color: rgb(184, 196, 215); margin-top: 4px; flex-shrink: 0; }
+.work-close { margin: 0 0 0 18px; padding: 0 6px; background-color: rgba(0, 0, 0, 0); border-width: 0; font-size: 36px; color: rgb(164, 179, 201); flex-shrink: 0; }
+.work-close:hover { color: rgb(255, 218, 153); }
+.work-close:focus { background-color: rgb(46, 55, 72); }
+.work-scroll { flex-shrink: 1; min-height: 0; overflow: hidden; }
+.work-scroll > .unity-scroll-view__content-viewport { min-height: 0; overflow: hidden; }
+.work-scroll .unity-scroll-view__content-container { flex-shrink: 0; }
+.work-jobs { padding-bottom: 2px; }
+.work-card { flex-direction: row; align-items: center; flex-shrink: 0; min-height: 108px; margin: 0 0 12px; padding: 8px; background-color: rgb(22, 29, 41); border-width: 1px; border-color: rgb(49, 61, 81); border-radius: 10px; overflow: hidden; }
+.work-last-card { margin-bottom: 0; }
+.work-card:hover { background-color: rgb(31, 39, 53); border-color: rgb(132, 148, 174); }
+.work-card-selected { border-color: rgb(255, 205, 117); background-color: rgb(37, 35, 33); }
+.work-card:focus { border-color: rgb(255, 235, 182); }
+.work-card:disabled { opacity: 0.45; }
+.work-card-art { width: 188px; height: 88px; flex-shrink: 0; margin-right: 22px; border-radius: 6px; -unity-background-scale-mode: scale-and-crop; }
+.work-art-cafe { background-image: url("project://database/Assets/Resources/Art/Backgrounds/cafe.jpg"); }
+.work-art-store { background-image: url("project://database/Assets/Resources/Art/Backgrounds/store.jpg"); }
+.work-art-ware { background-image: url("project://database/Assets/Resources/Art/Backgrounds/ware.jpg"); }
+.work-art-mart { background-image: url("project://database/Assets/Resources/Art/Backgrounds/mart.jpg"); }
+.work-card-copy { flex-grow: 1; flex-shrink: 1; min-width: 0; margin-right: 12px; }
+.work-title-line { flex-direction: row; align-items: center; }
+.work-card-title { font-size: 25px; -unity-font-style: bold; white-space: normal; flex-shrink: 1; }
+.work-check { color: rgb(255, 213, 140); font-size: 16px; margin-left: 10px; flex-shrink: 0; }
+.work-card-activity { font-size: 19px; color: rgb(158, 175, 201); white-space: normal; margin-top: 8px; }
+.work-card-metrics { align-items: flex-end; flex-shrink: 0; margin-right: 8px; }
+.work-card-pay { font-size: 23px; color: rgb(125, 224, 178); -unity-font-style: bold; }
+.work-card-hp { font-size: 20px; color: rgb(255, 126, 155); margin-top: 8px; }
+.work-preview { flex-direction: row; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 18px; padding-top: 16px; border-top-width: 1px; border-top-color: rgb(48, 61, 82); }
+.work-preview-item { flex-direction: row; align-items: center; margin: 0 14px; flex-shrink: 1; }
+.work-preview-label { font-size: 20px; color: rgb(163, 181, 206); margin-right: 12px; flex-shrink: 0; }
+.work-preview-value { font-size: 22px; white-space: normal; flex-shrink: 1; margin-top: 0; }
+.work-condition { font-size: 18px; white-space: normal; color: rgb(154, 173, 201); margin-top: 12px; -unity-text-align: middle-center; flex-shrink: 0; }
+.work-danger { color: rgb(255, 145, 168); }
+.work-footer { flex-direction: row; align-items: center; justify-content: space-between; flex-shrink: 0; margin-top: 20px; }
+.work-back { margin: 0; padding: 14px 28px; font-size: 22px; color: rgb(208, 219, 237); background-color: rgb(24, 31, 44); border-width: 1px; border-color: rgb(65, 80, 104); border-radius: 8px; }
+.work-back:hover { background-color: rgb(40, 51, 70); }
+.work-back:focus { border-color: rgb(255, 224, 171); }
+.work-start { margin: 0; padding: 14px 28px; font-size: 22px; -unity-font-style: bold; background-color: rgb(255, 205, 125); color: rgb(35, 25, 15); border-width: 1px; border-color: rgb(255, 224, 171); border-radius: 8px; flex-shrink: 0; }
+.work-start:hover { background-color: rgb(255, 223, 165); }
+.work-start:focus { border-color: rgb(255, 247, 223); }
+.work-start:disabled { opacity: 0.45; }
+.work-compact .work-root { padding-top: 88px; padding-bottom: 20px; }
+.work-compact .work-panel { padding: 20px; }
+.work-compact .work-heading { margin-bottom: 18px; }
+.work-compact .work-title { font-size: 32px; }
+.work-compact .work-card { min-height: 98px; }
+.work-compact .work-card-art { width: 160px; height: 76px; margin-right: 16px; }
+.work-compact .work-card-title { font-size: 22px; }
+.work-compact .work-card-pay { font-size: 21px; }
+.work-compact .work-card-activity { font-size: 17px; }
+.work-compact .work-preview { margin-top: 12px; padding-top: 12px; }
+.work-compact .work-footer { margin-top: 14px; }
+.work-narrow .work-status { left: 16px; right: 16px; top: 12px; flex-wrap: wrap; }
+.work-narrow .work-date { font-size: 18px; margin-right: 14px; }
+.work-narrow .work-clock { font-size: 24px; margin-right: 18px; }
+.work-narrow .work-cash { font-size: 19px; }
+.work-narrow .work-hp { font-size: 19px; margin-right: 18px; }
+.work-narrow .work-due { font-size: 18px; }
+.work-narrow .work-root { padding-left: 12px; padding-right: 12px; }
+.work-narrow .work-panel { padding: 16px; }
+.work-narrow .work-card-art { width: 104px; height: 70px; margin-right: 12px; }
+.work-narrow .work-card-title { font-size: 20px; }
+.work-narrow .work-card-pay { font-size: 18px; }
+.work-narrow .work-card-hp { font-size: 18px; }
+.work-narrow .work-card-activity { font-size: 16px; }
+.work-narrow .work-check { font-size: 14px; margin-left: 6px; }
+.work-narrow .work-preview-item { margin-left: 8px; margin-right: 8px; }
+.work-narrow .work-preview-label { font-size: 17px; margin-right: 8px; }
+.work-narrow .work-preview-value { font-size: 18px; }

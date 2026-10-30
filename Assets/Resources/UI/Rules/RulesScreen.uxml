@@ -1,0 +1,84 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="RulesScreen.uss" />
+    <ui:VisualElement name="rulesRoot" class="rules-root">
+        <ui:VisualElement class="rules-panel">
+            <ui:VisualElement class="rules-heading">
+                <ui:Label text="처음 시작하는 당신에게  /  게임 안내" class="rules-eyebrow" />
+                <ui:Label text="빚을 갚고, 내일을 버티세요" class="rules-title" />
+                <ui:Label text="목표는 빚 0원. 기한은 없지만, 이자는 매달 찾아옵니다." class="rules-subtitle" />
+            </ui:VisualElement>
+            <ui:VisualElement class="rules-debt-strip">
+                <ui:VisualElement class="rules-debt-item rules-debt-main">
+                    <ui:Label text="시작 빚" class="rules-stat-label" />
+                    <ui:Label name="startingDebt" text="30,000,000원" class="rules-debt-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="rules-debt-item">
+                    <ui:Label text="매달 기본 이자" class="rules-stat-label" />
+                    <ui:Label name="interestRate" text="5%" class="rules-debt-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="rules-tabs">
+                <ui:Button name="basicTab" text="핵심 규칙" class="rules-tab rules-tab-selected" />
+                <ui:Button name="moneyTab" text="돈과 투자" class="rules-tab" />
+                <ui:Button name="healthTab" text="건강과 회복" class="rules-tab" />
+                <ui:Button name="fullTab" text="전체 규칙" class="rules-tab" />
+            </ui:VisualElement>
+            <ui:ScrollView name="rulesScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="rules-scroll">
+                <ui:VisualElement name="basicPage" class="rules-page">
+                    <ui:VisualElement class="rules-cards">
+                        <ui:VisualElement class="rules-card rules-card-spaced">
+                            <ui:VisualElement class="rules-card-art rules-art-plan"><ui:Label text="01  PLAN" class="rules-card-number" /></ui:VisualElement>
+                            <ui:VisualElement class="rules-card-copy">
+                                <ui:Label text="하루를 계획해요" class="rules-card-title" />
+                                <ui:Label name="dayHours" text="08:00 ~ 24:00" class="rules-card-value" />
+                                <ui:Label name="actionHours" text="알바 5시간 · 다른 행동 2시간" class="rules-copy" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="rules-card rules-card-spaced">
+                            <ui:VisualElement class="rules-card-art rules-art-money"><ui:Label text="02  EARN" class="rules-card-number" /></ui:VisualElement>
+                            <ui:VisualElement class="rules-card-copy">
+                                <ui:Label text="벌고, 갚고, 투자해요" class="rules-card-title" />
+                                <ui:Label text="알바로 생활비와 이자 마련" class="rules-card-value rules-value-small" />
+                                <ui:Label text="증권사 정보로 투자 판단" class="rules-copy" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="rules-card">
+                            <ui:VisualElement class="rules-card-art rules-art-health"><ui:Label text="03  RECOVER" class="rules-card-number" /></ui:VisualElement>
+                            <ui:VisualElement class="rules-card-copy">
+                                <ui:Label text="체력과 멘탈을 챙겨요" class="rules-card-title" />
+                                <ui:Label text="무리하면 알바도 힘들어요" class="rules-card-value rules-value-small" />
+                                <ui:Label text="휴식과 음식, 여가로 회복" class="rules-copy" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="rules-warning">
+                        <ui:Label text="!  기억하세요" class="rules-warning-title" />
+                        <ui:Label name="paydayWarning" text="한 달은 7일 · 7일째 밤 이자 납부" class="rules-warning-copy" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="moneyPage" class="rules-page rules-hidden">
+                    <ui:Label text="벌기 전에, 위험부터 확인하세요" class="rules-page-title" />
+                    <ui:VisualElement class="rules-info-card"><ui:Label text="알바와 이자" class="rules-info-title" /><ui:Label text="알바로 생활비와 이자를 마련하세요. 이자를 못 내면 대출이 필요하고, 매달 대출 한도가 조여 옵니다. 대출마저 막히면 끌려갑니다." class="rules-copy" /></ui:VisualElement>
+                    <ui:VisualElement class="rules-info-card"><ui:Label text="주식  /  09:00 ~ 15:30" class="rules-info-title" /><ui:Label text="하루 등락 폭은 ±30%. 동전주는 상장폐지를 조심하세요. 증권사 리포트와 주갤 고닉의 공개 적중 기록을 확인하고 판단하세요." class="rules-copy" /></ui:VisualElement>
+                    <ui:VisualElement class="rules-info-card rules-risk-card"><ui:Label text="코인  /  24시간 · 최대 50배" class="rules-info-title" /><ui:Label text="청산가에 닿으면 증거금의 70~90%를 잃을 수 있어요. 레버리지가 높을수록 작은 변동도 위험합니다." class="rules-copy" /></ui:VisualElement>
+                    <ui:VisualElement class="rules-info-card"><ui:Label text="부모님의 유품" class="rules-info-title" /><ui:Label text="시작할 때 유품 1개를 고릅니다. 상점에서는 저렴한 뽑기 또는 더 비싼 직접 구매로 얻을 수 있어요." class="rules-copy" /></ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="healthPage" class="rules-page rules-hidden">
+                    <ui:Label text="오늘의 무리는, 내일의 부담이 돼요" class="rules-page-title" />
+                    <ui:VisualElement class="rules-info-card"><ui:Label text="체력  /  바닥나기 전에 쉬어요" class="rules-info-title" /><ui:Label text="알바는 체력을 많이 소모해요. 잠을 자도 완전히 회복되지는 않습니다. 체력이 0이면 기절해 행동이 제한돼요." class="rules-copy" /></ui:VisualElement>
+                    <ui:VisualElement class="rules-info-card"><ui:Label text="멘탈  /  연속 알바를 조심해요" class="rules-info-title" /><ui:Label text="연속 알바와 다가오는 이자일은 멘탈을 악화시키고 알바 성과를 깎습니다. 공원·포차·PC방·쇼핑·미래 달래기로 회복할 수 있어요. 같은 날 같은 놀이는 효과가 줄어듭니다." class="rules-copy" /></ui:VisualElement>
+                    <ui:VisualElement class="rules-info-card"><ui:Label text="질병  /  회복도 일정에 넣어요" class="rules-info-title" /><ui:Label text="나쁜 멘탈, 낮은 체력, 숙취는 아침 질병으로 이어질 수 있어요. 병원·약국·집에서 쉬기로 치료하고, 조깅·영양제로 예방하세요." class="rules-copy" /></ui:VisualElement>
+                    <ui:VisualElement class="rules-info-card rules-risk-card"><ui:Label text="도박 중독  /  미래에게도 영향을 줘요" class="rules-info-title" /><ui:Label text="중독도가 높으면 미래가 몰래 카지노에 갑니다. 끝에는 배드 엔딩이 기다리고 있어요." class="rules-copy" /></ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="fullPage" class="rules-page rules-hidden">
+                    <ui:Label text="전체 규칙" class="rules-page-title" />
+                    <ui:Label text="게임에 등록된 상세 안내입니다. 아래로 스크롤해 확인하세요." class="rules-copy rules-detail-intro" />
+                    <ui:VisualElement name="fullRulesBody" />
+                </ui:VisualElement>
+            </ui:ScrollView>
+            <ui:VisualElement class="rules-footer">
+                <ui:Button name="startButton" text="이해했어요, 시작하기  →" class="rules-start" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

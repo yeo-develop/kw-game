@@ -99,6 +99,64 @@ namespace KwGame.Tests
             Assert.That(wait.MoveNext(), Is.False);
         }
 
+        [Test]
+        public void HeldControlRevealsThenAdvancesAtTheInterval()
+        {
+            var wait = BeginLine("Ctrl을 누르면 이 대사를 빠르게 넘깁니다.");
+            Set("nextDialogueSkipAt", 10f);
+            Call("UpdateHeldDialogueSkip", true, 9f);
+            Assert.That(label.Typewriter.IsShowingText, Is.False);
+            Assert.That((bool)Get("clicked"), Is.False);
+            Call("UpdateHeldDialogueSkip", true, 10f);
+            Assert.That((bool)Get("clicked"), Is.True);
+            Assert.That(wait.MoveNext(), Is.False);
+        }
+
+        [Test]
+        public void ReleasingControlStopsAutomaticAdvance()
+        {
+            var wait = BeginLine("키를 놓으면 현재 대사에서 멈춥니다.");
+            Set("nextDialogueSkipAt", 10f);
+            Call("UpdateHeldDialogueSkip", true, 9f);
+            Call("UpdateHeldDialogueSkip", false, 11f);
+            Assert.That((bool)Get("clicked"), Is.False);
+            Assert.That(wait.MoveNext(), Is.True);
+            Call("UpdateHeldDialogueSkip", true, 11.01f);
+            Assert.That((bool)Get("clicked"), Is.False);
+        }
+
+        [Test]
+        public void HeldControlDoesNotDismissDecisionModals()
+        {
+            var wait = (IEnumerator)Call("WaitClick", false);
+            Assert.That(wait.MoveNext(), Is.True);
+            Set("waitFrame", Time.frameCount - 1);
+            Set("nextDialogueSkipAt", 0f);
+            Call("UpdateHeldDialogueSkip", true, 10f);
+            Assert.That((bool)Get("clicked"), Is.False);
+            Assert.That(wait.MoveNext(), Is.True);
+        }
+
+        [Test]
+        public void HeldControlAdvancesStoryCardsButNotTheNextLineInTheSameFrame()
+        {
+            var wait = (IEnumerator)Call("WaitClick", false);
+            Assert.That(wait.MoveNext(), Is.True);
+            Set("storyNow", "프롤로그 연출");
+            ((VisualElement)Get("modal")).style.display = DisplayStyle.Flex;
+            Set("waitFrame", Time.frameCount - 1);
+            Set("nextDialogueSkipAt", 0f);
+            Call("UpdateHeldDialogueSkip", true, 10f);
+            Assert.That((bool)Get("clicked"), Is.True);
+            Assert.That(wait.MoveNext(), Is.False);
+            Set("storyNow", null);
+            ((VisualElement)Get("modal")).style.display = DisplayStyle.None;
+            BeginLine("바로 다음 대사는 같은 프레임에 넘기지 않습니다.");
+            Set("nextDialogueSkipAt", 0f);
+            Call("UpdateHeldDialogueSkip", true, 11f);
+            Assert.That((bool)Get("clicked"), Is.False);
+        }
+
         IEnumerator BeginLine(string text)
         {
             var say = (IEnumerator)Call("Say", "nar", null, text, null);

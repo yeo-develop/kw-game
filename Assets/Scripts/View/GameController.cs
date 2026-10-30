@@ -13,7 +13,7 @@ using UnityEngine.UIElements;
 namespace KwGame.View
 {
     /// 메인 루프 (web/src/view/main.js 대응): pending → 화면 → 명령 → 이벤트 재생 → pending …
-    /// 화면은 UI Toolkit 을 코드로 만든다 (UXML/프리팹 없이 데이터 따라 메뉴가 바뀌는 구조라 flex 레이아웃이 편함).
+    /// 동적 메뉴는 코드로 만들고, 규칙 화면은 독립 UXML/USS 에셋을 사용한다.
     public partial class GameController : MonoBehaviour
     {
         public int seed = 0;            // 0 = 랜덤
@@ -29,6 +29,9 @@ namespace KwGame.View
         bool playing, waiting, clicked; int waitFrame;
         bool waitingForDialogue;
         int advanceFrame = -1;
+        const float DialogueSkipInterval = 0.08f;
+        float nextDialogueSkipAt;
+        bool DialogueSkipHeld => Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
         bool phoneOpen; string phoneTab = "stock";
         double stakeFrac = 0.1;
         Font font, fontBold;
@@ -100,6 +103,7 @@ namespace KwGame.View
         // ---------- 이벤트 재생 (events.js) ----------
         IEnumerator Play(List<SimEvent> evs, int closedCoins = 0)
         {
+            CloseWorkSelection();
             playing = true; FacePlayBegin();
             panel.style.display = DisplayStyle.None;   // 이벤트 재생 중엔 지난 선택지를 아예 걷음 (반투명으로 남아 보이던 문제)
             MinigameSync();                            // 알바 결과 카드도 바로 걷음
@@ -180,6 +184,7 @@ namespace KwGame.View
             }
             waitingForDialogue = dialogue;
             waiting = true; clicked = false; waitFrame = Time.frameCount;
+            nextDialogueSkipAt = Time.unscaledTime + DialogueSkipInterval;
             while (!clicked) yield return null;
             waiting = false; waitingForDialogue = false;
         }
@@ -210,6 +215,7 @@ namespace KwGame.View
             {
                 rtDirty = false; rtPhoneT = 0; rtWasOpen = G.stockOpen();
                 RenderHud(G.HudSnapOf());
+                workScreen?.Refresh();
                 if (phoneOpen) RenderPhone();
                 RenderMini();
             }
@@ -220,7 +226,7 @@ namespace KwGame.View
         {
             if (dlgText == null) return;
             RtUpdate();
-            if (!waiting && mg == null && G != null && S.pending?.t != "start")
+            if (!waiting && rulesScreen == null && workScreen == null && mg == null && G != null && S.pending?.t != "start")
             {
                 if (Input.GetKeyDown(KeyCode.P) || (phoneOpen && Input.GetKeyDown(KeyCode.Escape))) TogglePhone();
             }
@@ -230,12 +236,14 @@ namespace KwGame.View
                 dlgText.Typewriter.UpdateTypewriter();
                 UpdateDialogueHint();
             }
+            UpdateHeldDialogueSkip(DialogueSkipHeld, Time.unscaledTime);
             if (!waiting) return;
             if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) RequestAdvance();
         }
 
         void RequestAdvance()
         {
+            if (rulesScreen != null) { rulesScreen.Continue(); return; }
             if (!waiting || Time.frameCount <= waitFrame || advanceFrame == Time.frameCount) return;
             advanceFrame = Time.frameCount;
             if (waitingForDialogue && dlgText.Typewriter.IsShowingText)
@@ -244,6 +252,17 @@ namespace KwGame.View
                 return;
             }
             clicked = true;
+        }
+
+        void UpdateHeldDialogueSkip(bool held, float now)
+        {
+            if (!held) { nextDialogueSkipAt = now + DialogueSkipInterval; return; }
+            if (!waiting || (!waitingForDialogue && storyNow == null) || rulesScreen != null || workScreen != null || mg != null || phoneOpen || (modal.style.display == DisplayStyle.Flex && storyNow == null)) return;
+            if (Time.frameCount <= waitFrame || advanceFrame == Time.frameCount) return;
+            if (waitingForDialogue && dlgText.Typewriter.IsShowingText) CompleteDialogueText();
+            if (now < nextDialogueSkipAt) return;
+            RequestAdvance();
+            nextDialogueSkipAt = now + DialogueSkipInterval;
         }
 
         void CompleteDialogueText()
@@ -255,7 +274,7 @@ namespace KwGame.View
 
         void UpdateDialogueHint()
         {
-            dlgHint.text = dlgText.Typewriter.IsShowingText ? "클릭 / Space : 즉시 표시" : "클릭 / Space ▶";
+            dlgHint.text = (dlgText.Typewriter.IsShowingText ? "클릭 / Space : 즉시 표시" : "클릭 / Space ▶") + " · Ctrl 길게: 빠르게";
         }
 
         void HideDialogue()
@@ -268,6 +287,8 @@ namespace KwGame.View
 
         void OnDestroy()
         {
+            CloseWorkSelection();
+            rulesScreen?.Dispose(); rulesScreen = null;
             dlgText?.Typewriter?.StopShowingText();
             dlgText?.PauseAnimation();
             dlgText?.Typewriter?.Dispose();
