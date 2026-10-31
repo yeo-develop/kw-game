@@ -52,6 +52,7 @@ jobs:
           buildName: WebGL
           buildsPath: build
           allowDirtyBuild: true
+          cliVersion: v0.1.72   # latest 조회가 GitHub API 403 으로 자주 실패 → 고정
       - id: build2
         if: steps.build1.outcome == 'failure'
         continue-on-error: true
@@ -64,6 +65,7 @@ jobs:
           buildName: WebGL
           buildsPath: build
           allowDirtyBuild: true
+          cliVersion: v0.1.72   # latest 조회가 GitHub API 403 으로 자주 실패 → 고정
       - id: build3
         if: steps.build2.outcome == 'failure'
         continue-on-error: true
@@ -76,6 +78,7 @@ jobs:
           buildName: WebGL
           buildsPath: build
           allowDirtyBuild: true
+          cliVersion: v0.1.72   # latest 조회가 GitHub API 403 으로 자주 실패 → 고정
       - id: build4
         if: steps.build3.outcome == 'failure'
         uses: game-ci/unity-builder@v6
@@ -87,6 +90,7 @@ jobs:
           buildName: WebGL
           buildsPath: build
           allowDirtyBuild: true
+          cliVersion: v0.1.72   # latest 조회가 GitHub API 403 으로 자주 실패 → 고정
       - name: 버전 표시
         run: |
           sudo chown -R "$USER" build
