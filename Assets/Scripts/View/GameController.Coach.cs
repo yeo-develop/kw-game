@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -9,7 +10,7 @@ namespace KwGame.View
     // 짚을 UI 를 뺀 나머지를 어둡게 덮고(구멍 4장) 금테 + 설명 카드. 클릭/Space = 다음, 건너뛰기, 퀵메뉴 "도움말"로 다시.
     public partial class GameController
     {
-        const string CoachPref = "kw.v4.coach";
+        const string CoachPref = "kw.v4.coach", CoachName = "kw-coach";
         VisualElement coach;
         int coachStep;
 
@@ -38,22 +39,27 @@ namespace KwGame.View
         void CoachStart()
         {
             CoachClose();
-            if (phoneOpen) { phoneOpen = false; RenderAll(); }
             coachStep = 0;
-            coach = new VisualElement(); Ui.Fill(coach);
+            // 덮개를 먼저 달아 둠: 아래 RenderAll 이 CoachMaybe 로 또 시작하면 덮개가 하나 더 남아 클릭을 다 먹음 (튜토리얼 끝나도 클릭 안 되던 버그)
+            coach = new VisualElement { name = CoachName }; Ui.Fill(coach);
             coach.RegisterCallback<ClickEvent>(_ => CoachNext());
             root.Add(coach);
+            if (phoneOpen) { phoneOpen = false; RenderAll(); }
             // 한 프레임 뒤에 (버튼 위치가 잡힌 다음) 그림
             coach.schedule.Execute(CoachDraw);
         }
 
-        void CoachNext() { coachStep++; if (coachStep >= COACH.Length) CoachEnd(); else CoachDraw(); }
+        void CoachNext() { if (coach == null) { CoachClose(); return; } coachStep++; if (coachStep >= COACH.Length) CoachEnd(); else CoachDraw(); }
         void CoachEnd()
         {
             try { PlayerPrefs.SetInt(CoachPref, 1); PlayerPrefs.Save(); } catch { }
             CoachClose();
         }
-        void CoachClose() { coach?.RemoveFromHierarchy(); coach = null; }
+        void CoachClose()
+        {   // 혹시 남은 덮개까지 전부 걷기
+            foreach (var c in root.Children().Where(c => c.name == CoachName).ToList()) c.RemoveFromHierarchy();
+            coach = null;
+        }
 
         /// Update 에서: 튜토리얼 중엔 키로 넘기기 (다른 입력은 막힘 — 덮개가 클릭을 먹음)
         bool CoachKeys()
