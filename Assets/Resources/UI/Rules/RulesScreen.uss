@@ -71,6 +71,12 @@
 .rules-art-plan { background-image: url("project://database/Assets/Resources/Art/Backgrounds/room_night.jpg"); }
 .rules-art-money { background-image: url("project://database/Assets/Resources/Art/Backgrounds/broker.jpg"); }
 .rules-art-health { background-image: url("project://database/Assets/Resources/Art/Backgrounds/pc.jpg"); }
+.rules-art-work { background-image: url("project://database/Assets/Resources/Art/Backgrounds/work.jpg"); }
+.rules-art-casino { background-image: url("project://database/Assets/Resources/Art/Backgrounds/casino.jpg"); }
+.rules-art-relic { background-image: url("project://database/Assets/Resources/Art/CG/opening_box.jpg"); }
+.rules-art-rest { background-image: url("project://database/Assets/Resources/Art/Backgrounds/room_day.jpg"); }
+.rules-art-park { background-image: url("project://database/Assets/Resources/Art/Backgrounds/park.jpg"); }
+.rules-art-hospital { background-image: url("project://database/Assets/Resources/Art/Backgrounds/hosp.jpg"); }
 .rules-card-number { align-self: flex-start; background-color: rgba(10, 14, 23, 0.88); color: rgb(255, 218, 154); font-size: 17px; padding: 5px 10px; border-radius: 5px; }
 .rules-card-copy { padding: 20px 18px 24px; }
 .rules-card-title { font-size: 26px; color: rgb(255, 212, 141); -unity-font-style: bold; white-space: normal; margin-bottom: 16px; }
@@ -81,9 +87,10 @@
 .rules-warning-title { color: rgb(255, 208, 126); -unity-font-style: bold; font-size: 23px; margin-right: 24px; }
 .rules-warning-copy { font-size: 22px; white-space: normal; }
 .rules-page-title { font-size: 28px; -unity-font-style: bold; color: rgb(255, 213, 144); margin-bottom: 16px; white-space: normal; }
-.rules-info-card { padding: 18px 22px; margin-bottom: 12px; background-color: rgb(24, 29, 40); border-radius: 10px; border-left-width: 3px; border-left-color: rgb(121, 204, 172); }
-.rules-info-title { font-size: 24px; -unity-font-style: bold; color: rgb(234, 237, 244); margin-bottom: 8px; white-space: normal; }
-.rules-risk-card { border-left-color: rgb(255, 111, 148); }
+.rules-topic-cards .rules-card-title { margin-bottom: 10px; }
+.rules-topic-cards .rules-copy { margin-top: 8px; }
+.rules-topic-risk { border-color: rgb(143, 76, 98); }
+.rules-risk-copy { color: rgb(255, 151, 179); }
 .rules-detail { font-size: 22px; white-space: normal; padding: 16px 20px; margin-bottom: 12px; background-color: rgb(24, 29, 40); border-radius: 8px; }
 .rules-detail-intro { margin-bottom: 18px; }
 .rules-footer { flex-direction: row; justify-content: flex-end; align-items: center; flex-shrink: 0; margin-top: 22px; padding-top: 20px; border-top-width: 1px; border-top-color: rgb(48, 55, 71); }
