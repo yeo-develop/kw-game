@@ -67,6 +67,8 @@ namespace KwGame.View
             }
             var shots = ArgValue("-kwShots");
             if (shots != null) StartCoroutine(DemoShots(shots));
+            var fxShots = ArgValue("-kwFxShots");
+            if (fxShots != null) StartCoroutine(FxShots(fxShots));
         }
 
         public static GameData LoadData()
@@ -147,7 +149,11 @@ namespace KwGame.View
                     case "story": yield return PlayScene(e.Str("key")); break;
                     case "aff": Toast($"미래 호감 {(e.Num("d") > 0 ? "+" : "")}{e.Num("d"):0} → {e.Num("v"):0}", e.Num("d") > 0 ? "good" : "liq"); break;
                     case "watch": if (!phoneOpen) TogglePhone(); break;
-                    case "ending": if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely")) yield return PlayScene("clear"); break;
+                    case "ending":
+                        if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely")) yield return PlayScene("clear");
+                        if (e.Str("kind") == "clear") { StageFx("confetti", 960, 1060, 8); StageFx("clear", 960, 170, 5); }   // 빚 다 갚음
+                        break;
+                    case "liveLiq": StageFx("rekt", 960, 470, 5); break;   // 실시간 청산
                     case "error": Debug.LogWarning("[sim] " + e.Str("msg")); break;
                 }
             }
