@@ -8,19 +8,6 @@ namespace KwGame.EditorTools
     {
         void OnPreprocessTexture()
         {
-            if (assetPath.StartsWith("Assets/Resources/Fx/"))
-            {   // 픽셀 이펙트 시트 (tools/fx/build.py): 도트가 번지지 않게 점 필터, 프레임은 런타임에 잘라 씀
-                var fi = (TextureImporter)assetImporter;
-                fi.textureType = TextureImporterType.Default;
-                fi.filterMode = FilterMode.Point;
-                fi.mipmapEnabled = false;
-                fi.alphaIsTransparency = true;
-                fi.npotScale = TextureImporterNPOTScale.None;
-                fi.wrapMode = TextureWrapMode.Clamp;
-                fi.maxTextureSize = 2048;
-                fi.textureCompression = TextureImporterCompression.CompressedHQ;
-                return;
-            }
             if (!assetPath.StartsWith("Assets/Resources/Art/")) return;
             var ti = (TextureImporter)assetImporter;
             ti.textureType = TextureImporterType.Sprite;

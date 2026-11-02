@@ -91,7 +91,7 @@ namespace KwGame.View
             Action<double> done = v => score = v;
             IEnumerator game = key == "cafe" ? MgCafe(su, done) : key == "store" ? MgStore(su, done) : key == "mart" ? MgMart(su, done) : MgWare(su, done);
             if (autoSkipDialog) { game.MoveNext(); yield break; }
-            PixelFx(mg, "iris", 0, 0, 6, 1.0f);   // 아이리스가 열리며 알바 화면 등장 (pixelfx 의 닫힌 지점부터)
+            JuiceIris(mg);   // 원이 열리며 알바 화면 등장
             yield return HowTo(key);
             yield return Countdown();
             yield return game;
@@ -104,19 +104,13 @@ namespace KwGame.View
 
         IEnumerator Countdown()
         {
-            // 픽셀 카운트다운 (3·2·1·GO!) — GO! 가 터지는 순간 게임 시작, 남은 불꽃은 게임 위로 흘러감
-            if (PixelFx(mg, "countdown", 960, 520, 5) is VisualElement cd)
-            {
-                float t = 0; while (t < 1.85f) { t += Time.unscaledDeltaTime; yield return null; }
-                cd.BringToFront();
-                yield break;
-            }
             foreach (var t in new[] { "3", "2", "1", "시작!" })
             {
                 var l = Ui.Label(t, t.Length > 1 ? 120 : 180, t.Length > 1 ? Ui.Gold : Ui.Text, true);
                 Ui.Fill(l); l.style.unityTextAlign = TextAnchor.MiddleCenter; l.pickingMode = PickingMode.Ignore;
                 l.style.unityTextOutlineColor = Color.black; l.style.unityTextOutlineWidth = 2;
                 mg.Add(l);
+                JuiceSweep(mg, SizeOf(mg) / 2, t.Length > 1 ? Ui.Gold : Ui.Accent); l.BringToFront();   // 숫자 뒤로 고리가 한 바퀴
                 yield return Tween(0.42f, p => { l.style.scale = new Scale(Vector3.one * Mathf.Lerp(1.6f, 1f, EaseOut(p * 2.5f))); l.style.opacity = p < 0.75f ? 1 : 1 - (p - 0.75f) / 0.25f; });
                 l.RemoveFromHierarchy();
             }
@@ -287,9 +281,9 @@ namespace KwGame.View
             var pl = Ui.Label($"예상 일당 {G.won(pay)}", 40, Ui.Good, true); pl.style.marginTop = 8; card.Add(pl);
             var hint = Ui.Label("클릭 / Space", 20, Ui.Dim); hint.style.marginTop = 18; card.Add(hint);
             dim.Add(card); mg.Add(dim);
-            if (pay > 0) PixelFx(dim, "coin", 960 - 380, 900, 4);   // 코인이 튀어 올라 카운터로
             SetFace(g == "S" || g == "A" ? "smug" : g == "F" ? "cry" : "tired");
             yield return Tween(0.35f, p => { card.style.scale = new Scale(Vector3.one * Mathf.Lerp(0.6f, 1f, EaseOut(p))); card.style.opacity = p; });
+            if (pay > 0) JuiceCoins(dim, dim.WorldToLocal(new Vector2(card.worldBound.center.x, card.worldBound.yMax)), dim.WorldToLocal(pl.worldBound.center));   // 코인이 튀어 올라 일당으로
             float t = 0;
             while (t < 4f) { t += Time.unscaledDeltaTime; if (t > 0.8f && AnyPress()) break; yield return null; }   // 연타하던 손에 바로 넘어가지 않게
         }
@@ -973,7 +967,7 @@ namespace KwGame.View
                             hits++; combo = 0; Lives();
                             msg.text = o.k ? "진상: \"사장 나오라 그래!!!\" (−일당)" : "박스에 맞음. 허리도 매도함 (−일당)"; msg.style.color = Ui.Bad;
                             Flash(Ui.Bad); Shake(arena, 18); Float(arena, "아야", x, AH - 200, Ui.Bad);
-                            PixelFx(arena, "heart", x + PW / 2, AH - 260, 3);
+                            JuiceHeart(arena, x + PW / 2, AH - 250);
                             if (hits == 2) Bubble("자기 괜찮아?? 그거 계란 박스였음", "panic");
                         }
                         MgHud(combo, Mathf.Clamp01(1 - (float)hits / LIVES));

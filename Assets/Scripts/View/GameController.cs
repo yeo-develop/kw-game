@@ -151,9 +151,9 @@ namespace KwGame.View
                     case "watch": if (!phoneOpen) TogglePhone(); break;
                     case "ending":
                         if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely")) yield return PlayScene("clear");
-                        if (e.Str("kind") == "clear") { StageFx("confetti", 960, 1060, 8); StageFx("clear", 960, 170, 5); }   // 빚 다 갚음
+                        if (e.Str("kind") == "clear") JuiceConfetti(stage);   // 빚 다 갚음
                         break;
-                    case "liveLiq": StageFx("rekt", 960, 470, 5); break;   // 실시간 청산
+                    case "liveLiq": JuiceLiq(stage, SizeOf(stage).x / 2, SizeOf(stage).y * 0.42f); break;   // 실시간 청산
                     case "error": Debug.LogWarning("[sim] " + e.Str("msg")); break;
                 }
             }
