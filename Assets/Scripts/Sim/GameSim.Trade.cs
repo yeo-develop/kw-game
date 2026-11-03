@@ -11,7 +11,7 @@ namespace KwGame.Sim
         double? buyStock(string tk, double amt, double fee)
         {
             amt = Math.Floor(Math.Min(amt, S.cash) / 1000) * 1000;
-            if (amt < 10000 || !stockOpen() || !tkOpen(tk)) return null;
+            if (amt < 10000 || !stockOpen() || !tkOpen(tk) || D.TK[tk].inv && !shortOk()) return null;   // 곱버스(주식 숏)도 실적 넘어야
             fee += sickSlip();   // 아파서 손 떨림
             double p = S.mk.tk[tk].p;
             var h = S.hold.Get(tk);
@@ -41,14 +41,17 @@ namespace KwGame.Sim
             if (frac >= 0.999 || h.q * p < 100) S.hold.Remove(tk);
             S.today.Add(new Ledger { kind = "invest", amt = back - basis, label = T("lbl.sell", "n", D.TK[tk].name) }); S.realized += back - basis;
             S.st.invest++; S.st.iN++; if (back > basis) S.st.iW++;
+            shortCheck();
             return back - basis;
         }
         CoinPos openCoin(string tk, int dir, double lev, double margin)
         {
             margin = Math.Floor(margin / 1000) * 1000;
             double fee = rhu(margin * lev * (R.COIN_FEE + sickSlip() / 5));
+            if (dir < 0 && !shortOk()) return null;   // v4: 숏은 실적(실현수익) 넘어야
+            lev = Math.Min(lev, Math.Min(D.TK[tk].maxLev, levCap()));
+            if (v4) fee = rhu(margin * lev * (R.COIN_FEE + sickSlip() / 5));   // v4: 깎인 배율로 수수료 다시 (예전 모드는 골든 맞추려고 그대로)
             if (margin < 10000 || margin + fee > S.cash || !tkOpen(tk)) return null;
-            lev = Math.Min(lev, D.TK[tk].maxLev);
             double mult = has("allin") && margin + fee >= S.cash * 0.95 ? 1.5 : 1;
             var c = new CoinPos { id = S.pid++, tk = tk, dir = dir, lev = lev, margin = margin, entry = S.mk.tk[tk].p, mult = mult, t0 = Tnow(),
                 bonus = has("kimp") && dir > 0 && S.kimpDay != absDay() ? Math.Min(300000, rhu(margin * 0.05)) : 0 };
@@ -70,6 +73,7 @@ namespace KwGame.Sim
             S.cash += back; S.cps.Remove(c);
             S.today.Add(new Ledger { kind = "invest", amt = back - c.margin, label = T("lbl.close", "n", D.TK[c.tk].name, "lev", c.lev, "d", T(c.dir > 0 ? "long" : "short")) }); S.realized += back - c.margin - c.bonus;
             S.st.iN++; if (back > c.margin) S.st.iW++;
+            shortCheck();
             return back - c.margin;
         }
         double closeAll()

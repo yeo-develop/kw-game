@@ -335,7 +335,7 @@ namespace KwGame.Sim
         }
         bool paydayPaid(bool early = false)
         {
-            if (!early) S.paidMonth = S.month;
+            if (!early) { int c0 = credit(); S.paidMonth = S.month; creditUp(c0); }
             galReact("payday", V("debt", man(S.debt) + D.U("won")), 2);
             pushK("m", T("pd.k"));
             if (S.cash >= 10000 && S.debt > 0)

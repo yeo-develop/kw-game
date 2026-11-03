@@ -102,7 +102,9 @@ namespace KwGame.Sim
             double due = interestDue();
             if (S.paidMonth == S.month) { NPC(BANK, T("bank.already")); hideDlg(); return false; }
             if (S.cash < due) { NPC(BANK, T("bank.short", "d", won(due), "c", won(S.cash))); hideDlg(); return false; }
+            int c0 = credit();
             money(-due, "interest", T("lbl.payEarly", "m", S.month)); pushF("🧾", T("bank.feed", "m", S.month, "d", won(due)), "money"); S.st.interest += due; S.paidMonth = S.month;
+            creditUp(c0);
             pushK("kim", T("bank.kim", "m", S.month, "d", won(due)));
             stress(-10); hp(-hpCost("bank"));
             NPC(BANK, T("bank.done", "d", won(due)));
@@ -113,7 +115,8 @@ namespace KwGame.Sim
         bool repayStart(string loc)
         {
             double mx = Math.Floor(Math.Min(S.cash, S.debt) / 10000) * 10000, due = S.paidMonth == S.month ? 0 : interestDue();
-            if (mx < 10000)
+            if (v4 && S.debt > 0 && S.cash >= S.debt) mx = S.debt;   // v4: 만 원 밑 자투리 빚도 한 번에 끝낼 수 있게 (안 그러면 클리어 못 함)
+            if (mx < 10000 && !(v4 && mx > 0 && mx == S.debt))
             {
                 if (loc == "home") toast(T("repay.noCashHome"), "liq"); else { NPC(BANK, T("bank.noCash")); hideDlg(); }
                 return false;
@@ -186,7 +189,7 @@ namespace KwGame.Sim
         bool borrow(double L)
         {
             var P = S.pending; double fr = loanFee();
-            if (!R.LOAN_AMTS.Contains(L) || S.debt + L > loanCap()) return false;
+            if (!R.LOAN_AMTS.Contains(L) || S.debt + L > loanCap() || !loanOk()) return false;
             double net = rhu(L * (1 - fr));
             addDebt(L, T("lbl.loanDebt")); S.cash += net; S.st.borrowed += L; P.took += L; fame(1);
             S.today.Add(new Ledger { kind = "loan", amt = net, label = T("lbl.loan", "f", rhu(fr * 100)) });

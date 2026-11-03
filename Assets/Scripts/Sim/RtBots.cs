@@ -178,7 +178,7 @@ namespace KwGame.Sim
                     return C("lottoDone");
                 case "shop": return C("shopDone");
                 case "relicShop": return C("relicDone");
-                case "repay": { double a = Math.Min(repayAmt, P.mx); repayAmt = 0; return C("repay", "amt", Math.Max(0, Math.Floor(a / 10000) * 10000)); }
+                case "repay": { double a = Math.Min(repayAmt, P.mx); repayAmt = 0; return C("repay", "amt", a >= S.debt ? S.debt : Math.Max(0, Math.Floor(a / 10000) * 10000)); }   // 다 갚을 땐 자투리까지
                 case "brokerTrade": return C("brokerClose");
                 case "watch":
                     {
@@ -191,10 +191,10 @@ namespace KwGame.Sim
                     }
                 case "loan":
                     {
-                        double want = strat == "pro" && bullLoan == 1 ? (G.loanCap() - S.debt >= 3000000 && P.took < 6000000 ? 3000000 : 0) : strat == "casual" ? (P.took == 0 ? 1000000 : 0) : Smart ? (P.took == 0 ? 3000000 : P.took < 4000000 ? 1000000 : 0)
+                        double want = strat == "pro" && bullLoan == 1 ? (G.loanCap() - S.debt >= 3000000 && P.took < 9000000 ? 3000000 : 0) : strat == "casual" ? (P.took == 0 ? 1000000 : 0) : Smart ? (P.took == 0 ? 3000000 : P.took < 4000000 ? 1000000 : 0)
                             : strat == "gamble" ? R.LOAN_AMTS.Reverse().FirstOrDefault(a => S.debt + a <= G.loanCap() && S.cash < 3000000)
                             : P.took == 0 ? R.LOAN_AMTS[r.Next(R.LOAN_AMTS.Length)] : 0;
-                        return want > 0 && S.debt + want <= G.loanCap() ? C("borrow", "amt", want) : C("loanDone");
+                        return want > 0 && S.debt + want <= G.loanCap() && G.loanOk() ? C("borrow", "amt", want) : C("loanDone");
                     }
                 case "menhera": case "impulse":
                     {
@@ -238,7 +238,7 @@ namespace KwGame.Sim
         SimCommand Home()
         {
             if (S.kun.TryGetValue("m", out var un) && un > 0) return C("read", "what", "kakao", "room", "m");   // 사람은 카톡 읽음 (안 읽으면 매시간 멘탈↑)
-            if ((strat == "smart" || strat == "pro") && !seeded) { seeded = true; return C("loanOpen"); }
+            if ((strat == "smart" || strat == "pro") && !seeded && G.loanOk()) { seeded = true; return C("loanOpen"); }   // v4: 종잣돈 대출은 신용 1단계(첫 이자) 뒤에
             // 잘하는 사람: 2장 불장 들어가면 김사장 돈 더 땡겨서 탐 (빚 내서 빚 갚기)
             if (strat == "pro" && G.v4 && G.chapter() == 2 && bullLoan == 0) { bullLoan = 1; return C("loanOpen"); }
             var t = Trade(); if (t != null) return t;
@@ -273,7 +273,7 @@ namespace KwGame.Sim
             {
                 // 턴 모드 gamble 봇과 같은 성향: 300만 밑이면 한도까지 땡김 → 저녁·점심은 카지노 올인, 아침은 복권, 빈털터리면 알바
                 if (S.debt > 0 && S.cash >= S.debt + Due) { repayAmt = S.debt; return C("repayOpen"); }
-                if (S.cash < 3000000 && S.debt + R.LOAN_AMTS[0] <= G.loanCap() && loanT != G.Tnow()) { loanT = G.Tnow(); return C("loanOpen"); }
+                if (S.cash < 3000000 && S.debt + R.LOAN_AMTS[0] <= G.loanCap() && G.loanOk() && loanT != G.Tnow()) { loanT = G.Tnow(); return C("loanOpen"); }
                 if (S.stress >= 80 || S.hp < 12) return C("rest");
                 if (S.cash < 100000 && S.hp >= 45) return Go("work", "l-cafe");
                 if (S.slot >= 1 && S.cash >= 10000) return Go("casino", new[] { "l-oddeven", "l-card", "l-slot", "l-ladder" }[r.Next(4)]);
@@ -304,7 +304,7 @@ namespace KwGame.Sim
             if (strat == "gamble")
             {
                 if (S.debt > 0 && S.cash >= S.debt + Due) { repayAmt = S.debt; return C("repayOpen"); }
-                if (S.cash < 3000000 && S.debt + R.LOAN_AMTS[0] <= G.loanCap() && loanT != G.Tnow()) { loanT = G.Tnow(); return C("loanOpen"); }
+                if (S.cash < 3000000 && S.debt + R.LOAN_AMTS[0] <= G.loanCap() && G.loanOk() && loanT != G.Tnow()) { loanT = G.Tnow(); return C("loanOpen"); }
                 if (S.cash < 100000 && S.hp >= 45) return Go("work", "l-cafe");
                 if (S.slot >= 1 && S.cash >= 10000) return Go("casino", new[] { "l-oddeven", "l-slot" }[r.Next(2)]);
                 if (S.cash >= 10000) return Go("lotto", "l-lotto");
@@ -357,7 +357,7 @@ namespace KwGame.Sim
             int ch = G.chapter();
             if (ch == 2) return "BTK";
             if (ch == 3) return G.STK().Where(G.tkOpen).Where(k => !D.TK[k].junk && !D.TK[k].inv && !D.TK[k].meme).OrderByDescending(k => D.TK[k].beta).FirstOrDefault();
-            if (ch == 4) return D.TKList.FirstOrDefault(t => t.inv && G.tkOpen(t.id))?.id;
+            if (ch == 4) return G.shortOk() ? D.TKList.FirstOrDefault(t => t.inv && G.tkOpen(t.id))?.id : null;   // 숏 잠겼으면 곱버스 못 삼
             return null;
         }
         double Spare => Math.Floor((S.cash - Due * 1.05 - 300000) / 1000) * 1000;
@@ -450,7 +450,7 @@ namespace KwGame.Sim
                 if (S.cps.Count == 0 && S.cash >= 50000 && r.NextDouble() < 0.25)
                 {
                     var cs = D.TKList.Where(x => x.IsCoin && G.tkOpen(x.id) && !x.inv).ToList(); var tk = cs[r.Next(cs.Count)];
-                    return C("open", "tk", tk.id, "dir", r.Next(2) * 2 - 1, "lev", tk.maxLev >= 50 ? 50 : tk.maxLev, "amt", Math.Floor(S.cash * 0.25 / 1000) * 1000);
+                    return C("open", "tk", tk.id, "dir", G.shortOk() ? r.Next(2) * 2 - 1 : 1, "lev", Math.Min(tk.maxLev >= 50 ? 50 : tk.maxLev, G.levCap()), "amt", Math.Floor(S.cash * 0.25 / 1000) * 1000);
                 }
             }
             return null;

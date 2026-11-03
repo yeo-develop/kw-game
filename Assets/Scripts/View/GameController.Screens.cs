@@ -513,7 +513,8 @@ namespace KwGame.View
                 case "loan":
                     Title("김사장 캐피탈");
                     Info($"빚 {G.won(S.debt)} / 한도 {G.won(G.loanCap())} · 선이자 {G.loanFee() * 100:0}%", 22, Ui.Text);
-                    foreach (var amt in D.RULES.LOAN_AMTS) { var a = amt; Btn($"{G.man(a)}원 빌리기", () => Send("borrow", "amt", a), $"실수령 {G.won(MathK.RoundHalfUp(a * (1 - G.loanFee())))}", S.debt + a > G.loanCap()); }
+                    if (!G.loanOk()) Info("김사장: \"신규 고객님은 이자 한 번 내 보시고 오세요^^\"\n신용 0단계 = 대출 불가. 첫 이자를 내면 열려요 (김사장 캐피탈에서 미리 내도 됨).", 22, Ui.Gold);
+                    foreach (var amt in D.RULES.LOAN_AMTS) { var a = amt; Btn($"{G.man(a)}원 빌리기", () => Send("borrow", "amt", a), $"실수령 {G.won(MathK.RoundHalfUp(a * (1 - G.loanFee())))}", S.debt + a > G.loanCap() || !G.loanOk()); }
                     Btn("됐어요", () => Send("loanDone"), null, false, Ui.Panel);
                     break;
                 case "work": RenderWork(P); break;
@@ -541,7 +542,7 @@ namespace KwGame.View
                         var seen = new HashSet<double>();
                         foreach (var (a, l) in new[] { (P.mx, P.mx >= S.debt ? "빚 전부 갚기" : "가진 돈 전부"), (Math.Max(0, Math.Floor((P.mx - P.due) / 10000) * 10000), "이자 몫은 남기고"), (Math.Floor(P.mx / 20000) * 10000, "절반"), (100000.0, "10만 원만") })
                         {
-                            if (a < 10000 || a > P.mx || !seen.Add(a)) continue;
+                            if (a <= 0 || a < 10000 && a < S.debt || a > P.mx || !seen.Add(a)) continue;   // 만 원 밑은 "빚 전부 갚기"(자투리)만
                             var amt = a; Btn($"{l} · {G.won(amt)}", () => Send("repay", "amt", amt), $"갚으면 빚 {G.won(S.debt - amt)} · 이자 {G.won(MathK.Round1k((S.debt - amt) * G.rate()))}로 줄어듦");
                         }
                     }

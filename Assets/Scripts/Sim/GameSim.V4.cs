@@ -44,6 +44,32 @@ namespace KwGame.Sim
         }
         void greedD(double d) { if (v4 && d != 0) S.greed = clamp(rhu(S.greed + d), 0, 100); }
 
+        // ---------- 신용 단계 (초반 시드머니) ----------
+        /// 이자 낸 횟수 = 김사장 신용. 0 = 현물·코인 1배만, 대출 X → 1 = 대출 · 레버리지 10배 → 2 = 고배율. 이자를 일찍 내면 일찍 열림 (숏은 실적 — shortOk)
+        public int credit() => !v4 || S.part > 1 ? 3 : (int)clamp(   // 2부는 1부에서 쌓은 신용 그대로 (다 열림)
+            S.month - 1 + (S.paidMonth == S.month ? 1 : 0), 0, 3);
+        public bool loanOk() => credit() >= R.V4_CREDIT_LOAN;
+        /// 숏 = 실적으로 엶 (STONKS 의 '평판'): 실현수익 누적 V4_SHORT_PROFIT 넘으면. 신용(이자)으론 안 열림
+        public bool shortOk() => !v4 || S.shortOn || R.V4_SHORT_PROFIT <= 0;
+        /// 매도·청산 뒤: 실적 넘었으면 숏 열고 김사장 카톡
+        void shortCheck()
+        {
+            if (!v4 || S.shortOn || S.realized < R.V4_SHORT_PROFIT) return;
+            S.shortOn = true;
+            string x = T("v4.short.up", "p", man(R.V4_SHORT_PROFIT));
+            pushK("kim", T("v4.short.kim", "x", x)); toast(x, "good", "kakao", "kim");
+        }
+        public double levCap() { var L = R.V4_CREDIT_LEV; return L == null || L.Length == 0 ? 1000 : L[Math.Min(credit(), L.Length - 1)]; }
+        /// 다음 단계에서 열리는 것 (화면용). null = 다 열림
+        public string creditNext() => credit() >= 2 || !v4 ? null : T("v4.credit.next" + (credit() + 1));
+        /// 이자 낸 직후: 단계가 올랐으면 김사장 카톡 + 토스트
+        void creditUp(int before)
+        {
+            int c = credit(); if (!v4 || c <= before || c > 2) return;
+            string x = T("v4.credit.up" + c);
+            pushK("kim", T("v4.credit.kim", "x", x)); toast(x, "good", "kakao", "kim");
+        }
+
         // ---------- 아침 부탁 ----------
         public class Prom { public string id, ask, avoid, @do, okK, badK, endOk, endBad, hud; }
         List<Prom> proms() => D.J["V4_PROM"] is JArray a ? a.ToObject<List<Prom>>() : new List<Prom>();
@@ -108,11 +134,13 @@ namespace KwGame.Sim
         }
 
         // ---------- 집 행동 ----------
+        /// 시간대 비중: 평일 낮 = 장·알바 시간이라 놀아도 호감 덜 오름, 저녁 = 미래 시간. 주말은 그대로
+        public double dateMult() => !v4 || weekend() ? 1 : isEve() ? R.V4_DATE_EVE : R.V4_DATE_DAY;
         /// 미래랑 놀기: 칸 하나. 같은 날 두 번째부턴 호감 조금만
         void dateHome()
         {
             S.dateN++;
-            affD(S.dateN == 1 ? R.V4_DATE_AFF : 2);
+            affD((S.dateN == 1 ? R.V4_DATE_AFF : 2) * dateMult());
             stress(R.V4_DATE_ST); hp(5, T("why.date"));
             S.workStreak = 0;
             face("happy");

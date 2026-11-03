@@ -89,9 +89,9 @@ namespace KwGame.Tests
         public void DateRaisesAffectionAndUsesTheSlot()
         {
             var g = New(); var S = g.S;
-            double a0 = S.aff; int s0 = S.slot;
+            double a0 = S.aff; int s0 = S.slot; double dm = g.dateMult();
             Go(g, "date"); ToHome(g);
-            Assert.That(S.aff, Is.EqualTo(a0 + Data.RULES.V4_DATE_AFF * (1 - a0 / Data.RULES.V4_AFF_SOFT)).Within(0.51), "높을수록 덜 오르는 만큼");
+            Assert.That(S.aff, Is.EqualTo(a0 + Data.RULES.V4_DATE_AFF * dm * (1 - a0 / Data.RULES.V4_AFF_SOFT)).Within(0.51), "높을수록 덜 오르는 만큼 (시간대 배수 포함)");
             Assert.That(S.slot, Is.EqualTo(s0 + 1));
         }
 
@@ -113,11 +113,11 @@ namespace KwGame.Tests
         {
             var g = New(); var S = g.S;
             S.prom = "date"; S.promDone = false;
-            double a0 = S.aff;
+            double a0 = S.aff, dm = g.dateMult();
             Go(g, "date"); ToHome(g);
             Assert.That(S.promDone, Is.True);
             while (S.slot != 0 || S.day == 1) { Go(g, "rest"); ToHome(g); }
-            double afterDate = a0 + Data.RULES.V4_DATE_AFF * (1 - a0 / Data.RULES.V4_AFF_SOFT);
+            double afterDate = a0 + Data.RULES.V4_DATE_AFF * dm * (1 - a0 / Data.RULES.V4_AFF_SOFT);
             Assert.That(S.aff, Is.GreaterThan(afterDate + 1), "놀아 준 것 + 부탁 지킨 보상");
         }
 
@@ -338,6 +338,86 @@ namespace KwGame.Tests
             double a0 = S.aff;
             while (S.slot != 0 || S.day == 1) { Go(g, "rest"); ToHome(g); }
             Assert.That(S.aff, Is.LessThan(a0), "자정에 코인 들고 있으면 어김");
+        }
+
+        /// 신용 단계: 1장은 시드머니 — 대출·레버리지·숏 잠김. 이자를 (미리) 내면 단계가 오름
+        [Test]
+        public void CreditLocksLoanLeverageAndShortUntilInterestIsPaid()
+        {
+            var g = New(); var S = g.S; S.cash = 5000000;
+            Assert.That(g.credit(), Is.EqualTo(0));
+            double d0 = S.debt;
+            Go(g, "loanOpen");
+            Assert.That(g.Apply(C("borrow", "amt", 1000000.0)).Any(e => e.t == "error"), "신용 0: 김사장 대출 안 됨");
+            Assert.That(S.debt, Is.EqualTo(d0));
+            Go(g, "loanDone"); ToHome(g);
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
+            Go(g, "open", "tk", coin.id, "dir", -1, "lev", 1, "amt", 100000);
+            Assert.That(S.cps.Count, Is.EqualTo(0), "신용 0: 숏 안 됨");
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
+            Assert.That(S.cps.Single().lev, Is.EqualTo(1), "신용 0: 배율은 1배로 깎임");
+            Go(g, "close", "id", S.cps[0].id);
+
+            S.paidMonth = S.month;   // 이자 미리 냄
+            Assert.That(g.credit(), Is.EqualTo(1)); Assert.That(g.loanOk()); Assert.That(g.shortOk(), Is.False);
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
+            Assert.That(S.cps.Single().lev, Is.EqualTo(Data.RULES.V4_CREDIT_LEV[1]), "신용 1: 레버리지 10배까지");
+            Go(g, "close", "id", S.cps[0].id);
+            Go(g, "loanOpen"); Go(g, "borrow", "amt", 1000000.0);
+            Assert.That(S.debt, Is.EqualTo(d0 + 1000000), "신용 1: 대출 열림");
+            Go(g, "loanDone"); ToHome(g);
+
+            S.month = 2;             // 2장, 이번 주 이자도 냄 → 2단계: 고배율. 숏은 신용으론 안 열림
+            S.paidMonth = 2;
+            Assert.That(g.credit(), Is.EqualTo(2)); Assert.That(g.shortOk(), Is.False, "숏은 실적으로만");
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 25, "amt", 100000);
+            Assert.That(S.cps.Single().lev, Is.EqualTo(25), "신용 2: 고배율");
+        }
+
+        /// 숏 = 실적: 매매 실현수익 누적이 V4_SHORT_PROFIT 넘으면 열리고, 다시 잃어도 안 닫힘
+        [Test]
+        public void ShortUnlocksAfterRealizedProfitAndStaysOpen()
+        {
+            var g = New(); var S = g.S; S.cash = 5000000;
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
+            Assert.That(g.shortOk(), Is.False);
+            S.realized = Data.RULES.V4_SHORT_PROFIT;            // 직전까지 번 셈 치고
+            int k0 = S.kun["kim"];
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 100000);
+            S.mk.tk[coin.id].p *= 1.5;                          // 올랐을 때 청산 → 실적 넘음
+            Go(g, "close", "id", S.cps[0].id);
+            Assert.That(g.shortOk(), "실현수익 넘으면 숏 열림");
+            Assert.That(S.kun["kim"], Is.GreaterThan(k0), "김사장 카톡");
+            S.realized = 0;
+            Assert.That(g.shortOk(), "한 번 열리면 계속");
+            Go(g, "open", "tk", coin.id, "dir", -1, "lev", 1, "amt", 100000);
+            Assert.That(S.cps.Single().dir, Is.EqualTo(-1));
+        }
+
+        [Test]
+        public void EarlyInterestPaymentRaisesCreditWithKimMessage()
+        {
+            var g = New(); var S = g.S; S.cash = 5000000;
+            int k0 = S.kun["kim"];
+            Go(g, "map"); Go(g, "goTo", "loc", "bank"); Go(g, "act", "k", "l-payint");
+            Assert.That(S.paidMonth, Is.EqualTo(S.month));
+            Assert.That(g.credit(), Is.EqualTo(1));
+            Assert.That(S.kun["kim"], Is.GreaterThan(k0), "김사장 카톡: 신용 올라감");
+        }
+
+        /// 시간대 비중: 평일 낮은 장·알바, 저녁은 미래 시간
+        [Test]
+        public void EveningIsForMiraiAndDaytimeForWork()
+        {
+            var g = New(); var S = g.S;
+            Assert.That(g.weekend(), Is.False);
+            S.slot = 0; double day = g.dateMult(); var job = Data.JOBS.Values.First();
+            double payDay = g.jobPay(job, 0.5);
+            S.slot = 2; double eve = g.dateMult(); double payEve = g.jobPay(job, 0.5);
+            Assert.That(eve, Is.GreaterThan(day), "저녁 놀기 호감이 낮보다 큼");
+            Assert.That(payEve, Is.LessThan(payDay), "야간 알바는 덜 벌림");
+            S.day = Data.RULES.V4_WEEKDAYS + 1;
+            Assert.That(g.dateMult(), Is.EqualTo(1), "주말은 시간대 상관없음");
         }
 
         /// 밸런스 범위 (판 수 적게, 범위 넓게 — 정확한 값은 docs/V4.md §7 300판)
