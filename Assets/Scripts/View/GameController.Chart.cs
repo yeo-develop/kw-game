@@ -464,7 +464,7 @@ namespace KwGame.View
                 var sb = Ui.Button(G.shortOk() ? "숏 ▼" : "숏 ▼ 잠김", () => { stkDir = -1; RenderAll(); }, null, !G.shortOk(), stkDir < 0 ? StkDn : Ui.Panel2, 26); sb.style.flexGrow = 1; sb.style.alignItems = Align.Center; dr.Add(sb);
                 {
                     var lk = new List<string>();
-                    if (G.creditNext() is string cn) lk.Add($"신용 {G.credit()}단계 · 최대 {Math.Min(t.maxLev, G.levCap()):0}x — {cn}");
+                    if (G.levNext() is string ln) lk.Add($"지금 최대 {Math.Min(t.maxLev, G.levCap()):0}x — {ln} (지금 {G.sgnMan(S.realized)})");
                     if (!G.shortOk()) lk.Add($"숏 잠김 — 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림 (지금 {G.sgnMan(S.realized)})");
                     if (lk.Count > 0) { var cl = Ui.Label(string.Join("\n", lk), 18, Ui.Gold); cl.style.whiteSpace = WhiteSpace.Normal; cl.style.marginTop = 4; right.Add(cl); }
                 }

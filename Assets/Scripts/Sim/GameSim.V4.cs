@@ -44,30 +44,46 @@ namespace KwGame.Sim
         }
         void greedD(double d) { if (v4 && d != 0) S.greed = clamp(rhu(S.greed + d), 0, 100); }
 
-        // ---------- 신용 단계 (초반 시드머니) ----------
-        /// 이자 낸 횟수 = 김사장 신용. 0 = 현물·코인 1배만, 대출 X → 1 = 대출 · 레버리지 10배 → 2 = 고배율. 이자를 일찍 내면 일찍 열림 (숏은 실적 — shortOk)
+        // ---------- 신용 · 실적 (초반 시드머니) ----------
+        /// 이자 낸 횟수 = 김사장 신용. V4_CREDIT_LOAN 넘어야 대출. 이자를 일찍 내면 일찍 열림 (레버리지·숏은 실적 — levCap · shortOk)
         public int credit() => !v4 || S.part > 1 ? 3 : (int)clamp(   // 2부는 1부에서 쌓은 신용 그대로 (다 열림)
             S.month - 1 + (S.paidMonth == S.month ? 1 : 0), 0, 3);
         public bool loanOk() => credit() >= R.V4_CREDIT_LOAN;
         /// 숏 = 실적으로 엶 (STONKS 의 '평판'): 실현수익 누적 V4_SHORT_PROFIT 넘으면. 신용(이자)으론 안 열림
         public bool shortOk() => !v4 || S.shortOn || R.V4_SHORT_PROFIT <= 0;
-        /// 매도·청산 뒤: 실적 넘었으면 숏 열고 김사장 카톡
-        void shortCheck()
+        /// 레버리지 단계 = 실현수익으로 오른 최고 단계 (다시 잃어도 안 내려감). 2부는 다 열림
+        public double levCap() { var L = R.V4_LEV_CAP; return !v4 || S.part > 1 || L == null || L.Length == 0 ? 1000 : L[Math.Min(S.levTier, L.Length - 1)]; }
+        int levTierOf(double p) { var P = R.V4_LEV_PROFIT; int t = 0; for (int i = 1; i < (P?.Length ?? 0); i++) if (p >= P[i]) t = i; return t; }
+        /// 다음 레버리지 단계 문구 (화면용). null = 다 열림
+        public string levNext()
         {
-            if (!v4 || S.shortOn || S.realized < R.V4_SHORT_PROFIT) return;
-            S.shortOn = true;
-            string x = T("v4.short.up", "p", man(R.V4_SHORT_PROFIT));
-            pushK("kim", T("v4.short.kim", "x", x)); toast(x, "good", "kakao", "kim");
+            var P = R.V4_LEV_PROFIT; int n = S.levTier + 1;
+            return !v4 || S.part > 1 || P == null || n >= P.Length ? null : T("v4.lev.next", "p", man(P[n]), "x", R.V4_LEV_CAP[n]);
         }
-        public double levCap() { var L = R.V4_CREDIT_LEV; return L == null || L.Length == 0 ? 1000 : L[Math.Min(credit(), L.Length - 1)]; }
-        /// 다음 단계에서 열리는 것 (화면용). null = 다 열림
-        public string creditNext() => credit() >= 2 || !v4 ? null : T("v4.credit.next" + (credit() + 1));
-        /// 이자 낸 직후: 단계가 올랐으면 김사장 카톡 + 토스트
+        /// 다음 신용 단계 문구 (화면용). null = 대출 열림
+        public string creditNext() => !v4 || loanOk() ? null : T("v4.credit.next1");
+        /// 이자 낸 직후: 대출이 열렸으면 김사장 카톡 + 토스트
         void creditUp(int before)
         {
-            int c = credit(); if (!v4 || c <= before || c > 2) return;
-            string x = T("v4.credit.up" + c);
+            if (!v4 || before >= R.V4_CREDIT_LOAN || !loanOk()) return;
+            string x = T("v4.credit.up1");
             pushK("kim", T("v4.credit.kim", "x", x)); toast(x, "good", "kakao", "kim");
+        }
+        /// 매도·청산 뒤: 실적 넘었으면 레버리지 단계 올리고 · 숏 열고 김사장 카톡
+        void shortCheck()
+        {
+            if (!v4) return;
+            int t = levTierOf(S.realized);
+            if (t > S.levTier)
+            {
+                S.levTier = t;
+                string x = T("v4.lev.up", "p", man(R.V4_LEV_PROFIT[t]), "x", R.V4_LEV_CAP[t]);
+                pushK("kim", T("v4.short.kim", "x", x)); toast(x, "good", "kakao", "kim");
+            }
+            if (S.shortOn || S.realized < R.V4_SHORT_PROFIT) return;
+            S.shortOn = true;
+            string y = T("v4.short.up", "p", man(R.V4_SHORT_PROFIT));
+            pushK("kim", T("v4.short.kim", "x", y)); toast(y, "good", "kakao", "kim");
         }
 
         // ---------- 아침 부탁 ----------

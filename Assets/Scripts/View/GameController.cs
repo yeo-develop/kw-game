@@ -332,10 +332,10 @@ namespace KwGame.View
                 card.Add(Ui.Label($"☀ {(e.Num("part") > 1 ? "2부 · " : "")}{ch}장 {chn[Math.Max(0, Math.Min(3, ch - 1))]} · {(e.Num("month") - 1) * D.RULES.MONTH_DAYS + e.Num("day")}일째 아침", 40, Ui.Gold, true));
                 bool wkd = e["wk"] is bool wk && wk;
                 card.Add(Ui.Label($"원금 만기까지 {e.Num("left")}일" + (wkd ? " · 오늘은 주말 (국장 휴장)" : ""), 26, Ui.Accent));
-                // 아침 브리핑: 오늘 시간표 · 신용 단계 · 미래 부탁
+                // 아침 브리핑: 오늘 시간표 · 대출 · 레버리지 · 숏 · 미래 부탁
                 card.Add(Ui.Label(wkd ? "오늘: 하루 종일 미래 · 생활 (코인만 열림)" : "오늘: 오전 · 오후 = 장 (국장 09:00~15:30) · 밤 = 미래 · 생활 (코인만)", 22, Ui.Text));
-                int cr = G.credit();
-                card.Add(Ui.Label($"신용 {cr}단계: " + (cr == 0 ? "현물 · 코인 1배만 (대출 X)" : $"대출 · 레버리지 {G.levCap():0}배") + (G.creditNext() is string cn ? $"\n  → {cn}" : ""), 22, Ui.Gold));
+                card.Add(Ui.Label("대출: " + (G.creditNext() is string cn ? cn : "열림"), 22, Ui.Gold));
+                card.Add(Ui.Label($"코인 레버리지: 최대 {G.levCap():0}배" + (G.levNext() is string ln ? $" → {ln} (지금 {G.sgnMan(S.realized)})" : ""), 22, Ui.Gold));
                 card.Add(Ui.Label(G.shortOk() ? "숏: 열림" : $"숏: 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림 (지금 {G.sgnMan(S.realized)})", 22, Ui.Dim));
                 if (G.promNow() is GameSim.Prom pm) card.Add(Ui.Label("미래 부탁: " + pm.hud, 22, Ui.Accent));
             }

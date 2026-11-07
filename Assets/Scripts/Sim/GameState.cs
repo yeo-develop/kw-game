@@ -120,7 +120,7 @@ namespace KwGame.Sim
         public Rsch rsch; public double realized; public List<EqPoint> eqh = new List<EqPoint>(); public MarketPlan mplan; public int startT = -1;
         public int workStreak; public string menKey = ""; public double galFame; public string lastJob = ""; public bool needMorning;
         /// v4: 숏 해금됨 (실현수익 누적이 V4_SHORT_PROFIT 을 한 번이라도 넘음)
-        public bool shortOn;
+        public bool shortOn; public int levTier;
         public List<string> augs = new List<string>(); public MarketState mk; public OMap<Holding> hold = new OMap<Holding>(); public List<CoinPos> cps = new List<CoinPos>(); public int pid = 1;
         public News news; public Whale whale; public List<LottoTicket> lotto = new List<LottoTicket>(); public int paidMonth; public bool insUsed; public HomeLine hl;
         public int faint = -1, cleared = 0; public Dictionary<string, int> endSeen = new Dictionary<string, int>(); public List<string> resume; public RelicOffer relicOffer; public int gday;

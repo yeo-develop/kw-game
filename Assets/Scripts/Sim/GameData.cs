@@ -51,9 +51,10 @@ namespace KwGame.Sim
         /// 2부: 알바 경력 배율 · 국면 세기 배율 (빚 1억이라 1부 수치로는 못 갚음)
         public double V4_P2_PAY = 1, V4_P2_REGIME = 1;
         public Dictionary<string, double> V4_JOB_MULT;
-        /// 신용 단계(이자 낸 횟수): 단계별 코인 최대 배율 · 김사장 대출 열리는 단계 (초반 = 시드머니 모으기)
-        public double[] V4_CREDIT_LEV = { 1000 };
+        /// 신용 단계(이자 낸 횟수): 김사장 대출 열리는 단계 (초반 = 시드머니 모으기)
         public int V4_CREDIT_LOAN = 0;
+        /// 레버리지 = 실적: 실현수익 누적이 V4_LEV_PROFIT[i] 넘으면 코인 최대 배율 V4_LEV_CAP[i] (한 번 열리면 계속)
+        public double[] V4_LEV_PROFIT = { 0 }, V4_LEV_CAP = { 1000 };
         /// 숏 해금 = 실적: 매매 실현수익 누적이 이만큼 넘으면 (한 번 열리면 계속)
         public double V4_SHORT_PROFIT = 0;
         /// 시간대 비중: 평일 낮 놀기 호감 배수 · 저녁 놀기 호감 배수 · 저녁 알바 일당 배수

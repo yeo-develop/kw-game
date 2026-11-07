@@ -340,9 +340,9 @@ namespace KwGame.Tests
             Assert.That(S.aff, Is.LessThan(a0), "자정에 코인 들고 있으면 어김");
         }
 
-        /// 신용 단계: 1장은 시드머니 — 대출·레버리지·숏 잠김. 이자를 (미리) 내면 단계가 오름
+        /// 1장은 시드머니: 대출은 이자를 (미리) 내야, 레버리지·숏은 실적으로. 이자를 내도 레버리지는 안 열림
         [Test]
-        public void CreditLocksLoanLeverageAndShortUntilInterestIsPaid()
+        public void CreditLocksLoanAndLeverageStaysAtOneUntilProfit()
         {
             var g = New(); var S = g.S; S.cash = 5000000;
             Assert.That(g.credit(), Is.EqualTo(0));
@@ -353,25 +353,48 @@ namespace KwGame.Tests
             Go(g, "loanDone"); ToHome(g);
             var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
             Go(g, "open", "tk", coin.id, "dir", -1, "lev", 1, "amt", 100000);
-            Assert.That(S.cps.Count, Is.EqualTo(0), "신용 0: 숏 안 됨");
+            Assert.That(S.cps.Count, Is.EqualTo(0), "실적 0: 숏 안 됨");
             Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
-            Assert.That(S.cps.Single().lev, Is.EqualTo(1), "신용 0: 배율은 1배로 깎임");
+            Assert.That(S.cps.Single().lev, Is.EqualTo(1), "실적 0: 배율은 1배로 깎임");
             Go(g, "close", "id", S.cps[0].id);
 
-            S.paidMonth = S.month;   // 이자 미리 냄
-            Assert.That(g.credit(), Is.EqualTo(1)); Assert.That(g.loanOk()); Assert.That(g.shortOk(), Is.False);
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
-            Assert.That(S.cps.Single().lev, Is.EqualTo(Data.RULES.V4_CREDIT_LEV[1]), "신용 1: 레버리지 10배까지");
-            Go(g, "close", "id", S.cps[0].id);
+            S.paidMonth = S.month;   // 이자 미리 냄 → 대출만 열림
+            Assert.That(g.credit(), Is.EqualTo(1)); Assert.That(g.loanOk());
+            Assert.That(g.levCap(), Is.EqualTo(1), "레버리지는 이자로 안 열림");
             Go(g, "loanOpen"); Go(g, "borrow", "amt", 1000000.0);
             Assert.That(S.debt, Is.EqualTo(d0 + 1000000), "신용 1: 대출 열림");
-            Go(g, "loanDone"); ToHome(g);
+        }
 
-            S.month = 2;             // 2장, 이번 주 이자도 냄 → 2단계: 고배율. 숏은 신용으론 안 열림
-            S.paidMonth = 2;
-            Assert.That(g.credit(), Is.EqualTo(2)); Assert.That(g.shortOk(), Is.False, "숏은 실적으로만");
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 25, "amt", 100000);
-            Assert.That(S.cps.Single().lev, Is.EqualTo(25), "신용 2: 고배율");
+        /// 레버리지 = 실적: 실현수익 100만 → 10배, 500만 → 고배율. 다시 잃어도 안 내려감
+        [Test]
+        public void LeverageUnlocksByRealizedProfitAndStays()
+        {
+            var g = New(); var S = g.S; S.cash = 50000000;
+            var R = Data.RULES;
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 50);
+            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[0]));
+            Assert.That(g.levNext(), Is.Not.Null);
+            int k0 = S.kun["kim"];
+            void Win(double target)
+            {
+                S.realized = target;                             // 직전까지 번 셈 치고, 오를 때 청산
+                Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 1000000);
+                S.mk.tk[coin.id].p *= 1.5;
+                Go(g, "close", "id", S.cps[0].id);
+            }
+            Win(R.V4_LEV_PROFIT[1]);
+            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[1]), "100만: 10배");
+            Assert.That(S.kun["kim"], Is.GreaterThan(k0), "김사장 카톡");
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
+            Assert.That(S.cps.Single().lev, Is.EqualTo(R.V4_LEV_CAP[1]));
+            Go(g, "close", "id", S.cps[0].id);
+            Win(R.V4_LEV_PROFIT[2]);
+            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[2]), "500만: 고배율");
+            Assert.That(g.levNext(), Is.Null);
+            S.realized = 0;
+            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[2]), "한 번 열리면 계속");
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
+            Assert.That(S.cps.Single().lev, Is.EqualTo(50));
         }
 
         /// 숏 = 실적: 매매 실현수익 누적이 V4_SHORT_PROFIT 넘으면 열리고, 다시 잃어도 안 닫힘
