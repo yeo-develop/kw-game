@@ -21,7 +21,7 @@ namespace KwGame.EditorTools
         public static void Initialize()
         {
             EnsureCatalog();
-            Debug.Log("[Audio] 기본 음원 5개 연결 완료.");
+            Debug.Log("[Audio] 기본 음원 연결 완료.");
         }
 
         public static SoundCatalog EnsureCatalog()
@@ -46,6 +46,21 @@ namespace KwGame.EditorTools
             Assign(catalog.buttonClick, "SFX_ButtonClick.mp3");
             Assign(catalog.income, "SFX_Income.mp3");
             Assign(catalog.loss, "SFX_Loss.mp3");
+            Assign(catalog.liquidation, "SFX_Liquidation.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.kakao, "SFX_Kakao.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.kim, "SFX_Kim.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.affUp, "SFX_AffUp.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.affDown, "SFX_AffDown.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.unlock, "SFX_Unlock.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.news, "SFX_News.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.repaid, "SFX_Repaid.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.clear, "SFX_Clear.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.badEnding, "SFX_BadEnding.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.faint, "SFX_Faint.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.workPay, "SFX_WorkPay.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.minigameStart, "SFX_MinigameStart.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.morning, "SFX_Morning.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.menhera, "SFX_Menhera.ogg");   // Audio Studio MCP 생성
             Assign(catalog.backgroundMusic, "BGM_DefaultLoop.mp3");
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssetIfDirty(catalog);

@@ -25,6 +25,9 @@ namespace KwGame.Audio
         readonly HashSet<SoundCue> missingClips = new HashSet<SoundCue>();
         long sequence;
         double lastButton = double.NegativeInfinity;
+        readonly Dictionary<SoundCue, double> lastCue = new Dictionary<SoundCue, double>();
+        /// 같은 소리가 한 번에 몰려 오면 (카톡 여러 개 · 호감 연속) 한 번만
+        public const double CueCooldown = 0.25;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetInstance() => Instance = null;
@@ -135,6 +138,12 @@ namespace KwGame.Audio
                 double now = Time.unscaledTimeAsDouble;
                 if (now - lastButton < 0.045) return;
                 lastButton = now;
+            }
+            else
+            {
+                double now = Time.unscaledTimeAsDouble;
+                if (lastCue.TryGetValue(cue, out var last) && now - last < CueCooldown) return;
+                lastCue[cue] = now;
             }
             int index = -1;
             for (int i = 0; i < voices.Length; i++)

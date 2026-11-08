@@ -92,6 +92,7 @@ namespace KwGame.View
             IEnumerator game = key == "cafe" ? MgCafe(su, done) : key == "store" ? MgStore(su, done) : key == "mart" ? MgMart(su, done) : MgWare(su, done);
             if (autoSkipDialog) { game.MoveNext(); yield break; }
             JuiceIris(mg);   // 원이 열리며 알바 화면 등장
+            KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.MinigameStart);
             yield return HowTo(key);
             yield return Countdown();
             yield return game;
@@ -283,6 +284,7 @@ namespace KwGame.View
             dim.Add(card); mg.Add(dim);
             SetFace(g == "S" || g == "A" ? "smug" : g == "F" ? "cry" : "tired");
             yield return Tween(0.35f, p => { card.style.scale = new Scale(Vector3.one * Mathf.Lerp(0.6f, 1f, EaseOut(p))); card.style.opacity = p; });
+            if (pay > 0) KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.WorkPay);
             if (pay > 0) JuiceCoins(dim, dim.WorldToLocal(new Vector2(card.worldBound.center.x, card.worldBound.yMax)), dim.WorldToLocal(pl.worldBound.center));   // 코인이 튀어 올라 일당으로
             float t = 0;
             while (t < 4f) { t += Time.unscaledDeltaTime; if (t > 0.8f && AnyPress()) break; yield return null; }   // 연타하던 손에 바로 넘어가지 않게

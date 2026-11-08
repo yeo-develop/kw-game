@@ -91,15 +91,34 @@ namespace KwGame.Tests
         }
 
         [Test]
-        public void OnlyLiquidationEffectProducesLossSound()
+        public void LiquidationUsesItsOwnCueNotGenericLoss()
         {
-            Assert.That(SoundEventAdapter.FinancialCue(Event("fx", "k", "ash")), Is.EqualTo(SoundCue.Loss));
-            Assert.That(SoundEventAdapter.FinancialCue(Event("fx", "k", "flex", "amt", 10000d)), Is.Null);
-            Assert.That(SoundEventAdapter.FinancialCue(Event("fx", "k", "crack", "amt", -10000d)), Is.Null);
+            Assert.That(SoundEventAdapter.FinancialCue(Event("fx", "k", "ash")), Is.Null);
+            Assert.That(SoundEventAdapter.EventCue(Event("fx", "k", "ash")), Is.EqualTo(SoundCue.Liquidation));
+            Assert.That(SoundEventAdapter.EventCue(Event("liveLiq", "n", 1d)), Is.EqualTo(SoundCue.Liquidation));
+            Assert.That(SoundEventAdapter.EventCue(Event("fx", "k", "flex", "amt", 10000d)), Is.Null);
         }
 
         [Test]
-        public void DefaultCatalogReferencesAllFiveClipsWithCorrectImportSettings()
+        public void GameFlowEventsMapToTheirCues()
+        {
+            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "kim")), Is.EqualTo(SoundCue.Kim));
+            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "m")), Is.EqualTo(SoundCue.Kakao));
+            Assert.That(SoundEventAdapter.EventCue(Event("aff", "d", 3d)), Is.EqualTo(SoundCue.AffUp));
+            Assert.That(SoundEventAdapter.EventCue(Event("aff", "d", -3d)), Is.EqualTo(SoundCue.AffDown));
+            Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "good", "app", "kakao", "room", "kim")), Is.EqualTo(SoundCue.Unlock));
+            Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "news")), Is.EqualTo(SoundCue.News));
+            Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "good")), Is.Null);
+            Assert.That(SoundEventAdapter.EventCue(Event("repaid", "a", 100000d)), Is.EqualTo(SoundCue.Repaid));
+            Assert.That(SoundEventAdapter.EventCue(Event("ending", "kind", "clear")), Is.EqualTo(SoundCue.Clear));
+            Assert.That(SoundEventAdapter.EventCue(Event("ending", "kind", "bad1")), Is.EqualTo(SoundCue.BadEnding));
+            Assert.That(SoundEventAdapter.EventCue(Event("faint")), Is.EqualTo(SoundCue.Faint));
+            Assert.That(SoundEventAdapter.EventCue(Event("morning")), Is.EqualTo(SoundCue.Morning));
+            Assert.That(SoundEventAdapter.EventCue(Event("tick")), Is.Null);
+        }
+
+        [Test]
+        public void DefaultCatalogReferencesEveryCueWithCorrectImportSettings()
         {
             var catalog = Resources.Load<SoundCatalog>(SoundCatalog.ResourcePath);
             Assert.That(catalog, Is.Not.Null);
