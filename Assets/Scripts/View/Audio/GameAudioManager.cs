@@ -28,6 +28,8 @@ namespace KwGame.Audio
         readonly Dictionary<SoundCue, double> lastCue = new Dictionary<SoundCue, double>();
         /// 같은 소리가 한 번에 몰려 오면 (카톡 여러 개 · 호감 연속) 한 번만
         public const double CueCooldown = 0.25;
+        /// 대사 타자음 간격 (글자마다 울리면 시끄러움)
+        public const double BlipInterval = 0.07;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetInstance() => Instance = null;
@@ -142,9 +144,13 @@ namespace KwGame.Audio
             else
             {
                 double now = Time.unscaledTimeAsDouble;
-                if (lastCue.TryGetValue(cue, out var last) && now - last < CueCooldown) return;
+                if (lastCue.TryGetValue(cue, out var last) && now - last < (cue == SoundCue.Blip ? BlipInterval : CueCooldown)) return;
                 lastCue[cue] = now;
             }
+            // 폰 열기·닫기는 버튼 클릭음을 대신함 (같은 프레임 클릭음 끔 → 두 번 울리지 않게)
+            if (cue == SoundCue.PhoneOpen || cue == SoundCue.PhoneClose)
+                for (int i = 0; i < voices.Length; i++)
+                    if (voices[i] != null && voices[i].isPlaying && voiceOrder[i] == sequence && (voiceCues[i] == SoundCue.ButtonClick || voiceCues[i] == SoundCue.UiSelect)) voices[i].Stop();
             int index = -1;
             for (int i = 0; i < voices.Length; i++)
             {

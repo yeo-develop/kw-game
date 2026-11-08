@@ -240,6 +240,7 @@ namespace KwGame.View
             if (waitingForDialogue)
             {
                 dlgText.Typewriter.UpdateTypewriter();
+                if (dlgText.Typewriter.IsShowingText) KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.Blip);   // 타자음 (간격 BlipInterval)
                 UpdateDialogueHint();
             }
             if (!waiting) return;
@@ -309,7 +310,7 @@ namespace KwGame.View
                     case "face": SetFace((string)st["f"]); break;
                     case "kim": ShowKim((bool?)st["on"] == true); break;
                     case "hideDlg": HideDialogue(); break;
-                    case "rules": yield return RulesCard(); if (key == "opening") ShowCg("opening_box"); break;   // 규칙 뒤 = 유품 상자 장면
+                    case "rules": if (!G.v4) yield return RulesCard(); if (key == "opening") ShowCg("opening_box"); break;   // 규칙 뒤 = 유품 상자 장면 (v4 는 규칙 카드 없이 첫 화면 튜토리얼로)
                     case "shake": Shake(stage, 18); break;
                     case "flash": Flashback((bool?)st["on"] == true); break;
                     case "card": HideDialogue(); yield return StoryCard((string)st["h"], (string)st["t"], (string)st["sub"], (string)st["chart"]); break;
@@ -320,35 +321,63 @@ namespace KwGame.View
             HideDialogue();
         }
 
+        /// 아침 카드가 지난번에 본 해금 상태 (바뀐 날만 줄을 띄우려고). null / −1 = 아직 모름
+        bool? mLoanSeen, mShortSeen; int mLevSeen = -1;
+        /// 만기 같이 엔딩 목표 (GameSim.V4.cs v4EndVariant: 만기 빚 ≤ 시작 빚 × V4_DUO_DEBT + 호감 ≥ V4_AFF_GOOD)
+        double DuoDebt() => G.debtStart() * D.RULES.V4_DUO_DEBT;
+        bool DuoOk() => S.debt <= DuoDebt() && S.aff >= D.RULES.V4_AFF_GOOD;
+        string DuoGoal() => G.T("v4.goalDuo", "t", G.man(DuoDebt()), "a", D.RULES.V4_AFF_GOOD, "d", G.man(S.debt));
+
         IEnumerator Morning(SimEvent e)
         {
             modal.Clear();
             modal.style.display = DisplayStyle.Flex;
             HoldFace("pajama");   // 밤잠 자고 일어난 아침
             var card = Card(900);
+            bool first = false;
             if (e["v4"] is bool v4 && v4)
             {
-                string[] chn = { "빚 공동체", "불장", "과열", "만기" }; int ch = (int)e.Num("ch");
-                card.Add(Ui.Label($"☀ {(e.Num("part") > 1 ? "2부 · " : "")}{ch}장 {chn[Math.Max(0, Math.Min(3, ch - 1))]} · {(e.Num("month") - 1) * D.RULES.MONTH_DAYS + e.Num("day")}일째 아침", 40, Ui.Gold, true));
+                int ch = (int)e.Num("ch");
+                card.Add(Ui.Label($"☀ {(e.Num("part") > 1 ? "2부 · " : "")}{ch}장 {G.chapterName(ch)} · {(e.Num("month") - 1) * D.RULES.MONTH_DAYS + e.Num("day")}일째 아침", 40, Ui.Gold, true));
                 bool wkd = e["wk"] is bool wk && wk;
+                bool paid4 = e["paid"] is bool pd4 && pd4; double dd4 = e.Num("dd"), wday = e.Num("day");
+                first = (e.Num("month") - 1) * D.RULES.MONTH_DAYS + wday <= 1;   // 첫날 = 짧은 브리핑 (어제 결산 없음)
                 card.Add(Ui.Label($"원금 만기까지 {e.Num("left")}일" + (wkd ? " · 오늘은 주말 (국장 휴장)" : ""), 26, Ui.Accent));
-                // 아침 브리핑: 오늘 시간표 · 대출 · 레버리지 · 숏 · 미래 부탁
-                card.Add(Ui.Label(wkd ? "오늘: 하루 종일 미래 · 생활 (코인만 열림)" : "오늘: 오전 · 오후 = 장 (국장 09:00~15:30) · 밤 = 미래 · 생활 (코인만)", 22, Ui.Text));
-                card.Add(Ui.Label("대출: " + (G.creditNext() is string cn ? cn : "열림"), 22, Ui.Gold));
-                card.Add(Ui.Label($"코인 레버리지: 최대 {G.levCap():0}배" + (G.levNext() is string ln ? $" → {ln} (지금 {G.sgnMan(S.realized)})" : ""), 22, Ui.Gold));
-                card.Add(Ui.Label(G.shortOk() ? "숏: 열림" : $"숏: 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림 (지금 {G.sgnMan(S.realized)})", 22, Ui.Dim));
+                // 아침 브리핑: 매일 같은 줄 반복 X → 시간표·대출·레버리지·숏은 첫날 · 바뀐 날 · 손 닿을 때만. 부탁 · 이자 D-1 · 만기 목표는 늘
+                if (first || wday == 1 || wday == D.RULES.V4_WEEKDAYS + 1)
+                    card.Add(Ui.Label(wkd ? "오늘: 하루 종일 미래 · 생활 (코인만 열림)" : "오늘: 오전 · 오후 = 장 (국장 09:00~15:30) · 밤 = 미래 · 생활 (코인만)", 22, Ui.Text));
+                bool loanNow = G.loanOk(), shortNow = G.shortOk(); int levNow = S.levTier;
+                var LP = D.RULES.V4_LEV_PROFIT; int ln1 = levNow + 1;
+                bool levNear = S.part == 1 && LP != null && ln1 < LP.Length && S.realized >= LP[ln1] * 0.6;
+                bool shortNear = !shortNow && S.realized >= D.RULES.V4_SHORT_PROFIT * 0.6;
+                if (G.creditNext() is string cn) { if (first || !paid4 && dd4 <= 1) card.Add(Ui.Label("대출: " + cn, 22, Ui.Gold)); }
+                else if (mLoanSeen == false) card.Add(Ui.Label("대출: 새로 열림!", 22, Ui.Good, true));
+                if (first || levNear || mLevSeen >= 0 && mLevSeen != levNow)
+                    card.Add(Ui.Label($"코인 레버리지: 최대 {G.levCap():0}배" + (G.levNext() is string ln ? $" → {ln} (지금 {G.sgnMan(S.realized)})" : ""), 22, Ui.Gold));
+                if (first || shortNear || mShortSeen == false && shortNow)
+                    card.Add(Ui.Label(shortNow ? "숏: 열림" : $"숏: 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림 (지금 {G.sgnMan(S.realized)})", 22, Ui.Dim));
+                mLoanSeen = loanNow; mLevSeen = levNow; mShortSeen = shortNow;
                 if (G.promNow() is GameSim.Prom pm) card.Add(Ui.Label("미래 부탁: " + pm.hud, 22, Ui.Accent));
+                if (!paid4 && dd4 <= 1) card.Add(Ui.Label($"이자일 {(dd4 <= 0 ? "D-DAY (오늘 밤)" : "D-1 (내일 밤)")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Bad, true));
+                else if (first) card.Add(Ui.Label($"이자일까지 D-{dd4} · 이자 {G.won(e.Num("due"))}", 22, Ui.Dim));
+                var gl = Ui.Label(DuoGoal(), 22, DuoOk() ? Ui.Good : Ui.Gold); gl.style.whiteSpace = WhiteSpace.Normal; card.Add(gl);
             }
-            else card.Add(Ui.Label($"☀ {e.Num("month")}개월차 {e.Num("day")}일 아침", 40, Ui.Gold, true));
-            card.Add(Ui.Label(e["paid"] is bool p && p ? "이번 달 이자 냄" : $"이자일까지 D-{e.Num("dd")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Dim));
+            else
+            {
+                card.Add(Ui.Label($"☀ {e.Num("month")}개월차 {e.Num("day")}일 아침", 40, Ui.Gold, true));
+                card.Add(Ui.Label(e["paid"] is bool p && p ? "이번 달 이자 냄" : $"이자일까지 D-{e.Num("dd")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Dim));
+            }
             var Y = e["Y"] as List<Dictionary<string, object>>;
-            if (Y != null && Y.Count > 0)
+            if (Y != null && Y.Count > 0 && !(G.v4 && first))
             {
                 card.Add(Ui.Label("어제 결산", 28, Ui.Text, true));
-                foreach (var y in Y.Take(8)) card.Add(Ui.Label($"· {y["label"]}  {G.sgnWon(Convert.ToDouble(y["amt"]))}", 22, Convert.ToDouble(y["amt"]) >= 0 ? Ui.Good : Ui.Bad));
+                // v4: 큰 것 3줄 + 합계 (예전엔 8줄까지)
+                var top = G.v4 ? Y.OrderByDescending(y => Math.Abs(Convert.ToDouble(y["amt"]))).Take(3).ToList() : Y.Take(8).ToList();
+                foreach (var y in top) card.Add(Ui.Label($"· {y["label"]}  {G.sgnWon(Convert.ToDouble(y["amt"]))}", 22, Convert.ToDouble(y["amt"]) >= 0 ? Ui.Good : Ui.Bad));
+                if (Y.Count > top.Count) card.Add(Ui.Label($"· 그 밖 {Y.Count - top.Count}건", 20, Ui.Dim));
                 card.Add(Ui.Label($"합계 {G.sgnWon(e.Num("net"))} ({e.Str("netConv")})", 24, Ui.Text, true));
             }
-            if (!string.IsNullOrEmpty(e.Str("ev"))) card.Add(Ui.Label("오늘의 사건: " + e.Str("ev"), 24, Ui.Gold));
+            if (!string.IsNullOrEmpty(e.Str("ev")) && !(G.v4 && first)) card.Add(Ui.Label("오늘의 사건: " + e.Str("ev"), 24, Ui.Gold));
             card.Add(Ui.Label("미래: " + e.Str("mline"), 24, Ui.Accent));
             card.Add(Ui.Label("(클릭해서 계속)", 20, Ui.Dim));
             modal.Add(card);

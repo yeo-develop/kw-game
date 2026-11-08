@@ -64,6 +64,7 @@ namespace KwGame.Sim
             S.workStreak = 0;
             if (S.rt) { stress(R.RT_REST_ST); hp(isEve() ? R.RT_HP_REST_EVE : R.RT_HP_REST, T("why.rest")); sickRest(); }   // 저녁 쉬기 = 일찍 잠 (자정 수면 회복은 따로)
             else { stress(-22); hp(isEve() ? R.HP_REST_EVE : R.HP_REST, T("why.rest")); }
+            if (v4 && isEve() && R.V4_SLEEP_RSCH > 0) S.sleepD = absDay() + (S.day >= R.V4_WEEKDAYS && S.day < R.MONTH_DAYS ? R.MONTH_DAYS + 1 - S.day : 1);   // v4: 밤에 푹 자면 다음 장날 머리가 맑음 = 무료 리포트 +1 (금·토 밤이면 월요일)
             face("tired");
             M(fpick(TA("rest.m")), "tired");
             galReact("rest", null, 1);

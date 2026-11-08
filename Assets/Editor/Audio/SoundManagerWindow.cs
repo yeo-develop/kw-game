@@ -83,6 +83,12 @@ namespace KwGame.EditorTools
             AddCue(scroll, "알바 시작", "알바 미니게임 화면이 열릴 때. (Audio Studio MCP · Stable Audio 3 로컬 생성)", "minigameStart", false);
             AddCue(scroll, "아침", "아침 카드. (Audio Studio MCP · Stable Audio 3 로컬 생성)", "morning", false);
             AddCue(scroll, "카톡 폭탄", "멘헤라 카톡 폭탄. (Audio Studio MCP · Stable Audio 3 로컬 생성)", "menhera", false);
+            AddCue(scroll, "잠긴 버튼", "비활성 버튼을 눌렀을 때. (Audio Studio MCP 생성)", "uiDenied", false);
+            AddCue(scroll, "칩 고르기", "배율 · 롱/숏 · 금액 칩. (Audio Studio MCP 생성)", "uiSelect", false);
+            AddCue(scroll, "폰 열기", "P / 폰 버튼. (Audio Studio MCP 생성)", "phoneOpen", false);
+            AddCue(scroll, "폰 닫기", "P / Esc. (Audio Studio MCP 생성)", "phoneClose", false);
+            AddCue(scroll, "알림 팝", "미래 말풍선 · 일반 토스트. (Audio Studio MCP 생성)", "toastPop", false);
+            AddCue(scroll, "대사 타자음", "대사 글자가 나오는 동안 0.07초마다. (Audio Studio MCP 생성)", "blip", false);
             AddCue(scroll, "기본 배경 음악", "반복 재생. Title → Main 전환에도 이어집니다.", "backgroundMusic", true);
             var routing = new Foldout { text = "믹서 라우팅 (선택)", value = false }; scroll.Add(routing);
             foreach (string field in new[] { "musicGroup", "effectsGroup" }) routing.Add(new PropertyField(serializedCatalog.FindProperty(field)));

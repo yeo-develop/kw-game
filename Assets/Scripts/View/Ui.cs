@@ -78,8 +78,11 @@ namespace KwGame.View
         }
 
         public static Button Button(string text, Action onClick, string sub = null, bool disabled = false, Color? bg = null, float size = 24)
+            => Button(text, onClick, sub, disabled, bg, size, KwGame.Audio.SoundCue.ButtonClick);
+        static Button Button(string text, Action onClick, string sub, bool disabled, Color? bg, float size, KwGame.Audio.SoundCue click)
         {
-            var b = new Button(() => { if (!disabled) { KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.ButtonClick); onClick?.Invoke(); } }) { text = "" };
+            // 잠긴 버튼도 누르면 '띡' (왜 안 되지? 를 소리로)
+            var b = new Button(() => { KwGame.Audio.GameAudioManager.Play(disabled ? KwGame.Audio.SoundCue.UiDenied : click); if (!disabled) onClick?.Invoke(); }) { text = "" };
             b.style.flexDirection = FlexDirection.Column;
             b.style.alignItems = Align.FlexStart;
             b.style.backgroundColor = disabled ? new Color(0.18f, 0.18f, 0.22f, 1) : (bg ?? Panel2);
@@ -109,7 +112,7 @@ namespace KwGame.View
         /// 작은 가로 버튼 (칩)
         public static Button Chip(string text, Action onClick, bool disabled = false, Color? bg = null)
         {
-            var b = Button(text, onClick, null, disabled, bg, 20);
+            var b = Button(text, onClick, null, disabled, bg, 20, KwGame.Audio.SoundCue.UiSelect);
             b.style.marginRight = 8; b.style.paddingTop = 8; b.style.paddingBottom = 8; b.style.paddingLeft = 12; b.style.paddingRight = 12;
             return b;
         }

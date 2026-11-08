@@ -104,8 +104,11 @@ namespace KwGame.Sim
             if (S.cash < due) { NPC(BANK, T("bank.short", "d", won(due), "c", won(S.cash))); hideDlg(); return false; }
             int c0 = credit();
             money(-due, "interest", T("lbl.payEarly", "m", S.month)); pushF("🧾", T("bank.feed", "m", S.month, "d", won(due)), "money"); S.st.interest += due; S.paidMonth = S.month;
+            bool noRec = v4 && c0 < R.V4_CREDIT_LOAN && S.realized < earlyCreditProfit();   // v4: 실적 있는 고객만 조기 신용, 나머진 이자일에
+            if (noRec) S.earlyM = S.month;
             creditUp(c0);
             pushK("kim", T("bank.kim", "m", S.month, "d", won(due)));
+            if (noRec) pushK("kim", T("v4.credit.early", "p", man(earlyCreditProfit())));
             stress(-10); hp(-hpCost("bank"));
             NPC(BANK, T("bank.done", "d", won(due)));
             M(T("bank.m"), "happy"); hideDlg();

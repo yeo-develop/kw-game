@@ -13,6 +13,33 @@ namespace KwGame.Sim
         public int chapter() => (int)clamp(S.month, 1, 4);
         public bool weekend() => v4 && S.day > R.V4_WEEKDAYS;
         double p2reg() => S.part > 1 ? R.V4_P2_REGIME : 1;
+        // ---------- 시장 국면 시나리오 (판마다 다름) ----------
+        /// 씨앗으로 고르는 시나리오 번호 (rng 를 안 씀 → 저장·불러오기와 상관없이 같음). 2부는 1부와 다른 시나리오
+        int scenIdx(int part)
+        {
+            int n = R.V4_SCEN?.Length ?? 0; if (n == 0) return -1;
+            uint h = unchecked((uint)S.seed); h ^= h >> 16; h = unchecked(h * 0x7feb352d); h ^= h >> 15; h = unchecked(h * 0x846ca68b); h ^= h >> 16;
+            int a = (int)(h % (uint)n);
+            return part <= 1 || n == 1 ? a : (a + 1 + (int)((h >> 8) % (uint)(n - 1))) % n;
+        }
+        /// 장 ch(1~4)의 국면 이름 (화면엔 안 보여 줌 — 뉴스 방향·시세로만 드러남). 시나리오가 없으면 null
+        public string regime(int ch = 0) { int i = scenIdx(S.part); if (ch <= 0) ch = chapter(); return i < 0 ? null : R.V4_SCEN[i][(int)clamp(ch, 1, 4) - 1]; }
+        /// 장 ch 국면 = [시장 가산, 코인 가산, 변동성 배수, 좋은 뉴스 확률]
+        double[] regOf(int ch)
+        {
+            string k = regime(ch);
+            if (k != null && R.V4_REG != null && R.V4_REG.TryGetValue(k, out var g)) return g;
+            int c = (int)clamp(ch, 1, 4) - 1;
+            return new[] { R.V4_CH_MKT[c], R.V4_CH_COIN[c], R.V4_CH_VOL[c], R.V4_CH_NEWSUP[c] };
+        }
+        double[] regNow() => regOf(chapter());
+        /// 화면에 쓰는 장 이름 (국면은 안 드러냄). ch 0 = 지금 장
+        public string chapterName(int ch = 0)
+        {
+            if (ch <= 0) ch = chapter();
+            var L = TA(S.part > 1 ? "v4.chName2" : "v4.chName");
+            return L.Count == 0 ? "" : L[(int)clamp(ch, 1, L.Count) - 1];
+        }
         public int daysLeft() => Math.Max(0, R.V4_DAYS - absDay());
         /// 2부는 빚 1억 → 한도·상한·만기 판정도 같은 비율로
         public double debtScale() => v4 && S.part > 1 ? R.V4_PART2_DEBT / R.DEBT0 : 1;
@@ -30,7 +57,7 @@ namespace KwGame.Sim
             toast(T("v4.newsFlash", "h", n.h), "news", "news", "flash");   // room "flash" = 칸 시작 속보 (소리 구분용)
         }
         /// 장별 뉴스 방향 편향 (국면 = 확률). 좋은 뉴스가 나올 확률
-        int newsDir() => rnd() < R.V4_CH_NEWSUP[chapter() - 1] ? 1 : -1;
+        int newsDir() => rnd() < regNow()[3] ? 1 : -1;
         /// 칸 남은 시간 (v4: 행동 하나 = 칸 하나)
         int slotLeft() => Math.Max(1, slotEndMin(S.slot) - S.min);
 
@@ -47,7 +74,9 @@ namespace KwGame.Sim
         // ---------- 신용 · 실적 (초반 시드머니) ----------
         /// 이자 낸 횟수 = 김사장 신용. V4_CREDIT_LOAN 넘어야 대출. 이자를 일찍 내면 일찍 열림 (레버리지·숏은 실적 — levCap · shortOk)
         public int credit() => !v4 || S.part > 1 ? 3 : (int)clamp(   // 2부는 1부에서 쌓은 신용 그대로 (다 열림)
-            S.month - 1 + (S.paidMonth == S.month ? 1 : 0), 0, 3);
+            S.month - 1 + (S.paidMonth == S.month && S.earlyM != S.month ? 1 : 0), 0, 3);   // 실적 없이 미리 낸 이자는 이자일에 신용으로
+        /// 이자를 미리 내면 바로 신용이 오르는 실적 (레버리지 첫 단계와 같은 실현수익). 0 = 누구나
+        public double earlyCreditProfit() => R.V4_LEV_PROFIT != null && R.V4_LEV_PROFIT.Length > 1 ? R.V4_LEV_PROFIT[1] : 0;
         public bool loanOk() => credit() >= R.V4_CREDIT_LOAN;
         /// 숏 = 실적으로 엶 (STONKS 의 '평판'): 실현수익 누적 V4_SHORT_PROFIT 넘으면. 신용(이자)으론 안 열림
         public bool shortOk() => !v4 || S.shortOn || R.V4_SHORT_PROFIT <= 0;
@@ -61,7 +90,7 @@ namespace KwGame.Sim
             return !v4 || S.part > 1 || P == null || n >= P.Length ? null : T("v4.lev.next", "p", man(P[n]), "x", R.V4_LEV_CAP[n]);
         }
         /// 다음 신용 단계 문구 (화면용). null = 대출 열림
-        public string creditNext() => !v4 || loanOk() ? null : T("v4.credit.next1");
+        public string creditNext() => !v4 || loanOk() ? null : S.earlyM == S.month && S.paidMonth == S.month ? T("v4.credit.nextPaid") : T("v4.credit.next1", "p", man(earlyCreditProfit()));
         /// 이자 낸 직후: 대출이 열렸으면 김사장 카톡 + 토스트
         void creditUp(int before)
         {
@@ -123,7 +152,7 @@ namespace KwGame.Sim
         void promJudge()
         {
             var p = promNow(); if (p == null) return;
-            if (p.avoid == "coin" && S.cps.Count > 0) S.promBad = true;   // 코인 금지 = 자정에 들고 있어도 어김
+            if (p.avoid == "coin" && S.cps.Any(c => !c.mirai)) S.promBad = true;   // 코인 금지 = 자정에 들고 있어도 어김 (미래가 돌발로 산 건 빼고)
             bool kept = !S.promBad && (p.@do == null || S.promDone);
             if (kept) { affD(p.@do != null ? R.V4_PROM_OK : R.V4_PROM_OK / 2); stress(-5); pushK("m", p.endOk); }   // 하지 마 부탁은 가만있어도 지켜지니 절반
             else { affD(R.V4_PROM_BAD); stress(10); pushK("m", p.endBad); }
@@ -138,6 +167,7 @@ namespace KwGame.Sim
             int key = S.part * 10 + chapter();
             if (S.day == 1 && S.chSeen != key) { S.chSeen = key; Emit("story", "key", (S.part > 1 ? "p2ch" : "ch") + chapter()); }
             promPick();
+            if (S.sleepD == absDay() && R.V4_SLEEP_RSCH > 0) toast(T("v4.rest.morning", "n", R.V4_SLEEP_RSCH), "good");   // 어젯밤 푹 잠
             if (S.greed >= R.V4_GREED_HEIST) pushK("m", fpick(TA("v4.greedK2")));        // 털기 문턱 넘음
             else if (S.greed >= R.V4_GREED_HEIST - 15) pushK("m", fpick(TA("v4.greedK")));   // 슬슬
         }
@@ -165,6 +195,10 @@ namespace KwGame.Sim
             promHit("date"); if (isEve()) promHit("datenight");
             S.actMin = slotLeft(); slotUsed();
         }
+        /// 집 '쉬기/자기' 버튼 부제 (화면용): 밤 = 체력 + 내일 무료 리포트 보너스
+        public string restHint() => !v4 ? null : isEve()
+            ? (R.V4_SLEEP_RSCH > 0 ? T("v4.rest.subEve", "h", R.RT_HP_REST_EVE + R.RT_HP_SLEEP, "n", R.V4_SLEEP_RSCH) : T("v4.rest.subEve0", "h", R.RT_HP_REST_EVE + R.RT_HP_SLEEP))
+            : T("v4.rest.sub", "h", R.RT_HP_REST);
         void watchStart() { S.pending = new Pending("watch") { n0 = S.st.invest }; Emit("watch"); }
         void watchEnd()
         {
@@ -218,7 +252,7 @@ namespace KwGame.Sim
         {
             if (!v4) return;
             bool good = S.aff >= R.V4_AFF_GOOD;
-            var v = V("debt", won(S.debt), "aff", S.aff, "d", absDay(), "p", S.part);
+            var v = V("debt", won(S.debt), "aff", S.aff, "d", absDay(), "p", S.part, "pct", Math.Max(0, Math.Round((1 - S.debt / debtStart()) * 100)));   // pct = 갚은 비율 (같이 원양어선 문턱 = 1 − V4_DUO_DEBT)
             if (kind == "clear")
             {
                 if (variant == "gamble" || variant == "rich") { if (!good) { variant = "lonely"; lead = T("v4.end.lonely", v); } return; }
@@ -237,7 +271,7 @@ namespace KwGame.Sim
         bool part2Start()
         {
             S.part = 2; S.cleared = 0; S.ending = null; S.endInfo = null; S.pending = null; S.phase = "home";
-            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
+            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;
             S.today = new List<Ledger>(); S.resume = null;
             foreach (var kv in S.mk.tk) { kv.Value.ref0 = kv.Value.p; kv.Value.sT = int.MinValue; }

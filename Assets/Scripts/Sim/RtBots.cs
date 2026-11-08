@@ -14,22 +14,26 @@ namespace KwGame.Sim
             public int seed; public string strat, end = "none", variant = "";
             public int day, steps, errs, works, faints, menheras, sickDays;
             public int sells; public double sellRet;
+            /// 속보 매매: 산 칸 다음 칸까지 그 종목 수익 (가짜 속보 되돌림이 먹히는지)
+            public int newsN; public double newsRet;
             public double debt, cash, earned, interest, repaid, gnet, invest, aff, greed, promOk, promN; public int heistMax; public bool heistGo;
             public string lastErr, relic;
+            /// v4 이번 판 국면 시나리오 (장 1~4, 하네스 BAL_SCEN 진단용)
+            public string scen;
             /// v4 행동(칸) 사용 횟수: watch · work · date · rest · casino · lotto · park · 기타
             public Dictionary<string, int> acts = new Dictionary<string, int>();
         }
         public class Summary
         {
             public string strat; public int n;
-            public double[] heist = new double[4]; public double aff, greed, promRate, sellRet, sells, clear, bad, alive, clearDay, clear28, p25, p50, p75, badDay, debtEnd, earnPerDay, gnet, invest, errs, faints, menheras, sickDays;
+            public double[] heist = new double[4]; public double newsN, newsRet, aff, greed, promRate, sellRet, sells, clear, bad, alive, clearDay, clear28, p25, p50, p75, badDay, debtEnd, earnPerDay, gnet, invest, errs, faints, menheras, sickDays;
             /// 엔딩 종류(+변형)별 비율: clear · clear/gamble · clear/rich · bad1 · bad2 · bad3(과로) · bad4(멘헤라)
             public Dictionary<string, double> ends = new Dictionary<string, double>();
             /// 행동별 평균 비율 (v4)
             public Dictionary<string, double> acts = new Dictionary<string, double>();
             public double End(string kind) => ends.Where(kv => kv.Key == kind || kv.Key.StartsWith(kind + "/")).Sum(kv => kv.Value);
             public override string ToString() =>
-                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1} · 에러 {errs:F1}"
+                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1}" + (newsN > 0 ? $" · 속보 매매 {newsN:F1}회 평균 {newsRet:P1}" : "") + $" · 에러 {errs:F1}"
                 + (ends.Count > 0 ? "\n        엔딩 " + string.Join(" · ", ends.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value:P1}")) : "")
                 + (aff > 0 ? $"\n        호감 {aff:F0} · 욕심 {greed:F0} · 부탁 지킴 {promRate:P0}" : "")
                 + (heist[0] > 0 ? $"\n        털기 루트 1단계 {heist[0]:P0} · 2단계 {heist[1]:P0} · 3단계 {heist[2]:P0} · 턴다 {heist[3]:P0}" : "") + (acts.Count > 0 ? "\n        행동 " + string.Join(" · ", acts.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:P0}")) : "");
@@ -50,7 +54,10 @@ namespace KwGame.Sim
         int lastSickT = -1; bool seeded; int bullLoan; int loanT = -1, lottoT = -1, casinoT = -1;
         readonly HashSet<int> tipDone = new HashSet<int>();
         /// v4 속보 매매: 칸 시작 속보 보고 산 종목 → 산 칸 번호 (그 칸 끝나기 전엔 안 팖). 가짜인지는 봇도 모름
-        readonly Dictionary<string, int> newsPos = new Dictionary<string, int>(); int newsT = -1;
+        readonly Dictionary<string, int> newsPos = new Dictionary<string, int>(); readonly Dictionary<string, double> newsPx = new Dictionary<string, double>(); int newsT = -1;
+        /// 국면 읽기 (pro): 이번 장에 본 속보 방향(좋은/전체) + 장 시작 뒤 시세 흐름. 국면 이름은 화면에 안 나오니 플레이어가 볼 수 있는 것만으로
+        const int MN = 3; const double UP = 0.7;   // 국면 판단: 속보 MN개 이상 보고 좋은 뉴스 비율 UP 이상(이하) + 시세 같은 방향
+        int obsCh = -1, obsUp, obsN, obsT = -1, rideDir; double obsP0, obsC0;
         readonly Result res;
 
         RtBots(GameData d, int seed, string strat, double mgLo, double mgHi)
@@ -76,6 +83,7 @@ namespace KwGame.Sim
                 badDay = L.Any(x => x.end != "clear" && x.end != "none") ? L.Where(x => x.end != "clear" && x.end != "none").Average(x => x.day) : 0,
                 debtEnd = L.Average(x => x.end == "clear" ? 0 : x.debt), earnPerDay = L.Average(x => x.earned / Math.Max(1, x.day)),
                 sells = L.Average(x => x.sells), sellRet = L.Sum(x => x.sellRet) / Math.Max(1, L.Sum(x => x.sells)),
+                newsN = L.Average(x => x.newsN), newsRet = L.Sum(x => x.newsRet) / Math.Max(1, L.Sum(x => x.newsN)),
                 gnet = L.Average(x => x.gnet), invest = L.Average(x => x.invest), errs = L.Average(x => x.errs),
                 faints = L.Average(x => x.faints), menheras = L.Average(x => x.menheras), sickDays = L.Average(x => x.sickDays),
                 ends = L.Where(x => x.end != "none").GroupBy(x => x.end + (x.variant != "" ? "/" + x.variant : "")).ToDictionary(g => g.Key, g => (double)g.Count() / L.Count),
@@ -109,6 +117,7 @@ namespace KwGame.Sim
             }
             if (S.pending != null && S.pending.t != "ending" && G.absDay() <= maxDays) { res.errs++; res.lastErr = "step cap @" + S.pending.t; }   // 6만 수 안에 70일을 못 채움 = 봇이 헛돎
             if (S.ending != null) { res.end = S.ending; res.variant = S.endInfo?.variant ?? ""; }
+            if (G.v4) res.scen = string.Join(">", Enumerable.Range(1, 4).Select(c => G.regime(c)));
             res.day = G.absDay(); res.debt = S.debt; res.cash = S.cash; res.earned = S.st.earned; res.interest = S.st.interest;
             res.repaid = S.st.repaid; res.gnet = S.st.gnet; res.invest = S.realized; res.faints = (int)S.st.faint;
             res.menheras = (int)(S.st.menOk + S.st.menBad); res.relic = S.augs.FirstOrDefault(); res.aff = S.aff; res.greed = S.greed;
@@ -191,7 +200,7 @@ namespace KwGame.Sim
                     }
                 case "loan":
                     {
-                        double want = strat == "pro" && bullLoan == 1 ? (G.loanCap() - S.debt >= 3000000 && P.took < 9000000 ? 3000000 : 0) : strat == "casual" ? (P.took == 0 ? 1000000 : 0) : Smart ? (P.took == 0 ? 3000000 : P.took < 4000000 ? 1000000 : 0)
+                        double want = strat == "pro" && bullLoan == 1 ? (G.loanCap() - S.debt >= 3000000 && P.took < 9000000 ? 3000000 : 0) : strat == "casual" ? (P.took == 0 ? 1000000 : 0) : Smart ? (P.took == 0 ? 3000000 : P.took < 6000000 ? 1000000 : 0)
                             : strat == "gamble" ? R.LOAN_AMTS.Reverse().FirstOrDefault(a => S.debt + a <= G.loanCap() && S.cash < 3000000)
                             : P.took == 0 ? R.LOAN_AMTS[r.Next(R.LOAN_AMTS.Length)] : 0;
                         return want > 0 && S.debt + want <= G.loanCap() && G.loanOk() ? C("borrow", "amt", want) : C("loanDone");
@@ -240,7 +249,7 @@ namespace KwGame.Sim
             if (S.kun.TryGetValue("m", out var un) && un > 0) return C("read", "what", "kakao", "room", "m");   // 사람은 카톡 읽음 (안 읽으면 매시간 멘탈↑)
             if ((strat == "smart" || strat == "pro") && !seeded && G.loanOk()) { seeded = true; return C("loanOpen"); }   // v4: 종잣돈 대출은 신용 1단계(첫 이자) 뒤에
             // 잘하는 사람: 2장 불장 들어가면 김사장 돈 더 땡겨서 탐 (빚 내서 빚 갚기)
-            if (strat == "pro" && G.v4 && G.chapter() == 2 && bullLoan == 0) { bullLoan = 1; return C("loanOpen"); }
+            if (strat == "pro" && G.v4 && Mood() >= 0 && G.chapter() <= 3 && G.loanOk() && bullLoan == 0) { bullLoan = 1; return C("loanOpen"); }
             var t = Trade(); if (t != null) return t;
             // 상환: smart 는 다 갚을 수 있을 때 한 번에 (밑천 굴림), 나머지는 이자 낼 돈만 남기고 수시로
             double eq = S.cash + G.holdVal();
@@ -310,7 +319,7 @@ namespace KwGame.Sim
                 if (S.cash >= 10000) return Go("lotto", "l-lotto");
             }
             if (Smart && S.slot <= 1 && !G.weekend() && (DaysToPay <= 2 && S.cash < Due * 1.05 && S.hold.Count > 0 || PendingBuy() != null || S.hold.Count > 0 || S.slot == 0 && G.rsch().free < G.freeMax())) return C("watch");
-            if (eve) return careful && S.aff < 70 ? C("date") : C("rest");
+            if (eve) return careful && S.aff < (strat == "work" ? 55 : 70) ? C("date") : C("rest");   // work = 알바만 하는 사람: 미래는 호감 55 밑으로 떨어질 때만 챙김
             if (S.hp >= 40) return Go("work", "l-cafe");
             return C("rest");
         }
@@ -340,27 +349,45 @@ namespace KwGame.Sim
             if (S.stress >= 60) return S.dateN == 0 && S.aff < 85 ? C("date") : Go("park", "l-walk");
             bool stockSlot = S.slot <= 1 && !G.weekend();
             // 좋은 속보가 떴으면 장 보러 감 (코인 뉴스는 밤·주말에도)
-            if (S.news != null && S.news.dir > 0 && D.TK.TryGetValue(S.news.tk, out var ntk) && !ntk.inv && (ntk.IsCoin || stockSlot) && (pro || r.NextDouble() < 0.5) && S.cash >= 400000) return C("watch");
+            if (S.news != null && S.news.dir > 0 && D.TK.TryGetValue(S.news.tk, out var ntk) && !ntk.inv && (ntk.IsCoin || stockSlot) && (pro ? Mood() >= 0 : r.NextDouble() < 0.5) && S.cash >= 400000) return C("watch");
             if (stockSlot && (DaysToPay <= 2 && S.cash < Due * 1.05 && S.hold.Count > 0 || PendingBuy() != null || S.hold.Count > 0 || (pro && RideWanted()) || S.slot == 0 && G.rsch().free < G.freeMax())) return C("watch");
             if (eve)
             {
                 if (S.aff < (heistRoute && S.heist > 0 ? 80 : pro ? 70 : 65)) return C("date");   // 호감은 엔딩 문턱(60)보다 조금 위로만 — 남는 밤은 야간 알바 (털기 루트면 미래가 믿고 따라오게 80)
+                if (pro && S.cash + G.holdVal() >= 10000000 && G.daysLeft() > 3) return C("rest");   // 밤에 푹 자면 다음 장날 무료 리포트 +1 (굴릴 돈이 1천만↑면 야간 알바만큼 값어치)
                 return S.hp >= 55 ? Go("work", "l-cafe") : C("rest");
             }
             if (G.weekend() && S.aff < 70 && S.dateN == 0) return C("date");
             return S.hp >= 40 ? Go("work", "l-cafe") : C("rest");
         }
-        /// 국면 타기 (잘하는 사람): 2장 불장 = 대장코인 2배 롱 · 3장 과열 = 고베타 대형주 · 4장 폭락 = 곱버스. 장이 바뀌면 갈아탐
+        /// 국면 읽기: 장이 바뀌면 처음부터. 칸마다 속보 방향을 세고(가짜도 섞여 있지만 방향 비율은 국면을 따름), 대형주·대장코인 흐름을 봄
+        void Observe()
+        {
+            int ch = G.chapter();
+            if (ch != obsCh) { obsCh = ch; obsUp = obsN = 0; rideDir = 0; obsP0 = S.mk.tk["GSE"].p; obsC0 = S.mk.tk["BTK"].p; }
+            if (S.news != null && obsT != G.Tnow()) { obsT = G.Tnow(); obsN++; if (S.news.dir > 0) obsUp++; }
+        }
+        /// 지금 장 분위기: +1 오르는 장 · −1 내리는 장 · 0 모름/횡보. 한 번 정하면 반대 신호가 확실할 때만 바꿈
+        int Mood()
+        {
+            Observe();
+            double u = (obsUp + 1.0) / (obsN + 2.0), tr = Math.Log(S.mk.tk["GSE"].p / obsP0) + 0.5 * Math.Log(S.mk.tk["BTK"].p / obsC0);
+            if (obsN >= MN && u >= UP && tr > 0 && rideDir <= 0) rideDir = 1;                        // 좋은 속보가 확실히 많고 시세도 오름 = 불장
+            else if (obsN >= MN && u <= 1 - UP && tr < 0 && rideDir >= 0) rideDir = -1;            // 나쁜 속보가 확실히 많고 시세도 내림 = 폭락
+            return rideDir;
+        }
+        /// 국면 타기 (잘하는 사람): 오르는 장 = 대장코인 2배 롱 · 내리는 장 = 곱버스(숏 열렸으면). 장이 바뀌면 다시 읽음
         string RideTk()
         {
             if (!G.v4 || G.daysLeft() <= 3) return null;
-            int ch = G.chapter();
-            if (ch == 2) return "BTK";
-            if (ch == 3) return G.STK().Where(G.tkOpen).Where(k => !D.TK[k].junk && !D.TK[k].inv && !D.TK[k].meme).OrderByDescending(k => D.TK[k].beta).FirstOrDefault();
-            if (ch == 4) return G.shortOk() ? D.TKList.FirstOrDefault(t => t.inv && G.tkOpen(t.id))?.id : null;   // 숏 잠겼으면 곱버스 못 삼
+            int m = Mood();
+            if (m > 0) return "BTK";
+            if (m < 0) return G.shortOk() ? D.TKList.FirstOrDefault(t => t.inv && G.tkOpen(t.id))?.id : null;   // 숏 잠겼으면 곱버스 못 삼
             return null;
         }
         double Spare => Math.Floor((S.cash - Due * 1.05 - 300000) / 1000) * 1000;
+        /// 국면 타기는 여윳돈 절반만 (나머지는 리포트 매매 몫)
+        double RideAmt => Math.Floor(Spare * 0.5 / 1000) * 1000;
         bool RideWanted() => RideTk() is string k && (D.TK[k].IsCoin ? !S.cps.Any(c => c.tk == k) : !S.hold.Has(k)) && Spare >= 500000;
         Tip PendingBuy() => G.activeTips().FirstOrDefault(x => Follow(x) && x.dir > 0 && x.Tr >= G.Tnow() && !tipDone.Contains(x.id));
         SimCommand Go(string loc, string act) { wantLoc = loc; wantAct = act; return C("map"); }
@@ -392,17 +419,18 @@ namespace KwGame.Sim
                 if (G.v4 && S.pending?.t == "watch" && (strat == "pro" || strat == "casual") && newsT != G.Tnow() && S.news != null && S.news.dir > 0 && D.TK.TryGetValue(S.news.tk, out var nt) && G.tkOpen(nt.id) && !nt.inv)
                 {
                     newsT = G.Tnow();
-                    if (strat == "pro" || r.NextDouble() < 0.5)
+                    if ((strat == "pro" && Mood() >= 0) || (strat == "casual" && r.NextDouble() < 0.5))   // pro 는 내리는 장이면 좋은 속보도 거름
                     {
                         double amt = Math.Floor(Math.Max(0, S.cash - Due * (DaysToPay <= 2 ? 1.05 : 0) - 200000) * 0.6 / 1000) * 1000;
-                        if (amt >= 100000 && nt.IsCoin && !S.cps.Any(c => c.tk == nt.id)) { newsPos[nt.id] = G.Tnow(); return C("open", "tk", nt.id, "dir", 1, "lev", 1, "amt", amt); }
-                        if (amt >= 100000 && nt.IsStock && open) { newsPos[nt.id] = G.Tnow(); return C("buy", "tk", nt.id, "amt", amt, "where", "app"); }
+                        if (amt >= 100000 && nt.IsCoin && !S.cps.Any(c => c.tk == nt.id)) { newsPos[nt.id] = G.Tnow(); newsPx[nt.id] = S.mk.tk[nt.id].p; return C("open", "tk", nt.id, "dir", 1, "lev", 1, "amt", amt); }
+                        if (amt >= 100000 && nt.IsStock && open) { newsPos[nt.id] = G.Tnow(); newsPx[nt.id] = S.mk.tk[nt.id].p; return C("buy", "tk", nt.id, "amt", amt, "where", "app"); }
                     }
                 }
                 foreach (var kv in newsPos.ToList())
                     if (kv.Value < G.Tnow())
                     {
                         newsPos.Remove(kv.Key);
+                        if (newsPx.TryGetValue(kv.Key, out var px0)) { newsPx.Remove(kv.Key); res.newsN++; res.newsRet += Math.Max(-1, Math.Min(1, S.mk.tk[kv.Key].p / px0 - 1)); }   // ±100% 로 자름 (밈코인 바닥 반등 같은 튀는 값)
                         var c0 = S.cps.FirstOrDefault(c => c.tk == kv.Key && c.lev == 1); if (c0 != null) return C("close", "id", c0.id);
                     }
                 // 결과 나온(또는 지난) 정보 종목은 팔기
@@ -412,7 +440,7 @@ namespace KwGame.Sim
                     // 국면 바뀌면 지난 탈 것 정리 (코인 롱 · 주식)
                     foreach (var c in S.cps.ToList()) if (c.tk != ride && !newsPos.ContainsKey(c.tk)) return C("close", "id", c.id);
                     if (open) foreach (var k in S.hold.Keys.ToList()) if (k != ride && (k == "INV" || D.TK[k].beta >= 1.2) && !G.activeTips(k).Any(x => Follow(x) && x.dir > 0)) return C("sell", "tk", k, "frac", 1, "where", "app");
-                    if (ride != null && D.TK[ride].IsCoin && RideWanted() && PendingBuy() == null) return C("open", "tk", ride, "dir", 1, "lev", 2, "amt", Spare);
+                    if (ride != null && D.TK[ride].IsCoin && RideWanted() && PendingBuy() == null) return C("open", "tk", ride, "dir", 1, "lev", 2, "amt", RideAmt);
                 }
                 if (ride != null && S.hold.Has(ride) && PendingBuy() != null && S.cash < 500000 && open) return C("sell", "tk", ride, "frac", 1, "where", "app");
                 if (strat == "casual" && G.v4 && S.cps.Count == 0 && S.cash >= 300000 && r.NextDouble() < 0.04 && !(G.promNow()?.avoid == "coin" && r.NextDouble() < 0.6))
@@ -441,7 +469,7 @@ namespace KwGame.Sim
                     Trace?.Invoke($"   매수 {tip.tk} {amt / 1e4:F0}만 (현금 {S.cash / 1e4:F0}, {S.min / 60}시, 정보 Tr {tip.Tr} 지금 {G.Tnow()})");
                     if (amt >= 10000) return C("buy", "tk", tip.tk, "amt", amt, "where", "app");
                 }
-                if (ride != null && !D.TK[ride].IsCoin && RideWanted() && PendingBuy() == null) return C("buy", "tk", ride, "amt", Spare, "where", "app");
+                if (ride != null && !D.TK[ride].IsCoin && RideWanted() && PendingBuy() == null) return C("buy", "tk", ride, "amt", RideAmt, "where", "app");
                 return null;
             }
             if (strat == "gamble")

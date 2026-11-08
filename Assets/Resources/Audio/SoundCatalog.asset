@@ -12,9 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a3bbf2be2c74b2b498ba3b6d02d9bdca, type: 3}
   m_Name: SoundCatalog
   m_EditorClassIdentifier: KwGame.View::KwGame.Audio.SoundCatalog
-  buttonClick:
-    clip: {fileID: 8300000, guid: 270856b236f8d834ba0ce24bfdc89ad2, type: 3}
-    volume: 0.7
   tradeSuccess:
     clip: {fileID: 8300000, guid: e1e3293dd43aa0b4e8c83545fde4dbfc, type: 3}
     volume: 0.9
@@ -69,6 +66,27 @@ MonoBehaviour:
   menhera:
     clip: {fileID: 8300000, guid: bdfcff8269a94898aa38ad30c7023469, type: 3}
     volume: 0.7
+  buttonClick:
+    clip: {fileID: 8300000, guid: a36738077ac74a03a3ac04b558109548, type: 3}
+    volume: 0.6
+  uiDenied:
+    clip: {fileID: 8300000, guid: 63b8c85366df44f1aad23d0acbcef1ec, type: 3}
+    volume: 0.5
+  uiSelect:
+    clip: {fileID: 8300000, guid: 814127fa79664c7388909b2c9d0ff572, type: 3}
+    volume: 0.6
+  phoneOpen:
+    clip: {fileID: 8300000, guid: d353d5a378154b23bd3c4211a90a8672, type: 3}
+    volume: 0.5
+  phoneClose:
+    clip: {fileID: 8300000, guid: c0f8ff95207e4b4290abe500c795a36f, type: 3}
+    volume: 0.5
+  toastPop:
+    clip: {fileID: 8300000, guid: 78f0d62cf6d44662b2ac4fc8406300a2, type: 3}
+    volume: 0.45
+  blip:
+    clip: {fileID: 8300000, guid: f2e1b9e287304e9ebcc4b2efacad1475, type: 3}
+    volume: 0.25
   backgroundMusic:
     clip: {fileID: 8300000, guid: ed80de57e288c4645887db965af8cb97, type: 3}
     volume: 0.65

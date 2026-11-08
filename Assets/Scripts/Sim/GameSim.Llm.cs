@@ -45,7 +45,7 @@ namespace KwGame.Sim
             var P = newsPool();
             int day = G / R.SLOTS + 1, ch = (int)clamp((day - 1) / R.MONTH_DAYS + 1, 1, 4);
             double pp = 0;
-            if (v4) pp = R.V4_CH_NEWSUP[ch - 1];   // 장별 국면 = 호재 확률 (내장 생성기 newsDir 과 같은 값)
+            if (v4) pp = regOf(ch)[3];   // 장별 국면 = 호재 확률 (내장 생성기 newsDir 과 같은 값)
             else { foreach (var k in P) { var L = D.NEWS[k]; pp += (double)L.Count(x => x.dir > 0) / L.Count; } pp /= P.Count; }
             int dir = h() < pp ? 1 : -1; bool fake = h() < 0.3; int tier = (int)Math.Floor(h() * 3);
             var log = (S.nlog ?? new List<NewsLog>()).Where(x => !v4 || x.slotId <= G - 2).ToList();

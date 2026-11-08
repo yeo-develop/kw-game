@@ -42,11 +42,17 @@ namespace KwGame.Sim
         // v4 리디자인 (docs/V4.md, unity_v4.json V4_RULES). V4 = 0 이면 예전 실시간 그대로
         public int V4 = 0, V4_DAYS = 28, V4_WEEKDAYS = 5;
         public double V4_WATCH_SPEED = 2, V4_AFF0 = 50, V4_AFF_GOOD = 60, V4_AFF_HEIST = 85, V4_GREED_HEIST = 50, V4_DATE_AFF = 6, V4_DATE_ST = -12, V4_PROM_OK = 8, V4_PROM_BAD = -10, V4_AFF_SOFT = 120, V4_AFF_DECAY = 4, V4_DUO_DEBT = 0.5, V4_GREED_DECAY = 3, V4_GREED_DECAY_HEIST = 1, V4_PART2_DEBT = 100000000;
-        /// 장(=달)별 시장 국면: 시장 수익률 가산(칸당) · 코인 가산 · 변동성 배수. 1장 횡보 · 2장 불장 · 3장 과열 · 4장 폭락
+        /// 장(=달)별 시장 국면 기본값 (V4_SCEN 시나리오가 없을 때): 시장 수익률 가산(칸당) · 코인 가산 · 변동성 배수
         public double[] V4_CH_MKT = { 0, 0.006, 0.004, -0.012 }, V4_CH_COIN = { 0, 0.015, 0.01, -0.025 }, V4_CH_VOL = { 1, 1, 1.5, 1.3 };
         public string[] V4_HIDE_LOCS = { };
         /// 장별 좋은 뉴스 확률 · 칸마다 뉴스 확률 · 이자일 급매 손해 · 직종 배율
         public double[] V4_CH_NEWSUP = { 0.5, 0.7, 0.6, 0.25 };
+        /// 국면 시나리오 (판마다 씨앗으로 하나, 2부는 다른 것): V4_REG 이름 → [시장 가산, 코인 가산, 변동성 배수, 좋은 뉴스 확률]. V4_SCEN = 장 1~4 국면 순서 목록. 없으면 V4_CH_* 고정
+        public Dictionary<string, double[]> V4_REG; public string[][] V4_SCEN;
+        /// 가짜 뉴스 되돌림: 가짜 속보 종목은 실제로 반대 방향 (뉴스 크기 × 이 범위, '선반영 후 되돌림')
+        public double V4_FAKE_LO = 0, V4_FAKE_HI = 0;
+        /// 밤에 푹 자면 다음 날 무료 리포트 +이만큼
+        public int V4_SLEEP_RSCH = 0;
         public double V4_NEWS_P = 0.5, V4_FIRESALE = 0.2;
         /// 2부: 알바 경력 배율 · 국면 세기 배율 (빚 1억이라 1부 수치로는 못 갚음)
         public double V4_P2_PAY = 1, V4_P2_REGIME = 1;

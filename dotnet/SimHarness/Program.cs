@@ -29,26 +29,33 @@ static class P {
       string tr = Environment.GetEnvironmentVariable("BAL_TRACE");
       if (tr != null) { RtBots.Trace = Console.WriteLine; var rr = RtBots.Run(BD, int.Parse(tr) * 104729, strats[0]); Console.WriteLine($"{rr.end} d{rr.day} errs {rr.errs} {rr.lastErr}"); return 0; }
       if (Environment.GetEnvironmentVariable("BAL_MKT") != null) {
-        // 시장 국면 진단: 쉬기만 하면서 28일 → 장 시작(1·8·15·22일 아침)과 끝의 종목별 평균 가격 비 (판 n개 평균)
-        var sums = new Dictionary<string, double[]>();
+        // 시장 국면 진단: 쉬기만 하면서 28일 → 장마다(시작·끝 아침) 종목별 로그 수익을 그 장의 국면 이름별로 평균 (v4 는 판마다 시나리오가 달라서 국면별로 묶음)
+        var sums = new Dictionary<string, Dictionary<string, double>>(); var cnt = new Dictionary<string, int>();
+        void add(GameSim g, int ch, Dictionary<string, double> p0) {
+          string rg = g.regime(ch) ?? (ch + "장"); cnt[rg] = (cnt.TryGetValue(rg, out var c0) ? c0 : 0) + 1;
+          if (!sums.ContainsKey(rg)) sums[rg] = new Dictionary<string, double>();
+          foreach (var t in BD.TKList) if (p0.ContainsKey(t.id)) sums[rg][t.id] = (sums[rg].TryGetValue(t.id, out var v0) ? v0 : 0) + Math.Log(g.S.mk.tk[t.id].p / p0[t.id]);
+        }
         for (int sd = 1; sd <= n; sd++) {
           var g = GameSim.Create(BD, sd * 104729, new GameSim.Opts { rt = true }); g.Apply(new SimCommand("start"));
+          if (RtBots.Part2) g.S.part = 2;
           var p0 = new Dictionary<string, double>(); int lastCh = 0;
           for (int i = 0; i < 4000 && g.S.pending != null && g.S.pending.t != "ending"; i++) {
             var P = g.S.pending; int ch = g.absDay() >= 29 ? 5 : g.chapter();
             if (P.t == "home" && g.S.slot == 0 && ch != lastCh) {
-              foreach (var t in BD.TKList) { double px = g.S.mk.tk[t.id].p; if (lastCh > 0 && p0.ContainsKey(t.id)) { if (!sums.ContainsKey(t.id)) sums[t.id] = new double[4]; sums[t.id][lastCh - 1] += Math.Log(px / p0[t.id]); } p0[t.id] = px; }
+              if (lastCh > 0) add(g, lastCh, p0);
+              p0.Clear(); foreach (var t in BD.TKList) p0[t.id] = g.S.mk.tk[t.id].p;
               lastCh = ch;
             }
             SimCommand c = P.t == "home" ? new SimCommand("rest") : P.t == "relic" ? new SimCommand("pickRelic", "i", 0) : P.t == "event" ? new SimCommand("evPick", "k", P.opts.First(o => !o.dis).k)
               : P.t == "menhera" || P.t == "impulse" ? new SimCommand("reply", "i", 0) : P.t == "payday" ? new SimCommand("payday", "k", P.stage == "repay" ? "keep" : P.opts.FirstOrDefault(o => !o.dis)?.k ?? "pay") : P.t == "tempt" ? new SimCommand("tempt", "k", "no") : null;
             if (c == null) break;
             if (P.t == "payday" && P.stage == "choose") g.S.cash = Math.Max(g.S.cash, P.due + 1);
-            if (P.t == "payday" && g.absDay() >= 28) { foreach (var t in BD.TKList) if (p0.ContainsKey(t.id)) { if (!sums.ContainsKey(t.id)) sums[t.id] = new double[4]; sums[t.id][3] += Math.Log(g.S.mk.tk[t.id].p / p0[t.id]); } p0.Clear(); }
+            if (P.t == "payday" && g.absDay() >= 28 && p0.Count > 0) { add(g, 4, p0); p0.Clear(); }
             g.Apply(c);
           }
         }
-        foreach (var kv in sums) Console.WriteLine($"{kv.Key,-6} beta {BD.TK[kv.Key].beta,4} " + string.Join("  ", kv.Value.Select((v, i) => $"{i + 1}장 {Math.Exp(v / n) - 1,7:P1}")));
+        foreach (var t in BD.TKList) Console.WriteLine($"{t.id,-6} beta {t.beta,4} " + string.Join("  ", sums.Keys.OrderBy(k => k).Select(rg => $"{rg} {(sums[rg].TryGetValue(t.id, out var v) ? Math.Exp(v / cnt[rg]) - 1 : 0),7:P1}")));
         return 0;
       }
       if (Environment.GetEnvironmentVariable("BAL_RELIC") != null) {
@@ -59,9 +66,18 @@ static class P {
         }
         return 0;
       }
+      if (Environment.GetEnvironmentVariable("BAL_SCEN") != null) {
+        // 국면 시나리오별 결과 (v4: 판마다 씨앗으로 시나리오)
+        foreach (var st in strats) {
+          var L = Enumerable.Range(1, n).Select(s => RtBots.Run(BD, s * 104729, st)).ToList();
+          foreach (var g in L.GroupBy(x => x.scen).OrderBy(g => g.Key))
+            Console.WriteLine($"{st} {g.Key,-28} n={g.Count(),3} 클리어 {(double)g.Count(x => x.end == "clear") / g.Count():P0} 같이 {(double)g.Count(x => x.variant == "duo") / g.Count():P0} 남은빚 {g.Average(x => x.end == "clear" ? 0 : x.debt) / 1e4:F0}만 투자 {g.Average(x => x.invest) / 1e4:F0}만");
+        }
+        return 0;
+      }
       foreach (var st in strats) {
         var mg = (Environment.GetEnvironmentVariable("MG") ?? "0.55,0.85").Split(',').Select(double.Parse).ToArray();
-        Console.WriteLine(RtBots.Summarize(BD, st, n, 1, 70, mg[0], mg[1]));
+        Console.WriteLine(RtBots.Summarize(BD, st, n, int.Parse(Environment.GetEnvironmentVariable("BAL_SEED0") ?? "1"), 70, mg[0], mg[1]));   // BAL_SEED0 = 다른 씨앗 구간으로 (잡음 확인)
         if (Environment.GetEnvironmentVariable("BAL_SEEDS") != null)
           Console.WriteLine("  못 깬 시드: " + string.Join(",", Enumerable.Range(1, n).Where(s => RtBots.Run(BD, s * 104729, st).end != "clear")));
       }

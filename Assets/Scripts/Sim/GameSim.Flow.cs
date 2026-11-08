@@ -336,6 +336,7 @@ namespace KwGame.Sim
         bool paydayPaid(bool early = false)
         {
             if (!early) { int c0 = credit(); S.paidMonth = S.month; creditUp(c0); }
+            else if (v4 && S.earlyM == S.month) { int c0 = credit(); S.earlyM = 0; creditUp(c0); }   // 실적 없이 미리 낸 이자 → 이자일에 신용
             galReact("payday", V("debt", man(S.debt) + D.U("won")), 2);
             pushK("m", T("pd.k"));
             if (S.cash >= 10000 && S.debt > 0)
@@ -452,7 +453,7 @@ namespace KwGame.Sim
             if (amt >= 10000)
             {
                 if (stock) ok = buyStock(tk, amt, R.FEE_APP) is double b && b != 0;
-                else ok = openCoin(tk, 1, 1, Math.Floor(amt / (1 + R.COIN_FEE) / 1000) * 1000) != null;
+                else ok = openCoin(tk, 1, 1, Math.Floor(amt / (1 + R.COIN_FEE) / 1000) * 1000, true) != null;   // 미래가 산 코인 = 내가 '코인 금지'를 어긴 게 아님
             }
             if (ok) addShock(Tnow(), tk, (up ? 1 : -1) * mag);
             if (ok && S.rt) Emit("impBuy", "tk", tk, "amt", amt, "cash0", cash0, "cash1", S.cash, "coin", !stock);   // 화면 가운데 체결 알림 (피드백: 몰래 산 게 안 보임)
@@ -499,9 +500,9 @@ namespace KwGame.Sim
             string lead, variant = "";
             if (kind == "clear")
             {
-                // 변형 우선순위: gamble(도박으로 갚음) > rich(실시간 · 갚는 순간 총자산 RT_RICH↑) > 보통. 도박 클리어는 '어떻게' 갚았는지가 더 드문 이야기라 먼저
+                // 변형 우선순위: gamble(도박으로 갚음 — v4 는 도박 순익이 알바 수입·매매 실현수익 둘 다보다 클 때만) > rich(실시간 · 갚는 순간 총자산 RT_RICH↑) > 보통. 도박 클리어는 '어떻게' 갚았는지가 더 드문 이야기라 먼저
                 double assets = rhu(S.cash + holdVal()); v["a"] = won(assets);
-                variant = S.st.gnet > 0 && S.st.gnet >= S.st.earned ? "gamble" : S.rt && assets >= R.RT_RICH ? "rich" : "";
+                variant = S.st.gnet > 0 && S.st.gnet >= (v4 ? Math.Max(S.st.earned, S.realized) : S.st.earned) ? "gamble" : S.rt && assets >= R.RT_RICH ? "rich" : "";
                 lead = T(variant == "gamble" ? "end.clearGamble" : variant == "rich" ? "end.clearRich" : S.stress < 60 ? "end.clearHappy" : "end.clearMeh", v) + "\n\n" +
                     (decor.Count > 0 ? string.Join("\n", decor.Select(k => D.DECOR_END.TryGetValue(k, out var s) ? s : null).Where(s => !string.IsNullOrEmpty(s))) : T("end.noDecor"));
             }

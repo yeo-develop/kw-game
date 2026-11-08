@@ -61,6 +61,12 @@ namespace KwGame.EditorTools
             Assign(catalog.minigameStart, "SFX_MinigameStart.ogg");   // Audio Studio MCP 생성
             Assign(catalog.morning, "SFX_Morning.ogg");   // Audio Studio MCP 생성
             Assign(catalog.menhera, "SFX_Menhera.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.uiDenied, "SFX_UiDenied.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.uiSelect, "SFX_UiSelect.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.phoneOpen, "SFX_PhoneOpen.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.phoneClose, "SFX_PhoneClose.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.toastPop, "SFX_ToastPop.ogg");   // Audio Studio MCP 생성
+            Assign(catalog.blip, "SFX_Blip.ogg");   // Audio Studio MCP 생성
             Assign(catalog.backgroundMusic, "BGM_DefaultLoop.mp3");
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssetIfDirty(catalog);

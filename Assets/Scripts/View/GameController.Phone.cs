@@ -214,7 +214,7 @@ namespace KwGame.View
                 if (m.d != lastDay)
                 {
                     lastDay = m.d;
-                    var dl = Ui.Label($"{(m.d - 1) / D.RULES.MONTH_DAYS + 1}개월 {(m.d - 1) % D.RULES.MONTH_DAYS + 1}일", 15, Color.white); dl.style.alignSelf = Align.Center; dl.style.backgroundColor = new Color(0, 0, 0, 0.18f);
+                    var dl = Ui.Label(G.v4 ? $"{m.d}일째" : $"{(m.d - 1) / D.RULES.MONTH_DAYS + 1}개월 {(m.d - 1) % D.RULES.MONTH_DAYS + 1}일", 15, Color.white); dl.style.alignSelf = Align.Center; dl.style.backgroundColor = new Color(0, 0, 0, 0.18f);
                     Ui.Radius(dl, 10); dl.style.paddingLeft = 10; dl.style.paddingRight = 10; dl.style.marginTop = 6; dl.style.marginBottom = 8; body.Add(dl);
                 }
                 KkBubble(body, m.w, m.x, m.t, room);

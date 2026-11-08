@@ -26,7 +26,7 @@ AudioImporter:
   assetBundleName:
   assetBundleVariant:
 """
-VOL = {"liquidation":0.9,"kakao":0.6,"kim":0.75,"affUp":0.6,"affDown":0.7,"unlock":0.85,"news":0.55,"repaid":0.85,"clear":0.9,"badEnding":0.9,"faint":0.8,"workPay":0.8,"minigameStart":0.7,"morning":0.5,"menhera":0.7}
+VOL = {"liquidation":0.9,"kakao":0.6,"kim":0.75,"affUp":0.6,"affDown":0.7,"unlock":0.85,"news":0.55,"repaid":0.85,"clear":0.9,"badEnding":0.9,"faint":0.8,"workPay":0.8,"minigameStart":0.7,"morning":0.5,"menhera":0.7,"buttonClick":0.6,"uiDenied":0.5,"uiSelect":0.6,"phoneOpen":0.5,"phoneClose":0.5,"toastPop":0.45,"blip":0.25}
 cat = REPO/"Assets/Resources/Audio/SoundCatalog.asset"; s = cat.read_text()
 block = ""
 for field, src in picks.items():

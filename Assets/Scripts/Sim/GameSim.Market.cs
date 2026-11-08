@@ -14,8 +14,8 @@ namespace KwGame.Sim
             M = M ?? S.mk;
             if (rnd() > 0.9) M.reg = -M.reg;
             double v = rtVol();
-            int ch = v4 ? chapter() - 1 : -1; if (ch >= 0) v *= R.V4_CH_VOL[ch];   // v4 장별 시장 국면
-            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) * v + sh(shock, "MKT") + (ch >= 0 ? R.V4_CH_MKT[ch] * p2reg() : 0);
+            var rg = v4 ? regNow() : null; if (rg != null) v *= rg[2];   // v4 장별 시장 국면 (판마다 시나리오)
+            double mret = M.reg * 0.0027 + gauss() * (evening ? 0.0092 : 0.0058) * v + sh(shock, "MKT") + (rg != null ? rg[0] * p2reg() : 0);
             bool whale = evening && S.mk == M && has("whale");
             var P = new MarketPlan { whale = whale };
             foreach (var t in D.TKList)
@@ -26,7 +26,7 @@ namespace KwGame.Sim
                 if (t.inv) r = (t.of != null && P.r.ContainsKey(t.of) ? -2 * P.r[t.of] : -2 * mret) - 0.001 + gauss() * t.vol * v;
                 else if (t.meme) r = S.rt ? (rnd() < R.RT_MEME_UP ? 0.4 + rnd() * 0.4 : -(0.3 + rnd() * 0.3)) : rnd() < 0.46 ? 0.45 + rnd() * 0.45 : -(0.28 + rnd() * 0.3);   // 실시간: 기대값 ≈ 0 (예전엔 칸당 +8% 라 몰빵이 정답)
                 else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * v * (evening ? 1.3 : 1);
-                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) + (ch >= 0 ? R.V4_CH_COIN[ch] * p2reg() : 0);
+                else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) + (rg != null ? rg[1] * p2reg() : 0);
                 if (!(t.inv && t.of != null)) r += sh(shock, k);
                 r = wkGap(t, r, M);   // v4 주말 휴장: 국장은 안 움직이고 월요일 오전에 몰아서
                 P.r[k] = clamp(r, -0.7, 1.5);
@@ -58,6 +58,7 @@ namespace KwGame.Sim
             var sh0 = S.shocks.TryGetValue(T, out var o) ? new Dictionary<string, double>(o) : new Dictionary<string, double>();
             S.shocks.Remove(T);
             if (S.news != null && !S.news.fake) sh0[S.news.tk] = sh(sh0, S.news.tk) + S.news.r;
+            else if (S.news != null && v4 && R.V4_FAKE_HI > 0) sh0[S.news.tk] = sh(sh0, S.news.tk) - S.news.r * (R.V4_FAKE_LO + rnd() * (R.V4_FAKE_HI - R.V4_FAKE_LO));   // v4 가짜 속보 = 선반영 후 되돌림 (반대로 움직임 → 좋은 뉴스마다 사는 게 정답이 아님)
             S.mplan = planMarket(sh0, isEve()); S.mplan.T = T; return S.mplan;
         }
         MarketPlan curPlan() => (S.mplan != null && S.mplan.T == Tnow()) ? S.mplan : planNext();

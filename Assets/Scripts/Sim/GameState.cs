@@ -35,7 +35,7 @@ namespace KwGame.Sim
     public class Move { public double o, c, h, l, r; }
     public class News { public string tk, h; public int dir; public double r; public bool fake; public bool llm; public string body, src, ev, arc; public int? step; }
     public class Holding { public double q, cost; public int t0, bday; }
-    public class CoinPos { public int id; public string tk; public int dir; public double lev, margin, entry, mult; public int t0; public double bonus; }
+    public class CoinPos { public int id; public string tk; public int dir; public double lev, margin, entry, mult; public int t0; public double bonus; public bool mirai; }   // mirai = 미래 돌발 매수 (v4: '코인 금지' 부탁 어김으로 안 침)
     public class Ledger { public string kind; public double amt; public string label; }
     public class KMsg { public string w, x, t; public int d; }
     public class Cm { public string au, x; public double up; public int res, tipc; }
@@ -138,7 +138,7 @@ namespace KwGame.Sim
         /// 멘헤라·돌발 매수를 연달아 나쁘게 받아친 횟수 (착한 답장이면 0). 실시간 bad4 판정용 (다이제스트 밖, 저장엔 들어감)
         public int menRun;
         // v4 리디자인 (GameSim.V4.cs, docs/V4.md, 다이제스트 밖): 미래 호감 · 욕심(숨김) · 몇 부 · 오늘 부탁(id, 어김, 해냄) · 본 장 카드 · 오늘 놀아준 횟수
-        public double aff = -1, greed; public int part = 1; public string prom; public bool promBad, promDone; public int chSeen, dateN, nflashT = -1, gapT = -1, heist; public bool heistGo;   // heist = 털기 준비 단계(0~3), heistGo = 만기 밤에 턴다
+        public double aff = -1, greed; public int part = 1; public string prom; public bool promBad, promDone; public int chSeen, dateN, nflashT = -1, gapT = -1, heist, earlyM, sleepD; public bool heistGo;   // heist = 털기 준비 단계(0~3), heistGo = 만기 밤에 턴다, earlyM = 실적 없이 이자 미리 낸 달(신용은 이자일에), sleepD = 밤에 푹 자서 무료 리포트 +1 받는 날(absDay)
         /// v4 주말 갭: 주말 동안 쌓인 국장 수익률 (월요일 오전에 반영)
         public Dictionary<string, double> wkGap = new Dictionary<string, double>();
     }

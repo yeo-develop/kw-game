@@ -113,6 +113,7 @@ namespace KwGame.View
             toastCol = new VisualElement(); Ui.Abs(toastCol, 24, 330);   // 상태 카드 아래
             toastCol.style.width = 520; toastCol.style.alignItems = Align.FlexStart; toastCol.pickingMode = PickingMode.Ignore;
             stage.Add(toastCol);
+            hudBar.RegisterCallback<GeometryChangedEvent>(_ => toastCol.style.top = Mathf.Max(330, hudBar.layout.yMax + 12));   // 상태 카드가 길어져도(만기 목표 줄 등) 알림이 안 겹치게
 
             modal = Ui.Box(new Color(0, 0, 0, 0.72f)); Ui.Fill(modal);
             modal.style.alignItems = Align.Center; modal.style.justifyContent = Justify.Center; modal.style.display = DisplayStyle.None;
@@ -122,6 +123,7 @@ namespace KwGame.View
         void TogglePhone()
         {
             phoneOpen = !phoneOpen;
+            KwGame.Audio.GameAudioManager.Play(phoneOpen ? KwGame.Audio.SoundCue.PhoneOpen : KwGame.Audio.SoundCue.PhoneClose);
             RenderAll();
             if (phoneOpen)
             {
@@ -250,10 +252,18 @@ namespace KwGame.View
             else
             {
                 dlgName.style.display = DisplayStyle.None;
-                idleText.text = P == null ? "" : P.t == "start" ? "빚 3천만 원. 매달(7일) 이자 5%. 알바·주식·코인·도박… 갚을 방법은 많다."
+                idleText.text = P == null ? "" : P.t == "start" ? StartLine()
                     : P.t == "ending" ? (S.endInfo?.ok == true ? "빚 0원. 해냈다." : "끝. 스코어보드를 보고 새 게임으로.") : Ui.Clean(LocTitle()) + " — 위에서 골라 줘";
                 idleText.style.color = Ui.Dim;
             }
+        }
+
+        /// 시작 화면 한 줄 (숫자는 rules 에서: v4 = 주 이자 RT_RATE · 만기 V4_DAYS)
+        string StartLine()
+        {
+            var R = D.RULES;
+            return G.v4 ? $"빚 {G.man(R.DEBT0)} 원. 만기 {R.V4_DAYS}일. 매주({R.MONTH_DAYS}일) 이자 {R.RT_RATE * 100:0.#}% ({G.man(MathK.Round1k(R.DEBT0 * R.RT_RATE))} 원).\n하루 세 번: 장 보기 · 알바 · 미래랑 놀기 중에 골라."
+                : $"빚 {G.man(R.DEBT0)} 원. 매달({R.MONTH_DAYS}일) 이자 {G.rate() * 100:0.#}%. 알바·주식·코인·도박… 갚을 방법은 많다.";
         }
 
         string LocTitle()
@@ -268,6 +278,7 @@ namespace KwGame.View
         void Toast(string text, string kind, Sprite icon = null)
         {
             if (string.IsNullOrEmpty(text)) return;
+            if (kind == "bubble" || kind == "" || kind == null) KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.ToastPop);   // 돈·속보 토스트는 자기 소리가 있음
             var t = Ui.Box(kind == "good" ? new Color(0.12f, 0.3f, 0.18f, 0.95f) : kind == "liq" ? new Color(0.35f, 0.1f, 0.12f, 0.95f) : kind == "big" ? new Color(0.4f, 0.3f, 0.05f, 0.95f) : new Color(0.15f, 0.15f, 0.22f, 0.95f), 14, 10);
             t.style.marginBottom = 8; t.pickingMode = PickingMode.Ignore;
             if (icon != null) { t.style.flexDirection = FlexDirection.Row; t.style.alignItems = Align.Center; t.Add(Icon(icon, 56)); }
@@ -314,7 +325,7 @@ namespace KwGame.View
             if (G.v4)
             {
                 var v4r = Ui.Row(); v4r.style.alignItems = Align.Center; v4r.style.marginTop = 6; hudBar.Add(v4r);
-                string chName = new[] { "빚 공동체", "불장", "과열", "만기" }[G.chapter() - 1];
+                string chName = G.chapterName();   // 국면은 안 드러내는 장 이름 (sim V4_STR v4.chName)
                 v4r.Add(L($"{(S.part > 1 ? "2부 " : "")}{G.chapter()}장 {chName}", 19, Ui.Accent, true));
                 v4r.Add(L($"  · 만기 D-{G.daysLeft()}" + (G.weekend() ? " · 주말 휴장" : ""), 19, G.daysLeft() <= 3 ? Ui.Bad : Ui.Gold, true));
                 var p = G.promNow(); string ps = G.promState();
@@ -356,21 +367,29 @@ namespace KwGame.View
             money.Add(M("빚", G.won(h.debt), Ui.Bad));
             money.Add(M("현금", G.won(h.cash), Ui.Good));
             money.Add(M("평가", G.won(h.hv), Ui.Text));
-            hudBar.Add(L(h.paidMonth == h.month ? "이번 달 이자 냄" : $"이자 {(MD - h.day == 0 ? "D-DAY" : $"D-{MD - h.day}")} · {G.won(MathK.Round1k(h.debt * G.rate()))}", 19, h.paidMonth == h.month ? Ui.Good : Ui.Gold, true));
+            hudBar.Add(L(h.paidMonth == h.month ? (G.v4 ? "이번 주 이자 냄" : "이번 달 이자 냄") : $"이자 {(MD - h.day == 0 ? "D-DAY" : $"D-{MD - h.day}")} · {G.won(MathK.Round1k(h.debt * G.rate()))}", 19, h.paidMonth == h.month ? Ui.Good : Ui.Gold, true));
+            // v4: 만기 같이 엔딩 목표 (숫자는 rules 에서)
+            if (G.v4) { var gl = L(DuoGoal(), 17, DuoOk() ? Ui.Good : Ui.Dim); gl.style.whiteSpace = WhiteSpace.Normal; gl.style.marginTop = 2; hudBar.Add(gl); }
             // 3줄: 수치 막대 셋
             var bars = Ui.Row(); bars.style.marginTop = 10; hudBar.Add(bars);
-            void Bar(string k, double v, Color c, string tail)
+            void Bar(string k, double v, Color c, string tail, double tick = -1)
             {
                 var b = new VisualElement(); b.style.flexGrow = 1; b.style.flexBasis = 0; b.style.marginRight = 12; b.style.overflow = Overflow.Hidden;   // 글자가 옆 막대로 넘어가지 않게
                 b.Add(L($"{k} {v:0}{tail}", 16, Ui.Dim));
                 var tr = Ui.Box(new Color(1, 1, 1, 0.12f), 0, 5); tr.style.height = 10; tr.style.marginTop = 4;
                 var f = Ui.Box(c, 0, 5); f.style.height = Length.Percent(100); f.style.width = Length.Percent((float)Math.Max(0, Math.Min(100, v))); tr.Add(f);
+                if (tick >= 0)   // 목표 눈금 (호감 60 = 같이 엔딩)
+                {
+                    var tk = new VisualElement(); tk.style.position = Position.Absolute; tk.style.left = Length.Percent((float)tick); tk.style.top = -3; tk.style.bottom = -3; tk.style.width = 2;
+                    tk.style.backgroundColor = Color.white; tk.pickingMode = PickingMode.Ignore; tr.Add(tk);
+                }
                 b.Add(tr); bars.Add(b);
             }
             Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, h.faint ? " 기절" : "");
+            // 스트레스: 찰수록 나쁨 (예전 이름 "멘탈"은 높을수록 좋은 것처럼 읽혀서) → 차오를수록 경고색
             string men = h.stress >= G.menLine() ? " 멘헤라" : h.stress >= 40 ? " 불안" : "";
-            Bar("멘탈", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : new Color(0.55f, 0.75f, 1f), men);
-            if (G.v4) Bar("호감", S.aff, S.aff >= D.RULES.V4_AFF_GOOD ? new Color(1f, 0.45f, 0.65f) : S.aff < 30 ? Ui.Bad : Ui.Gold, "");
+            Bar("스트레스", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : Ui.Dim, men);
+            if (G.v4) Bar("호감", S.aff, S.aff >= D.RULES.V4_AFF_GOOD ? new Color(1f, 0.45f, 0.65f) : S.aff < 30 ? Ui.Bad : Ui.Gold, "", D.RULES.V4_AFF_GOOD);
             Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");
             // 몸 상태 줄: 병·숙취·내일 아플 확률 (막대 글자에 붙이면 옆 막대를 가려서 따로 뺌). v4 는 병 없음
             if (S.rt && !G.v4)
@@ -466,7 +485,7 @@ namespace KwGame.View
             {
                 case "start":
                     Title("롱잡고알바감");
-                    Info(G.v4 ? "빚 3천만 원. 만기 28일. 매주(7일) 이자 5%.\n하루 세 번: 장 보기 · 알바 · 미래랑 놀기 중에 골라." : "빚 3천만 원. 매달(7일) 이자 5%. 알바·주식·코인·도박… 갚을 방법은 많다.", 26, Ui.Text);
+                    Info(StartLine(), 26, Ui.Text);
                     Btn("새 게임 시작", () => Send("start"), $"시드 {S.seed}", false, Ui.Accent);
                     Btn($"AI 뉴스·대사 (Claude): {(LlmSettings.On ? "켜짐" : "꺼짐")}", () => LlmToggle(!LlmSettings.On),
                         string.IsNullOrEmpty(LlmSettings.Url) ? "서버 URL 없음" : (LlmSettings.On ? "끄면 내장 문구만 씀" : "켜면 뉴스·대사를 AI 가 씀 (실패하면 내장 문구)"), string.IsNullOrEmpty(LlmSettings.Url));
@@ -513,7 +532,12 @@ namespace KwGame.View
                 case "loan":
                     Title("김사장 캐피탈");
                     Info($"빚 {G.won(S.debt)} / 한도 {G.won(G.loanCap())} · 선이자 {G.loanFee() * 100:0}%", 22, Ui.Text);
-                    if (!G.loanOk()) Info("김사장: \"신규 고객님은 이자 한 번 내 보시고 오세요^^\"\n신용 0단계 = 대출 불가. 첫 이자를 내면 열려요 (김사장 캐피탈에서 미리 내도 됨).", 22, Ui.Gold);
+                    if (!G.loanOk())
+                    {   // 대출 = 이자일에 이자 내면 열림. 미리 내기는 매매 실현수익 V4_LEV_PROFIT[1] 넘어야 인정
+                        var LP = D.RULES.V4_LEV_PROFIT; int dl = D.RULES.MONTH_DAYS - S.day;
+                        Info(G.T("v4.loanLock", "next", G.creditNext() ?? "", "dd", dl <= 0 ? "D-DAY" : $"D-{dl}",
+                            "r", G.sgnMan(S.realized), "p", G.man(LP != null && LP.Length > 1 ? LP[1] : 0)), 22, Ui.Gold);
+                    }
                     foreach (var amt in D.RULES.LOAN_AMTS) { var a = amt; Btn($"{G.man(a)}원 빌리기", () => Send("borrow", "amt", a), $"실수령 {G.won(MathK.RoundHalfUp(a * (1 - G.loanFee())))}", S.debt + a > G.loanCap() || !G.loanOk()); }
                     Btn("됐어요", () => Send("loanDone"), null, false, Ui.Panel);
                     break;
@@ -537,7 +561,7 @@ namespace KwGame.View
                     break;
                 case "repay":
                     Title(P.loc == "home" ? "빚 갚기 (김사장 계좌로 이체)" : "원금 상환");
-                    Info($"빚 {G.won(S.debt)} · 현금 {G.won(S.cash)}" + (P.due > 0 ? $" · 이번 달 이자 {G.won(P.due)} 남겨 둘 것" : ""), 22, Ui.Text);
+                    Info($"빚 {G.won(S.debt)} · 현금 {G.won(S.cash)}" + (P.due > 0 ? $" · {(G.v4 ? "이번 주" : "이번 달")} 이자 {G.won(P.due)} 남겨 둘 것" : ""), 22, Ui.Text);
                     {
                         var seen = new HashSet<double>();
                         foreach (var (a, l) in new[] { (P.mx, P.mx >= S.debt ? "빚 전부 갚기" : "가진 돈 전부"), (Math.Max(0, Math.Floor((P.mx - P.due) / 10000) * 10000), "이자 몫은 남기고"), (Math.Floor(P.mx / 20000) * 10000, "절반"), (100000.0, "10만 원만") })
@@ -665,7 +689,9 @@ namespace KwGame.View
         void RenderEnding(Pending P)
         {
             var E = S.endInfo;
-            Title(E?.tag ?? "엔딩");
+            // v4 만기 결산(이자는 냄)은 "이자 미납" 태그 대신 만기 태그
+            bool matured = G.v4 && E != null && E.kind == "bad1" && E.days >= D.RULES.V4_DAYS && S.paidMonth == S.month;
+            Title(matured ? G.T(E.variant == "duo" ? "v4.tag.duo" : "v4.tag.sea") : E?.tag ?? "엔딩");
             if (E == null) return;
             Info(E.h, 32, E.ok ? Ui.Good : Ui.Bad);
             Info(E.lead, 22, Ui.Text);
@@ -675,7 +701,7 @@ namespace KwGame.View
             var sb = E.sb;
             Info("스코어보드", 26, Ui.Gold);
             void Row(string k, string v) { var r = Ui.Row(); r.style.justifyContent = Justify.SpaceBetween; r.style.marginBottom = 4; r.Add(Ui.Label(k, 22, Ui.Dim)); r.Add(Ui.Label(v, 22, Ui.Text, true)); panelBody.Add(r); }
-            Row("버틴 날", $"{sb.days}일 ({sb.month}개월 {sb.day}일)");
+            Row("버틴 날", G.v4 ? $"{sb.days}일 / {D.RULES.V4_DAYS}일" : $"{sb.days}일 ({sb.month}개월 {sb.day}일)");
             Row("남은 빚", G.won(sb.debt)); Row("갚은 빚", G.won(sb.repaid)); Row("낸 이자", G.won(sb.interest));
             Row("알바로 번 돈", G.won(sb.earned)); Row("투자 손익", G.sgnWon(sb.profit)); Row("도박 순손익", G.sgnWon(sb.gnet));
             Row("최대 자산", G.won(sb.maxAsset)); Row("도박 승/판", $"{sb.gW}/{sb.gN}"); Row("투자 승/매도", $"{sb.iW}/{sb.iN} · 청산 {sb.liq}");

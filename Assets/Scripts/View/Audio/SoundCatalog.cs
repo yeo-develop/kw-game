@@ -5,7 +5,7 @@ using UnityEngine.Audio;
 
 namespace KwGame.Audio
 {
-    public enum SoundCue { ButtonClick, TradeSuccess, Income, Loss, Liquidation, Kakao, Kim, AffUp, AffDown, Unlock, News, Repaid, Clear, BadEnding, Faint, WorkPay, MinigameStart, Morning, Menhera, BackgroundMusic }
+    public enum SoundCue { ButtonClick, TradeSuccess, Income, Loss, Liquidation, Kakao, Kim, AffUp, AffDown, Unlock, News, Repaid, Clear, BadEnding, Faint, WorkPay, MinigameStart, Morning, Menhera, UiDenied, UiSelect, PhoneOpen, PhoneClose, ToastPop, Blip, BackgroundMusic }
 
     [Serializable]
     public sealed class SoundClip
@@ -37,6 +37,12 @@ namespace KwGame.Audio
         [BoxGroup("게임 이벤트"), InlineProperty, LabelText("알바 시작")] public SoundClip minigameStart = new SoundClip { volume = 0.7f };
         [BoxGroup("게임 이벤트"), InlineProperty, LabelText("아침")] public SoundClip morning = new SoundClip { volume = 0.5f };
         [BoxGroup("게임 이벤트"), InlineProperty, LabelText("카톡 폭탄 (멘헤라)")] public SoundClip menhera = new SoundClip { volume = 0.7f };
+        [BoxGroup("UI"), InlineProperty, LabelText("잠긴 버튼")] public SoundClip uiDenied = new SoundClip { volume = 0.5f };
+        [BoxGroup("UI"), InlineProperty, LabelText("칩 고르기 (배율·롱숏 등)")] public SoundClip uiSelect = new SoundClip { volume = 0.6f };
+        [BoxGroup("UI"), InlineProperty, LabelText("폰 열기")] public SoundClip phoneOpen = new SoundClip { volume = 0.5f };
+        [BoxGroup("UI"), InlineProperty, LabelText("폰 닫기")] public SoundClip phoneClose = new SoundClip { volume = 0.5f };
+        [BoxGroup("UI"), InlineProperty, LabelText("알림 팝 (미래 말풍선 등)")] public SoundClip toastPop = new SoundClip { volume = 0.45f };
+        [BoxGroup("UI"), InlineProperty, LabelText("대사 타자음")] public SoundClip blip = new SoundClip { volume = 0.25f };
         [BoxGroup("배경 음악"), InlineProperty, LabelText("기본 BGM")] public SoundClip backgroundMusic = new SoundClip { volume = 0.65f };
         [BoxGroup("채널 음량"), Range(0, 1), LabelText("음악")] public float musicVolume = 0.5f;
         [BoxGroup("채널 음량"), Range(0, 1), LabelText("효과음")] public float effectsVolume = 1f;
@@ -66,6 +72,12 @@ namespace KwGame.Audio
                 case SoundCue.MinigameStart: return minigameStart;
                 case SoundCue.Morning: return morning;
                 case SoundCue.Menhera: return menhera;
+                case SoundCue.UiDenied: return uiDenied;
+                case SoundCue.UiSelect: return uiSelect;
+                case SoundCue.PhoneOpen: return phoneOpen;
+                case SoundCue.PhoneClose: return phoneClose;
+                case SoundCue.ToastPop: return toastPop;
+                case SoundCue.Blip: return blip;
                 case SoundCue.BackgroundMusic: return backgroundMusic;
                 default: throw new ArgumentOutOfRangeException(nameof(cue));
             }

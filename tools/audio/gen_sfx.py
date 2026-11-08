@@ -21,6 +21,13 @@ SFX = {
     "mg_start": (1.5, "game start whistle", "short referee whistle blast with a snappy drum hit", "energetic, arcade", "dry", "minigame start"),
     "morning": (3.0, "morning birds and a gentle alarm", "light birdsong with a soft two-note marimba alarm", "fresh, calm, warm", "outdoor, light reverb", "new day begins"),
     "menhera": (2.0, "rapid phone vibrations and notification pings", "many overlapping message pings in a frantic burst", "chaotic, comedic, digital", "dry", "phone blowing up with messages"),
+    "ui_click": (0.4, "soft UI button tap", "single short crisp click with a tiny bubbly pop", "clean, light, plastic, friendly mobile game", "dry, close-up", "cute mobile game button click"),
+    "ui_denied": (0.5, "UI error blip", "two quick low muted buzzes", "soft, dull, short", "dry, close-up", "disabled button denied sound"),
+    "phone_open": (0.7, "smartphone swipe up", "quick airy whoosh rising with a light glassy tick at the end", "smooth, modern", "dry", "phone screen opens"),
+    "phone_close": (0.6, "smartphone swipe down", "quick airy whoosh falling ending in a soft tap", "smooth, modern", "dry", "phone screen closes"),
+    "ui_select": (0.4, "UI toggle select", "short bright tick with a small rising pitch", "glassy, crisp", "dry, close-up", "selecting an option chip"),
+    "toast": (0.6, "notification pop", "soft bubbly pop with a short sparkle", "light, cute", "dry", "small popup notification appears"),
+    "blip": (0.15, "dialogue text blip", "a single very short soft synth beep", "round, cute, retro game", "dry", "visual novel typing voice blip"),
     "casino_win": (2.5, "slot machine jackpot", "bells ringing with coins pouring out", "bright, flashy, metallic", "casino, light reverb", "small jackpot win"),
 }
 

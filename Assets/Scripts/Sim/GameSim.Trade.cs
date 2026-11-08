@@ -44,7 +44,7 @@ namespace KwGame.Sim
             shortCheck();
             return back - basis;
         }
-        CoinPos openCoin(string tk, int dir, double lev, double margin)
+        CoinPos openCoin(string tk, int dir, double lev, double margin, bool byMirai = false)
         {
             margin = Math.Floor(margin / 1000) * 1000;
             double fee = rhu(margin * lev * (R.COIN_FEE + sickSlip() / 5));
@@ -54,11 +54,11 @@ namespace KwGame.Sim
             if (margin < 10000 || margin + fee > S.cash || !tkOpen(tk)) return null;
             double mult = has("allin") && margin + fee >= S.cash * 0.95 ? 1.5 : 1;
             var c = new CoinPos { id = S.pid++, tk = tk, dir = dir, lev = lev, margin = margin, entry = S.mk.tk[tk].p, mult = mult, t0 = Tnow(),
-                bonus = has("kimp") && dir > 0 && S.kimpDay != absDay() ? Math.Min(300000, rhu(margin * 0.05)) : 0 };
+                bonus = has("kimp") && dir > 0 && S.kimpDay != absDay() ? Math.Min(300000, rhu(margin * 0.05)) : 0, mirai = byMirai };
             if (c.bonus != 0) S.kimpDay = absDay();
             S.cash -= margin + fee; S.cps.Add(c); S.st.invest++; S.workStreak = 0; S.invIn = S.invIn + margin; S.realized -= fee;
             if (lev >= R.ADD_COIN_LEV) { double f = Math.Min(1, margin / Math.Max(1, S.cash + margin + fee)); addict(R.Gain("coin") * (0.1 + 0.9 * f * f) * (has("addict") ? 1.5 : 1)); }
-            if (v4) { promHit("coin"); greedD(lev >= 25 ? 8 : lev >= 10 ? 4 : 0); }
+            if (v4) { if (!byMirai) promHit("coin"); greedD(lev >= 25 ? 8 : lev >= 10 ? 4 : 0); }
             if (mult > 1) augFx("allin", T("aug.allin"));
             if (c.bonus != 0) augFx("kimp", T("aug.kimp", "m", man(c.bonus)));
             return c;

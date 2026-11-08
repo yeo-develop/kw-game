@@ -70,11 +70,12 @@ namespace KwGame.View
                 var kk = k; head.Add(Ui.Chip(n, () => { stkTab = kk; stkMsg = ""; RenderAll(); }, false, stkTab == k ? Ui.Accent : (Color?)null));
             }
             var rs = G.rsch();
-            head.Add(Ui.Chip($"무료 리포트 {rs.free}/{G.freeMax()}", () => { onSent = ReportMsg; Send("report", "paid", false); }, rs.free >= G.freeMax() || G.v4 && S.pending?.t != "watch"));
+            bool rptSlot = !G.v4 || S.pending?.t == "watch";   // v4: 리포트는 장 보기 칸에서만 → 잠긴 이유를 칩에
+            head.Add(Ui.Chip(rptSlot ? $"무료 리포트 {rs.free}/{G.freeMax()}" : "무료 리포트 · 장 보기 칸에서", () => { onSent = ReportMsg; Send("report", "paid", false); }, rs.free >= G.freeMax() || !rptSlot));
             {   // 유료는 두 번 눌러야 삼 (피드백: 막 누르다 10만 원씩 증발)
                 double rf = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE; bool armed = Time.realtimeSinceStartup - rptArm < 4;
                 bool dis = rs.paid >= R.RSCH_PAID_MAX || S.cash < rf || G.v4 && S.pending?.t != "watch";
-                var pc = Ui.Chip(dis ? $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})" : armed ? $"{G.won(rf)} 냄? 한 번 더 누르기" : $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})",
+                var pc = Ui.Chip(!rptSlot ? "유료 리포트 · 장 보기 칸에서" : dis ? $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})" : armed ? $"{G.won(rf)} 냄? 한 번 더 누르기" : $"유료 리포트 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})",
                     () => { if (Time.realtimeSinceStartup - rptArm < 4) { rptArm = -10; onSent = ReportMsg; Send("report", "paid", true); } else { rptArm = Time.realtimeSinceStartup; RenderAll(); } },
                     dis, armed && !dis ? (Color?)Ui.Bad : null);
                 head.Add(pc);
@@ -143,7 +144,7 @@ namespace KwGame.View
                 double pnl = e?.Num("pnl") ?? 0;
                 string tkn = e?.Str("tk") != null && D.TK.TryGetValue(e.Str("tk"), out var t) ? t.name : "";
                 string op = e?.Str("op");
-                stkMsg = !ok ? (S.rt ? $"{what} 실패 (장 마감 / 현금 부족)" : $"{what} 실패 (장 마감 / 현금 부족 / 이번 칸에 진입함)")
+                stkMsg = !ok ? $"{what} 실패 ({OrderFailWhy(evs, kv[0] as string, kv)})"
                     : op == "buy" ? $"체결: {tkn} {G.won(e.Num("amt"))} 매수"
                     : op == "open" ? $"체결: {tkn} {e.Num("lev"):0}x {(e.Num("dir") > 0 ? "롱" : "숏")} · 증거금 {G.won(e.Num("margin"))}"
                     : $"체결: {tkn} {what} {G.sgnWon(pnl)}";
@@ -153,6 +154,24 @@ namespace KwGame.View
                 if (line != null) { Toast("미래: " + line, "bubble"); SetFace(good ? (op == "buy" || op == "open" ? "smug" : "happy") : "cry"); }
             };
             Send(new SimCommand(kv[0] as string, kv.Skip(1).ToArray()));
+        }
+
+        /// 주문 실패 이유: sim error 이벤트(Api.cs: watchOnly · locked · phone@…)가 있으면 그걸, 없으면 지금 상태로 짐작
+        string OrderFailWhy(List<SimEvent> evs, string cmd, object[] kv)
+        {
+            string msg = evs.FirstOrDefault(x => x.t == "error")?.Str("msg");
+            if (msg == "watchOnly") return "국장 주문은 장 보기 칸에서만 · 집 → 장 보기";
+            if (msg == "locked") return "아직 상장 전 종목";
+            if (msg != null && msg.StartsWith("phone@")) return "지금은 폰 주문 불가 (고르는 중)";
+            if (msg != null) return "지금은 주문 안 됨";
+            object Arg(string k) { for (int i = 1; i + 1 < kv.Length; i += 2) if (kv[i] as string == k) return kv[i + 1]; return null; }
+            string tk = Arg("tk") as string;
+            bool stock = tk != null && D.TK.TryGetValue(tk, out var t) && t.IsStock;
+            if (stock && !G.stockOpen()) return G.weekend() ? "주말 휴장 · 코인만" : "장 마감 · 국장 09:00~15:30";
+            if (cmd == "open" && G.v4 && !G.shortOk() && Arg("dir") != null && Convert.ToDouble(Arg("dir")) < 0) return $"숏 잠김 · 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림";
+            if (cmd == "open" && Arg("lev") != null && Convert.ToDouble(Arg("lev")) > G.levCap()) return $"배율 잠김 · 지금 최대 {G.levCap():0}배";
+            if ((cmd == "buy" || cmd == "open") && S.cash < 10000) return "현금 부족";
+            return S.rt ? "현금 부족 / 배율 잠김" : "장 마감 / 현금 부족 / 이번 칸에 진입함";
         }
 
         // ---------- 시세 띠 ----------
