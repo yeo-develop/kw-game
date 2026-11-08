@@ -102,12 +102,23 @@ namespace KwGame.Tests
         [Test]
         public void GameFlowEventsMapToTheirCues()
         {
-            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "kim")), Is.EqualTo(SoundCue.Kim));
-            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "m")), Is.EqualTo(SoundCue.Kakao));
+            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "kim", "w", "kim")), Is.EqualTo(SoundCue.Kim));
+            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "m", "w", "m")), Is.EqualTo(SoundCue.Kakao));
+            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "m", "w", "me")), Is.Null, "내가 보낸 말");
+            Assert.That(SoundEventAdapter.EventCue(Event("kakao", "room", "m", "w", "sys")), Is.Null, "시스템");
+            Assert.That(SoundEventAdapter.EventCue(Event("prom", "ok", true)), Is.EqualTo(SoundCue.AffUp));
+            Assert.That(SoundEventAdapter.EventCue(Event("prom", "ok", false)), Is.EqualTo(SoundCue.AffDown));
+            Assert.That(SoundEventAdapter.EventCue(Event("unlock", "k", "short")), Is.EqualTo(SoundCue.Unlock));
+            Assert.That(SoundEventAdapter.EventCue(Event("cash", "d", 150000d, "k", "work")), Is.EqualTo(SoundCue.WorkPay));
+            Assert.That(SoundEventAdapter.FinancialCue(Event("cash", "d", 150000d, "k", "work")), Is.Null, "일당은 WorkPay 하나만");
+            Assert.That(SoundEventAdapter.EventCue(Event("cash", "d", -900000d, "k", "interest")), Is.EqualTo(SoundCue.Repaid));
+            Assert.That(SoundEventAdapter.FinancialCue(Event("cash", "d", -900000d, "k", "interest")), Is.Null, "이자 = 손실음 아님");
+            Assert.That(SoundEventAdapter.EventCue(Event("ending", "kind", "clear", "variant", "lonely")), Is.EqualTo(SoundCue.AffDown));
+            Assert.That(SoundEventAdapter.EventCue(Event("ending", "kind", "heist", "variant", "ok")), Is.EqualTo(SoundCue.Clear));
+            Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "news", "app", "news")), Is.Null, "칸 끝 결과 · 상장 소식은 조용히");
             Assert.That(SoundEventAdapter.EventCue(Event("aff", "d", 3d)), Is.EqualTo(SoundCue.AffUp));
             Assert.That(SoundEventAdapter.EventCue(Event("aff", "d", -3d)), Is.EqualTo(SoundCue.AffDown));
-            Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "good", "app", "kakao", "room", "kim")), Is.EqualTo(SoundCue.Unlock));
-            Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "news")), Is.EqualTo(SoundCue.News));
+            Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "news", "app", "news", "room", "flash")), Is.EqualTo(SoundCue.News));
             Assert.That(SoundEventAdapter.EventCue(Event("toast", "kind", "good")), Is.Null);
             Assert.That(SoundEventAdapter.EventCue(Event("repaid", "a", 100000d)), Is.EqualTo(SoundCue.Repaid));
             Assert.That(SoundEventAdapter.EventCue(Event("ending", "kind", "clear")), Is.EqualTo(SoundCue.Clear));

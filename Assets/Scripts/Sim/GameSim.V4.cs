@@ -27,7 +27,7 @@ namespace KwGame.Sim
             S.nflashT = Tnow();
             // AI 기사면 출처·본문까지 (가짜 30% 는 기사 속 단서로 가려냄 → 칸 끝에 [오보] 정정)
             pushF("🚨", T("v4.newsFlash", "h", n.h), "news", n.llm ? new List<string> { T("news.src", "s", n.src, "b", n.body) } : null);
-            toast(T("v4.newsFlash", "h", n.h), "news", "news");
+            toast(T("v4.newsFlash", "h", n.h), "news", "news", "flash");   // room "flash" = 칸 시작 속보 (소리 구분용)
         }
         /// 장별 뉴스 방향 편향 (국면 = 확률). 좋은 뉴스가 나올 확률
         int newsDir() => rnd() < R.V4_CH_NEWSUP[chapter() - 1] ? 1 : -1;
@@ -67,7 +67,7 @@ namespace KwGame.Sim
         {
             if (!v4 || before >= R.V4_CREDIT_LOAN || !loanOk()) return;
             string x = T("v4.credit.up1");
-            pushK("kim", T("v4.credit.kim", "x", x)); toast(x, "good", "kakao", "kim");
+            pushK("kim", T("v4.credit.kim", "x", x)); toast(x, "good", "kakao", "kim"); Emit("unlock", "k", "loan");
         }
         /// 매도·청산 뒤: 실적 넘었으면 레버리지 단계 올리고 · 숏 열고 김사장 카톡
         void shortCheck()
@@ -78,12 +78,12 @@ namespace KwGame.Sim
             {
                 S.levTier = t;
                 string x = T("v4.lev.up", "p", man(R.V4_LEV_PROFIT[t]), "x", R.V4_LEV_CAP[t]);
-                pushK("kim", T("v4.short.kim", "x", x)); toast(x, "good", "kakao", "kim");
+                pushK("kim", T("v4.short.kim", "x", x)); toast(x, "good", "kakao", "kim"); Emit("unlock", "k", "lev");
             }
             if (S.shortOn || S.realized < R.V4_SHORT_PROFIT) return;
             S.shortOn = true;
             string y = T("v4.short.up", "p", man(R.V4_SHORT_PROFIT));
-            pushK("kim", T("v4.short.kim", "x", y)); toast(y, "good", "kakao", "kim");
+            pushK("kim", T("v4.short.kim", "x", y)); toast(y, "good", "kakao", "kim"); Emit("unlock", "k", "short");
         }
 
         // ---------- 아침 부탁 ----------
@@ -110,13 +110,13 @@ namespace KwGame.Sim
             {
                 S.promBad = true;
                 pushK("m", p.badK); toast(T("v4.promBadT", "a", p.hud), "liq", "kakao", "m");
-                Emit("prom");
+                Emit("prom", "ok", false);
             }
             else if (p.@do == kind && !S.promDone)
             {
                 S.promDone = true;
                 pushK("m", p.okK); toast(T("v4.promOkT", "a", p.hud), "good", "kakao", "m");
-                Emit("prom");
+                Emit("prom", "ok", true);
             }
         }
         /// 자정: 부탁 판정 → 호감·스트레스

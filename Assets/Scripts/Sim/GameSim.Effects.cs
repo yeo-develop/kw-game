@@ -28,7 +28,7 @@ namespace KwGame.Sim
             S.stress = clamp(S.stress + d, 0, 100);
             if (mental() != before) Emit("ment", "m", mental());
         }
-        void money(double d, string kind, string label) { S.cash += d; S.today.Add(new Ledger { kind = kind, amt = d, label = label }); Emit("cash", "d", d); }
+        void money(double d, string kind, string label) { S.cash += d; S.today.Add(new Ledger { kind = kind, amt = d, label = label }); Emit("cash", "d", d, "k", kind); }
         void addDebt(double d, string label) { S.debt += d; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.today.Add(new Ledger { kind = "debt", amt = -d, label = label }); Emit("debt", "d", d); }
         void coverNeg() { if (S.cash < 0) { double d = Math.Ceiling(-S.cash); S.cash = 0; addDebt(d, T("lbl.cover")); } }
         void augFx(string id, string text) => Emit("augfx", "id", id, "text", text);
@@ -46,7 +46,7 @@ namespace KwGame.Sim
             var L = S.kk[room]; L.Add(new KMsg { w = w, x = x, t = clockNow(), d = absDay() }); if (L.Count > 60) L.RemoveRange(0, L.Count - 60);
             if (w != "me" && w != "sys") S.kun[room]++;
             if (room == "kim" && w == "kim") toast(T("kim.toast", "x", x), "kim", "kakao", "kim");
-            Emit("kakao", "room", room);
+            Emit("kakao", "room", room, "w", w);
         }
         void pushF(string ic, string x, string kind = null, List<string> rows = null)
         {
