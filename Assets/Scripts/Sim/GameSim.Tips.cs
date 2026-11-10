@@ -116,7 +116,7 @@ namespace KwGame.Sim
         }
         string encounterRoll() { var W = WALKERS(); return rnd() < R.ENCOUNTER_P ? W[(int)Math.Floor(rnd() * W.Count)] : null; }
 
-        public string resMark(string r) => T("res." + (string.IsNullOrEmpty(r) ? "wait" : r));
+        public string resMark(string r) { string k = "res." + (string.IsNullOrEmpty(r) ? "wait" : r); return v4 && D.STR["v4." + k] != null ? T("v4." + k) : T(k); }   // v4: 웹 글꼴에 없는 그림 글자 대신 ○ ×
         public string srcRec(string who)
         {
             if (S.srcStat.TryGetValue(who, out var g) && g[1] != 0) return g[0] + "/" + g[1] + " (" + JsFmt.Num(rhu((double)g[0] / g[1] * 100)) + "%)";
@@ -133,8 +133,14 @@ namespace KwGame.Sim
             t.via = via; var d = srcOf(t);
             pushF("🔎", d.an ? T("v4.an.feed", "ic", d.ic, "n", d.name, "tk", D.TK[t.tk].name, "a", t.dir > 0 ? "▲" : "▼", "w", tipWhen(t), "r", srcRec(t.who))
                 : T("tip.feed", "ic", d.ic, "n", d.name, "tk", D.TK[t.tk].name, "a", t.dir > 0 ? "▲" : "▼", "w", tipWhen(t), "s", stars(d.trust)), "tip");
-            string bub = via != "post" && S.phase == "home" ? fpick(D.TIP_REACT[t.who == HY ? HY : t.tier]) : null;
+            string bub = via != "post" && S.phase == "home" ? (d.an ? anReact(d) : fpick(D.TIP_REACT[t.who == HY ? HY : t.tier])) : null;
             Emit("tip", "id", t.id, "via", via, "bubble", bub, "face", t.tier == "rep" ? "tired" : "smug");
+        }
+        /// 분석가 리포트를 받았을 때 미래 한마디: 전적이 좋으면 믿자, 나쁘면 거꾸로 타자, 애매하면 걸러도 된다 (읽는 법을 미래 입으로)
+        string anReact(Source d)
+        {
+            double rate = S.srcStat.TryGetValue(d.id, out var g) && g[1] > 0 ? (double)g[0] / g[1] : 0.5;
+            return fpick(TA(rate >= 0.65 ? "v4.an.reactGood" : rate <= 0.35 ? "v4.an.reactBad" : "v4.an.reactMid")).Replace("{a}", d.name);
         }
         void onTipsResolved(List<Tip> list)
         {

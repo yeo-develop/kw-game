@@ -79,22 +79,17 @@ namespace KwGame.View
                 if (!rptSlot) head.Add(Ui.Chip("유료 리포트 · 장 보기 칸에서", () => { }, true));
                 else
                 {
-                    var hd = Ui.Label($"골라서 묻기 ({rs.paid}/{R.RSCH_PAID_MAX})", 18, StkAxis, true); hd.style.marginBottom = 4; body.Add(hd);
-                    var strip = Ui.Row(); strip.style.flexWrap = Wrap.Wrap; strip.style.alignItems = Align.Stretch; body.Add(strip);
+                    var strip = Ui.Row(); strip.style.flexWrap = Wrap.Wrap; strip.style.alignItems = Align.Center; strip.style.marginBottom = 4; body.Add(strip);
+                    var hd = Ui.Label($"골라서 묻기 {G.man(rf)} ({rs.paid}/{R.RSCH_PAID_MAX})", 17, StkAxis, true); hd.style.marginRight = 8; strip.Add(hd);
                     foreach (var a in ans)
-                    {   // 두 번 눌러야 삼 (분석가별로 따로 대기)
+                    {   // 분석가마다 칩 하나: 이름 + 전적. 두 번 눌러야 삼 (분석가별로 따로 대기)
                         string aid = a.id; bool armed = rptArmId == aid && Time.realtimeSinceStartup - rptArm < 4;
-                        var c = Ui.Box(StkCard, 10, 8); c.style.marginRight = 8; c.style.marginBottom = 6; c.style.width = 220; if (armed && !dis) Ui.Border(c, Ui.Bad, 2);
-                        c.Add(Ui.Label($"{a.ic} {a.name}", 19, Ui.Text, true));
-                        c.Add(Ui.Label(G.T("v4.an.rec", "r", G.srcRec(aid)), 16, Ui.Gold));
-                        if (!string.IsNullOrEmpty(a.flav)) { var fl = Ui.Label(a.flav, 14, Ui.Dim); fl.style.whiteSpace = WhiteSpace.Normal; c.Add(fl); }
-                        var pb = Ui.Chip(armed && !dis ? $"한 번 더 누르기 ({G.man(rf)})" : G.T("v4.an.paid", "f", G.man(rf)),
+                        var pb = Ui.Chip(armed && !dis ? $"{a.name} — 한 번 더 누르기" : $"{a.name} {G.srcRec(aid)}",
                             () => { if (rptArmId == aid && Time.realtimeSinceStartup - rptArm < 4) { rptArm = -10; rptArmId = null; onSent = ReportMsg; Send("report", "paid", true, "who", aid); } else { rptArm = Time.realtimeSinceStartup; rptArmId = aid; RenderAll(); } },
                             dis, armed && !dis ? (Color?)Ui.Bad : null);
-                        pb.style.marginTop = 4; c.Add(pb);
-                        strip.Add(c);
+                        pb.tooltip = a.flav; pb.style.marginBottom = 4; strip.Add(pb);
                     }
-                    var hl = Ui.Label(G.T("v4.an.help"), 15, Ui.Dim); hl.style.whiteSpace = WhiteSpace.Normal; hl.style.marginBottom = 8; body.Add(hl);
+                    if (stkTab == "mkt") { var hl = Ui.Label(G.T("v4.an.help"), 15, Ui.Dim); hl.style.whiteSpace = WhiteSpace.Normal; hl.style.marginBottom = 8; body.Add(hl); }
                 }
             }
             else

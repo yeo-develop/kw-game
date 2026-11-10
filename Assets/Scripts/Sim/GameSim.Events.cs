@@ -38,6 +38,12 @@ namespace KwGame.Sim
             return true;
         }
 
+        /// 체력을 없앤 규칙(v4)에선 "· 체력 −5" 같은 조각을 문구에서 뺌 (데이터는 턴 모드와 같이 써서 여기서 거름)
+        string noHpText(string s)
+        {
+            if (s == null || !hpOff || !s.Contains("체력")) return s;
+            return string.Join(" · ", s.Split(new[] { " · " }, StringSplitOptions.None).Where(x => !x.Contains("체력")));
+        }
         void evStart(EvDef ev)
         {
             Emit("event", "id", ev.id, "title", ev.title);
@@ -55,7 +61,7 @@ namespace KwGame.Sim
             {
                 var o = ev.opts[i];
                 bool dis = o.need > 0 && S.cash < o.need;
-                opts.Add(new Opt { k = "ev" + i, l = o.l, sub = dis ? won(o.need) + " 필요" : o.sub, dis = dis });
+                opts.Add(new Opt { k = "ev" + i, l = o.l, sub = dis ? won(o.need) + " 필요" : noHpText(o.sub), dis = dis });
             }
             S.pending = new Pending("event") { evId = ev.id, opts = opts };
         }

@@ -11,7 +11,7 @@ namespace KwGame.Sim
 
         public List<LocOpt> locOpts(string key)
         {
-            Func<string, string> hc = k => T("lo.hp", "h", hpCost(k));
+            Func<string, string> hc = k => hpOff ? "" : T("lo.hp", "h", hpCost(k));
             switch (key)
             {
                 case "broker":
