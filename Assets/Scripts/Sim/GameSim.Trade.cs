@@ -48,7 +48,8 @@ namespace KwGame.Sim
         {
             margin = Math.Floor(margin / 1000) * 1000;
             double fee = rhu(margin * lev * (R.COIN_FEE + sickSlip() / 5));
-            if (dir < 0 && !shortOk()) return null;   // v4: 숏은 실적(실현수익) 넘어야
+            if (dir < 0 && !shortOk()) return null;   // v4: 숏은 첫 납부 통과 뒤 (옛 규칙: 실현수익)
+            if (v4 && !byMirai && margin > marginRoom() + 0.5) return null;   // 증거금 합계 상한 (배율이 아니라 금액을 묶음)
             lev = Math.Min(lev, Math.Min(D.TK[tk].maxLev, levCap()));
             if (v4) fee = rhu(margin * lev * (R.COIN_FEE + sickSlip() / 5));   // v4: 깎인 배율로 수수료 다시 (예전 모드는 골든 맞추려고 그대로)
             if (margin < 10000 || margin + fee > S.cash || !tkOpen(tk)) return null;

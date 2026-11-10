@@ -167,11 +167,13 @@ namespace KwGame.View
             object Arg(string k) { for (int i = 1; i + 1 < kv.Length; i += 2) if (kv[i] as string == k) return kv[i + 1]; return null; }
             string tk = Arg("tk") as string;
             bool stock = tk != null && D.TK.TryGetValue(tk, out var t) && t.IsStock;
+            if (cmd == "open" && Arg("amt") != null && Convert.ToDouble(Arg("amt")) > G.marginRoom() + 0.5)   // 증거금 합계 상한 (v4 관문 규칙)
+                return G.T("v4.margin.over", "a", G.man(G.marginCap()), "u", G.man(G.marginUsed()), "r", G.man(G.marginRoom()));
             if (stock && !G.stockOpen()) return G.weekend() ? "주말 휴장 · 코인만" : "장 마감 · 국장 09:00~15:30";
-            if (cmd == "open" && G.v4 && !G.shortOk() && Arg("dir") != null && Convert.ToDouble(Arg("dir")) < 0) return $"숏 잠김 · 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림";
+            if (cmd == "open" && G.v4 && !G.shortOk() && Arg("dir") != null && Convert.ToDouble(Arg("dir")) < 0) return "숏 잠김 · 첫 주 납부를 통과하면 숏이 열려요";
             if (cmd == "open" && Arg("lev") != null && Convert.ToDouble(Arg("lev")) > G.levCap()) return $"배율 잠김 · 지금 최대 {G.levCap():0}배";
             if ((cmd == "buy" || cmd == "open") && S.cash < 10000) return "현금 부족";
-            return S.rt ? "현금 부족 / 배율 잠김" : "장 마감 / 현금 부족 / 이번 칸에 진입함";
+            return S.rt ? "현금 부족 / 증거금 상한" : "장 마감 / 현금 부족 / 이번 칸에 진입함";
         }
 
         // ---------- 시세 띠 ----------
@@ -433,9 +435,9 @@ namespace KwGame.View
             var R = D.RULES; bool isC = t.IsCoin, open = isC || G.stockTradeOk();   // v4: 국장은 장 보기 칸에서만
             if (isC && phoneOpen) CoachCtx("coin");   // 첫 코인 주문 화면 → 롱/숏 설명 카드 (폰 위에 덮음)
             if (isC && stkLev > t.maxLev) stkLev = t.maxLev;
-            if (isC && stkLev > G.levCap()) stkLev = G.levCap();   // v4 신용 단계: 배율·숏 상한
-            if (isC && stkDir < 0 && !G.shortOk()) stkDir = 1;
+            if (isC && stkDir < 0 && !G.shortOk()) stkDir = 1;   // v4: 숏은 첫 주 납부 통과 뒤
             double maxAmt = Math.Max(0, Math.Floor((isC ? S.cash / (1 + stkLev * (R.COIN_FEE + G.sickSlip() / 5)) : S.cash) / 10000) * 10000);
+            if (isC && G.marginCap() != double.MaxValue) maxAmt = Math.Min(maxAmt, Math.Floor(G.marginRoom() / 10000) * 10000);   // 증거금 합계 상한 → "최대" = 현금과 남은 상한 중 작은 쪽
             if (stkAmt == null) stkAmt = Math.Round(maxAmt * 0.25 / 10000) * 10000;
             stkAmt = Math.Max(0, Math.Min(stkAmt.Value, maxAmt));
             double amt = stkAmt.Value;
@@ -474,8 +476,7 @@ namespace KwGame.View
                 foreach (var l in levs)
                 {
                     double ll = l;
-                    bool lk = l > G.levCap();
-                    var b = Ui.Chip(lk ? $"{l:0}x 잠김" : $"{l:0}x", () => { stkLev = ll; stkAmt = null; if (ll >= 25) { Toast("미래: " + (ll >= 50 ? "50배!!! 자기 최고야 사랑해" : "오 좀 치네?"), "bubble"); SetFace("happy"); } RenderAll(); }, lk,
+                    var b = Ui.Chip($"{l:0}x", () => { stkLev = ll; stkAmt = null; if (ll >= 25) { Toast("미래: " + (ll >= 50 ? "50배!!! 자기 최고야 사랑해" : "오 좀 치네?"), "bubble"); SetFace("happy"); } RenderAll(); }, false,
                         stkLev == l ? (l >= 25 ? (Color)StkUp : Ui.Accent) : (Color?)null);
                     b.style.marginBottom = 6; lr.Add(b);
                 }
@@ -483,10 +484,11 @@ namespace KwGame.View
                 var lb = Ui.Button("롱 ▲", () => { stkDir = 1; RenderAll(); }, null, false, stkDir > 0 ? StkUp : Ui.Panel2, 26); lb.style.flexGrow = 1; lb.style.marginRight = 8; lb.style.alignItems = Align.Center; dr.Add(lb);
                 var sb = Ui.Button(G.shortOk() ? "숏 ▼" : "숏 ▼ 잠김", () => { stkDir = -1; RenderAll(); }, null, !G.shortOk(), stkDir < 0 ? StkDn : Ui.Panel2, 26); sb.style.flexGrow = 1; sb.style.alignItems = Align.Center; dr.Add(sb);
                 {
-                    var lk = new List<string>();
-                    if (G.levNext() is string ln) lk.Add($"지금 최대 {Math.Min(t.maxLev, G.levCap()):0}x — {ln} (지금 {G.sgnMan(S.realized)})");
-                    if (!G.shortOk()) lk.Add($"숏 잠김 — 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림 (지금 {G.sgnMan(S.realized)})");
-                    if (lk.Count > 0) { var cl = Ui.Label(string.Join("\n", lk), 18, Ui.Gold); cl.style.whiteSpace = WhiteSpace.Normal; cl.style.marginTop = 4; right.Add(cl); }
+                    if (!G.shortOk()) { var cl = Ui.Label("숏 잠김 — 첫 주 납부를 통과하면 숏이 열려요", 18, Ui.Gold); cl.style.whiteSpace = WhiteSpace.Normal; cl.style.marginTop = 4; right.Add(cl); }
+                    if (G.marginNext() is string mn)
+                    {
+                        var ml = Ui.Label(mn + (G.marginUsed() > 0 ? $" · 지금 {G.man(G.marginUsed())} 쓰는 중" : ""), 17, Ui.Dim); ml.style.whiteSpace = WhiteSpace.Normal; ml.style.marginTop = 4; right.Add(ml);
+                    }
                 }
 
                 double allin = G.has("allin") && amt * (1 + stkLev * R.COIN_FEE) >= S.cash * 0.95 ? 1.5 : 1;
@@ -507,9 +509,9 @@ namespace KwGame.View
             }
             else
             {
-                bool invLk = t.inv && !G.shortOk();   // 곱버스 = 주식 숏 → 실적 넘어야
+                bool invLk = t.inv && !G.shortOk();   // 곱버스 = 주식 숏 → 첫 주 납부 통과 뒤
                 var buy = Ui.Button("매수", () => Order("매수", "가즈아. 이건 우상향이다 (희망)", null, "buy", "tk", t.id, "amt", stkAmt ?? 0, "where", where),
-                    invLk ? $"숏 잠김 — 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림" : open ? $"{G.won(amt)} · 수수료 {G.won(amt * fee)}" : G.v4 && G.stockOpen() ? "장 보기 칸에서만 주문" : S.rt ? "장 마감 (09:00~15:30)" : "장 마감 (아침·점심만)", amt < 10000 || !open || invLk, StkUp, 28);
+                    invLk ? "숏 잠김 — 첫 주 납부를 통과하면 곱버스가 열려요" : open ? $"{G.won(amt)} · 수수료 {G.won(amt * fee)}" : G.v4 && G.stockOpen() ? "장 보기 칸에서만 주문" : S.rt ? "장 마감 (09:00~15:30)" : "장 마감 (아침·점심만)", amt < 10000 || !open || invLk, StkUp, 28);
                 buy.style.marginTop = 12; buy.style.alignItems = Align.Center; right.Add(buy);
                 var h = S.hold.Get(t.id);
                 if (h != null && h.q > 0)

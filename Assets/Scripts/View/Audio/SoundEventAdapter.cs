@@ -53,6 +53,7 @@ namespace KwGame.Audio
                 case "aff": return e.Num("d") > 0 ? SoundCue.AffUp : e.Num("d") < 0 ? SoundCue.AffDown : (SoundCue?)null;
                 case "prom": return e["ok"] is bool ok ? (ok ? SoundCue.AffUp : SoundCue.AffDown) : (SoundCue?)null;
                 case "unlock": return SoundCue.Unlock;
+                case "gate": return e["ok"] is bool gok ? (gok ? SoundCue.Repaid : SoundCue.Kim) : (SoundCue?)null;   // 납부 관문: 통과 / 미납
                 case "toast": return e.Str("kind") == "news" && e.Str("room") == "flash" ? SoundCue.News : (SoundCue?)null;   // 칸 시작 속보만
                 case "cash":
                     if (e.Str("k") == "work" && e.Num("d") > 0) return SoundCue.WorkPay;

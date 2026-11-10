@@ -127,31 +127,31 @@ namespace KwGame.Sim
             S.month - 1 + (S.paidMonth == S.month && S.earlyM != S.month ? 1 : 0), 0, 3);   // 실적 없이 미리 낸 이자는 이자일에 신용으로
         /// 이자를 미리 내면 바로 신용이 오르는 실적 (레버리지 첫 단계와 같은 실현수익). 0 = 누구나
         public double earlyCreditProfit() => R.V4_LEV_PROFIT != null && R.V4_LEV_PROFIT.Length > 1 ? R.V4_LEV_PROFIT[1] : 0;
-        public bool loanOk() => credit() >= R.V4_CREDIT_LOAN;
+        public bool loanOk() => gateOn ? S.part > 1 || S.gateTier >= R.V4_LOAN_GATE : credit() >= R.V4_CREDIT_LOAN;   // 관문 규칙: 첫 납부 통과 뒤
         /// 숏 = 실적으로 엶 (STONKS 의 '평판'): 실현수익 누적 V4_SHORT_PROFIT 넘으면. 신용(이자)으론 안 열림
-        public bool shortOk() => !v4 || S.shortOn || R.V4_SHORT_PROFIT <= 0;
+        public bool shortOk() => !v4 || (gateOn ? S.part > 1 || S.gateTier >= R.V4_SHORT_GATE : S.shortOn || R.V4_SHORT_PROFIT <= 0);
         /// 레버리지 단계 = 실현수익으로 오른 최고 단계 (다시 잃어도 안 내려감). 2부는 다 열림
-        public double levCap() { var L = R.V4_LEV_CAP; return !v4 || S.part > 1 || L == null || L.Length == 0 ? 1000 : L[Math.Min(S.levTier, L.Length - 1)]; }
+        public double levCap() { var L = R.V4_LEV_CAP; return !v4 || gateOn || S.part > 1 || L == null || L.Length == 0 ? 1000 : L[Math.Min(S.levTier, L.Length - 1)]; }   // 관문 규칙: 배율은 처음부터 자유 (증거금 상한으로 묶음 — marginCap)
         int levTierOf(double p) { var P = R.V4_LEV_PROFIT; int t = 0; for (int i = 1; i < (P?.Length ?? 0); i++) if (p >= P[i]) t = i; return t; }
         /// 다음 레버리지 단계 문구 (화면용). null = 다 열림
         public string levNext()
         {
             var P = R.V4_LEV_PROFIT; int n = S.levTier + 1;
-            return !v4 || S.part > 1 || P == null || n >= P.Length ? null : T("v4.lev.next", "p", man(P[n]), "x", R.V4_LEV_CAP[n]);
+            return !v4 || gateOn || S.part > 1 || P == null || n >= P.Length ? null : T("v4.lev.next", "p", man(P[n]), "x", R.V4_LEV_CAP[n]);
         }
         /// 다음 신용 단계 문구 (화면용). null = 대출 열림
-        public string creditNext() => !v4 || loanOk() ? null : S.earlyM == S.month && S.paidMonth == S.month ? T("v4.credit.nextPaid") : T("v4.credit.next1", "p", man(earlyCreditProfit()));
+        public string creditNext() => !v4 || loanOk() ? null : gateOn ? T("v4.gate.loanNext") : S.earlyM == S.month && S.paidMonth == S.month ? T("v4.credit.nextPaid") : T("v4.credit.next1", "p", man(earlyCreditProfit()));
         /// 이자 낸 직후: 대출이 열렸으면 김사장 카톡 + 토스트
         void creditUp(int before)
         {
-            if (!v4 || before >= R.V4_CREDIT_LOAN || !loanOk()) return;
+            if (!v4 || gateOn || before >= R.V4_CREDIT_LOAN || !loanOk()) return;   // 관문 규칙에선 gatePass 가 알림
             string x = T("v4.credit.up1");
             pushK("kim", T("v4.credit.kim", "x", x)); toast(x, "good", "kakao", "kim"); Emit("unlock", "k", "loan");
         }
         /// 매도·청산 뒤: 실적 넘었으면 레버리지 단계 올리고 · 숏 열고 김사장 카톡
         void shortCheck()
         {
-            if (!v4) return;
+            if (!v4 || gateOn) return;   // 관문 규칙: 실적 해금 없음 (납부 통과로 엶)
             int t = levTierOf(S.realized);
             if (t > S.levTier)
             {
@@ -163,6 +163,97 @@ namespace KwGame.Sim
             S.shortOn = true;
             string y = T("v4.short.up", "p", man(R.V4_SHORT_PROFIT));
             pushK("kim", T("v4.short.kim", "x", y)); toast(y, "good", "kakao", "kim"); Emit("unlock", "k", "short");
+        }
+
+        // ---------- 주간 납부 관문 (docs/BLUEPRINT.md) ----------
+        public bool gateOn => v4 && R.V4_GATE_CAP != null && R.V4_GATE_CAP.Length > 0;
+        /// 주 w(1~) 납부 뒤 남아도 되는 빚. 마지막 주는 0 = 만기
+        public double gateCap(int week = 0)
+        {
+            if (!gateOn) return double.MaxValue;
+            if (week <= 0) week = S.month;
+            var C = R.V4_GATE_CAP; return C[(int)clamp(week, 1, C.Length) - 1] * debtScale();
+        }
+        /// 이번 주에 갚아야 할 원금 (지금 빚 − 상한). 주중에 미리 갚으면 줄어듦, 빌리면 늘어남
+        public double gatePrincipal() => !gateOn ? 0 : Math.Max(0, S.debt - gateCap());
+        /// 이번 주 납부 총액 = 이자(아직 안 냈으면) + 원금 분납
+        public double gateDue() => (S.paidMonth == S.month ? 0 : interestDue()) + gatePrincipal();
+        /// 코인 증거금 합계 상한 (통과한 관문 수 단계). 2부·단계 끝 = 상한 없음
+        public double marginCap()
+        {
+            var M = R.V4_MARGIN_CAP;
+            return !v4 || M == null || S.part > 1 || S.gateTier >= M.Length ? double.MaxValue : M[S.gateTier];
+        }
+        public double marginUsed() => S.cps.Where(c => !c.mirai).Sum(c => c.margin);
+        public double marginRoom() => Math.Max(0, marginCap() - marginUsed());
+        /// 증거금 상한 안내 (화면용). null = 상한 없음
+        public string marginNext()
+        {
+            var M = R.V4_MARGIN_CAP; double cap = marginCap();
+            if (cap == double.MaxValue) return null;
+            return S.gateTier + 1 < M.Length ? T("v4.margin.next", "a", man(cap), "b", man(M[S.gateTier + 1])) : T("v4.margin.last", "a", man(cap));
+        }
+        List<Opt> gateOpts(double need)
+        {
+            double hv = holdVal(), part = Math.Floor(Math.Min(S.cash, need) / 10000) * 10000;
+            string left = $"{S.missN + 1}/{R.V4_MISS_MAX}";
+            return new List<Opt> {
+                new Opt { k = "gatePay", l = T("v4.gate.pay", "p", won(need)), sub = T("pd.cash", "c", won(S.cash)), dis = S.cash < need },
+                new Opt { k = "gateSell", l = T("pd.sell"), sub = hv > 0 ? T("pd.sellSub", "v", won(hv)) : T("pd.sellNone"), dis = hv <= 0 || S.cash >= need },
+                new Opt { k = "gatePart", l = T("v4.gate.part", "c", won(part)), sub = T("v4.gate.missSub", "s", won(need - part), "f", won(round1k((need - part) * R.V4_LATE_FEE)), "n", left), dis = part < 10000 || S.cash >= need },
+                new Opt { k = "gateSkip", l = T("v4.gate.skip"), sub = T("v4.gate.missSub", "s", won(need), "f", won(round1k(need * R.V4_LATE_FEE)), "n", left) },
+            };
+        }
+        /// 이자를 낸 뒤: 이번 주 원금 분납. 이미 상한 밑이면 바로 통과
+        void gateStart(bool say = true)
+        {
+            double need = gatePrincipal();
+            if (need <= 0) { gatePass(); return; }
+            if (say) KIM(T("v4.gate.ask", "p", won(need), "cap", won(gateCap())));
+            S.pending = new Pending("payday") { stage = "gate", due = need, opts = gateOpts(need) };
+        }
+        bool gateCmd(string ck)
+        {
+            var P = S.pending; var o = P.opts.FirstOrDefault(x => x.k == ck); if (o == null || o.dis) return false;
+            double need = gatePrincipal();
+            if (ck == "gatePay") { repay(need); gatePass(); return true; }
+            if (ck == "gateSell") { double sv = stockVal(); double t = closeAll(); t -= fireSale(sv); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); gateStart(false); return true; }
+            if (ck == "gatePart") { double part = Math.Floor(Math.Min(S.cash, need) / 10000) * 10000; repay(part); gateMiss(need - part); return true; }
+            if (ck == "gateSkip") { gateMiss(need); return true; }
+            return false;
+        }
+        /// 통과: 미납 기록 지움 · 단계 +1 (증거금 상한 · 숏 · 대출) · 유품 하나 고르기
+        void gatePass()
+        {
+            S.missN = 0; S.pending = null;
+            bool last = absDay() >= R.V4_DAYS;
+            if (last || S.debt <= 0) { paydayEnd(); return; }
+            double cap0 = marginCap(); bool short0 = shortOk(), loan0 = loanOk();
+            S.gateTier++;
+            var ups = new List<string>(); double cap1 = marginCap();
+            if (cap1 != cap0) ups.Add(cap1 == double.MaxValue ? T("v4.gate.upMarginMax") : T("v4.gate.upMargin", "a", man(cap1)));
+            if (!short0 && shortOk()) { S.shortOn = true; ups.Add(T("v4.gate.upShort")); Emit("unlock", "k", "short"); }
+            if (!loan0 && loanOk()) { ups.Add(T("v4.gate.upLoan")); Emit("unlock", "k", "loan"); }
+            KIM(T("v4.gate.pass", "cap", won(gateCap(S.month + 1))));
+            if (ups.Count > 0) { string x = string.Join(" · ", ups); pushK("kim", T("v4.gate.kim", "x", x)); toast(T("v4.gate.passT", "x", x), "good", "kakao", "kim"); }
+            Emit("gate", "ok", true, "w", S.month, "tier", S.gateTier);
+            after("paydayEnd");
+            if (D.AUGS.Any(a => !has(a.id))) relicStart(T("v4.gate.relic"));
+        }
+        /// 미납: 못 낸 원금에 연체료. 연속 V4_MISS_MAX 번이면 만기 전에 끌려감 (만기 주는 결산으로)
+        void gateMiss(double shortA)
+        {
+            S.missN++; S.pending = null;
+            double fee = round1k(shortA * R.V4_LATE_FEE);
+            bool last = absDay() >= R.V4_DAYS;
+            Emit("gate", "ok", false, "w", S.month, "short", shortA);
+            if (last) { paydayEnd(); return; }
+            if (fee > 0) addDebt(fee, T("lbl.gateLate"));
+            stress(10);
+            if (S.missN >= R.V4_MISS_MAX) { KIM(T("v4.gate.out")); ending("bad1"); return; }
+            KIM(T("v4.gate.miss", "s", won(shortA), "f", won(fee)));
+            pushK("kim", T("v4.gate.missK", "cap", won(gateCap(S.month + 1))));
+            paydayEnd();
         }
 
         // ---------- 아침 부탁 ----------
@@ -322,7 +413,7 @@ namespace KwGame.Sim
         bool part2Start()
         {
             S.part = 2; S.cleared = 0; S.ending = null; S.endInfo = null; S.pending = null; S.phase = "home";
-            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
+            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.missN = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;
             S.today = new List<Ledger>(); S.resume = null;
             foreach (var kv in S.mk.tk) { kv.Value.ref0 = kv.Value.p; kv.Value.sT = int.MinValue; }

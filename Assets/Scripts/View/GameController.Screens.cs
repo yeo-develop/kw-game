@@ -369,7 +369,31 @@ namespace KwGame.View
             money.Add(M("빚", G.won(h.debt), Ui.Bad));
             money.Add(M("현금", G.won(h.cash), Ui.Good));
             money.Add(M("평가", G.won(h.hv), Ui.Text));
-            hudBar.Add(L(h.paidMonth == h.month ? (G.v4 ? "이번 주 이자 냄" : "이번 달 이자 냄") : $"이자 {(MD - h.day == 0 ? "D-DAY" : $"D-{MD - h.day}")} · {G.won(MathK.Round1k(h.debt * G.rate()))}", 19, h.paidMonth == h.month ? Ui.Good : Ui.Gold, true));
+            if (G.gateOn)
+            {   // 납부 막대: 이번 주 이자 + 원금 분납 · D-n · 현금이 얼마나 찼나
+                double due = G.gateDue(), intr = h.paidMonth == h.month ? 0 : G.interestDue();
+                string dd = MD - h.day <= 0 ? "D-DAY" : $"D-{MD - h.day}";
+                var gr = Ui.Row(); gr.style.alignItems = Align.Center; gr.style.marginTop = 2; hudBar.Add(gr);
+                if (due <= 0)
+                {
+                    bool lastWk = h.month >= D.RULES.V4_GATE_CAP.Length;
+                    gr.Add(L(lastWk ? "이번 주 납부 끝" : G.T("v4.gate.hudOk", "cap", G.man(G.gateCap(h.month + 1))), 19, Ui.Good, true));
+                }
+                else gr.Add(L(G.T("v4.gate.hud", "d", G.man(due), "i", G.man(intr), "p", G.man(G.gatePrincipal())) + " · " + dd, 19, Ui.Gold, true));
+                if (S.missN > 0)
+                {
+                    var mc = Ui.Box(Ui.Bad, 0, 6); mc.style.marginLeft = 8; mc.style.paddingLeft = 8; mc.style.paddingRight = 8; mc.style.paddingTop = 2; mc.style.paddingBottom = 2;
+                    mc.Add(L($"미납 {S.missN}/{D.RULES.V4_MISS_MAX}", 16, Color.white, true)); gr.Add(mc);
+                }
+                if (due > 0)
+                {
+                    bool full = h.cash >= due; double fr = Math.Min(1, Math.Max(0, h.cash / due));
+                    var tr = Ui.Box(new Color(1, 1, 1, 0.12f), 0, 3); tr.style.height = 6; tr.style.marginTop = 4; tr.pickingMode = PickingMode.Ignore;
+                    var f = Ui.Box(full ? Ui.Good : Ui.Gold, 0, 3); f.style.height = Length.Percent(100); f.style.width = Length.Percent((float)(fr * 100)); f.pickingMode = PickingMode.Ignore; tr.Add(f);
+                    hudBar.Add(tr);
+                }
+            }
+            else hudBar.Add(L(h.paidMonth == h.month ? (G.v4 ? "이번 주 이자 냄" : "이번 달 이자 냄") : $"이자 {(MD - h.day == 0 ? "D-DAY" : $"D-{MD - h.day}")} · {G.won(MathK.Round1k(h.debt * G.rate()))}", 19, h.paidMonth == h.month ? Ui.Good : Ui.Gold, true));
             // v4: 만기 같이 엔딩 목표 (숫자는 rules 에서)
             if (G.v4) { var gl = L(DuoGoal(), 17, DuoOk() ? Ui.Good : Ui.Dim); gl.style.whiteSpace = WhiteSpace.Normal; gl.style.marginTop = 2; hudBar.Add(gl); }
             // 3줄: 수치 막대 셋
@@ -536,8 +560,9 @@ namespace KwGame.View
                 case "loan":
                     Title("김사장 캐피탈");
                     Info($"빚 {G.won(S.debt)} / 한도 {G.won(G.loanCap())} · 선이자 {G.loanFee() * 100:0}%", 22, Ui.Text);
-                    if (!G.loanOk())
-                    {   // 대출 = 이자일에 이자 내면 열림. 미리 내기는 매매 실현수익 V4_LEV_PROFIT[1] 넘어야 인정
+                    if (!G.loanOk() && G.gateOn) Info("김사장: \"신규 고객님은 한 주 약속 지켜 보시고 오세요^^\"\n" + G.T("v4.gate.loanNext"), 22, Ui.Gold);   // 관문 규칙: 첫 납부 통과 뒤
+                    else if (!G.loanOk())
+                    {   // 옛 규칙: 대출 = 이자일에 이자 내면 열림. 미리 내기는 매매 실현수익 V4_LEV_PROFIT[1] 넘어야 인정
                         var LP = D.RULES.V4_LEV_PROFIT; int dl = D.RULES.MONTH_DAYS - S.day;
                         Info(G.T("v4.loanLock", "next", G.creditNext() ?? "", "dd", dl <= 0 ? "D-DAY" : $"D-{dl}",
                             "r", G.sgnMan(S.realized), "p", G.man(LP != null && LP.Length > 1 ? LP[1] : 0)), 22, Ui.Gold);
@@ -621,8 +646,9 @@ namespace KwGame.View
                     foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("tempt", "k", k), o.sub, o.dis); }
                     break;
                 case "payday":
-                    Title(P.stage == "repay" ? "이자 냄 — 원금도 갚을까?" : P.stage == "side" ? "김사장 홀짝" : $"이자일 — {G.won(P.due)}");
-                    foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("payday", "k", k), o.sub, o.dis); }
+                    Title(P.stage == "gate" ? "원금 분납" : P.stage == "repay" ? "이자 냄 — 원금도 갚을까?" : P.stage == "side" ? "김사장 홀짝" : $"이자일 — {G.won(P.due)}");
+                    if (P.stage == "gate") Info($"이번 주 원금 {G.won(P.due)} · 내고 나면 빚 {G.won(G.gateCap())}" + (S.missN > 0 ? $" · 지금 미납 {S.missN}/{D.RULES.V4_MISS_MAX}" : ""), 22, Ui.Text);
+                    foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("payday", "k", k), o.sub, o.dis, k == "gatePay" ? Ui.Accent : (Color?)null); }
                     break;
                 case "ending": RenderEnding(P); break;
                 case "liqAlert": RenderLiqAlert(P); break;

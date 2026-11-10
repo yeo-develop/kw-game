@@ -144,6 +144,8 @@ namespace KwGame.Sim
         // 메타 (GameSim.Meta.cs, 다이제스트 밖): 난이도("easy"|"normal"|"hard") · 알바 중 청산 횟수 · 내가 연 코인 최고 배율 · 자정 부탁 판정(지킴/어김) 횟수 · 지금 알바 나가 있음(알바 끝 ~ 그 시간 다 흐를 때까지)
         public string diff = "normal"; public int liqWork, maxLev, promKept, promBroke; public bool awayWork;
         /// 알바 중 청산 경보: 마지막 일당 · 경보를 띄운 칸 (한 칸 1회)
-        public double lastPay; public int alertT = -1;   // promKept·promBroke = 누적 (오늘 어김 bool promBad 와 다름)
+        public double lastPay; public int alertT = -1;
+        /// 주간 납부 관문: 통과한 횟수(증거금 상한·숏·대출 해금 단계) · 연속 미납 횟수
+        public int gateTier, missN;   // promKept·promBroke = 누적 (오늘 어김 bool promBad 와 다름)
     }
 }

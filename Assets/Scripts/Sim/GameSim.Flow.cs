@@ -43,6 +43,7 @@ namespace KwGame.Sim
                 case "advance": advance(); break;
                 case "spend": spend(); break;
                 case "paydayMsg": M(T("pd.next", "m", S.month + 1), "smug"); hideDlg(); break;
+                case "paydayEnd": paydayEnd(); break;   // 관문 통과 → 유품 고른 뒤 이어서
                 case "tutInit": if (S.optTut) S.tg = "home"; break;
                 case "v4Start": v4Morning(); break;
                 default: throw new Exception("unknown step " + k);
@@ -60,7 +61,7 @@ namespace KwGame.Sim
             else if (S.hp < R.HP_LOW) L = TA("home.tired");
             else if (S.addict >= R.ADD_NAG && rnd() < 0.5) L = TA("home.addict");
             else L = ((Newtonsoft.Json.Linq.JArray)D.STR["home.slot"][S.slot]).Select(x => (string)x).ToList();
-            string text = (S.day == R.MONTH_DAYS && isEve() && S.paidMonth != S.month && S.debt > 0) ? T("home.payday", "d", man(interestDue())) : pick(L);
+            string text = (S.day == R.MONTH_DAYS && isEve() && S.paidMonth != S.month && S.debt > 0) ? T("home.payday", "d", man(gateOn ? gateDue() : interestDue())) : pick(L);
             S.hl = new HomeLine { T = Tnow(), t = text };
             return S.hl.t;
         }
@@ -133,7 +134,7 @@ namespace KwGame.Sim
         }
 
         // ---------- 아침 ----------
-        string kimFill(string x) => replace1(replace1(replace1(x, "{dd}", JsFmt.Num(R.MONTH_DAYS - S.day)), "{due}", won(interestDue())), "{debt}", won(S.debt));
+        string kimFill(string x) => replace1(replace1(replace1(x, "{dd}", JsFmt.Num(R.MONTH_DAYS - S.day)), "{due}", won(gateOn ? gateDue() : interestDue())), "{debt}", won(S.debt));
         void morning()
         {
             int MD = R.MONTH_DAYS;
@@ -175,7 +176,7 @@ namespace KwGame.Sim
             string mline = mental() == "men" ? T("mline.men") : mental() == "anx" ? T("mline.anx") : S.hp < R.HP_LOW ? T("mline.tired") : S.addict >= R.ADD_NAG ? T("mline.addict") : S.stress < 25 ? T("mline.happy") : T("mline.calm");
             pushK("m", mline);
             var tod = S.today.Where(x => x.kind == "div" || x.kind == "ev").ToList();
-            Emit("morning", "month", S.month, "day", S.day, "dd", MD - S.day, "paid", S.paidMonth == S.month || S.debt <= 0, "due", interestDue(), "cash", S.cash, "hv", holdVal(), "hp", S.hp, "addict", S.addict,
+            Emit("morning", "month", S.month, "day", S.day, "dd", MD - S.day, "paid", S.paidMonth == S.month || S.debt <= 0, "due", gateOn ? gateDue() : interestDue(), "cash", S.cash, "hv", holdVal(), "hp", S.hp, "addict", S.addict,
                 "Y", Y, "net", net, "netConv", net != 0 ? conv(net) : T("conv0"), "ev", evT ?? "", "tod", tod,
                 "best", S.posts.Where(p => p.best).Skip(Math.Max(0, S.posts.Count(p => p.best) - 2)).Select(p => V("au", p.au, "title", p.title, "up", p.up)).ToList(), "mline", mline,
                 "v4", v4, "ch", chapter(), "left", daysLeft(), "wk", weekend(), "part", S.part);
@@ -324,6 +325,7 @@ namespace KwGame.Sim
                 P.due *= 2; KIM(T("pd.betLose", "d", won(P.due))); fx("crack", "amt", -P.due / 2); stress(10);
                 paydayChoose(); return true;
             }
+            if (P.stage == "gate") return gateCmd(ck);
             if (P.stage == "repay")
             {
                 var o = P.opts.FirstOrDefault(x => x.k == ck); if (o == null || o.dis) return false;
@@ -340,6 +342,7 @@ namespace KwGame.Sim
             else if (v4 && S.earlyM == S.month) { int c0 = credit(); S.earlyM = 0; creditUp(c0); }   // 실적 없이 미리 낸 이자 → 이자일에 신용
             galReact("payday", V("debt", man(S.debt) + D.U("won")), 2);
             pushK("m", T("pd.k"));
+            if (gateOn) { gateStart(); return true; }   // 관문 규칙: 이자 다음은 원금 분납 (자유 상환 단계 대신)
             if (S.cash >= 10000 && S.debt > 0)
             {
                 double half = Math.Floor(S.cash / 20000) * 10000;

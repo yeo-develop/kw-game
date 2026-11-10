@@ -69,6 +69,11 @@ namespace KwGame.Sim
         public Dictionary<string, Dictionary<string, double>> V4_DIFF;
         /// 알바 중 청산 경보: 레버리지 포지션 손실이 증거금의 V4_ALERT_LOSS 를 넘으면 한 칸에 한 번 끼어듦 (0 = 끔). 몰래 폰 보면 일당 ×V4_ALERT_PAY, V4_ALERT_CAUGHT 확률로 들켜 일당 0
         public double V4_ALERT_LOSS = 0, V4_ALERT_PAY = 0.7, V4_ALERT_CAUGHT = 0.35;
+        /// 주간 납부 관문 (docs/BLUEPRINT.md ②③): 주 w 이자일 뒤 빚이 V4_GATE_CAP[w-1] 이하여야 함 (원금 분납). null = 끔 (이자만)
+        /// 못 낸 원금엔 V4_LATE_FEE 연체료, V4_MISS_MAX 주 연속 미납이면 만기 전에 끌려감. 통과할 때마다 유품 1개 + 증거금 상한 한 단계
+        public double[] V4_GATE_CAP; public double V4_LATE_FEE = 0.1; public int V4_MISS_MAX = 2, V4_SHORT_GATE = 1, V4_LOAN_GATE = 1;
+        /// 코인 증거금 합계 상한 (통과한 관문 수로 단계). 배율은 처음부터 자유 — 기능이 아니라 금액을 묶음. 단계를 넘으면 상한 없음
+        public double[] V4_MARGIN_CAP;
 
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;

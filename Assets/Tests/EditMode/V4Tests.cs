@@ -133,7 +133,7 @@ namespace KwGame.Tests
             for (int i = 0; i < 10 && S.pending?.t != "ending"; i++)
             {
                 var P = S.pending; Assert.That(P, Is.Not.Null);
-                if (P.t == "payday") Go(g, "payday", "k", P.stage == "repay" ? "keep" : "pay"); else ToHome(g);
+                if (P.t == "payday") Go(g, "payday", "k", P.stage == "repay" ? "keep" : P.stage == "gate" ? "gateSkip" : "pay"); else ToHome(g);
             }
             Assert.That(S.pending?.t, Is.EqualTo("ending"));
             return g;
@@ -341,116 +341,124 @@ namespace KwGame.Tests
             Assert.That(S.aff, Is.LessThan(a0), "자정에 코인 들고 있으면 어김");
         }
 
-        /// 1장은 시드머니: 대출은 이자를 (미리) 내야, 레버리지·숏은 실적으로. 이자를 내도 레버리지는 안 열림
-        [Test]
-        public void CreditLocksLoanAndLeverageStaysAtOneUntilProfit()
+        // ---------- 주간 납부 관문 · 증거금 상한 (docs/BLUEPRINT.md ⑥-1·7·8·9) ----------
+        /// 이자일 밤으로 보내고 이자까지 냄 → 원금 분납 단계(또는 이미 통과)에서 멈춤
+        static void ToGate(GameSim g)
         {
-            var g = New(); var S = g.S; S.cash = 5000000;
-            Assert.That(g.credit(), Is.EqualTo(0));
-            double d0 = S.debt;
-            Go(g, "loanOpen");
-            Assert.That(g.Apply(C("borrow", "amt", 1000000.0)).Any(e => e.t == "error"), "신용 0: 김사장 대출 안 됨");
-            Assert.That(S.debt, Is.EqualTo(d0));
-            Go(g, "loanDone"); ToHome(g);
-            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
-            Go(g, "open", "tk", coin.id, "dir", -1, "lev", 1, "amt", 100000);
-            Assert.That(S.cps.Count, Is.EqualTo(0), "실적 0: 숏 안 됨");
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
-            Assert.That(S.cps.Single().lev, Is.EqualTo(1), "실적 0: 배율은 1배로 깎임");
-            Go(g, "close", "id", S.cps[0].id);
-
-            S.paidMonth = S.month;   // 이자 미리 냄 → 대출만 열림
-            Assert.That(g.credit(), Is.EqualTo(1)); Assert.That(g.loanOk());
-            Assert.That(g.levCap(), Is.EqualTo(1), "레버리지는 이자로 안 열림");
-            Go(g, "loanOpen"); Go(g, "borrow", "amt", 1000000.0);
-            Assert.That(S.debt, Is.EqualTo(d0 + 1000000), "신용 1: 대출 열림");
-        }
-
-        /// 레버리지 = 실적: 실현수익 100만 → 10배, 500만 → 고배율. 다시 잃어도 안 내려감
-        [Test]
-        public void LeverageUnlocksByRealizedProfitAndStays()
-        {
-            var g = New(); var S = g.S; S.cash = 50000000;
-            var R = Data.RULES;
-            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 50);
-            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[0]));
-            Assert.That(g.levNext(), Is.Not.Null);
-            int k0 = S.kun["kim"];
-            void Win(double target)
-            {
-                S.realized = target;                             // 직전까지 번 셈 치고, 오를 때 청산
-                Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 1000000);
-                S.mk.tk[coin.id].p *= 1.5;
-                Go(g, "close", "id", S.cps[0].id);
-            }
-            Win(R.V4_LEV_PROFIT[1]);
-            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[1]), "100만: 10배");
-            Assert.That(S.kun["kim"], Is.GreaterThan(k0), "김사장 카톡");
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
-            Assert.That(S.cps.Single().lev, Is.EqualTo(R.V4_LEV_CAP[1]));
-            Go(g, "close", "id", S.cps[0].id);
-            Win(R.V4_LEV_PROFIT[2]);
-            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[2]), "500만: 고배율");
-            Assert.That(g.levNext(), Is.Null);
-            S.realized = 0;
-            Assert.That(g.levCap(), Is.EqualTo(R.V4_LEV_CAP[2]), "한 번 열리면 계속");
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 50, "amt", 100000);
-            Assert.That(S.cps.Single().lev, Is.EqualTo(50));
-        }
-
-        /// 숏 = 실적: 매매 실현수익 누적이 V4_SHORT_PROFIT 넘으면 열리고, 다시 잃어도 안 닫힘
-        [Test]
-        public void ShortUnlocksAfterRealizedProfitAndStaysOpen()
-        {
-            var g = New(); var S = g.S; S.cash = 5000000;
-            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
-            Assert.That(g.shortOk(), Is.False);
-            S.realized = Data.RULES.V4_SHORT_PROFIT;            // 직전까지 번 셈 치고
-            int k0 = S.kun["kim"];
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 100000);
-            S.mk.tk[coin.id].p *= 1.5;                          // 올랐을 때 청산 → 실적 넘음
-            Go(g, "close", "id", S.cps[0].id);
-            Assert.That(g.shortOk(), "실현수익 넘으면 숏 열림");
-            Assert.That(S.kun["kim"], Is.GreaterThan(k0), "김사장 카톡");
-            S.realized = 0;
-            Assert.That(g.shortOk(), "한 번 열리면 계속");
-            Go(g, "open", "tk", coin.id, "dir", -1, "lev", 1, "amt", 100000);
-            Assert.That(S.cps.Single().dir, Is.EqualTo(-1));
-        }
-
-        /// 이자 미리 내기: 매매 실적(실현수익 V4_LEV_PROFIT[1])이 있으면 바로 신용 UP, 없으면 이자는 냈어도 신용은 이자일에
-        [Test]
-        public void EarlyInterestPaymentRaisesCreditWithKimMessage()
-        {
-            var g = New(); var S = g.S; S.cash = 5000000; S.realized = g.earlyCreditProfit();
-            int k0 = S.kun["kim"];
-            Go(g, "map"); Go(g, "goTo", "loc", "bank"); Go(g, "act", "k", "l-payint");
-            Assert.That(S.paidMonth, Is.EqualTo(S.month));
-            Assert.That(g.credit(), Is.EqualTo(1), "실적 있는 고객 = 미리 내면 바로 신용");
-            Assert.That(S.kun["kim"], Is.GreaterThan(k0), "김사장 카톡: 신용 올라감");
-        }
-
-        [Test]
-        public void EarlyInterestWithoutTrackRecordWaitsForPayday()
-        {
-            var g = New(); var S = g.S; S.cash = 5000000; S.realized = 0;
-            Assert.That(g.earlyCreditProfit(), Is.GreaterThan(0));
-            Go(g, "map"); Go(g, "goTo", "loc", "bank"); Go(g, "act", "k", "l-payint");
-            Assert.That(S.paidMonth, Is.EqualTo(S.month), "이자는 냄");
-            Assert.That(g.credit(), Is.EqualTo(0), "1일차 조기 납부로 대출 우회 금지");
-            Assert.That(g.loanOk(), Is.False);
-            Assert.That(S.kk["kim"].Last().x, Is.EqualTo(g.T("v4.credit.early", "p", g.man(g.earlyCreditProfit()))), "김사장: 실적 없으면 이자일에");
-            Assert.That(g.creditNext(), Is.EqualTo(g.T("v4.credit.nextPaid")));
-            ToHome(g);
-            // 이자일 밤 → 신용 UP (김사장 카톡)
+            var S = g.S;
             S.day = Data.RULES.MONTH_DAYS; S.slot = 2; S.min = g.slotStartMin(2);
-            int k0 = S.kun["kim"];
             Go(g, "rest");
-            for (int i = 0; i < 10 && !(S.pending?.t == "home" && S.month == 2); i++) ToHome(g);
-            Assert.That(S.month, Is.EqualTo(2));
-            Assert.That(g.credit(), Is.GreaterThanOrEqualTo(1)); Assert.That(g.loanOk());
-            Assert.That(S.kk["kim"].Any(m => m.x.Contains(g.T("v4.credit.up1"))), "이자일에 신용 올라감 카톡");
-            Assert.That(S.kun["kim"], Is.GreaterThan(k0));
+            for (int i = 0; i < 12; i++)
+            {
+                var P = S.pending; Assert.That(P, Is.Not.Null);
+                if (P.t == "payday" && P.stage == "gate") return;
+                if (P.t == "relic" || P.t == "ending" || (P.t == "home" && S.day == 1)) return;   // 이미 통과했거나 끝남
+                if (P.t == "payday") Go(g, "payday", "k", "pay"); else ToHome(g);
+            }
+            Assert.Fail("ToGate: " + S.pending?.t);
+        }
+
+        /// ⑥-1: 배율은 1일차부터 자유, 대신 증거금 합계가 상한(30만)을 넘는 주문은 거절. 숏·대출은 첫 납부 통과 뒤
+        [Test]
+        public void LeverageIsOpenFromDayOneButMarginIsCapped()
+        {
+            var g = New(); var S = g.S; S.cash = 5000000; var R = Data.RULES;
+            Assert.That(g.gateOn); Assert.That(S.gateTier, Is.EqualTo(0));
+            Assert.That(g.marginCap(), Is.EqualTo(R.V4_MARGIN_CAP[0]));
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 10, "amt", R.V4_MARGIN_CAP[0]);
+            Assert.That(S.cps.Single().lev, Is.EqualTo(10), "1일차에 10배가 열림");
+            Assert.That(g.marginRoom(), Is.EqualTo(0));
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 2, "amt", 100000);
+            Assert.That(S.cps.Count, Is.EqualTo(1), "상한을 넘는 주문은 거절");
+            Go(g, "close", "id", S.cps[0].id);
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", R.V4_MARGIN_CAP[0] + 10000);
+            Assert.That(S.cps.Count, Is.EqualTo(0), "1배여도 금액이 넘으면 거절 (배율이 아니라 금액을 묶음)");
+            Go(g, "open", "tk", coin.id, "dir", -1, "lev", 1, "amt", 100000);
+            Assert.That(S.cps.Count, Is.EqualTo(0), "숏은 첫 납부 통과 뒤");
+            Assert.That(g.loanOk(), Is.False);
+            Go(g, "loanOpen");
+            Assert.That(g.Apply(C("borrow", "amt", 1000000.0)).Any(e => e.t == "error"), "대출도 첫 납부 통과 뒤");
+        }
+
+        /// ⑥-7·8: 7일째 밤 이자 다음에 원금 분납. 통과하면 유품 하나 + 증거금 상한·숏·대출이 열리고, 다음 주 요구액은 더 큼
+        [Test]
+        public void WeeklyGateGrowsAndPassingRewardsRelicAndRaisesMarginCap()
+        {
+            var g = New(); var S = g.S; S.cash = 20000000; var R = Data.RULES;
+            int relics0 = S.augs.Count; double debt0 = S.debt;
+            Assert.That(g.gatePrincipal(), Is.EqualTo(debt0 - R.V4_GATE_CAP[0]));
+            ToGate(g);
+            Assert.That(S.pending.stage, Is.EqualTo("gate"));
+            double need1 = S.pending.due;
+            Assert.That(need1, Is.EqualTo(debt0 - R.V4_GATE_CAP[0]), "1주차 원금 분납 = 빚 − 상한");
+            Go(g, "payday", "k", "gatePay");
+            Assert.That(S.debt, Is.EqualTo(R.V4_GATE_CAP[0]));
+            Assert.That(S.pending?.t, Is.EqualTo("relic"), "통과 보상: 유품 고르기");
+            Assert.That(S.pending.offer.Count, Is.GreaterThan(0));
+            Go(g, "pickRelic", "i", 0);
+            Assert.That(S.augs.Count, Is.EqualTo(relics0 + 1));
+            ToHome(g);
+            Assert.That(S.month, Is.EqualTo(2)); Assert.That(S.gateTier, Is.EqualTo(1)); Assert.That(S.missN, Is.EqualTo(0));
+            Assert.That(g.marginCap(), Is.EqualTo(R.V4_MARGIN_CAP[1]), "증거금 상한 한 단계 위");
+            Assert.That(g.shortOk()); Assert.That(g.loanOk());
+            Assert.That(S.kk["kim"].Any(m => m.x.Contains(g.T("v4.gate.upShort"))), "김사장 카톡으로 열린 것 알림");
+            // 주중에 빌리면 이번 주에 갚을 원금이 그만큼 늘어남 (대출 = 주 단위 단기 자금)
+            double p0 = g.gatePrincipal();
+            Go(g, "loanOpen"); Go(g, "borrow", "amt", 1000000.0); Go(g, "loanDone"); ToHome(g);
+            Assert.That(g.gatePrincipal(), Is.EqualTo(p0 + 1000000));
+            ToGate(g);
+            Assert.That(S.pending.stage, Is.EqualTo("gate"));
+            Assert.That(S.pending.due, Is.GreaterThan(need1), "요구액이 주마다 커짐");
+        }
+
+        /// 주중에 미리 갚아 상한 밑이면 이자만 내고 바로 통과
+        [Test]
+        public void RepayingEarlyPassesTheGateWithoutAsking()
+        {
+            var g = New(); var S = g.S; S.cash = 5000000;
+            S.debt = Data.RULES.V4_GATE_CAP[0];
+            Assert.That(g.gatePrincipal(), Is.EqualTo(0));
+            ToGate(g);
+            Assert.That(S.pending?.t, Is.EqualTo("relic"), "원금 단계 없이 통과 보상으로");
+            Assert.That(S.gateTier, Is.EqualTo(1));
+        }
+
+        /// 가진 만큼만 내면 못 낸 원금에만 연체료. 다음 주에 다 내면 미납 기록이 지워짐
+        [Test]
+        public void PartialGatePaymentChargesLateFeeOnShortfall()
+        {
+            var g = New(); var S = g.S; var R = Data.RULES;
+            S.cash = g.interestDue() + 1000000;   // 이자 내고 100만 남음
+            ToGate(g);
+            double need = S.pending.due, debt = S.debt;
+            Go(g, "payday", "k", "gatePart");
+            double shortA = need - 1000000;
+            Assert.That(S.debt, Is.EqualTo(debt - 1000000 + MathK.Round1k(shortA * R.V4_LATE_FEE)), "100만 갚고, 못 낸 원금의 연체료가 빚에 붙음");
+            Assert.That(S.missN, Is.EqualTo(1)); Assert.That(S.gateTier, Is.EqualTo(0), "미납이면 증거금 상한 그대로");
+            ToHome(g);
+            Assert.That(S.month, Is.EqualTo(2)); Assert.That(S.ending, Is.Null);
+            S.cash = 20000000;
+            ToGate(g); Go(g, "payday", "k", "gatePay");
+            Assert.That(S.missN, Is.EqualTo(0), "통과하면 미납 기록 지움");
+            Assert.That(S.debt, Is.EqualTo(R.V4_GATE_CAP[1]));
+        }
+
+        /// ⑥-9: 2주 연속 미납이면 28일 전에 원양어선
+        [Test]
+        public void TwoMissedGatesInARowEndTheRunBeforeMaturity()
+        {
+            var g = New(); var S = g.S;
+            S.cash = g.interestDue() + 50000;
+            ToGate(g); Go(g, "payday", "k", "gateSkip");
+            Assert.That(S.missN, Is.EqualTo(1)); Assert.That(S.ending, Is.Null);
+            ToHome(g);
+            S.cash = g.interestDue() + 50000;
+            ToGate(g);
+            Assert.That(S.pending.stage, Is.EqualTo("gate"));
+            Go(g, "payday", "k", "gateSkip");
+            Assert.That(S.ending, Is.EqualTo("bad1"));
+            Assert.That(g.absDay(), Is.LessThan(Data.RULES.V4_DAYS), "만기 전에 끝남");
         }
 
         /// 국면 시나리오: 판(씨앗)마다 장 순서가 다르고, 2부는 1부와 다른 순서. 장 이름엔 국면이 안 드러남
@@ -617,7 +625,7 @@ namespace KwGame.Tests
         static GameSim ToAlert(int seed, out string tk)
         {
             var g = New(seed); var S = g.S;
-            S.levTier = 2; S.cash = 2000000;   // 레버리지 열어 둠 (실적 해금은 다른 테스트)
+            S.gateTier = 3; S.cash = 2000000;   // 증거금 상한 없는 단계 (상한은 다른 테스트)
             var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
             Go(g, "open", "tk", coin.id, "dir", 1, "lev", 10, "amt", 500000);
             Assert.That(S.cps.Single().lev, Is.EqualTo(10));
@@ -664,7 +672,7 @@ namespace KwGame.Tests
         public void LiqAlertNeedsLeverageAndWork()
         {
             var g = New(5); var S = g.S;
-            S.cash = 2000000;
+            S.cash = 2000000; S.gateTier = 3;
             var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
             Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 500000);   // 1배 = 경보 없음
             Go(g, "map"); Go(g, "goTo", "loc", "work");

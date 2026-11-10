@@ -56,7 +56,7 @@ namespace KwGame.Tests
             for (int i = 0; i < 10 && S.pending?.t != "ending"; i++)
             {
                 var P = S.pending; Assert.That(P, Is.Not.Null);
-                if (P.t == "payday") e = Go(g, "payday", "k", P.stage == "repay" ? "keep" : "pay");
+                if (P.t == "payday") e = Go(g, "payday", "k", P.stage == "repay" ? "keep" : P.stage == "gate" ? "gateSkip" : "pay");
                 else { e = new List<SimEvent>(); ToHome(g); }
                 endEv = endEv ?? e.FirstOrDefault(x => x.t == "ending");
             }

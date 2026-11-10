@@ -369,7 +369,7 @@ namespace KwGame.View
         }
 
         /// 아침 카드가 지난번에 본 해금 상태 (바뀐 날만 줄을 띄우려고). null / −1 = 아직 모름
-        bool? mLoanSeen, mShortSeen; int mLevSeen = -1;
+        bool? mLoanSeen, mShortSeen;
         /// 만기 같이 엔딩 목표 (GameSim.V4.cs v4EndVariant: 만기 빚 ≤ 시작 빚 × V4_DUO_DEBT + 호감 ≥ V4_AFF_GOOD)
         double DuoDebt() => G.debtStart() * G.duoDebt();   // 난이도별 문턱
         bool DuoOk() => S.debt <= DuoDebt() && S.aff >= D.RULES.V4_AFF_GOOD;
@@ -393,20 +393,30 @@ namespace KwGame.View
                 // 아침 브리핑: 매일 같은 줄 반복 X → 시간표·대출·레버리지·숏은 첫날 · 바뀐 날 · 손 닿을 때만. 부탁 · 이자 D-1 · 만기 목표는 늘
                 if (first || wday == 1 || wday == D.RULES.V4_WEEKDAYS + 1)
                     card.Add(Ui.Label(wkd ? "오늘: 하루 종일 미래 · 생활 (코인만 열림)" : "오늘: 오전 · 오후 = 장 (국장 09:00~15:30) · 밤 = 미래 · 생활 (코인만)", 22, Ui.Text));
-                bool loanNow = G.loanOk(), shortNow = G.shortOk(); int levNow = S.levTier;
-                var LP = D.RULES.V4_LEV_PROFIT; int ln1 = levNow + 1;
-                bool levNear = S.part == 1 && LP != null && ln1 < LP.Length && S.realized >= LP[ln1] * 0.6;
-                bool shortNear = !shortNow && S.realized >= D.RULES.V4_SHORT_PROFIT * 0.6;
-                if (G.creditNext() is string cn) { if (first || !paid4 && dd4 <= 1) card.Add(Ui.Label("대출: " + cn, 22, Ui.Gold)); }
-                else if (mLoanSeen == false) card.Add(Ui.Label("대출: 새로 열림!", 22, Ui.Good, true));
-                if (first || levNear || mLevSeen >= 0 && mLevSeen != levNow)
-                    card.Add(Ui.Label($"코인 레버리지: 최대 {G.levCap():0}배" + (G.levNext() is string ln ? $" → {ln} (지금 {G.sgnMan(S.realized)})" : ""), 22, Ui.Gold));
-                if (first || shortNear || mShortSeen == false && shortNow)
-                    card.Add(Ui.Label(shortNow ? "숏: 열림" : $"숏: 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림 (지금 {G.sgnMan(S.realized)})", 22, Ui.Dim));
-                mLoanSeen = loanNow; mLevSeen = levNow; mShortSeen = shortNow;
+                bool loanNow = G.loanOk(), shortNow = G.shortOk();
+                if (G.gateOn)
+                {   // 주간 납부 관문: 납부 줄 (HUD 와 같은 글) · 증거금 상한 · 대출/숏 잠김 (잠긴 동안만)
+                    double gd = G.gateDue(), gi = S.paidMonth == S.month ? 0 : G.interestDue();
+                    bool lastWk = S.month >= D.RULES.V4_GATE_CAP.Length;
+                    string gs = gd <= 0 ? (lastWk ? "이번 주 납부 끝" : G.T("v4.gate.hudOk", "cap", G.man(G.gateCap(S.month + 1))))
+                        : G.T("v4.gate.hud", "d", G.man(gd), "i", G.man(gi), "p", G.man(G.gatePrincipal())) + " · " + (dd4 <= 0 ? "D-DAY (오늘 밤)" : $"D-{dd4}");
+                    var gln = Ui.Label(gs, 26, gd <= 0 ? Ui.Good : dd4 <= 1 ? Ui.Bad : Ui.Gold, true); gln.style.whiteSpace = WhiteSpace.Normal; card.Add(gln);
+                    if (S.missN > 0) card.Add(Ui.Label($"미납 {S.missN}/{D.RULES.V4_MISS_MAX} — 이번 주도 못 내면 원양어선", 22, Ui.Bad, true));
+                    if (G.marginNext() is string mn) card.Add(Ui.Label("코인: " + mn, 22, Ui.Dim));
+                    if (!loanNow || !shortNow) card.Add(Ui.Label("대출 · 숏: " + G.T("v4.gate.loanNext"), 22, Ui.Dim));
+                    else if (mLoanSeen == false || mShortSeen == false) card.Add(Ui.Label("대출 · 숏: 새로 열림!", 22, Ui.Good, true));
+                }
+                else
+                {
+                    if (G.creditNext() is string cn) { if (first || !paid4 && dd4 <= 1) card.Add(Ui.Label("대출: " + cn, 22, Ui.Gold)); }
+                    else if (mLoanSeen == false) card.Add(Ui.Label("대출: 새로 열림!", 22, Ui.Good, true));
+                    if (mShortSeen == false && shortNow) card.Add(Ui.Label("숏: 열림", 22, Ui.Dim));
+                }
+                mLoanSeen = loanNow; mShortSeen = shortNow;
                 if (G.promNow() is GameSim.Prom pm) { card.Add(Ui.Label("미래 부탁: " + pm.hud, 22, Ui.Accent)); if (!first) CoachCtx("mirai"); }   // 둘째 날부터 첫 부탁 → 미래 설명 카드
                 if (wkd) CoachCtx("unlock");   // 첫 주말 아침 (첫 해금이 먼저면 그때)
-                if (!paid4 && dd4 <= 1) card.Add(Ui.Label($"이자일 {(dd4 <= 0 ? "D-DAY (오늘 밤)" : "D-1 (내일 밤)")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Bad, true));
+                if (G.gateOn) { }   // 납부 줄은 위에서
+                else if (!paid4 && dd4 <= 1) card.Add(Ui.Label($"이자일 {(dd4 <= 0 ? "D-DAY (오늘 밤)" : "D-1 (내일 밤)")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Bad, true));
                 else if (first) card.Add(Ui.Label($"이자일까지 D-{dd4} · 이자 {G.won(e.Num("due"))}", 22, Ui.Dim));
                 var gl = Ui.Label(DuoGoal(), 22, DuoOk() ? Ui.Good : Ui.Gold); gl.style.whiteSpace = WhiteSpace.Normal; card.Add(gl);
             }

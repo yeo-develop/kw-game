@@ -20,6 +20,8 @@ namespace KwGame.Sim
             public string lastErr, relic;
             /// v4 알바 중 청산 경보 횟수 · 그중 몰래 폰 본 횟수 · 경보 뒤 실제 청산(알바 중)
             public int alerts, peeks, liqWork;
+            /// 루프 지표 (docs/BLUEPRINT.md ⑥): 7일째 자산 · 원금 첫 상환일 · 2배↑ 포지션 들고 알바 간 칸 · 대출 누계 · 관문 통과/미납 · 매도 수익률들
+            public double asset7 = -1, borrowed; public int firstRepay, workHeld, gatePass, gateMiss; public List<double> sellRets = new List<double>();
             /// v4 이번 판 국면 시나리오 (장 1~4, 하네스 BAL_SCEN 진단용)
             public string scen;
             /// v4 행동(칸) 사용 횟수: watch · work · date · rest · casino · lotto · park · 기타
@@ -35,9 +37,13 @@ namespace KwGame.Sim
             public Dictionary<string, double> acts = new Dictionary<string, double>();
             /// v4 경보: 판당 평균 횟수 · 경보가 한 번이라도 뜬 판 비율 · 몰래 폰 본 비율 · 알바 중 청산 판당
             public double alerts, alertRuns, peekRate, liqWork;
+            /// 루프 지표: 7일째 자산 중앙 · 원금 첫 상환일 중앙 · 포지션 들고 알바 칸/판 · 만기 전 탈락 · 대출 없이 깬 비율(클리어 중) · 관문 통과/미납 · 매도 수익률 중앙
+            public double asset7, firstRepay, workHeld, early, noLoanClear, gatePass, gateMiss, sellMed;
             public double End(string kind) => ends.Where(kv => kv.Key == kind || kv.Key.StartsWith(kind + "/")).Sum(kv => kv.Value);
             public override string ToString() =>
-                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1}" + (newsN > 0 ? $" · 속보 매매 {newsN:F1}회 평균 {newsRet:P1}" : "") + $" · 에러 {errs:F1}" + (alerts > 0 ? $" · 경보 {alerts:F2}회/판 ({alertRuns:P0} 판, 폰 봄 {peekRate:P0}, 알바 중 청산 {liqWork:F2}회/판)" : "")
+                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1}" + (newsN > 0 ? $" · 속보 매매 {newsN:F1}회 평균 {newsRet:P1}" : "") + $" · 에러 {errs:F1}"
+                + $"\n        루프 7일째 자산 {asset7 / 1e4:F0}만 · 원금 첫 상환 {firstRepay:F0}일째 · 포지션 들고 알바 {workHeld:F1}칸/판 · 만기 전 탈락 {early:P0} · 대출 없이 클리어 {noLoanClear:P0} · 관문 통과 {gatePass:F1}/미납 {gateMiss:F1} · 매도 중앙 {sellMed:P1}"
+                + (alerts > 0 ? $" · 경보 {alerts:F2}회/판 ({alertRuns:P0} 판, 폰 봄 {peekRate:P0}, 알바 중 청산 {liqWork:F2}회/판)" : "")
                 + (ends.Count > 0 ? "\n        엔딩 " + string.Join(" · ", ends.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value:P1}")) : "")
                 + (aff > 0 ? $"\n        호감 {aff:F0} · 욕심 {greed:F0} · 부탁 지킴 {promRate:P0}" : "")
                 + (heist[0] > 0 ? $"\n        털기 루트 1단계 {heist[0]:P0} · 2단계 {heist[1]:P0} · 3단계 {heist[2]:P0} · 턴다 {heist[3]:P0}" : "") + (acts.Count > 0 ? "\n        행동 " + string.Join(" · ", acts.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:P0}")) : "");
@@ -94,12 +100,17 @@ namespace KwGame.Sim
                 faints = L.Average(x => x.faints), menheras = L.Average(x => x.menheras), sickDays = L.Average(x => x.sickDays),
                 ends = L.Where(x => x.end != "none").GroupBy(x => x.end + (x.variant != "" ? "/" + x.variant : "")).ToDictionary(g => g.Key, g => (double)g.Count() / L.Count),
                 heist = new[] { L.Average(x => x.heistMax >= 1 ? 1.0 : 0), L.Average(x => x.heistMax >= 2 ? 1.0 : 0), L.Average(x => x.heistMax >= 3 ? 1.0 : 0), L.Average(x => x.heistGo ? 1.0 : 0) },
+                asset7 = Med(L.Where(x => x.asset7 >= 0).Select(x => x.asset7)), firstRepay = Med(L.Where(x => x.firstRepay > 0).Select(x => (double)x.firstRepay)),
+                workHeld = L.Average(x => x.workHeld), early = L.Average(x => x.end != "clear" && x.end != "none" && x.day < data.RULES.V4_DAYS ? 1.0 : 0),
+                noLoanClear = cl.Count > 0 ? cl.Average(x => x.borrowed <= 0 ? 1.0 : 0) : 0, gatePass = L.Average(x => x.gatePass), gateMiss = L.Average(x => x.gateMiss),
+                sellMed = Med(L.SelectMany(x => x.sellRets)),
                 alerts = L.Average(x => x.alerts), alertRuns = L.Average(x => x.alerts > 0 ? 1.0 : 0), peekRate = L.Sum(x => x.peeks) / Math.Max(1.0, L.Sum(x => x.alerts)), liqWork = L.Average(x => x.liqWork),
                 aff = L.Average(x => x.aff), greed = L.Average(x => x.greed), promRate = L.Sum(x => x.promOk) / Math.Max(1, L.Sum(x => x.promN)),
                 acts = L.SelectMany(x => x.acts.Keys).Distinct().ToDictionary(k => k, k => L.Average(x => { double n = x.acts.Values.Sum(); return n > 0 && x.acts.TryGetValue(k, out var v) ? v / n : 0; })),
             };
         }
 
+        static double Med(IEnumerable<double> xs) { var a = xs.OrderBy(x => x).ToList(); return a.Count == 0 ? 0 : a[a.Count / 2]; }
         /// 클리어 일수 분위 (못 깬 판 = 무한대 → 999)
         static double Pct(List<Result> L, double q) { var d = L.Select(x => x.end == "clear" ? x.day : 999).OrderBy(x => x).ToList(); return d[Math.Min(d.Count - 1, (int)(q * d.Count))]; }
 
@@ -127,7 +138,7 @@ namespace KwGame.Sim
             if (G.v4) res.scen = string.Join(">", Enumerable.Range(1, 4).Select(c => G.regime(c)));
             res.day = G.absDay(); res.debt = S.debt; res.cash = S.cash; res.earned = S.st.earned; res.interest = S.st.interest;
             res.repaid = S.st.repaid; res.gnet = S.st.gnet; res.invest = S.realized; res.faints = (int)S.st.faint;
-            res.menheras = (int)(S.st.menOk + S.st.menBad); res.relic = S.augs.FirstOrDefault(); res.aff = S.aff; res.liqWork = S.liqWork; res.greed = S.greed;
+            res.menheras = (int)(S.st.menOk + S.st.menBad); res.relic = S.augs.FirstOrDefault(); res.aff = S.aff; res.liqWork = S.liqWork; res.borrowed = S.st.borrowed; res.greed = S.greed;
             return res;
         }
         void Go(SimCommand c)
@@ -137,8 +148,15 @@ namespace KwGame.Sim
             string ak = c.t == "watch" || c.t == "date" || c.t == "rest" ? c.t
                 : c.t == "act" ? (c.Str("k") is string k ? (k.StartsWith("l-cafe") || k == "l-store" || k == "l-ware" || k == "l-mart" ? "work" : k == "l-oddeven" || k == "l-slot" || k == "l-card" || k == "l-ladder" ? "casino" : k == "l-lotto" || k == "l-scratch" ? "lotto" : "out:" + k.Substring(2)) : null) : null;
             if (ak != null && G.v4) res.acts[ak] = (res.acts.TryGetValue(ak, out var n0) ? n0 : 0) + 1;
+            if (ak == "work" && S.cps.Any(x => !x.mirai && x.lev * x.mult >= 2)) res.workHeld++;   // 제목의 장면: 레버리지 포지션을 들고 알바 감
+            if (res.asset7 < 0 && G.absDay() >= 7) res.asset7 = S.cash + G.holdVal();
             if (c.t == "alertPeek" || c.t == "alertHold") { res.alerts++; if (c.t == "alertPeek") res.peeks++; }
-            foreach (var e in G.Apply(c)) if (e.t == "error") { res.errs++; res.lastErr = c.t + " @" + (S.pending?.t ?? "-"); }
+            foreach (var e in G.Apply(c))
+            {
+                if (e.t == "error") { res.errs++; res.lastErr = c.t + " @" + (S.pending?.t ?? "-"); }
+                else if (e.t == "gate") { if (e["ok"] is bool ok && ok) res.gatePass++; else res.gateMiss++; }
+            }
+            if (res.firstRepay == 0 && S.st.repaid > 0) res.firstRepay = G.absDay();
             if (ps0 != null && G.absDay() != d0) { res.promN++; if (ps0 == "ok") res.promOk++; }   // 자정 넘긴 명령 직전 부탁 상태
             res.heistMax = Math.Max(res.heistMax, S.heist); res.heistGo |= S.heistGo;
         }
@@ -148,7 +166,10 @@ namespace KwGame.Sim
         /// v4 사람 봇: pro = 잘하는 사람 (장 보며 리포트 매매 · 국면 타기 · 부탁 지킴 · 미래 챙김), casual = 보통 사람 (섞어서 · 실수 · 가끔 도박/고배율)
         bool Human => strat == "pro" || strat == "casual";
         bool Careful => strat == "work" || Smart;
-        double Due => S.paidMonth == S.month ? 0 : G.interestDue();
+        /// 이번 주 이자 (아직 안 냈으면)
+        double Int => S.paidMonth == S.month ? 0 : G.interestDue();
+        /// 이자일에 낼 돈: 관문 규칙이면 이자 + 원금 분납
+        double Due => G.v4 && G.gateOn ? G.gateDue() : Int;
         /// 이자일까지 남은 날 (0 = 오늘 저녁)
         int DaysToPay => R.MONTH_DAYS - S.day;
 
@@ -202,7 +223,7 @@ namespace KwGame.Sim
                         // v4 장 보기: 매매할 게 있으면 하고, 아니면 시계를 흘림 (칸 끝나면 알아서 나감). 아침 장 열리기 전엔 9시까지
                         if (strat != "random" && G.daysLeft() <= 3 && S.hold.Count > 0 && G.stockTradeOk()) return C("sell", "tk", S.hold.Keys.First(), "frac", 1, "where", "app");   // 만기 직전 정리
                         var t = strat == "random" ? (r.NextDouble() < 0.1 ? C("watchEnd") : null) : Trade(); if (t != null) return t;
-                        if (Smart && S.debt > 0 && S.cash >= S.debt + Due) return C("watchEnd");   // 다 팔았으면 집에 가서 갚기
+                        if (Smart && S.debt > 0 && S.cash >= S.debt + Int) return C("watchEnd");   // 다 팔았으면 집에 가서 갚기
                         if (strat != "random" && !(Smart && PendingBuy() != null) && (S.min >= R.RT_STOCK[0] || !Smart || G.weekend())) return C("watchEnd");
                         return C("tick", "m", Math.Max(1, Math.Min(60, G.slotEndMin(S.slot) - S.min)));
                     }
@@ -244,6 +265,14 @@ namespace KwGame.Sim
                     {
                         if (P.stage == "side") return C("payday", "k", "odd");
                         if (P.stage == "repay") return C("payday", "k", G.v4 && G.daysLeft() <= 0 ? "repayAll" : "keep");
+                        if (P.stage == "gate")
+                        {   // 원금 분납: 낼 수 있으면 냄. 모자라면 — 이번이 마지막 기회(연속 미납 직전·만기)면 급매해서라도, 아니면 가진 만큼만
+                            bool can(string k0) => P.opts.Any(o => o.k == k0 && !o.dis);
+                            if (can("gatePay")) return C("payday", "k", "gatePay");
+                            bool must = S.missN + 1 >= R.V4_MISS_MAX || G.daysLeft() <= 0;
+                            if (can("gateSell") && (must || strat == "random" && r.NextDouble() < 0.5)) return C("payday", "k", "gateSell");
+                            return C("payday", "k", can("gatePart") ? "gatePart" : "gateSkip");
+                        }
                         if (G.v4 && G.daysLeft() <= 0 && P.opts.Any(o => o.k == "sell" && !o.dis)) return C("payday", "k", "sell");
                         foreach (var k in new[] { "pay", "sell", "loan", "bet" }) if (P.opts.Any(o => o.k == k && !o.dis)) return C("payday", "k", k);
                         return null;
@@ -262,7 +291,7 @@ namespace KwGame.Sim
             var t = Trade(); if (t != null) return t;
             // 상환: smart 는 다 갚을 수 있을 때 한 번에 (밑천 굴림), 나머지는 이자 낼 돈만 남기고 수시로
             double eq = S.cash + G.holdVal();
-            if (Smart && S.debt > 0 && eq >= S.debt + Due)
+            if (Smart && S.debt > 0 && eq >= S.debt + Int)
             {
                 if (S.cash >= S.debt) { repayAmt = S.debt; return C("repayOpen"); }
                 if (S.cps.Count > 0) return C("closeCoins");
@@ -290,7 +319,7 @@ namespace KwGame.Sim
             if (strat == "gamble")
             {
                 // 턴 모드 gamble 봇과 같은 성향: 300만 밑이면 한도까지 땡김 → 저녁·점심은 카지노 올인, 아침은 복권, 빈털터리면 알바
-                if (S.debt > 0 && S.cash >= S.debt + Due) { repayAmt = S.debt; return C("repayOpen"); }
+                if (S.debt > 0 && S.cash >= S.debt + Int) { repayAmt = S.debt; return C("repayOpen"); }
                 if (S.cash < 3000000 && S.debt + R.LOAN_AMTS[0] <= G.loanCap() && G.loanOk() && loanT != G.Tnow()) { loanT = G.Tnow(); return C("loanOpen"); }
                 if (S.stress >= 80 || S.hp < 12) return C("rest");
                 if (S.cash < 100000 && S.hp >= 45) return Go("work", "l-cafe");
@@ -321,7 +350,7 @@ namespace KwGame.Sim
             if (S.stress >= 58) return careful || r.NextDouble() < 0.5 ? C("date") : C("rest");
             if (strat == "gamble")
             {
-                if (S.debt > 0 && S.cash >= S.debt + Due) { repayAmt = S.debt; return C("repayOpen"); }
+                if (S.debt > 0 && S.cash >= S.debt + Int) { repayAmt = S.debt; return C("repayOpen"); }
                 if (S.cash < 3000000 && S.debt + R.LOAN_AMTS[0] <= G.loanCap() && G.loanOk() && loanT != G.Tnow()) { loanT = G.Tnow(); return C("loanOpen"); }
                 if (S.cash < 100000 && S.hp >= 45) return Go("work", "l-cafe");
                 if (S.slot >= 1 && S.cash >= 10000) return Go("casino", new[] { "l-oddeven", "l-slot" }[r.Next(2)]);
@@ -398,6 +427,8 @@ namespace KwGame.Sim
         /// 국면 타기는 여윳돈 절반만 (나머지는 리포트 매매 몫)
         double RideAmt => Math.Floor(Spare * 0.5 / 1000) * 1000;
         bool RideWanted() => RideTk() is string k && (D.TK[k].IsCoin ? !S.cps.Any(c => c.tk == k) : !S.hold.Has(k)) && Spare >= 500000;
+        /// 코인 증거금: 상한에 남은 만큼만 (관문 규칙)
+        double Room(double amt) => G.v4 ? Math.Min(amt, Math.Floor(G.marginRoom() / 1000) * 1000) : amt;
         Tip PendingBuy() => G.activeTips().FirstOrDefault(x => Follow(x) && x.dir > 0 && x.Tr >= G.Tnow() && !tipDone.Contains(x.id));
         SimCommand Go(string loc, string act) { wantLoc = loc; wantAct = act; return C("map"); }
 
@@ -408,7 +439,7 @@ namespace KwGame.Sim
             if (Smart)
             {
                 // 다 갚을 수 있으면 정리 (장 보기 중이면 여기서 팔고, 집에 가서 갚음)
-                if (G.v4 && S.debt > 0 && S.cash + G.holdVal() >= S.debt + Due && S.cash < S.debt + Due)
+                if (G.v4 && S.debt > 0 && S.cash + G.holdVal() >= S.debt + Int && S.cash < S.debt + Int)
                 {
                     if (S.cps.Count > 0) return C("closeCoins");
                     if (open && S.hold.Count > 0) return C("sell", "tk", S.hold.Keys.First(), "frac", 1, "where", "app");
@@ -431,6 +462,7 @@ namespace KwGame.Sim
                     if ((strat == "pro" && Mood() >= 0) || (strat == "casual" && r.NextDouble() < 0.5))   // pro 는 내리는 장이면 좋은 속보도 거름
                     {
                         double amt = Math.Floor(Math.Max(0, S.cash - Due * (DaysToPay <= 2 ? 1.05 : 0) - 200000) * 0.6 / 1000) * 1000;
+                        if (nt.IsCoin) amt = Room(amt);
                         if (amt >= 100000 && nt.IsCoin && !S.cps.Any(c => c.tk == nt.id)) { newsPos[nt.id] = G.Tnow(); newsPx[nt.id] = S.mk.tk[nt.id].p; return C("open", "tk", nt.id, "dir", 1, "lev", 1, "amt", amt); }
                         if (amt >= 100000 && nt.IsStock && open) { newsPos[nt.id] = G.Tnow(); newsPx[nt.id] = S.mk.tk[nt.id].p; return C("buy", "tk", nt.id, "amt", amt, "where", "app"); }
                     }
@@ -449,20 +481,21 @@ namespace KwGame.Sim
                     // 국면 바뀌면 지난 탈 것 정리 (코인 롱 · 주식)
                     foreach (var c in S.cps.ToList()) if (c.tk != ride && !newsPos.ContainsKey(c.tk)) return C("close", "id", c.id);
                     if (open) foreach (var k in S.hold.Keys.ToList()) if (k != ride && (k == "INV" || D.TK[k].beta >= 1.2) && !G.activeTips(k).Any(x => Follow(x) && x.dir > 0)) return C("sell", "tk", k, "frac", 1, "where", "app");
-                    if (ride != null && D.TK[ride].IsCoin && RideWanted() && PendingBuy() == null) return C("open", "tk", ride, "dir", 1, "lev", 2, "amt", RideAmt);
+                    if (ride != null && D.TK[ride].IsCoin && RideWanted() && PendingBuy() == null && Room(RideAmt) >= 100000) return C("open", "tk", ride, "dir", 1, "lev", 2, "amt", Room(RideAmt));
                 }
                 if (ride != null && S.hold.Has(ride) && PendingBuy() != null && S.cash < 500000 && open) return C("sell", "tk", ride, "frac", 1, "where", "app");
                 if (strat == "casual" && G.v4 && S.cps.Count == 0 && S.cash >= 300000 && r.NextDouble() < 0.04 && !(G.promNow()?.avoid == "coin" && r.NextDouble() < 0.6))
                 {
                     var cs = D.TKList.Where(x => x.IsCoin && G.tkOpen(x.id) && !x.inv).ToList(); var tk = cs[r.Next(cs.Count)];
-                    return C("open", "tk", tk.id, "dir", 1, "lev", 10, "amt", Math.Floor(S.cash * 0.2 / 1000) * 1000);
+                    double a10 = Room(Math.Floor(S.cash * 0.2 / 1000) * 1000);
+                    if (a10 >= 10000) return C("open", "tk", tk.id, "dir", 1, "lev", 10, "amt", a10);
                 }
                 if (strat == "casual") foreach (var c in S.cps.ToList()) if (c.t0 < G.Tnow() - 2) return C("close", "id", c.id);
                 if (!open) return null;
                 foreach (var k in S.hold.Keys.ToList())
                     if (k != ride && !(newsPos.TryGetValue(k, out var nT) && nT == G.Tnow()) && !G.activeTips(k).Any(x => Follow(x) && x.dir > 0))
                     {
-                        var h = S.hold.Get(k); double ret = h.q * S.mk.tk[k].p / h.cost - 1; res.sells++; res.sellRet += ret;
+                        var h = S.hold.Get(k); double ret = h.q * S.mk.tk[k].p / h.cost - 1; res.sells++; res.sellRet += ret; res.sellRets.Add(ret);
                         var lt = S.tips.LastOrDefault(x => x.tk == k && x.who == RES);
                         Trace?.Invoke($"   매도 {k} {ret:P1} (산 칸 {h.t0}, 지금 {G.Tnow()} {S.min / 60}시, 정보 {lt?.kind} {lt?.res} Tr {lt?.Tr} rr {lt?.rr:P0})");
                         return C("sell", "tk", k, "frac", 1, "where", "app");
@@ -487,7 +520,8 @@ namespace KwGame.Sim
                 if (S.cps.Count == 0 && S.cash >= 50000 && r.NextDouble() < 0.25)
                 {
                     var cs = D.TKList.Where(x => x.IsCoin && G.tkOpen(x.id) && !x.inv).ToList(); var tk = cs[r.Next(cs.Count)];
-                    return C("open", "tk", tk.id, "dir", G.shortOk() ? r.Next(2) * 2 - 1 : 1, "lev", Math.Min(tk.maxLev >= 50 ? 50 : tk.maxLev, G.levCap()), "amt", Math.Floor(S.cash * 0.25 / 1000) * 1000);
+                    double ag = Room(Math.Floor(S.cash * 0.25 / 1000) * 1000);
+                    if (ag >= 10000) return C("open", "tk", tk.id, "dir", G.shortOk() ? r.Next(2) * 2 - 1 : 1, "lev", Math.Min(tk.maxLev >= 50 ? 50 : tk.maxLev, G.levCap()), "amt", ag);
                 }
             }
             return null;
@@ -500,7 +534,7 @@ namespace KwGame.Sim
             if (x < 0.5) return C("tick", "m", r.Next(1, 40));
             if (x < 0.58) return C("rest");
             if (x < 0.7 && G.stockTradeOk()) { var ks = G.STK().Where(G.tkOpen).ToList(); return C("buy", "tk", ks[r.Next(ks.Count)], "amt", S.cash * 0.3, "where", "app"); }
-            if (x < 0.8) { var cs = D.TKList.Where(t => t.IsCoin && G.tkOpen(t.id)).ToList(); var t0 = cs[r.Next(cs.Count)]; return C("open", "tk", t0.id, "dir", r.Next(2) * 2 - 1, "lev", new[] { 1, 5, 25, 50 }[r.Next(4)], "amt", S.cash * 0.2); }
+            if (x < 0.8) { var cs = D.TKList.Where(t => t.IsCoin && G.tkOpen(t.id)).ToList(); var t0 = cs[r.Next(cs.Count)]; return C("open", "tk", t0.id, "dir", r.Next(2) * 2 - 1, "lev", new[] { 1, 5, 25, 50 }[r.Next(4)], "amt", Room(S.cash * 0.2)); }
             if (x < 0.85) return C("closeCoins");
             if (x < 0.88 && G.stockTradeOk()) { var h = S.hold.Keys.FirstOrDefault(); if (h != null) return C("sell", "tk", h, "frac", 1, "where", "app"); }
             if (x < 0.9 && S.cash < 100000) return C("loanOpen");
