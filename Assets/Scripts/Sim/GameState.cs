@@ -78,6 +78,8 @@ namespace KwGame.Sim
         public bool first, jackpot, rerolled, betUsed, cont;
         public double n0, total, staked, before, spent, got, mx, due, took, half;
         public int A, As, rounds, race, n, bought, pulls, si; public string evId;
+        /// 알바 중 몰래 폰 본 횟수 · 들켰나 (그 칸 일당 0)
+        public int peeks; public bool caught;
         public WorkSetup setup; public List<Horse> H; public ScratchCard card; public GachaLast last;
         public List<Opt> opts; public List<string> offer;
         public Pending(string t) { this.t = t; }
@@ -155,6 +157,8 @@ namespace KwGame.Sim
         public string diff = "normal"; public int liqWork, maxLev, promKept, promBroke; public bool awayWork;
         /// 알바 중 청산 경보: 마지막 일당 · 경보를 띄운 칸 (한 칸 1회)
         public double lastPay; public int alertT = -1;
+        /// 하루 결과 (정산 카드 · 밤의 미래): 아침 기준 실현손익·청산 수 · 그날 결과 종류 · 정산/청산 밤 장면/미래의 감을 쓴 날
+        public double dayReal0, dayLiq0; public string dayRes; public int settleD, nightEvD, senseD;
         /// 주간 납부 관문: 통과한 횟수(증거금 상한·숏·대출 해금 단계) · 연속 미납 횟수
         public int gateTier, missN;
         /// 이번 주에 김사장한테 빌린 돈 (이번 주 원금 분납에선 빼 줌 = 다음 주로 미루는 다리)

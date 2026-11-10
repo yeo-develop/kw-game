@@ -381,7 +381,7 @@ namespace KwGame.View
         // ---------- 정보 수첩 ----------
         void TipsApp(VisualElement body)
         {
-            var tips = G.activeTips().OrderBy(t => t.Tr).ToList();
+            var tips = G.activeTips().OrderBy(t => t.Td > 0 ? t.Td : t.Tr).ToList();   // 분석가 리포트는 기한순 (진짜 발표 칸은 숨김)
             void H(string t, string sub)
             {
                 var hr = Ui.Row(); hr.style.marginTop = 14; hr.style.marginBottom = 8; hr.style.borderBottomWidth = 2; hr.style.borderBottomColor = PaperLine; hr.style.paddingBottom = 4; body.Add(hr);

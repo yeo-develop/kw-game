@@ -32,7 +32,7 @@ namespace KwGame.Sim
                     return D.JOBList.Select(J => new LocOpt
                     {
                         k = "l-" + J.id, ic = J.ic, l = J.name,
-                        sub = hpOff ? T("v4.lo.pay", "a", man(jobPay(J, 0) * (has("grind") ? R.GRIND_PAY : 1)), "b", man(jobPay(J, 1) * (has("grind") ? R.GRIND_PAY : 1)), "s", workStress(J, S.workStreak + 1)) : T("lo.pay", "a", man((S.rt ? jobPay(J, 0) : J.@base) * (has("grind") ? R.GRIND_PAY : 1)), "b", man((S.rt ? jobPay(J, 1) : J.@base + J.var) * (has("grind") ? R.GRIND_PAY : 1)), "h", jobHp(J)) + (S.hp <= jobHp(J) ? T("lo.faintRisk") : S.hp < R.HP_LOW ? T("lo.tiredPen") : "")
+                        sub = hpOff ? T("v4.lo.pay", "a", man(jobPay(J, 0) * (has("grind") ? R.GRIND_PAY : 1)), "b", man(jobPay(J, 1) * (has("grind") ? R.GRIND_PAY : 1)), "s", workStress(J, S.workStreak + 1)) + " · " + T(peekRisk(J.id) >= 1 ? "v4.peek.jobNo" : peekRisk(J.id) >= 0.3 ? "v4.peek.jobMid" : "v4.peek.jobOk") : T("lo.pay", "a", man((S.rt ? jobPay(J, 0) : J.@base) * (has("grind") ? R.GRIND_PAY : 1)), "b", man((S.rt ? jobPay(J, 1) : J.@base + J.var) * (has("grind") ? R.GRIND_PAY : 1)), "h", jobHp(J)) + (S.hp <= jobHp(J) ? T("lo.faintRisk") : S.hp < R.HP_LOW ? T("lo.tiredPen") : "")
                     }).ToList();
                 case "pc":
                     return new List<LocOpt> {

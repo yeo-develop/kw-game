@@ -60,11 +60,15 @@ namespace KwGame.Sim
                 double L = b - a, u = (m - a) / L, dt = 1 / L;
                 double X1 = Math.Log(rtClose(t, s, P) / s.so), x = Math.Log(s.p / s.so), x2;
                 // 발표 갭 (분석가 리포트 결과): 그 전까지는 발표 몫 J 를 뺀 길로 가다가 uj 에서 한 번에 뜀
-                double J = 0, uj = 9; if (P.jmp != null && P.jmp.TryGetValue(t.id, out var jp)) { uj = jp[0]; J = jmpLog(P, t.id); }
-                bool pre = u < uj - 1e-9;
-                double ub = 1, xb = X1 - (pre ? J : 0);   // 다음 목표: 경유점이 있으면 거기까지, 없으면 종가까지 (브라운 다리). 경유점은 발표 몫을 뺀 값
-                if (P.way != null && P.way.TryGetValue(t.id, out var W)) for (int i = 0; i + 1 < W.Length; i += 2) if (W[i] > u + 1e-9) { ub = W[i]; xb = W[i + 1] + (pre ? 0 : J); break; }
-                if (pre && u + dt >= uj - 1e-9) { x += J; xb += J; }   // 발표: 이번 1분에 갭
+                double later = 0, now = 0, done = 0;   // 아직 안 뜬 발표 몫 · 이번 1분에 뜨는 몫 · 이미 뜬 몫
+                if (P.jmp != null && P.jmp.TryGetValue(t.id, out var jp))
+                {
+                    var JJ = jmpLogs(P, t, s, s.so);
+                    for (int i = 0; i < JJ.Length; i++) { double uj = jp[2 * i]; if (u >= uj - 1e-9) done += JJ[i]; else if (u + dt >= uj - 1e-9) now += JJ[i]; else later += JJ[i]; }
+                }
+                double ub = 1, xb = X1 - later - now;   // 다음 목표: 경유점이 있으면 거기까지, 없으면 종가까지 (브라운 다리). 경유점은 발표 몫을 뺀 값
+                if (P.way != null && P.way.TryGetValue(t.id, out var W)) for (int i = 0; i + 1 < W.Length; i += 2) if (W[i] > u + 1e-9) { ub = W[i]; xb = W[i + 1] + done; break; }
+                if (now != 0) { x += now; xb += now; }   // 발표: 이번 1분에 갭
                 if (u + dt >= ub - 1e-9) x2 = xb;
                 else
                 {
@@ -131,7 +135,6 @@ namespace KwGame.Sim
                 S.min++; mins--;
                 if (v4) { planEvFire(P); rtStops(); }
                 rtLiq(liqs);
-                if (liqAlertCheck()) { S.owe += mins; mins = 0; break; }   // 알바 중 청산 경보: 남은 시간은 선택 뒤에 (spend 가 다시 흘림)
                 if (S.min % 60 == 0 && (!v4 || S.pending?.t == "watch")) readIgnored();   // v4: 행동으로 몇 시간 건너뛸 땐 읽씹 페널티 안 쌓음 (장 볼 때만)
             }
             if (liqs.Count > 0)
@@ -176,6 +179,7 @@ namespace KwGame.Sim
                 double g = c.lev * c.mult * c.dir * (S.mk.tk[c.tk].p / c.entry - 1);
                 bool tp = c.tp > 0 && g >= c.tp, sl = c.sl > 0 && g <= -c.sl;
                 if (!tp && !sl) continue;
+                if (g <= -0.9) continue;   // 갭이 청산선까지 넘었으면 손절이 아니라 청산 (rtLiq) — 손절을 걸었다고 더 잃으면 안 됨
                 double pnl = closeCoin(c, true) ?? 0;
                 toast(T(tp ? "v4.stop.tp" : "v4.stop.sl", "n", D.TK[c.tk].name, "pnl", sgnWon(pnl)), tp ? "good" : "liq", "coin");
                 Emit("stop", "id", c.id, "k", tp ? "tp" : "sl", "pnl", pnl, "tk", c.tk);
@@ -212,7 +216,7 @@ namespace KwGame.Sim
         void spend()
         {
             int o = S.owe; S.owe = 0;
-            if (!clockRun(o)) { if (S.pending?.t == "liqAlert") return; S.awayWork = false; after("home"); }   // 경보가 끼어들면 선택 뒤 spend 로 이어짐
+            if (!clockRun(o)) { S.awayWork = false; after("home"); }
         }
         bool tickCmd(SimCommand c)
         {

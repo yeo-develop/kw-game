@@ -19,12 +19,12 @@ namespace KwGame.Sim
             var cands = TKS().Where(k => tkOpen(k) && (!TK[k].meme || d.meme) && (d.stock ? TK[k].type == "stock" && !TK[k].inv : true) && (d.coin ? TK[k].type == "coin" : true)).ToList();
             if (d.meme && tkOpen("MMC") && rnd() < 0.5) cands = new List<string> { "MMC" };
             bool an = v4 && d.an;
-            if (an && oTk == null) { bool coinRep = rnd() < R.V4_AN_COINP; var cc = TKS().Where(k => tkOpen(k) && !TK[k].meme && !TK[k].inv && (TK[k].type == "coin") == coinRep).ToList(); if (cc.Count > 0) cands = cc; }   // 분석가 리포트: 코인이면 결과가 1~2칸 뒤 → 잡고 자리를 비울 이유
+            if (an && oTk == null) { bool coinRep = rnd() < R.V4_AN_COINP; var all = anTickers(); var cc = all.Where(k => (TK[k].type == "coin") == coinRep).ToList(); cands = cc.Count > 0 ? cc : all; }   // 분석가 리포트: 코인이면 결과가 1~2칸 뒤 → 잡고 자리를 비울 이유
             string tk = oTk != null && cands.Contains(oTk) ? oTk : cands[(int)Math.Floor(rnd() * cands.Count)];
             bool stockish = TK[tk].type == "stock";
             int dir = oDir != 0 ? oDir : (rnd() < (d.up ?? (stockish ? 0.65 : 0.5)) ? 1 : -1);
             double mag = d.mag[0] + rnd() * (d.mag[1] - d.mag[0]);
-            if (an) { if (!stockish) mag *= R.V4_AN_COIN; }
+            if (an) { if (!stockish) mag = Math.Min(0.6, mag * R.V4_AN_COIN * clamp(TK[tk].vol / Math.Max(1e-9, R.V4_AN_VOL0), 1, R.V4_AN_VOLX)); }   // 코인은 그 코인의 변동성만큼 크게 (잡음에 묻히지 않게 → 사나운 코인엔 배율을 낮춰야 함)
             else
             {
                 if (v4 && d.tier != "rep") mag *= R.V4_TIP_MAG;   // 찌라시 한 방이 시세를 뒤엎지 않게 (레버리지가 잡음이 아니라 판단을 키우도록)
@@ -87,6 +87,8 @@ namespace KwGame.Sim
             return A[Math.Min(A.Length - 1, order.IndexOf(i))];
         }
         /// 새 판·2부 시작: 분석가마다 지난 전적 V4_AN_PRIOR 건을 진짜 적중률로 뽑아 깔아 둠 (프로필에 보임). 씨앗 해시라 rng 흐름과 무관
+        /// 분석가가 다루는 종목 (열린 것 중 밈·곱버스 빼고)
+        List<string> anTickers() => TKS().Where(k => tkOpen(k) && !D.TK[k].meme && !D.TK[k].inv).ToList();
         public void anSeedPublic() => anSeed();
         void anSeed()
         {
@@ -106,7 +108,7 @@ namespace KwGame.Sim
         {
             var Rr = rsch(); double fee = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE;
             var ans = analysts(); Source pickA = null;
-            if (ans.Count > 0) { pickA = paid && who != null ? ans.FirstOrDefault(x => x.id == who) : null; if (paid && who != null && pickA == null) return null; }
+            if (ans.Count > 0) { pickA = paid && who != null ? ans.FirstOrDefault(x => x.id == who) : null; if (paid && who != null && pickA == null || anTickers().Count == 0) return null; }
             if (paid) { if (Rr.paid >= R.RSCH_PAID_MAX || S.cash < fee) return null; S.cash -= fee; Rr.paid++; S.today.Add(new Ledger { kind = "ev", amt = -fee, label = T("lbl.paidReport") }); }
             else { if (Rr.free >= freeMax()) return null; Rr.free++; }
             if (ans.Count > 0) return rollTip((pickA ?? ans[(int)Math.Min(ans.Count - 1, Math.Floor(rnd() * ans.Count))]).id);

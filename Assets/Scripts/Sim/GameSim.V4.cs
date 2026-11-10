@@ -60,39 +60,95 @@ namespace KwGame.Sim
         public double posLoss(CoinPos c) => c.entry > 0 ? -(c.lev * c.mult * c.dir * (S.mk.tk[c.tk].p / c.entry - 1)) : 0;
         /// 청산가
         public double liqPrice(CoinPos c) => c.entry * (1 - 0.9 * c.dir / Math.Max(1e-9, c.lev * c.mult));
-        /// 알바 나가 있는 동안 레버리지 포지션 손실이 문턱을 넘으면 한 칸에 한 번 경보 pending (true = 시계 멈춤)
-        bool liqAlertCheck()
+        // ---------- 알바 중 실시간 · 몰래 폰 보기 (docs/BLUEPRINT.md ①: 시세는 계속 흐르고 손은 묶임) ----------
+        /// 알바 미니게임이 도는 동안 시계를 m 분 흘림 (칸 끝 1분 전까지만 — 칸 마무리는 결과 뒤에). 그동안 예약·청산·발표가 그대로 일어남
+        Sub workTick(int m)
         {
-            if (!v4 || !S.awayWork || R.V4_ALERT_LOSS <= 0 || S.alertT == Tnow() || S.pending != null) return false;
+            var P = S.pending; if (!v4 || P == null || P.t != "work" || P.setup == null || P.setup.practice) return Sub.Err("state");
+            m = Math.Min(m, slotEndMin(S.slot) - 1 - S.min);
+            if (m <= 0) return Sub.Go();
+            S.awayWork = true;
+            clockRun(m);
+            workAlertCheck();
+            return Sub.Go();
+        }
+        /// 레버리지 포지션 손실이 문턱을 넘으면 한 칸에 한 번 알림 (화면: 미니게임 위 경고 — 폰을 볼지는 플레이어 몫)
+        void workAlertCheck()
+        {
+            if (R.V4_ALERT_LOSS <= 0 || S.alertT == Tnow()) return;
             CoinPos worst = null; double wl = 0;
             foreach (var c in S.cps) { if (c.lev * c.mult < 2 || c.margin <= 0) continue; double l = posLoss(c); if (l >= R.V4_ALERT_LOSS && l > wl) { wl = l; worst = c; } }
-            if (worst == null) return false;
+            if (worst == null) return;
             S.alertT = Tnow();
-            double took = round1k(S.lastPay * (1 - R.V4_ALERT_PAY));
-            S.pending = new Pending("liqAlert") { tk = worst.tk, n0 = Math.Min(1, wl), total = rhu(worst.margin * Math.Min(1, wl)), due = liqPrice(worst), took = took, half = R.V4_ALERT_CAUGHT, key = S.lastJob };
-            face("panic");
             toast(T("v4.alert.toast", "n", D.TK[worst.tk].name, "p", rhu(wl * 100)), "liq", "coin");
-            Emit("liqAlert", "tk", worst.tk, "loss", wl);
-            return true;
+            Emit("workAlert", "tk", worst.tk, "loss", wl, "liq", liqPrice(worst), "id", worst.id);
         }
-        /// 경보 선택. peek = 몰래 폰 본다 (전부 정리 + 일당 깎임 + 들킬 수도), 아니면 참는다. 남은 알바 시간은 spend 로 이어 흘림
-        Sub liqAlertPick(bool peek)
+        /// 이 알바에서 몰래 폰을 볼 때 들킬 확률 (1 이상 = 폰을 못 꺼냄)
+        public double peekRisk(string job) => R.V4_PEEK != null && R.V4_PEEK.TryGetValue(job ?? "", out var p) ? p : R.V4_ALERT_CAUGHT;
+        /// 지금 몰래 폰을 볼 수 있나 (알바 미니게임 중 + 폰을 꺼낼 수 있는 알바)
+        public bool peekOk() => v4 && S.pending?.t == "work" && S.pending.setup != null && !S.pending.setup.practice && peekRisk(S.pending.key) < 1;
+        /// 지금까지 폰을 본 만큼 깎이는 일당 비율 (들켰으면 전부)
+        public double peekCut(Pending P) => P == null ? 0 : P.caught ? 1 : Math.Min(1, R.V4_PEEK_PAY * P.peeks);
+        /// 몰래 폰 보기: 포지션 정리 (id 하나, 0 이하면 전부). 볼 때마다 일당 −V4_PEEK_PAY, 들키면 그 칸 일당 0
+        Sub workPeek(int id)
         {
-            var P = S.pending; if (P == null || P.t != "liqAlert") return Sub.Err("state");
-            S.pending = null;
-            if (peek)
-            {
-                double s = 0; foreach (var x in S.cps.ToList()) s += closeCoin(x) ?? 0;
-                Emit("trade", "op", "closeCoins", "ok", true, "pnl", s);
-                bool caught = hashU(Tnow() * 31 + 7) < P.half;
-                double cut = caught ? S.lastPay : P.took;
-                if (cut > 0) { money(-cut, "work", T(caught ? "lbl.alertCaught" : "lbl.alertCut")); coverNeg(); }   // 돌발 매수 뒤라 현금이 모자라면 빚으로
-                if (caught) { stress(8); pushK("m", T("v4.alert.caughtM")); toast(T("v4.alert.caught", "p", won(S.lastPay)), "liq"); }
-                else toast(T("v4.alert.peek", "p", won(cut), "pnl", sgnWon(s)), "info");
-            }
-            else toast(T("v4.alert.hold"), "info");
-            after("spend");
+            var P = S.pending; if (!peekOk()) return Sub.Err("peek");
+            P.peeks++;
+            bool was = P.caught;
+            if (!P.caught && hashU(Tnow() * 31 + 7 + P.peeks * 97) < peekRisk(P.key)) P.caught = true;
+            double s = 0; int n = 0;
+            foreach (var x in S.cps.ToList()) if (id <= 0 || x.id == id) { s += closeCoin(x) ?? 0; n++; }
+            Emit("trade", "op", "closeCoins", "ok", true, "pnl", s);
+            Emit("peek", "n", P.peeks, "caught", P.caught, "pnl", s, "closed", n, "cut", peekCut(P));
+            if (P.caught && !was) { stress(8); toast(T("v4.peek.caught"), "liq"); }
+            else toast(T("v4.peek.ok", "pnl", sgnWon(s), "p", rhu(peekCut(P) * 100)), "info");
             return Sub.Go();
+        }
+
+        // ---------- 하루 결과: 정산 카드 · 밤의 미래 · 호감 버프 (docs/BLUEPRINT.md ① ⑥-5·6) ----------
+        /// 오늘(아침 이후) 매매 실현손익 · 청산 횟수
+        public double dayPnl() => S.realized - S.dayReal0;
+        public int dayLiq() => (int)Math.Round(S.st.liq - S.dayLiq0);
+        /// 그날 결과 4종: liq 청산 · jackpot 대박 · loss 손실 · normal 평범
+        public string dayClass() { double p = dayPnl(), k = debtScale(); return dayLiq() > 0 ? "liq" : p >= R.V4_NIGHT_BIG * k ? "jackpot" : p <= -R.V4_NIGHT_LOSS * k ? "loss" : "normal"; }
+        /// 저녁 칸 시작: 낮 결과를 한 번에 정산 (일당 · 매매 · 청산 · 리포트 적중) → 그 결과로 밤의 미래 대사가 갈림
+        void v4Evening()
+        {
+            if (!v4 || !isEve() || S.settleD == absDay()) return;
+            S.settleD = absDay();
+            double wage = 0; foreach (var x in S.today) if (x.kind == "work") wage += x.amt;
+            double pnl = dayPnl(); int liq = dayLiq(), day = Tnow() / R.SLOTS;
+            var reps = S.tips.Where(t => !string.IsNullOrEmpty(t.res) && srcOf(t).an && t.Tr / R.SLOTS == day).ToList();
+            S.dayRes = dayClass();
+            if (wage != 0 || pnl != 0 || liq > 0 || reps.Count > 0)
+                Emit("settle", "cls", S.dayRes, "wage", wage, "pnl", pnl, "liq", liq, "unreal", unreal(), "hit", reps.Count(t => t.res == "hit"), "miss", reps.Count(t => t.res != "hit"), "net", wage + pnl);
+            if (S.dayRes == "jackpot") greedD(R.V4_NIGHT_GREED);
+            if (S.day == R.MONTH_DAYS && S.paidMonth != S.month && S.debt > 0) return;   // 이자일 저녁 집 대사는 김사장 얘기
+            var L = TA("v4.night." + S.dayRes); if (L.Count == 0) return;
+            string line = fpick(L).Replace("{a}", won(Math.Abs(pnl))).Replace("{w}", won(wage));
+            S.hl = new HomeLine { T = Tnow(), t = line };
+            Emit("night", "cls", S.dayRes, "line", line);
+        }
+        /// 호감 구간 버프 단계 (기둥 연결): 1 = 도시락(아침 스트레스 −) · 2 = + 미래의 감(하루 한 번 가짜 속보 경고) · 3 = + 응원(일당 +)
+        public int buffTier() { var A = R.V4_BUFF_AFF; if (!v4 || A == null) return 0; int n = 0; foreach (var a in A) if (S.aff >= a) n++; return n; }
+        /// 지금 켜진 버프 이름들 (화면용)
+        public List<string> buffs()
+        {
+            var L = new List<string>(); int t = buffTier();
+            if (t >= 1) L.Add(T("v4.buff.lunchN")); if (t >= 2) L.Add(T(S.senseD == absDay() ? "v4.buff.senseUsed" : "v4.buff.senseN")); if (t >= 3) L.Add(T("v4.buff.cheerN", "p", rhu((R.V4_BUFF_CHEER - 1) * 100)));
+            return L;
+        }
+        /// 알바를 잘하면 (점수 V4_WORK_INFO↑) 손님이 정보를 흘림: 분석가 한 명의 지난 리포트 한 건이 맞았나 (전적에 더해짐 = 읽을 거리가 빨리 쌓임)
+        void workInfo()
+        {
+            var L = analysts(); if (L.Count == 0) return;
+            var a = L[(int)Math.Min(L.Count - 1, Math.Floor(hashU(Tnow() * 53 + 3) * L.Count))];
+            bool hit = hashU(Tnow() * 59 + 11) < anAcc(a.id);
+            if (!S.srcStat.TryGetValue(a.id, out var g)) S.srcStat[a.id] = g = new int[2];
+            g[1]++; if (hit) g[0]++;
+            string x = T(hit ? "v4.work.infoHit" : "v4.work.infoMiss", "ic", a.ic, "a", a.name, "r", srcRec(a.id));
+            pushF("👂", x, "tip"); toast(x, "info");
+            Emit("workInfo", "who", a.id, "hit", hit);
         }
         public bool locHidden(string id) => v4 && R.V4_HIDE_LOCS != null && R.V4_HIDE_LOCS.Contains(id);
         /// 국장 주문 가능: v4 는 장 보기 칸에서만 (행동 → 소재 → 본 행동). 코인은 어디서나
@@ -105,6 +161,11 @@ namespace KwGame.Sim
             // AI 기사면 출처·본문까지 (가짜 30% 는 기사 속 단서로 가려냄 → 칸 끝에 [오보] 정정)
             pushF("🚨", T("v4.newsFlash", "h", n.h), "news", n.llm ? new List<string> { T("news.src", "s", n.src, "b", n.body) } : null);
             toast(T("v4.newsFlash", "h", n.h), "news", "news", "flash");   // room "flash" = 칸 시작 속보 (소리 구분용)
+            if (n.fake && buffTier() >= 2 && S.senseD != absDay() && n.tk != "MKT")
+            {   // 호감 버프: 미래의 감 — 하루에 한 번, 그날 첫 가짜 속보를 알아챔
+                S.senseD = absDay(); string x = T("v4.buff.sense", "n", D.TK.TryGetValue(n.tk, out var nt) ? nt.name : n.tk);
+                pushK("m", x); toast(x, "info", "kakao", "m"); Emit("sense", "tk", n.tk);
+            }
         }
         /// 장별 뉴스 방향 편향 (국면 = 확률). 좋은 뉴스가 나올 확률
         int newsDir() => rnd() < regNow()[3] ? 1 : -1;
@@ -240,7 +301,7 @@ namespace KwGame.Sim
         {
             S.missN = 0; S.pending = null;
             bool last = absDay() >= R.V4_DAYS;
-            if (last || S.debt <= 0) { paydayEnd(); return; }
+            if (last || S.debt <= 0) { S.loanWeek = 0; paydayEnd(); return; }
             bool loan0 = loanOk();
             S.gateTier++; S.loanWeek = 0;
             var ups = new List<string>();
@@ -320,6 +381,8 @@ namespace KwGame.Sim
             int key = S.part * 10 + chapter();
             if (S.day == 1 && S.chSeen != key) { S.chSeen = key; Emit("story", "key", (S.part > 1 ? "p2ch" : "ch") + chapter()); }
             promPick();
+            S.dayReal0 = S.realized; S.dayLiq0 = S.st.liq; S.dayRes = null;   // 오늘 결과(정산 카드)의 기준점
+            if (buffTier() >= 1 && R.V4_BUFF_LUNCH > 0) { stress(-R.V4_BUFF_LUNCH); toast(T("v4.buff.lunch", "s", R.V4_BUFF_LUNCH), "good"); }   // 호감 버프: 도시락
             if (S.sleepD == absDay() && R.V4_SLEEP_RSCH > 0) toast(T("v4.rest.morning", "n", R.V4_SLEEP_RSCH), "good");   // 어젯밤 푹 잠
             if (S.greed >= R.V4_GREED_HEIST) pushK("m", fpick(TA("v4.greedK2")));        // 털기 문턱 넘음
             else if (S.greed >= R.V4_GREED_HEIST - 15) pushK("m", fpick(TA("v4.greedK")));   // 슬슬
@@ -376,7 +439,15 @@ namespace KwGame.Sim
         {
             if (!v4 || D.EVENTS.Count == 0 || fainted() || S.ending != null) return false;
             var ev = D.EVENTS.FirstOrDefault(e => e.day == absDay() && (e.part == 0 || e.part == S.part) && (e.slots == null || e.slots.Contains(S.slot)) && S.heist >= e.heistMin && !S.evSeen.Contains(e.id + "@" + S.part));
-            if (ev == null) return false;
+            if (ev == null)
+            {   // 조건 장면: 청산당한 날 밤 (하루 한 번, 이자일 저녁 빼고)
+                if (isEve() && S.dayRes == "liq" && S.nightEvD != absDay() && S.day != R.MONTH_DAYS)
+                {
+                    var ne = D.EVENTS.FirstOrDefault(e => e.when == "liq" && (e.part == 0 || e.part == S.part));
+                    if (ne != null) { S.nightEvD = absDay(); S.evT = Tnow(); evStart(ne); return true; }
+                }
+                return false;
+            }
             S.evSeen.Add(ev.id + "@" + S.part); S.evT = Tnow();
             evStart(ev);
             return true;
@@ -435,8 +506,9 @@ namespace KwGame.Sim
         /// 2부 판돈: 가진 돈이 V4_P2_CASH 보다 적으면 거기까지 채움 (빚 1억에 포함된 돈이라는 설정 — 굴릴 돈이 없으면 읽기 엔진이 안 돎)
         public void p2Seed()
         {
-            if (R.V4_P2_CASH <= 0 || S.cash >= R.V4_P2_CASH) return;
-            S.cash = R.V4_P2_CASH; pushK("kim", T("v4.p2.seed", "a", man(R.V4_P2_CASH)));
+            double eq = S.cash + holdVal();   // 들고 넘어온 포지션·주식도 가진 돈 (현금만 비우고 판돈을 또 받는 수 방지)
+            if (R.V4_P2_CASH <= 0 || eq >= R.V4_P2_CASH) return;
+            S.cash += R.V4_P2_CASH - eq; pushK("kim", T("v4.p2.seed", "a", man(R.V4_P2_CASH)));
         }
         bool part2Start()
         {

@@ -18,7 +18,7 @@ namespace KwGame.Sim
             return () => Rng.Float(ref a);
         }
         bool evFits(EvDef e) =>
-            e.day == 0 && (e.slots == null || e.slots.Contains(S.slot)) && absDay() >= Math.Max(1, e.minDay) && S.cash >= e.minCash && S.addict >= e.minAddict;
+            e.day == 0 && e.when == null && (e.slots == null || e.slots.Contains(S.slot)) && absDay() >= Math.Max(1, e.minDay) && S.cash >= e.minCash && S.addict >= e.minAddict;
 
         /// homeStep 에서 호출. 이벤트를 띄웠으면 true (pending = event)
         bool evCheck()

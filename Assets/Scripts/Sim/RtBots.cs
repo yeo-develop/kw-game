@@ -100,7 +100,7 @@ namespace KwGame.Sim
         public static bool Part2;
         /// 난이도 (하네스 BAL_DIFF=easy|normal|hard)
         public static string Diff = "normal";
-        int traceDay, wkSeen;
+        int traceDay, wkSeen, peekT = -1;
         readonly GameData D; readonly string strat; readonly bool heistRoute; readonly Random r; readonly double mgLo, mgHi;
         /// pro 변형 (측정용): trader = 알바 없이 칸마다 장만 봄 · proloan = 납부일에 모자라면 김사장 돈으로 메움 · proall = 전적을 안 읽고 리포트를 전부 따라 탐
         readonly bool allWatch, bridge, blind;
@@ -212,7 +212,7 @@ namespace KwGame.Sim
             if (res.asset7 < 0 && G.absDay() >= 7) res.asset7 = S.cash + G.holdVal();
             if (res.asset14 < 0 && G.absDay() >= 14) res.asset14 = S.cash + G.holdVal() + (S.st.repaid - S.st.borrowed);   // 14일째: 가진 것 + 그동안 갚은 원금 (순 진행)
             if (c.t == "report" && c.Truthy("paid")) res.paidRep++;
-            if (c.t == "alertPeek" || c.t == "alertHold") { res.alerts++; if (c.t == "alertPeek") res.peeks++; }
+            if (c.t == "workPeek") res.peeks++;
             double cash0 = S.cash; int cps0 = S.cps.Count;
             double real0 = S.realized; var ids0 = G.v4 ? S.cps.Select(x => x.id).ToList() : null; var mg0 = G.v4 ? S.cps.ToDictionary(x => x.id, x => x.margin) : null;
             var evs = G.Apply(c);
@@ -232,7 +232,7 @@ namespace KwGame.Sim
             if (Trace != null && G.v4)
             {
                 if (c.t == "open") Trace($"   코인 {(S.cps.Count > cps0 ? "진입" : "거절")} {c.Str("tk")} {(c.Int("dir", 0) > 0 ? "롱" : "숏")} {c.Num("lev")}배 {c.Num("amt") / 1e4:F0}만 (s{S.slot} {S.min / 60}시)");
-                else if (c.t == "close" || c.t == "closeCoins" || c.t == "alertPeek") Trace($"   코인 정리 {(S.cash - cash0) / 1e4:+0;-0}만 (s{S.slot} {S.min / 60}시)");
+                else if (c.t == "close" || c.t == "closeCoins" || c.t == "workPeek") Trace($"   코인 정리 {(S.cash - cash0) / 1e4:+0;-0}만 (s{S.slot} {S.min / 60}시)");
                 foreach (var e in evs)
                 {
                     if (e.t == "gate") Trace($"   관문 {(e["ok"] is bool b0 && b0 ? "통과" : "미납")} 빚 {S.debt / 1e4:F0} 현금 {S.cash / 1e4:F0}");
@@ -244,6 +244,7 @@ namespace KwGame.Sim
             {
                 if (e.t == "error") { res.errs++; res.lastErr = c.t + " @" + (S.pending?.t ?? "-"); }
                 else if (e.t == "gate") { if (e["ok"] is bool ok && ok) res.gatePass++; else { res.gateMiss++; if (G.absDay() < R.V4_DAYS) res.missEarly = true; } }
+                else if (e.t == "workAlert") res.alerts++;
             }
             if (res.firstRepay == 0 && S.st.repaid > 0) res.firstRepay = G.absDay();
             if (ps0 != null && G.absDay() != d0) { res.promN++; if (ps0 == "ok") res.promOk++; }   // 자정 넘긴 명령 직전 부탁 상태
@@ -289,7 +290,25 @@ namespace KwGame.Sim
                         return a != null && opts.Any(o => o.k == a) ? C("act", "k", a) : C("leave");
                     }
                 case "encounter": return C("encounter", "ask", false);
-                case "work": return P.setup == null ? C("mgSetup") : C("mgResult", "score", mgLo + r.NextDouble() * (mgHi - mgLo));
+                case "work":
+                    {
+                        if (P.setup == null) return C("mgSetup");
+                        int left = G.v4 ? G.slotEndMin(S.slot) - 1 - S.min : 0;
+                        if (left > 0 && S.cps.Any(x => !x.mirai))
+                        {   // 포지션을 들고 일하는 중: 30분씩 흘리며 지켜봄 (사람 = 미니게임 구석의 내 포지션). 손실이 깊으면 몰래 폰을 볼지 정함 (한 칸에 한 번)
+                            var worst = S.cps.Where(x => !x.mirai && x.lev * x.mult >= 2).OrderByDescending(x => G.posLoss(x)).FirstOrDefault();
+                            if (worst != null && G.posLoss(worst) >= R.V4_ALERT_LOSS && G.peekOk() && peekT != G.Tnow())
+                            {
+                                peekT = G.Tnow();
+                                // pro: 발표를 기다리는 리포트 포지션은 잡음에 밀려도 안 건드림 (발표가 이미 틀렸고 남은 증거금이 크면 정리). casual 은 반반
+                                bool waiting = tipPos.TryGetValue(worst.id, out var tid) && S.tips.Any(q => q.id == tid && string.IsNullOrEmpty(q.res) && q.Tr >= G.Tnow() && !(S.mplan != null && S.mplan.evs.Any(e => e.k == "report" && e.id == tid && e.done)));
+                                bool peek = strat == "pro" ? !waiting && worst.margin * (1 - G.posLoss(worst)) >= 600000 : Human && r.NextDouble() < 0.5;
+                                if (peek) return C("workPeek", "id", strat == "pro" ? worst.id : 0);
+                            }
+                            return C("workTick", "m", Math.Min(30, left));
+                        }
+                        return C("mgResult", "score", mgLo + r.NextDouble() * (mgHi - mgLo));
+                    }
                 case "casino":
                     {
                         // 도박 봇 = 매판 올인 (턴 모드 bots 와 같음), 하이로우는 유리한 쪽
@@ -357,7 +376,6 @@ namespace KwGame.Sim
                         return C("evPick", "k", o[r.Next(o.Count)].k);
                     }
                 case "tempt": return C("tempt", "k", strat == "gamble" && S.cash >= 10000 ? "go" : "no");
-                case "liqAlert": return C(strat == "pro" || (strat == "casual" && r.NextDouble() < 0.5) ? "alertPeek" : "alertHold");   // 알바 중 청산 경보: pro 는 정리, casual 반반, 나머지는 참음
                 case "payday":
                     {
                         if (P.stage == "side") return C("payday", "k", "odd");
@@ -578,8 +596,8 @@ namespace KwGame.Sim
             double x = strat == "pro" ? 0 : r.NextDouble();
             if (G.hpOff)
             {   // 체력 삭제 뒤: 알바 차이 = 일당 대 스트레스. 스트레스 여유가 있으면 많이 주는 것
-                double room = 55 - S.stress;
-                bool ok(string id) => G.workStress(D.JOBS[id], S.workStreak + 1) <= room;
+                double room = 55 - S.stress; bool held = strat == "pro" && S.cps.Any(c => !c.mirai && c.lev * c.mult >= 2);
+                bool ok(string id) => G.workStress(D.JOBS[id], S.workStreak + 1) <= room && !(held && G.peekRisk(id) >= 1);
                 return Go("work", x < 0.3 && ok("ware") ? "l-ware" : x < 0.6 && ok("mart") ? "l-mart" : x < 0.8 ? "l-cafe" : "l-store");
             }
             return Go("work", S.hp >= 80 && x < 0.3 ? "l-ware" : S.hp >= 62 && x < 0.6 ? "l-mart" : x < 0.8 ? "l-cafe" : "l-store");
@@ -667,7 +685,9 @@ namespace KwGame.Sim
                 {
                     tipNextTr = ctip.id; nextCat = "tip";
                     Trace?.Invoke($"   리포트 매매 {ctip.who} 진짜적중률 {G.anAcc(ctip.who):F2} 전적 {G.srcRec(ctip.who)} 태도 {Stance(ctip)} 종류 {ctip.kind} 기한 +{ctip.Td - G.Tnow()} 증거금 {ac / 1e4:F0}만");
-                    return pro ? C("open", "tk", ctip.tk, "dir", ed, "lev", PlayLev, "amt", ac, "sl", PlaySl) : C("open", "tk", ctip.tk, "dir", ed, "lev", Math.Min(D.TK[ctip.tk].maxLev, CasualLev), "amt", ac);   // casual: 예약 없이
+                    // pro: 사나운 코인일수록 배율을 낮춤 (발표 폭도 잡음도 변동성만큼 큼). casual 은 늘 같은 배율
+                    double plev = Math.Max(1, Math.Min(D.TK[ctip.tk].maxLev, Math.Round(PlayLev * R.V4_AN_VOL0 / Math.Max(R.V4_AN_VOL0, D.TK[ctip.tk].vol))));
+                    return pro ? C("open", "tk", ctip.tk, "dir", ed, "lev", plev, "amt", ac, "sl", PlaySl) : C("open", "tk", ctip.tk, "dir", ed, "lev", Math.Min(D.TK[ctip.tk].maxLev, CasualLev), "amt", ac);   // casual: 예약 없이
                 }
             }
             // 탈 것 (pro): 폭락만 아니면 대장코인 롱을 기본으로 깔고 감 (제목의 포지션). 장 보기 칸에서만 잡음 = 예약 손절을 걸 수 있어서. 납부일엔 새로 안 잡음

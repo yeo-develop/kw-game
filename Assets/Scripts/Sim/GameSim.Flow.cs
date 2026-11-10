@@ -79,6 +79,7 @@ namespace KwGame.Sim
             }
             if (has("rumor")) { var t = rollTip(SUB); tipAnnounce(t, "sub"); }
             kqExpire(); kqMaybe(); hyMaybe(); gallTick(); newsFlash();
+            v4Evening();
             addictTick();
         }
         void addictTick()

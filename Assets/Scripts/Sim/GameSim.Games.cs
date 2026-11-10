@@ -15,7 +15,7 @@ namespace KwGame.Sim
         /// 일당 = 기본 + 성과×변동. 실시간 모드는 7만~14만 (피드백: 알바비 너무 짬)
         public double jobPay(Job J, double sc) => S.rt ? round1k((R.RT_JOB_PAY0 + R.RT_JOB_PAYV * sc) * jobMult(J)) : round1k(J.@base + J.var * sc);
         /// v4 직종 배율 (힘든 알바일수록 많이: 상하차 · 마트)
-        public double jobMult(Job J) => !v4 ? 1 : (R.V4_JOB_MULT != null && R.V4_JOB_MULT.TryGetValue(J.id, out var m) ? m : 1) * (S.part > 1 ? R.V4_P2_PAY : 1) * (isEve() && !weekend() ? R.V4_WORK_EVE : 1) * dv("pay");   // 평일 밤 = 미래·생활 시간 → 야간 알바는 덜 벌림 (주말은 그대로)
+        public double jobMult(Job J) => !v4 ? 1 : (R.V4_JOB_MULT != null && R.V4_JOB_MULT.TryGetValue(J.id, out var m) ? m : 1) * (S.part > 1 ? R.V4_P2_PAY : 1) * (isEve() && !weekend() ? R.V4_WORK_EVE : 1) * dv("pay") * (buffTier() >= 3 ? R.V4_BUFF_CHEER : 1);   // 평일 밤 = 미래·생활 시간 → 야간 알바는 덜 벌림 (주말은 그대로)
         /// 성과 배율: 턴 모드는 체력 낮으면 깎임. 실시간 모드는 컨디션 상관없이 1 (피드백: 컨디션 따라 돈 변동 없어도 됨)
         public double workMult() => S.rt ? 1 : hpMult();
         void workStart(string key, string loc)
@@ -62,9 +62,13 @@ namespace KwGame.Sim
             double hm = workMult(), sc = score * hm;
             double pay = jobPay(J, sc);
             if (has("grind")) { pay = round1k(pay * R.GRIND_PAY); augFx("grind", T("aug.grind")); }
+            double cut = v4 ? peekCut(P) : 0; double full = pay;
+            if (cut > 0) pay = round1k(pay * (1 - cut));   // 몰래 폰 본 만큼 깎임 (들켰으면 0)
             S.st.work++; S.st.earned += pay; S.workStreak++; promHit("work");
             if (S.rt) { S.awayWork = true; S.lastPay = pay; }   // 메타: 알바가 쓴 시간이 다 흐를 때까지 = 알바 나가 있음 (그동안 청산되면 liqWork)
-            money(pay, "work", T("lbl.work", "n", J.name, "p", rhu(sc * 100)));
+            money(pay, "work", T("lbl.work", "n", J.name, "p", rhu(sc * 100)) + (cut > 0 ? T(P.caught ? "lbl.peekCaught" : "lbl.peekCut", "a", won(full - pay)) : ""));
+            if (cut > 0 && P.caught) pushK("m", T("v4.alert.caughtM"));
+            if (v4 && sc >= R.V4_WORK_INFO) workInfo();
             hp(-jobHp(J), T("why.work"));
             galReact("work", V("amt", man(pay) + D.U("won"), "int", man(interestDue()) + D.U("won"), "pct", JsFmt.ToFixed(pay / Math.Max(1, interestDue()) * 100, 1), "conv", conv(pay)), 2);
             stress(workStress(J, S.workStreak));

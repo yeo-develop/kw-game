@@ -177,6 +177,7 @@ namespace KwGame.View
                     : op == "open" ? $"체결: {tkn} {e.Num("lev"):0}x {(e.Num("dir") > 0 ? "롱" : "숏")} · 증거금 {G.won(e.Num("margin"))}"
                     : $"체결: {tkn} {what} {G.sgnWon(pnl)}";
                 if (!ok) return;
+                if (op == "open") { stkSl = 0; stkTp = 0; }   // 예약 칩은 주문마다 새로 고름 (지난 주문 것이 조용히 따라붙지 않게)
                 bool good = op == "buy" || op == "open" || pnl >= 0;
                 string line = good ? bubbleOk : bubbleBad;
                 if (line != null) { Toast("미래: " + line, "bubble"); SetFace(good ? (op == "buy" || op == "open" ? "smug" : "happy") : "cry"); }

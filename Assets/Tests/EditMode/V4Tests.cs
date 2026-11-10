@@ -34,7 +34,6 @@ namespace KwGame.Tests
                     case "event": Go(g, "evPick", "k", P.opts.First(o => !o.dis).k); break;
                     case "menhera": case "impulse": Go(g, "reply", "i", P.opts.FindIndex(o => o.ok)); break;
                     case "tempt": Go(g, "tempt", "k", "no"); break;
-                    case "liqAlert": Go(g, "alertHold"); break;
                     case "payday": Go(g, "payday", "k", P.stage == "repay" ? "keep" : P.opts.First(o => !o.dis).k); break;
                     default: Assert.Fail("ToHome: " + P.t); break;
                 }
@@ -507,7 +506,6 @@ namespace KwGame.Tests
             double best = 0, worst = 0; int n = 0;
             for (int sd = 1; sd <= 20; sd++) { var x = New(sd); var L = x.analysts().OrderByDescending(a => x.anAcc(a.id)).ToList(); best += x.S.srcStat[L[0].id][0]; worst += x.S.srcStat[L[L.Count - 1].id][0]; n += R.V4_AN_PRIOR; }
             Assert.That(best / n, Is.GreaterThan(worst / n + 0.4));
-            string o1 = order(g); S.part = 2;
             Assert.That(Enumerable.Range(1, 12).Any(sd => { var x = New(sd); string p1 = order(x); x.S.part = 2; return order(x) != p1; }), "2부에선 다시 섞임");
         }
 
@@ -610,7 +608,7 @@ namespace KwGame.Tests
             Go(g, "map"); Go(g, "goTo", "loc", "work");
             if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
             var ev = g.Apply(C("act", "k", "l-cafe")); ev.AddRange(g.Apply(C("mgSetup"))); ev.AddRange(g.Apply(C("mgResult", "score", 0.8)));
-            for (int i = 0; i < 6 && S.pending != null && S.pending.t != "home"; i++) { if (S.pending.t == "liqAlert") ev.AddRange(g.Apply(C("alertHold"))); else ToHome(g); }
+            ToHome(g);
             Assert.That(S.cps.Count, Is.EqualTo(0), "알바하는 사이 예약 손절 체결");
             Assert.That(S.st.liq, Is.EqualTo(liq0), "청산이 아니라 손절");
         }
@@ -794,68 +792,182 @@ namespace KwGame.Tests
             Assert.That(easy.interestDue(), Is.EqualTo(MathK.Round1k(easy.S.debt * easy.rate())));
         }
 
-        // ---------- 알바 중 청산 경보 (docs/STORE.md §3 ⑦) ----------
-        /// 10배 롱을 들고 알바 → 시세가 7% 빠지면(손실 70%) 알바 시간 중 경보가 한 번 끼어듦
-        static GameSim ToAlert(int seed, out string tk)
+        // ---------- 알바 중 실시간 · 몰래 폰 보기 (docs/BLUEPRINT.md ⑥-2·3) ----------
+        /// (lev > 0 이면 그 배율 롱 50만을 들고) 알바 미니게임 준비까지. mul ≠ 1 이면 미니게임 직전에 시세를 진입가 × mul 로
+        static GameSim ToWork(int seed, string job, double lev, out string tk, double mul = 1)
         {
-            var g = New(seed); var S = g.S;
-            S.cash = 2000000;
+            var g = New(seed); var S = g.S; S.cash = 2000000;
             var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 10, "amt", 500000);
-            Assert.That(S.cps.Single().lev, Is.EqualTo(10));
+            if (lev > 0) { Go(g, "open", "tk", coin.id, "dir", 1, "lev", lev, "amt", 500000); Assert.That(S.cps.Single().lev, Is.EqualTo(lev)); }
             tk = coin.id;
-            // 알바: 지도 → 일터 → 카페 → 미니게임 결과
             Go(g, "map"); Go(g, "goTo", "loc", "work");
             if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
-            var opt = g.Query(() => g.locOpts("work")).First(o => !o.dis && o.k == "l-cafe");
-            // 미니게임 직전에 시세를 떨어뜨려 둠 (알바 뒤 시간이 흐르자마자 손실 70%)
-            S.mk.tk[coin.id].p = S.cps[0].entry * 0.93;
-            Go(g, "act", "k", opt.k); Go(g, "mgSetup"); Go(g, "mgResult", "score", 0.8);
+            if (lev > 0 && mul != 1) S.mk.tk[coin.id].p = S.cps[0].entry * mul;
+            Go(g, "act", "k", "l-" + job); Go(g, "mgSetup");
             return g;
         }
+        /// ⑥-2: 알바 미니게임이 도는 동안 시세가 분 단위로 흐름 (칸 끝 1분 전까지)
         [Test]
-        public void LiqAlertInterruptsWorkOncePerSlot()
+        public void PricesMoveWhileTheWorkMinigameRuns()
         {
-            var g = ToAlert(5, out var tk); var S = g.S;
-            Assert.That(S.pending?.t, Is.EqualTo("liqAlert"), "알바 시간 중 경보");
-            var P = S.pending;
-            Assert.That(P.tk, Is.EqualTo(tk)); Assert.That(P.n0, Is.InRange(0.6, 1)); Assert.That(P.took, Is.GreaterThan(0)); Assert.That(P.key, Is.EqualTo("cafe"));
-            Assert.That(S.owe, Is.GreaterThan(0), "남은 알바 시간은 선택 뒤로");
-            double cash = S.cash, liq0 = S.st.liq;
-            Go(g, "alertHold");
-            Assert.That(S.pending?.t, Is.Not.EqualTo("liqAlert"), "참으면 한 칸에 다시 안 뜸");
-            Assert.That(S.cash, Is.EqualTo(cash).Within(1e-6).Or.GreaterThan(cash), "참으면 일당 안 깎임");
+            var g = ToWork(5, "cafe", 0, out var tk); var S = g.S;
+            int m0 = S.min, T0 = g.Tnow(); double p0 = S.mk.tk[tk].p;
+            Go(g, "workTick", "m", 30);
+            Assert.That(S.min, Is.EqualTo(m0 + 30)); Assert.That(S.pending.t, Is.EqualTo("work")); Assert.That(g.Tnow(), Is.EqualTo(T0));
+            Assert.That(S.mk.tk[tk].p, Is.Not.EqualTo(p0), "일하는 동안 시세가 움직임");
+            Go(g, "workTick", "m", 600);
+            Assert.That(S.min, Is.EqualTo(g.slotEndMin(S.slot) - 1), "칸 끝 1분 전까지만 (마무리는 결과 뒤에)");
+            Assert.That(S.pending.t, Is.EqualTo("work"));
+            double cash = S.cash;
+            Go(g, "mgResult", "score", 0.8);
+            Assert.That(S.cash, Is.GreaterThan(cash), "일당");
             ToHome(g);
-            Assert.That(S.cps.Count == 0 || S.st.liq == liq0, "참은 뒤 청산됐으면 포지션이 없음");
-            if (S.st.liq > liq0) Assert.That(S.liqWork, Is.GreaterThanOrEqualTo(1), "알바 중 청산 집계 (도전과제 liq_work)");
+            Assert.That(g.Tnow(), Is.EqualTo(T0 + 1), "알바 = 한 칸");
+            // 연습 판에선 시계가 안 감
+            var h = New(5); Go(h, "map"); Go(h, "goTo", "loc", "work");
+            if (h.S.pending.t == "encounter") Go(h, "encounter", "ask", false);
+            Go(h, "act", "k", "l-cafe"); Go(h, "mgSetup", "practice", true);
+            Assert.That(h.Apply(C("workTick", "m", 10)).Any(e => e.t == "error"));
         }
+        /// ⑥-3: 레버리지 포지션 손실이 깊어지면 한 칸에 한 번 알림. 몰래 폰을 보면 정리되지만 볼 때마다 일당이 깎이고, 들키면 그 칸 일당 0
         [Test]
-        public void LiqAlertPeekClosesPositionsAndCutsPay()
+        public void WorkAlertFiresOnceAndPeekClosesAtACost()
         {
-            var g = ToAlert(5, out _); var S = g.S;
-            Assert.That(S.pending?.t, Is.EqualTo("liqAlert"));
-            double took = S.pending.took, pay = S.lastPay;
-            Go(g, "alertPeek");
-            Assert.That(S.cps.Count, Is.EqualTo(0), "몰래 폰 봄 = 전부 정리");
-            var led = S.today.Last(l => l.kind == "work");
-            Assert.That(-led.amt, Is.EqualTo(took).Or.EqualTo(pay), "일당 깎임 또는 들켜서 전부");
-            ToHome(g);
-            Assert.That(S.pending?.t, Is.EqualTo("home").Or.EqualTo("ending"));
+            var R = Data.RULES; int caught = 0, clean = 0;
+            for (int sd = 1; sd <= 30 && (caught == 0 || clean < 2); sd++)
+            {
+                var g = ToWork(sd, "cafe", 10, out var tk, 0.93); var S = g.S;   // 10배 × −7% = 증거금 −70%
+                var ev = g.Apply(C("workTick", "m", 1));
+                Assert.That(ev.Count(e => e.t == "workAlert"), Is.EqualTo(1), "문턱(60%)을 넘으면 알림");
+                Assert.That(g.Apply(C("workTick", "m", 5)).Any(e => e.t == "workAlert"), Is.False, "한 칸에 한 번만");
+                if (S.cps.Count == 0) continue;   // 그 사이 청산됨 (드묾)
+                Assert.That(g.peekOk());
+                var full = ToWork(sd, "cafe", 0, out _);   // 같은 씨앗으로 폰을 안 본 판의 일당
+                Go(full, "mgResult", "score", 0.8); double payFull = full.S.today.Last(l => l.kind == "work").amt;
+                Go(g, "workPeek", "id", 0);
+                Assert.That(S.cps.Count, Is.EqualTo(0), "몰래 폰 봄 = 정리");
+                Assert.That(S.pending.peeks, Is.EqualTo(1));
+                bool c = S.pending.caught;
+                Go(g, "mgResult", "score", 0.8);
+                double pay = S.today.Where(l => l.kind == "work").Sum(l => l.amt);
+                if (c) { caught++; Assert.That(pay, Is.EqualTo(0), "들키면 그 칸 일당 0"); }
+                else { clean++; Assert.That(pay, Is.EqualTo(MathK.Round1k(payFull * (1 - R.V4_PEEK_PAY))), "볼 때마다 일당이 깎임"); }
+                ToHome(g); Assert.That(S.pending?.t, Is.EqualTo("home").Or.EqualTo("ending").Or.EqualTo("event"));
+            }
+            Assert.That(clean, Is.GreaterThanOrEqualTo(2)); Assert.That(caught, Is.GreaterThanOrEqualTo(1), "가끔 들킴");
         }
+        /// 알바마다 폰 보기가 다름: 상하차는 일당이 센 대신 폰을 못 꺼냄. 알바 중 청산은 따로 셈 (도전과제)
         [Test]
-        public void LiqAlertNeedsLeverageAndWork()
+        public void WareCannotPeekAndLiquidationAtWorkIsCounted()
         {
-            var g = New(5); var S = g.S;
-            S.cash = 2000000;
-            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
-            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 500000);   // 1배 = 경보 없음
-            Go(g, "map"); Go(g, "goTo", "loc", "work");
-            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
-            var opt = g.Query(() => g.locOpts("work")).First(o => !o.dis && o.k == "l-cafe");
-            S.mk.tk[coin.id].p = S.cps[0].entry * 0.3;
-            Go(g, "act", "k", opt.k); Go(g, "mgSetup"); Go(g, "mgResult", "score", 0.8);
-            ToHome(g);
-            Assert.That(S.alertT, Is.EqualTo(-1), "1배 현물은 경보 없음");
+            var g = ToWork(5, "ware", 10, out _, 0.93); var S = g.S;
+            Assert.That(g.peekRisk("ware"), Is.GreaterThanOrEqualTo(1)); Assert.That(g.peekRisk("cafe"), Is.LessThan(g.peekRisk("mart")));
+            Assert.That(g.peekOk(), Is.False);
+            Assert.That(g.Apply(C("workPeek", "id", 0)).Any(e => e.t == "error"), "상하차 중엔 폰을 못 봄");
+            Assert.That(S.cps.Count, Is.EqualTo(1));
+            S.mk.tk[S.cps[0].tk].p = S.cps[0].entry * 0.90;   // 청산선 밖
+            Go(g, "workTick", "m", 1);
+            Assert.That(S.cps.Count, Is.EqualTo(0)); Assert.That(S.liqWork, Is.GreaterThanOrEqualTo(1), "알바 중 청산 집계");
+            var h = ToWork(5, "cafe", 1, out _, 0.3);   // 1배 현물은 알림 없음
+            Assert.That(h.Apply(C("workTick", "m", 1)).Any(e => e.t == "workAlert"), Is.False);
+        }
+
+        // ---------- 하루 결과: 정산 · 밤의 미래 · 호감 버프 · 손님 정보 (docs/BLUEPRINT.md ⑥-5·6, 기둥 연결) ----------
+        /// 아침부터 저녁 칸 시작까지 쉬어 넘김 → 그 사이 나온 이벤트 전부
+        static List<SimEvent> ToEvening(GameSim g)
+        {
+            var all = new List<SimEvent>();
+            for (int i = 0; i < 4 && g.S.slot < 2; i++) { all.AddRange(g.Apply(C("rest"))); if (g.S.pending != null && g.S.pending.t != "home" && g.S.pending.t != "event") ToHome(g); }
+            return all;
+        }
+        /// ⑥-5·6: 저녁에 낮 결과를 한 번에 정산하고 (일당 · 매매 · 청산), 그 결과 4종에 따라 미래의 밤 대사가 다른 묶음에서 나옴
+        [Test]
+        public void EveningSettlesTheDayAndMiraiReactsToIt()
+        {
+            var R = Data.RULES;
+            (GameSim g, List<SimEvent> ev) Day(System.Action<GameState> mut)
+            {
+                var g = New(7); mut(g.S);
+                return (g, ToEvening(g));
+            }
+            string[] lines(string cls) => Data.SA("v4.night." + cls).ToArray();
+            bool from(string line, string cls) => lines(cls).Any(t => { int i = t.IndexOf('{'); return line.StartsWith(i < 0 ? t : t.Substring(0, i)); });
+
+            var (a, ea) = Day(S => { S.realized += R.V4_NIGHT_BIG * 2; });
+            var st = ea.Single(e => e.t == "settle");
+            Assert.That(st.Str("cls"), Is.EqualTo("jackpot")); Assert.That(st.Num("pnl"), Is.EqualTo(R.V4_NIGHT_BIG * 2));
+            Assert.That(a.S.dayRes, Is.EqualTo("jackpot")); Assert.That(a.S.greed, Is.GreaterThanOrEqualTo(R.V4_NIGHT_GREED), "대박이면 미래 욕심이 오름");
+            Assert.That(from(ea.Single(e => e.t == "night").Str("line"), "jackpot"), "대박 묶음");
+            Assert.That(a.S.hl.t, Is.EqualTo(ea.Single(e => e.t == "night").Str("line")), "그날 밤 집 대사"); Assert.That(a.S.hl.T, Is.EqualTo(a.Tnow()));
+
+            var (b, eb) = Day(S => { S.realized -= R.V4_NIGHT_LOSS * 2; });
+            Assert.That(eb.Single(e => e.t == "settle").Str("cls"), Is.EqualTo("loss")); Assert.That(from(eb.Single(e => e.t == "night").Str("line"), "loss"));
+
+            var (c, ec) = Day(S => { });
+            Assert.That(ec.Any(e => e.t == "settle"), Is.False, "아무 일도 없던 날은 정산 카드 없음");
+            Assert.That(from(ec.Single(e => e.t == "night").Str("line"), "normal"));
+
+            var (d, ed) = Day(S => { S.st.liq += 1; S.realized -= 300000; });
+            Assert.That(ed.Single(e => e.t == "settle").Str("cls"), Is.EqualTo("liq")); Assert.That(ed.Single(e => e.t == "settle").Num("liq"), Is.EqualTo(1));
+            Assert.That(d.S.pending?.t, Is.EqualTo("event"), "청산당한 날 밤 장면");
+            Assert.That(d.S.pending.evId, Is.EqualTo("v4_liqnight"));
+            double aff = d.S.aff; Go(d, "evPick", "k", d.S.pending.opts[0].k);
+            Assert.That(d.S.aff, Is.GreaterThan(aff), "위로받으면 호감↑");
+            ToHome(d); Assert.That(d.S.pending.t, Is.EqualTo("home"), "하루 한 번만");
+            // 알바한 날: 일당이 정산에 잡힘
+            var w = ToWork(7, "cafe", 0, out _); Go(w, "mgResult", "score", 0.8); ToHome(w);
+            var ew = ToEvening(w); var sw = ew.Single(e => e.t == "settle");
+            Assert.That(sw.Num("wage"), Is.GreaterThan(0)); Assert.That(sw.Str("cls"), Is.EqualTo("normal")); Assert.That(sw.Num("net"), Is.EqualTo(sw.Num("wage") + sw.Num("pnl")));
+        }
+        /// 기둥 연결: 호감 40 도시락(아침 스트레스 −) · 60 미래의 감(그날 첫 가짜 속보를 알아챔) · 80 응원(일당 +)
+        [Test]
+        public void AffectionTiersGiveBuffs()
+        {
+            var R = Data.RULES; var g = New(); var S = g.S; var A = R.V4_BUFF_AFF;
+            Assert.That(A.Length, Is.EqualTo(3));
+            S.aff = A[0] - 1; Assert.That(g.buffTier(), Is.EqualTo(0)); Assert.That(g.buffs(), Is.Empty);
+            S.aff = A[0]; Assert.That(g.buffTier(), Is.EqualTo(1));
+            S.aff = A[1]; Assert.That(g.buffTier(), Is.EqualTo(2));
+            var job = Data.JOBS["cafe"]; S.aff = A[2] - 1; double p0 = g.jobPay(job, 0.5);
+            S.aff = A[2]; Assert.That(g.buffTier(), Is.EqualTo(3)); Assert.That(g.buffs().Count, Is.EqualTo(3));
+            Assert.That(g.jobPay(job, 0.5), Is.EqualTo(MathK.Round1k(p0 * R.V4_BUFF_CHEER)).Within(1000), "응원 = 일당 +10%");
+            // 도시락: 다음 날 아침 알림
+            S.aff = A[1] - 1; var ev = new List<SimEvent>();   // 밤사이 호감이 좀 깎여도(부탁·안 놀아 줌) 40 은 넘게
+            for (int i = 0; i < 6 && S.day == 1; i++)
+            {
+                ev.AddRange(g.Apply(C("rest")));
+                for (int k = 0; k < 10 && S.pending != null && S.pending.t != "home"; k++)
+                {   // 사이에 끼는 장면도 이벤트를 모으며 넘김
+                    var P = S.pending;
+                    ev.AddRange(g.Apply(P.t == "event" ? C("evPick", "k", P.opts.First(o => !o.dis).k) : P.t == "menhera" || P.t == "impulse" ? C("reply", "i", P.opts.FindIndex(o => o.ok)) : P.t == "tempt" ? C("tempt", "k", "no") : C("pickRelic", "i", 0)));
+                }
+            }
+            Assert.That(S.day, Is.EqualTo(2)); Assert.That(g.buffTier(), Is.GreaterThanOrEqualTo(1));
+            Assert.That(ev.Any(e => e.t == "toast" && (e.Str("text") ?? "").Contains("도시락")), "아침에 도시락");
+            // 미래의 감: 호감 60↑ 이면 그날 첫 가짜 속보에서 카톡 (하루 한 번), 진짜 속보엔 조용
+            int fakeSeen = 0, realSeen = 0;
+            for (int sd = 1; sd <= 40 && (fakeSeen < 2 || realSeen < 2); sd++)
+            {
+                var h = New(sd); var H = h.S; H.aff = A[1] + 5;
+                Go(h, "rest"); if (H.pending.t != "home") ToHome(h);
+                if (H.slot != 1 || H.news == null || H.news.tk == "MKT") continue;
+                if (H.news.fake) { fakeSeen++; Assert.That(H.senseD, Is.EqualTo(h.absDay()), "가짜 속보를 알아챔"); Assert.That(h.buffs().Any(x => x.Contains("오늘 씀"))); }
+                else { realSeen++; Assert.That(H.senseD, Is.Not.EqualTo(h.absDay()), "진짜 속보엔 안 뜸"); }
+            }
+            Assert.That(fakeSeen, Is.GreaterThanOrEqualTo(2)); Assert.That(realSeen, Is.GreaterThanOrEqualTo(2));
+        }
+        /// 기둥 연결: 알바를 잘하면 손님이 분석가 전적 한 건을 흘림 (읽을 거리가 알바에서 옴)
+        [Test]
+        public void GoodWorkShiftBringsAnalystInfo()
+        {
+            var R = Data.RULES;
+            int total(GameSim x) => x.analysts().Sum(a => x.S.srcStat[a.id][1]);
+            var g = ToWork(5, "cafe", 0, out _); int n0 = total(g);
+            var ev = g.Apply(C("mgResult", "score", System.Math.Min(1, R.V4_WORK_INFO + 0.1)));
+            Assert.That(total(g), Is.EqualTo(n0 + 1), "전적 +1건"); Assert.That(ev.Any(e => e.t == "workInfo"));
+            var h = ToWork(5, "cafe", 0, out _); int m0 = total(h);
+            Go(h, "mgResult", "score", System.Math.Max(0, R.V4_WORK_INFO - 0.2));
+            Assert.That(total(h), Is.EqualTo(m0), "대충 하면 정보 없음");
         }
 
         /// 밸런스 범위 (판 수 적게, 범위 넓게 — 정확한 값은 docs/V4.md §7 300판). 루프 기준 (BLUEPRINT ⑥): 전적을 읽는 사람 > 전부 따라 타는 사람 · 알바만으론 못 깸 · 장만 봐선 못 이김 · 포지션 들고 알바 감

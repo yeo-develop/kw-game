@@ -209,8 +209,6 @@ namespace KwGame.Sim
                 case "impulse":
                     if (t == "reply") { if (!impulseReply(c.Int("i"))) err("reply"); return; }
                     break;
-                case "liqAlert":
-                    if (t == "alertPeek" || t == "alertHold") { sub(liqAlertPick(t == "alertPeek")); return; }
                     break;
                 case "ending":
                     if (t == "continue") { if (!continueGame()) err("continue"); return; }
@@ -254,6 +252,8 @@ namespace KwGame.Sim
                     break;
                 case "work":
                     if (t == "mgSetup") { workSetup(c.Truthy("practice")); return; }
+                    if (t == "workTick") { sub(workTick((int)clamp(c.Int("m", 1), 1, 600))); return; }   // 미니게임이 도는 동안 시계 (v4)
+                    if (t == "workPeek") { sub(workPeek(c.Int("id", 0))); return; }                       // 몰래 폰 보기: 포지션 정리
                     if (t == "mgResult") { if (P.setup == null || P.setup.practice) { err("mg"); return; } sub(workResult(c.Num("score"))); return; }
                     break;
                 case "casino":

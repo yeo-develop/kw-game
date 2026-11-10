@@ -71,24 +71,35 @@ namespace KwGame.Sim
             foreach (var t in S.tips)
             {
                 if (t.Tr != T || !string.IsNullOrEmpty(t.res) || (t.kind != "real" && t.kind != "anti") || !srcOf(t).an || !P.r.ContainsKey(t.tk)) continue;
-                double js = (t.kind == "real" ? 1 : -1) * t.dir * t.mag;
-                if (P.jmp.TryGetValue(t.tk, out var j0)) j0[1] += js; else P.jmp[t.tk] = new[] { 0.15 + 0.7 * hashU(T * 613 + t.id * 31), js };
-                P.evs.Add(new PlanEv { u = P.jmp[t.tk][0], k = "report", tk = t.tk, ok = t.kind == "real", id = t.id });
+                double js = (t.kind == "real" ? 1 : -1) * t.dir * t.mag, uj = 0.15 + 0.7 * hashU(T * 613 + t.id * 31);
+                // 같은 종목에 발표가 여럿이면 각자 자기 순간에 따로 뜀 ([u1, 충격1, u2, 충격2, …] 시간순)
+                var L0 = P.jmp.TryGetValue(t.tk, out var j0) ? j0.ToList() : new List<double>();
+                int at = 0; while (at < L0.Count && L0[at] <= uj) at += 2;
+                L0.Insert(at, uj); L0.Insert(at + 1, js); P.jmp[t.tk] = L0.ToArray();
+                P.evs.Add(new PlanEv { u = uj, k = "report", tk = t.tk, ok = t.kind == "real", id = t.id });
             }
             if (n != null && n.tk != "MKT" && D.TK.TryGetValue(n.tk, out var nt) && !nt.meme && P.r.ContainsKey(n.tk) && tkOpen(n.tk) && R.V4_EARLY != null && R.V4_EARLY.Length == 2)
             {
                 // 초반엔 진짜든 가짜든 뉴스 방향으로 조금 가거나 흔들림 (같은 분포) → 진짜는 그 뒤로 쭉, 가짜는 되돌림. 초반 시세만 보고는 못 가리고, 후속 속보·출처로 가려야 함
-                double X1 = Math.Log(1 + P.r[n.tk]) - jmpLog(P, n.tk), N = Math.Log(1 + Math.Abs(n.r)) * n.dir, e0 = N * (R.V4_EARLY[0] + hashU(T * 211 + 41) * (R.V4_EARLY[1] - R.V4_EARLY[0]));
+                var ns = S.mk.tk[n.tk]; var JJ = jmpLogs(P, nt, ns, ns.p);   // 계획은 칸 시작 = 지금 가격이 시가
+                double X1 = Math.Log(Math.Max(1e-9, rtCloseAt(nt, ns, P, ns.p) / ns.p)) - (JJ?.Sum() ?? 0), N = Math.Log(1 + Math.Abs(n.r)) * n.dir, e0 = N * (R.V4_EARLY[0] + hashU(T * 211 + 41) * (R.V4_EARLY[1] - R.V4_EARLY[0]));
                 P.way[n.tk] = n.fake ? new[] { 0.3, e0, 0.6, e0 * 0.3 + X1 * 0.4 } : new[] { 0.3, e0, 0.7, e0 + (X1 - e0) * 0.75 };
                 if (hashU(T * 131 + 17) < R.V4_FOLLOW_P) P.evs.Add(new PlanEv { u = 0.35, k = "follow", tk = n.tk, ok = hashU(T * 389 + 71) < R.V4_FOLLOW_ACC ? !n.fake : n.fake });   // 후속 속보도 가끔 틀림
             }
         }
-        /// 발표 갭의 로그 크기 (칸 전체 수익률에서 발표 몫을 뺀 것과의 차)
-        double jmpLog(MarketPlan P, string tk)
+        /// 발표 갭들의 로그 크기 (시간순). 가격제한(주식)·바닥을 적용한 값으로 — 발표 몫을 하나씩 뺀 종가들의 비
+        double[] jmpLogs(MarketPlan P, Ticker t, TkState s, double so)
         {
-            if (P.jmp == null || !P.jmp.TryGetValue(tk, out var j) || !P.r.TryGetValue(tk, out var r)) return 0;
-            return Math.Log(Math.Max(0.05, 1 + r)) - Math.Log(Math.Max(0.05, 1 + r - j[1]));
+            if (P.jmp == null || !P.jmp.TryGetValue(t.id, out var j) || !P.r.TryGetValue(t.id, out var r)) return null;
+            int n = j.Length / 2; var J = new double[n]; double rest = 0;
+            for (int i = 0; i < n; i++) rest += j[2 * i + 1];
+            double lv(double rr) { double c = Math.Max(so * (1 + rr), t.p0 * 0.001); return t.IsStock ? limit(s, c) : c; }
+            double prev = lv(r - rest);
+            for (int i = 0; i < n; i++) { rest -= j[2 * i + 1]; double cur = lv(r - rest); J[i] = Math.Log(cur / prev); prev = cur; }
+            return J;
         }
+        /// 시가 so 기준 계획 종가 (rtClose 와 같은 규칙)
+        double rtCloseAt(Ticker t, TkState s, MarketPlan P, double so) { double c = Math.Max(so * (1 + P.r[t.id]), t.p0 * 0.001); return t.IsStock ? limit(s, c) : c; }
         MarketPlan curPlan() => (S.mplan != null && S.mplan.T == Tnow()) ? S.mplan : planNext();
         MarketState initMarket()
         {

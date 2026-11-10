@@ -63,6 +63,12 @@ namespace KwGame.Sim
         /// v4 하루 무료 리포트 (기본 1 에 더하는 수)
         public int V4_FREE_REP = 1;
         public int V4_NO_HP; public Dictionary<string, double> V4_JOB_ST;
+        /// 알바 중 몰래 폰 보기 (BLUEPRINT ①): 알바별 들킬 확률 (1 이상 = 폰을 못 꺼냄. 없으면 예전 경보 확률) · 볼 때마다 일당이 깎이는 비율
+        public Dictionary<string, double> V4_PEEK; public double V4_PEEK_PAY = 0.15;
+        /// 기둥 연결: 호감 구간 버프 문턱 [도시락, 미래의 감, 응원] · 도시락 = 아침 스트레스 −N · 응원 = 일당 배수 · 알바 점수가 이 이상이면 손님 정보(분석가 전적 +1건)
+        public double[] V4_BUFF_AFF; public double V4_BUFF_LUNCH = 5, V4_BUFF_CHEER = 1.1, V4_WORK_INFO = 0.7;
+        /// 그날 결과 4종 (정산 카드 · 밤의 미래): 낮 매매 실현손익이 +BIG 이상 = 대박, −LOSS 이하 = 손실 (청산이 있었으면 청산). 대박이면 욕심 +GREED
+        public double V4_NIGHT_BIG = 1000000, V4_NIGHT_LOSS = 500000, V4_NIGHT_GREED = 4;
         /// 신용 단계(이자 낸 횟수): 김사장 대출 열리는 단계 (초반 = 시드머니 모으기)
         public int V4_CREDIT_LOAN = 0;
         /// 레버리지 = 실적: 실현수익 누적이 V4_LEV_PROFIT[i] 넘으면 코인 최대 배율 V4_LEV_CAP[i] (한 번 열리면 계속)
@@ -86,6 +92,8 @@ namespace KwGame.Sim
         public double V4_FOLLOW_P = 0, V4_FOLLOW_ACC = 1;
         /// 분석가 (unity_v4.json V4_AN): 리포트는 분석가 중 하나가 씀. 적중률 V4_AN_ACC 를 판마다 섞어 숨김 (전적으로만 드러남), 틀리면 반대로 움직임. 코인 리포트 비율 · 코인일 때 충격 배수
         public double[] V4_AN_ACC; public double V4_AN_COINP = 0.5, V4_AN_COIN = 1;
+        /// 코인 발표 폭 = 기본 × (그 코인 변동성 / V4_AN_VOL0), 최대 V4_AN_VOLX 배 (대장코인 기준 1배)
+        public double V4_AN_VOL0 = 0.037, V4_AN_VOLX = 3.5;
         /// 분석가마다 시작할 때 보이는 지난 전적 건수 (진짜 적중률로 뽑음 → 첫날부터 읽을 거리)
         public int V4_AN_PRIOR;
         /// 속보 종목의 칸 초반(30% 지점) 움직임 = 뉴스 크기 × [lo, hi] 사이 (진짜·가짜 같은 분포 → 초반 시세만으론 못 가림). null = 끔
@@ -137,7 +145,7 @@ namespace KwGame.Sim
     public class KQDef { public string q, ok, good, bad; public string[] no; }
     /// 돌발 이벤트 (unity_events.json). lines = [who, text, face?] 목록, who: m·me·kim·nar
     /// day = v4 이야기 이벤트: 그 날(absDay, 2부도 1부터) 집에 오면 무조건 (랜덤 풀엔 안 들어감). part = 몇 부 이야기인지 (0 = 아무 때나)
-    public class EvDef { public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay, day, part, heistMin; public double minCash, minAddict; public List<EvOpt> opts; }
+    public class EvDef { /** when = 조건으로 뜨는 장면 ("liq" = 청산당한 날 밤). day 대신 */ public string when; public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay, day, part, heistMin; public double minCash, minAddict; public List<EvOpt> opts; }
     /// v4: aff = 미래 호감 · greed = 욕심 · debtPct = 빚 비율 변화 (−0.3 = 30% 탕감)
     public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict, aff, greed, debtPct, debt; public int heist = -1; public bool go; public EvOpt fail; }   // heist: 털기 단계로 (−1 = 그대로) · go: 만기 밤에 턴다
     public class MenSet { public string[] msgs; public string last, ok, good, bad; public string[] no; }

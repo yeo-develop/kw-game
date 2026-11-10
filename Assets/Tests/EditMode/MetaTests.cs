@@ -35,7 +35,6 @@ namespace KwGame.Tests
                     case "event": Go(g, "evPick", "k", P.opts.First(o => !o.dis).k); break;
                     case "menhera": case "impulse": Go(g, "reply", "i", P.opts.FindIndex(o => o.ok)); break;
                     case "tempt": Go(g, "tempt", "k", "no"); break;
-                    case "liqAlert": Go(g, "alertHold"); break;
                     case "payday": Go(g, "payday", "k", P.stage == "repay" ? "keep" : P.opts.First(o => !o.dis).k); break;
                     default: Assert.Fail("ToHome: " + P.t); break;
                 }
