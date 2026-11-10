@@ -1117,7 +1117,9 @@ namespace KwGame.Tests
             foreach (var a in new[] { "watch", "work", "date" }) Assert.That(pro.acts.TryGetValue(a, out var v) ? v : 0, Is.GreaterThan(0.1), $"pro 가 {a} 를 씀 (죽은 선택지 없음)");
             // ⑥-10: 리포트를 전부 따라 타면 남는 게 없고 (답안지 아님), 전적을 읽으면 번다
             double tipPro = pro.pnl.TryGetValue("tip", out var tp) ? tp : 0, tipBlind = blind.pnl.TryGetValue("tip", out var tb) ? tb : 0;
-            Assert.That(tipBlind, Is.LessThan(4000000), "전부 따라 타기는 엔진이 못 됨");
+            // 40판 표본은 판당 평균이 ±100만쯤 흔들림 (300판 실측: 작전주 끔 228만 · 켬 278만, 읽는 쪽 1,485만) → 절대 띠는 넉넉히, 대신 읽는 쪽의 절반 미만이라는 비율을 같이 봄
+            Assert.That(tipBlind, Is.LessThan(6000000), "전부 따라 타기는 엔진이 못 됨");
+            Assert.That(tipBlind, Is.LessThan(tipPro * 0.5), "전부 따라 타면 읽는 쪽의 절반도 못 범");
             Assert.That(tipPro, Is.GreaterThan(tipBlind + 3000000), "전적을 읽는 쪽이 뚜렷이 더 범");
             Assert.That(pro.clear, Is.GreaterThan(blind.clear), "읽는 사람이 더 자주 깸");
             Assert.That(pro.tipFade, Is.GreaterThan(0.1), "거꾸로 타는 것도 실력 (꼴찌 분석가)"); Assert.That(pro.tipSkip, Is.GreaterThan(0.05), "거를 줄도 앎");
@@ -1292,6 +1294,50 @@ namespace KwGame.Tests
         // ---------- 작전주 (docs/BLUEPRINT_V3.md ⑥-1~10). 화면이 붙기 전이라 데이터에선 꺼 둠(V4_OP 0) → 테스트에서만 켬 ----------
         static void OpOn(System.Action body) { double v0 = Data.RULES.V4_OP; Data.RULES.V4_OP = 1; try { body(); } finally { Data.RULES.V4_OP = v0; } }
         /// 한 칸 쉬고 집으로 (시세는 그 칸만큼 흐름)
+        /// 관문 급매: 하한가에 잠긴 주식은 못 파니 급매 손해도 안 매기고, 팔 게 그것뿐이면 선택지가 잠김 (예전엔 누를 때마다 현금만 깎이고 제자리 → 봇이 헛돎)
+        [Test]
+        public void GateFireSaleSkipsLockedStock() => OpOn(() =>
+        {
+            var g = New(7); var S = g.S; var R = Data.RULES;
+            var open = g.STK().Where(k => g.tkOpen(k)).Take(2).ToList(); string tk = open[0], tk2 = open[1];
+            S.cps.Clear(); foreach (var k in g.STK().ToList()) if (S.hold.Has(k)) S.hold.Remove(k);
+            S.ops.Add(new Op { tk = tk, key = -1, ph = 4, lockDay = g.absDay() + R.MONTH_DAYS + 3 });
+            S.hold.Set(tk, new Holding { q = 100, cost = S.mk.tk[tk].p * 100, t0 = g.Tnow(), bday = g.absDay() });
+            S.hold.Set(tk2, new Holding { q = 10, cost = S.mk.tk[tk2].p * 10, t0 = g.Tnow(), bday = g.absDay() });
+            S.cash = g.interestDue() + 5000;   // 이자만 내고 나면 빈손
+            ToGate(g); Assert.That(S.pending.t, Is.EqualTo("payday")); Assert.That(S.pending.stage, Is.EqualTo("gate"));
+            Assert.That(g.opLocked(tk), "준비: 잠긴 종목"); Assert.That(S.hold.Has(tk)); Assert.That(S.hold.Has(tk2));
+            double free = g.stockValFree(), all = g.stockVal(), c0 = S.cash;
+            Assert.That(free, Is.EqualTo(10 * S.mk.tk[tk2].p).Within(1e-6)); Assert.That(all, Is.GreaterThan(free));
+            Assert.That(S.pending.opts.First(o => o.k == "gateSell").dis, Is.False, "팔 수 있는 주식이 있으면 급매 가능");
+            Go(g, "payday", "k", "gateSell");
+            Assert.That(S.hold.Has(tk), "잠긴 주식은 그대로"); Assert.That(S.hold.Has(tk2), Is.False, "팔 수 있는 건 팔림");
+            Assert.That(S.cash - c0, Is.LessThanOrEqualTo(free), "받은 돈은 판 주식 값 이하");
+            Assert.That(S.cash - c0, Is.GreaterThan(free * (1 - R.V4_FIRESALE - 0.05)), "급매 손해는 판 몫에만 (잠긴 주식 값에는 안 매김)");
+            Assert.That(S.pending.t, Is.EqualTo("payday")); Assert.That(S.pending.stage, Is.EqualTo("gate"));
+            var sell = S.pending.opts.First(o => o.k == "gateSell");
+            Assert.That(sell.dis, "남은 게 잠긴 주식뿐이면 급매가 잠김"); Assert.That(sell.sub, Is.EqualTo(g.T("v4.op.lock")), "이유가 보임");
+            double c1 = S.cash; g.Apply(C("payday", "k", "gateSell"));
+            Assert.That(S.cash, Is.EqualTo(c1), "잠긴 선택지를 눌러도 현금이 안 깎임");
+            // 이자 단계도 같음: 이자가 모자라고 팔 게 잠긴 주식뿐이면 급매가 잠기고 이유가 보임 (주말 납부일에 금요일 설거지 종목)
+            var g2 = New(7); var S2 = g2.S;
+            S2.cps.Clear(); foreach (var k in g2.STK().ToList()) if (S2.hold.Has(k)) S2.hold.Remove(k);
+            S2.ops.Add(new Op { tk = tk, key = -1, ph = 4, lockDay = g2.absDay() + R.MONTH_DAYS + 3 });
+            S2.hold.Set(tk, new Holding { q = 100, cost = S2.mk.tk[tk].p * 100, t0 = g2.Tnow(), bday = g2.absDay() });
+            S2.cash = 5000; S2.day = R.MONTH_DAYS; S2.slot = 2; S2.min = g2.slotStartMin(2); Go(g2, "rest");
+            for (int i = 0; i < 12 && S2.pending != null && S2.pending.t != "payday" && S2.pending.t != "ending"; i++)
+            {   // 납부 화면 전까지만 넘김 (ToHome 은 납부까지 눌러 버림)
+                var P2 = S2.pending;
+                if (P2.t == "event") Go(g2, "evPick", "k", P2.opts.First(o => !o.dis).k);
+                else if (P2.t == "menhera" || P2.t == "impulse") Go(g2, "reply", "i", P2.opts.FindIndex(o => o.ok));
+                else if (P2.t == "tempt") Go(g2, "tempt", "k", "no");
+                else if (P2.t == "relic") Go(g2, "pickRelic", "i", 0);
+                else break;
+            }
+            Assert.That(S2.pending?.t, Is.EqualTo("payday")); Assert.That(S2.pending.stage, Is.EqualTo("choose"));
+            var sell2 = S2.pending.opts.First(o => o.k == "sell");
+            Assert.That(sell2.dis, "이자 단계: 잠긴 주식뿐이면 급매가 잠김"); Assert.That(sell2.sub, Is.EqualTo(g2.T("v4.op.lock")));
+        });
         static void RestSlot(GameSim g) { if (g.S.pending?.t == "home") Go(g, "rest"); if (g.S.pending != null && g.S.pending.t != "home" && g.S.pending.t != "ending") ToHome(g); }
         /// ⑥-1·2: 1주차엔 작전이 없고, 2주차부터 그 주에 상장된 후보 주식 하나에 매집 → 끌어올리기 → (설거지 | 식음)이 순서대로. 매집 구간은 거래량이 평소의 2배 이상
         [Test]
@@ -1418,6 +1464,8 @@ namespace KwGame.Tests
             Assert.That(g.slotActOf(1), Is.EqualTo("rest")); Assert.That(g.slotActOf(2), Is.Null);
             Go(g, "date"); ToHome(g);
             Assert.That(g.absDay(), Is.EqualTo(2)); Assert.That(g.slotActOf(0), Is.Null, "다음 날엔 새 판");
+            Assert.That(g.slotYHas(), "어제 기록이 남음"); Assert.That(g.slotActYOf(0), Is.EqualTo("work:store")); Assert.That(g.slotActYOf(1), Is.EqualTo("rest")); Assert.That(g.slotActYOf(2), Is.EqualTo("date"));
+            Assert.That(g.slotNetYOf(0), Is.GreaterThan(0), "어제 오전에 번 일당");
             Assert.That(g.Apply(C("quick", "loc", "shop")).Any(e => e.t == "error"), "숨긴 장소는 못 감");
         }
     }

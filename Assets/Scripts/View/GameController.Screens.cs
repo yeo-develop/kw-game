@@ -14,13 +14,13 @@ using UnityEngine.UIElements;
 
 namespace KwGame.View
 {
-    // 화면 구성: HUD(위) · 장면+대사창(왼쪽) · 행동 패널(오른쪽) · 폰(장면 위 오버레이) · 모달(아침 결산·규칙) · 토스트
+    // 화면 구성 (docs/UI_V2.md): 맨 위 상태 띠 · 장면 + 대사창 · 가운데 선택지 상자 · 폰(장면 위 오버레이) · 모달(아침 결산·규칙) · 토스트
     public partial class GameController
     {
         static readonly string[] PHONE_OK = { "home", "map", "loc", "brokerTrade", "watch" };
 
-        // 비주얼노벨식 한 화면: 장면이 화면 전체. 위에 작은 카드들(왼쪽 상태 · 오른쪽 미니 시세 · 가운데 알림),
-        // 아래 대사창(평소엔 미래 한마디 + 퀵메뉴), 고를 게 있을 때만 가운데 선택지 상자, 폰은 오른쪽에서 열고 닫음(P).
+        // 비주얼노벨식 한 화면: 장면이 화면 전체. 맨 위 상태 띠(누르면 상태 카드), 집 = 계획판 (GameController.Plan.cs), 장 보기 = 데스크 (GameController.Desk.cs),
+        // 그 밖엔 아래 대사창 + 고를 게 있을 때만 가운데 선택지 상자, 폰은 오른쪽에서 열고 닫음(P). 퀵메뉴 · 미니 시세는 옛 칸 방식만.
         VisualElement mini, quickBar; Label idleText;
         static readonly Color Glass = new Color(0.05f, 0.05f, 0.09f, 0.93f);
         static VisualElement GlassBox(float pad = 16, float radius = 16)
@@ -58,11 +58,12 @@ namespace KwGame.View
             stage.RegisterCallback<GeometryChangedEvent>(_ => FitFigures());
             stageTitle = Ui.Label("", 20, Ui.Dim); stageTitle.style.display = DisplayStyle.None;   // 장소 이름은 상태 카드에
 
-            // 왼쪽 위 상태 카드 (예전 HUD)
-            hudBar = GlassBox(18, 18); Ui.Abs(hudBar, 24, 24); hudBar.style.width = 520; hudBar.pickingMode = PickingMode.Ignore;
-            stage.Add(hudBar);
+            // 장 보기 데스크 (GameController.Desk.cs): 선택지 · 대사창 · 폰 · 알림이 그 위에 그려지게 먼저 넣음
+            BuildDesk();
+            // v4 집 = 하루 계획판 (GameController.Plan.cs)
+            BuildPlan();
 
-            // 오른쪽 위 미니 시세창 (누르면 폰)
+            // 오른쪽 위 미니 시세창 (옛 칸 방식만, 누르면 폰)
             mini = GlassBox(14, 16); Ui.Abs(mini, null, 24, 24); mini.style.width = 400;
             mini.RegisterCallback<ClickEvent>(_ => { if (!phoneOpen) TogglePhone(); });
             stage.Add(mini);
@@ -118,20 +119,32 @@ namespace KwGame.View
 
             // 폰 (오른쪽에서 밀려 나옴)
             phone = Ui.Box(new Color(0.04f, 0.04f, 0.06f, 0.99f), 12, 40);   // 폰 테두리(베젤) — 안쪽 앱 화면은 RenderPhone
-            Ui.Abs(phone, null, 20, 20, 20); phone.style.width = 880; Ui.Border(phone, new Color(0.32f, 0.32f, 0.38f), 3); phone.style.overflow = Overflow.Hidden;
+            Ui.Abs(phone, null, StripH + 12, 20, 20); phone.style.width = 880; Ui.Border(phone, new Color(0.32f, 0.32f, 0.38f), 3); phone.style.overflow = Overflow.Hidden;   // 상태 띠(그만 보기) 아래부터
             phone.style.display = DisplayStyle.None;
             stage.Add(phone);
 
-            // 알림 (왼쪽, 상태 카드 아래, 3개까지)
-            toastCol = new VisualElement(); Ui.Abs(toastCol, 24, 330);   // 상태 카드 아래
+            // 알림 (왼쪽, 상태 띠 아래, 3개까지)
+            toastCol = new VisualElement(); Ui.Abs(toastCol, 24, StripH + 12);
             toastCol.style.width = 520; toastCol.style.alignItems = Align.FlexStart; toastCol.pickingMode = PickingMode.Ignore;
             stage.Add(toastCol);
-            hudBar.RegisterCallback<GeometryChangedEvent>(_ => PlaceAlerts());   // 상태 카드가 길어져도(만기 목표 줄 등) 알림이 안 겹치게
 
-            // 발표 · 예약 체결 배너 (위쪽 가운데, 토스트와 따로 쌓임)
-            bannerCol = new VisualElement(); Ui.Abs(bannerCol, null, 24); bannerCol.style.alignItems = Align.Center; bannerCol.pickingMode = PickingMode.Ignore;
+            // 발표 · 예약 체결 배너 (띠 아래 가운데, 토스트와 따로 쌓임)
+            bannerCol = new VisualElement(); Ui.Abs(bannerCol, null, StripH + 12); bannerCol.style.alignItems = Align.Center; bannerCol.pickingMode = PickingMode.Ignore;
             stage.Add(bannerCol);
             bannerCol.RegisterCallback<GeometryChangedEvent>(_ => PlaceAlerts());
+
+            // 맨 위 상태 띠 (모든 화면 공통, 데스크 · 인물보다 위). 누르면 자세한 상태 카드
+            hudBar = new VisualElement(); Ui.Abs(hudBar, 0, 0, 0); hudBar.style.height = StripH;
+            hudBar.style.backgroundColor = new Color(0.05f, 0.05f, 0.09f, 0.95f);
+            hudBar.style.borderBottomWidth = 2; hudBar.style.borderBottomColor = new Color(1, 1, 1, 0.14f);
+            hudBar.style.flexDirection = FlexDirection.Row; hudBar.style.alignItems = Align.Center;
+            hudBar.style.paddingLeft = 24; hudBar.style.paddingRight = 24; hudBar.style.overflow = Overflow.Hidden;
+            hudBar.RegisterCallback<ClickEvent>(ev =>
+            {   // 속도 칩 · 그만 보기 같은 띠 안 버튼은 제 일만
+                for (var v = ev.target as VisualElement; v != null && v != hudBar; v = v.parent) if (v is Button) return;
+                ToggleStatusCard();
+            });
+            stage.Add(hudBar);
             PlaceAlerts();
 
             modal = Ui.Box(new Color(0, 0, 0, 0.72f)); Ui.Fill(modal);
@@ -313,65 +326,89 @@ namespace KwGame.View
             var P = S?.pending;
             bool mgFull = P?.t == "work" && P.setup != null;
             string sig = (P?.t ?? "") + "|" + mgFull + "|" + phoneOpen;
-            if (sig != layoutSig) { layoutSig = sig; CloseHudTip(); }   // 화면이 바뀌면 떠 있던 유물·버프 설명 카드는 닫음 (같은 화면을 다시 그릴 땐 그대로)
+            if (sig != layoutSig) { layoutSig = sig; CloseHudTip(); CloseStatusCard(); }   // 화면이 바뀌면 떠 있던 설명 · 상태 카드는 닫음 (같은 화면을 다시 그릴 땐 그대로)
             DisplayStyle Show(bool b) => b ? DisplayStyle.Flex : DisplayStyle.None;
+            bool v4 = G != null && G.v4, home = v4 && P?.t == "home";
             hudBar.style.display = Show(!mgFull);
-            mini.style.display = Show(!mgFull && S?.rt == true && P?.t != "start" && S.phase != "opening");
-            dlg.style.display = Show(!mgFull);
-            panel.style.display = Show(!mgFull && P != null && P.t != "home");
+            mini.style.display = Show(!v4 && !mgFull && S?.rt == true && P?.t != "start" && S.phase != "opening");   // v4 는 시세를 데스크에서
+            quickBar.style.display = Show(!v4);   // v4 집 행동은 계획판에만
+            panel.style.display = Show(!mgFull && P != null && P.t != "home" && !DeskActive);
             panel.style.left = Length.Percent(phoneOpen ? 26 : 50);   // 폰 열리면 선택지는 왼쪽으로
-            // 폰이 열리면 왼쪽 위 HUD 와 겹치지 않게 아래로 내림 (대사 글줄은 가려도 됨: "위에서 골라 줘"뿐. 퀵메뉴 줄은 안 가림). 스크롤 영역에 최대 높이를 직접 줘야 넘칠 때 스크롤 · "더 있음"이 됨
+            // 폰이 열리면 아래로 내림 (대사 글줄은 가려도 됨: "위에서 골라 줘"뿐). 위쪽은 상태 띠 아래까지만. 스크롤 영역에 최대 높이를 직접 줘야 넘칠 때 스크롤 · "더 있음"이 됨
             bool low = !mgFull && phoneOpen;
-            panel.style.bottom = low ? 190 : 330; panel.style.maxHeight = low ? 380 : 620;
-            if (panelSv != null) panelSv.style.maxHeight = (low ? 380 : 620) - 100;
+            float H = stage.layout.height > 10 ? stage.layout.height : 1080;
+            float pb = low ? 190 : 330, pm = Mathf.Max(240, Mathf.Min(low ? 380 : 620, H - pb - StripH - 24));
+            panel.style.bottom = pb; panel.style.maxHeight = pm;
+            if (panelSv != null) panelSv.style.maxHeight = pm - 100;
             phone.style.display = Show(!mgFull && phoneOpen);
-            dlg.style.right = !mgFull && phoneOpen ? PhoneW + 20 + 16 : 40;   // 폰 열리면 대사창 · 퀵메뉴를 폰 왼쪽까지만 (오른쪽 저장·타이틀이 폰 뒤로 숨던 문제)
+            dlg.style.right = !mgFull && phoneOpen ? PhoneW + 20 + 16 : 40;   // 폰 열리면 대사창을 폰 왼쪽까지만
+            // 집: 미래는 왼쪽, 오른쪽은 계획판 (겹치지 않게 왼쪽으로 붙임)
+            if (home) miraiEl.style.left = PlanMiraiX; else miraiEl.style.left = Length.Percent(18);
+            PlanLayout(H);
+            DlgSync();
             PlaceAlerts();
         }
 
         const float PhoneW = 880, HudW = 520;
+        /// 맨 위 상태 띠 높이 (1080p 기준). 데스크 · 계획판 · 알림이 이 아래부터
+        const float StripH = 80;
         VisualElement bannerCol, panelMore; ScrollView panelSv;
 
         /// 알림 자리 (화면 모드별): 토스트 · 배너 · 카톡 팝업
-        /// 평소 = 토스트는 상태 카드 아래, 배너는 위쪽 가운데 · 미니게임 = 토스트는 하단 가운데 · 폰 열림 = 상태 카드와 폰 사이 위쪽 (선택지 상자는 왼쪽 아래라 안 가림)
-        /// 카톡 팝업 = 대사창(퀵메뉴) 바로 위, 폰이 열려 있으면 폰 왼쪽
+        /// 평소 = 토스트는 띠 아래 왼쪽, 배너는 띠 아래 가운데 · 데스크 = 가운데 차트 칸 위쪽 (종목 목록 · 주문 패널을 안 가림) · 미니게임 = 토스트는 하단 가운데 · 폰 열림 = 띠 아래 폰 왼쪽
+        /// 카톡 팝업 = 집 · 데스크에선 왼쪽 아래 (계획판 · 주문 패널을 안 가림), 그 밖엔 대사창 바로 위
         void PlaceAlerts()
         {
-            if (toastCol == null || bannerCol == null) return;
+            if (toastCol == null || bannerCol == null || hudBar == null) return;
             var P = G?.S?.pending;
             bool mgFull = P?.t == "work" && P.setup != null;
+            bool desk = DeskActive, home = G != null && G.v4 && P?.t == "home";
             float W = stage.layout.width > 10 ? stage.layout.width : 1920;
-            float hudBottom = hudBar.resolvedStyle.display != DisplayStyle.None && hudBar.layout.height > 1 ? hudBar.layout.yMax : 300;
+            float top = StripH + 12;
+            float bh = bannerCol.childCount > 0 && !float.IsNaN(bannerCol.layout.height) ? bannerCol.layout.height + 8 : 0;
+            void Center(VisualElement v, float w) { v.style.left = Length.Percent(50); v.style.translate = new Translate(Length.Percent(-50), 0); v.style.width = w; }
+            void At(VisualElement v, float x, float w) { v.style.left = x; v.style.translate = new Translate(0, 0); v.style.width = w; }
+            toastCol.style.bottom = StyleKeyword.Auto; toastCol.style.alignItems = Align.FlexStart; bannerCol.style.top = top;
             if (mgFull)
-            {   // 미니게임: 손님 줄 · 주문표가 있는 위쪽을 비우고 하단 가운데
-                toastCol.style.left = Length.Percent(50); toastCol.style.translate = new Translate(Length.Percent(-50), 0);
-                toastCol.style.top = StyleKeyword.Auto; toastCol.style.bottom = 40; toastCol.style.width = 640; toastCol.style.alignItems = Align.Center;
-                bannerCol.style.left = Length.Percent(50); bannerCol.style.translate = new Translate(Length.Percent(-50), 0); bannerCol.style.width = 760;
+            {   // 미니게임: 손님 줄 · 주문표가 있는 위쪽을 비우고 하단 가운데 (띠도 숨음)
+                Center(toastCol, 640); toastCol.style.top = StyleKeyword.Auto; toastCol.style.bottom = 40; toastCol.style.alignItems = Align.Center;
+                Center(bannerCol, 760); bannerCol.style.top = 24;
             }
             else if (phoneOpen)
-            {   // 상태 카드와 폰 사이 빈 띠 (위쪽): 배너 → 그 아래 토스트
-                float x = 24 + HudW + 16, w = Mathf.Max(320, W - 20 - PhoneW - 16 - x);
-                bannerCol.style.left = x; bannerCol.style.translate = new Translate(0, 0); bannerCol.style.width = w;
-                float bh = bannerCol.childCount > 0 ? bannerCol.layout.height + 8 : 0;
-                toastCol.style.left = x; toastCol.style.translate = new Translate(0, 0);
-                toastCol.style.top = 24 + (float.IsNaN(bh) ? 0 : bh); toastCol.style.bottom = StyleKeyword.Auto; toastCol.style.width = w; toastCol.style.alignItems = Align.FlexStart;
+            {   // 띠 아래, 폰 왼쪽: 배너 → 그 아래 토스트
+                float w = Mathf.Max(320, W - 24 - PhoneW - 20 - 16);
+                At(bannerCol, 24, w);
+                At(toastCol, 24, Mathf.Min(HudW, w)); toastCol.style.top = top + bh;
+            }
+            else if (desk)
+            {   // 데스크: 가운데 차트 칸 위쪽 (왼쪽 종목 목록 380 · 오른쪽 주문 패널 470 사이)
+                float x = 24 + 380 + 16, w = Mathf.Max(320, W - x - 470 - 24 - 16);
+                At(bannerCol, x, w);
+                At(toastCol, x, w); toastCol.style.top = top + bh;
             }
             else
             {
-                toastCol.style.left = 24; toastCol.style.translate = new Translate(0, 0);
-                toastCol.style.top = Mathf.Max(330, hudBottom + 12); toastCol.style.bottom = StyleKeyword.Auto; toastCol.style.width = HudW; toastCol.style.alignItems = Align.FlexStart;
-                bannerCol.style.left = Length.Percent(50); bannerCol.style.translate = new Translate(Length.Percent(-50), 0); bannerCol.style.width = 760;
+                At(toastCol, 24, HudW); toastCol.style.top = top;
+                Center(bannerCol, 760);
             }
             if (bannerCol.parent != null && bannerCol.parent.IndexOf(bannerCol) < bannerCol.parent.childCount - 1) bannerCol.BringToFront();   // 폰보다 위
-            // 카톡 팝업 (GameController.Phone.cs 가 처음 띄울 때 만듦): 오른쪽 아래 퀵메뉴(저장 · 타이틀 · 설정)를 가리지 않게 대사창 위로
+            // 카톡 팝업 (GameController.Phone.cs 가 처음 띄울 때 만듦)
             if (kkPopCol != null)
             {
-                float dh = dlg.resolvedStyle.display != DisplayStyle.None && dlg.layout.height > 1 ? dlg.layout.height + 24 + 12 : 24;
-                // 폰이 열리면 선택지 상자가 아래로 내려와 있음 → 그 위로 올려서 "그만 보기" 같은 버튼을 안 가리게
-                bool boxLow = !mgFull && phoneOpen && panel.resolvedStyle.display != DisplayStyle.None;
-                float ph = panel.layout.height > 1 ? panel.layout.height : 380;
-                kkPopCol.style.bottom = boxLow ? 190 + ph + 12 : dh;
-                kkPopCol.style.right = !mgFull && phoneOpen ? PhoneW + 20 + 16 : 24;
+                if (!mgFull && (home || desk))
+                {   // 누를 곳(계획판 · 주문 패널 · 포지션 · 띠)이 없는 왼쪽 아래
+                    kkPopCol.style.left = 24; kkPopCol.style.right = StyleKeyword.Auto; kkPopCol.style.bottom = 24;
+                }
+                else
+                {
+                    float dh = dlg.resolvedStyle.display != DisplayStyle.None && dlg.layout.height > 1 ? dlg.layout.height + 24 + 12 : 24;
+                    // 폰이 열리면 선택지 상자가 아래로 내려와 있음 → 그 위로 올려서 버튼을 안 가리게
+                    bool boxLow = !mgFull && phoneOpen && panel.resolvedStyle.display != DisplayStyle.None;
+                    float ph = panel.layout.height > 1 ? panel.layout.height : 380;
+                    kkPopCol.style.left = StyleKeyword.Auto;
+                    kkPopCol.style.bottom = boxLow ? 190 + ph + 12 : dh;
+                    kkPopCol.style.right = !mgFull && phoneOpen ? PhoneW + 20 + 16 : 24;
+                }
             }
         }
 
@@ -397,16 +434,21 @@ namespace KwGame.View
             BarrageSync();
             SickSync();
             MinigameSync();
-            LayoutForMode();
+            LayoutForMode(); RenderDesk();
             CoachMaybe();
         }
 
-        /// 대사가 없을 때 대사창: 집이면 미래 한마디, 밖이면 지금 있는 곳
+        /// 대사가 없을 때 대사창: 집이면 미래 한마디 (v4 는 미래 옆 말풍선), 밖이면 지금 있는 곳
         void SetIdle()
         {
             if (dlgText.style.display == DisplayStyle.Flex) return;
             var P = S?.pending;
-            if (P?.t == "home") { dlgName.text = "미래"; dlgName.style.display = DisplayStyle.Flex; idleText.text = Ui.Clean(HomeLine() ?? ""); idleText.style.color = Ui.Text; }
+            if (P?.t == "home" && G.v4 && planBubbleText != null)
+            {
+                planBubbleText.text = Ui.Clean(HomeLine() ?? "");
+                dlgName.style.display = DisplayStyle.None; idleText.text = "";
+            }
+            else if (P?.t == "home") { dlgName.text = "미래"; dlgName.style.display = DisplayStyle.Flex; idleText.text = Ui.Clean(HomeLine() ?? ""); idleText.style.color = Ui.Text; }
             else
             {
                 dlgName.style.display = DisplayStyle.None;
@@ -461,117 +503,182 @@ namespace KwGame.View
             t.RegisterCallback<DetachFromPanelEvent>(_ => animation.Kill());
         }
 
-        // ---------- 상태 카드 (왼쪽 위) ----------
+        // ---------- 맨 위 상태 띠 (한 줄). 자세한 건 띠를 누르면 상태 카드 ----------
         void RenderHud(HudSnap h)
         {
             hudBar.Clear(); hudCash = null;
+            Label L(string t, float size, Color c, bool bold = false) { var l = Ui.Label(t, size, c, bold); l.style.whiteSpace = WhiteSpace.NoWrap; l.style.flexShrink = 0; l.pickingMode = PickingMode.Ignore; return l; }
             if (h.phase == "opening" || S.pending?.t == "start")
             {
-                hudBar.Add(Ui.Label("롱잡고알바감", 36, Ui.Accent, true));
+                hudBar.Add(L("롱잡고알바감", 34, Ui.Accent, true));
+                CloseStatusCard();
                 return;
             }
-            Label L(string t, float size, Color c, bool bold = false) { var l = Ui.Label(t, size, c, bold); l.style.whiteSpace = WhiteSpace.NoWrap; l.pickingMode = PickingMode.Ignore; return l; }
             VisualElement Chip(string t, Color fg, Color bg)
             {
-                var c = Ui.Box(bg, 0, 6); c.style.marginLeft = 8; c.style.paddingLeft = 8; c.style.paddingRight = 8; c.style.paddingTop = 2; c.style.paddingBottom = 2; c.pickingMode = PickingMode.Ignore;
-                c.Add(L(t, 18, fg, true)); return c;
+                var c = Ui.Box(bg, 0, 6); c.style.marginLeft = 10; c.style.paddingLeft = 8; c.style.paddingRight = 8; c.style.paddingTop = 2; c.style.paddingBottom = 2; c.style.flexShrink = 0; c.pickingMode = PickingMode.Ignore;
+                c.Add(L(t, 18, fg, true)); hudBar.Add(c); return c;
+            }
+            void Gap() { var g = new VisualElement(); g.style.width = 2; g.style.height = 36; g.style.marginLeft = 18; g.style.marginRight = 18; g.style.flexShrink = 0; g.style.backgroundColor = new Color(1, 1, 1, 0.14f); g.pickingMode = PickingMode.Ignore; hudBar.Add(g); }
+            Label M(string k, string v, Color c)
+            {
+                var b = Ui.Row(); b.style.marginRight = 22; b.style.flexShrink = 0; b.pickingMode = PickingMode.Ignore;
+                b.Add(L(k, 20, Ui.Dim)); var vl = L(v, 24, c, true); vl.style.marginLeft = 6; b.Add(vl); hudBar.Add(b); return vl;
             }
             int MD = D.RULES.MONTH_DAYS;
-            // 1줄: 언제 · 어디. 시계는 늘 흰색, 장중이면 옆에 "장중" 칩 (빨강은 상승 전용)
-            var top = Ui.Row(); top.style.alignItems = Align.Center; hudBar.Add(top);
-            top.Add(L(S.rt ? G.clockNow() : D.SLOT_NAME[Math.Min(h.slot, D.SLOT_NAME.Count - 1)], 34, Ui.Text, true));
-            if (S.rt && G.stockOpen()) top.Add(Chip("장중", StkUp, new Color(1f, 0.3f, 0.37f, 0.16f)));
-            string dayTxt = G.v4 ? $"{G.absDay()}일째 ({"월화수목금토일"[(h.day - 1) % 7]})" : $"{h.month}개월 {h.day}일";   // v4: 1주 = 월~일, 토·일 휴장
-            var when = L($"  {dayTxt} · {(G.v4 ? new[] { "오전", "오후", "밤" } : D.SLOT_NAME.ToArray())[Math.Min(h.slot, 2)]}", 20, Ui.Dim); top.Add(when);
-            var sp = new VisualElement(); sp.style.flexGrow = 1; top.Add(sp);
-            top.Add(L(Ui.Clean(LocTitle()), 20, Ui.Dim));
-            // v4: 장 · 만기 D-day · 미래 호감 · 오늘 부탁 (시간은 장 볼 때만 흐름)
-            if (G.v4)
-            {
-                var v4r = Ui.Row(); v4r.style.alignItems = Align.Center; v4r.style.marginTop = 6; hudBar.Add(v4r);
-                string chName = G.chapterName();   // 국면은 안 드러내는 장 이름 (sim V4_STR v4.chName)
-                v4r.Add(L($"{(S.part > 1 ? "2부 " : "")}{G.chapter()}장 {chName}", 20, Ui.Accent, true));
-                v4r.Add(L($"  · 만기 D-{G.daysLeft()}" + (G.weekend() ? " · 주말 휴장" : ""), 20, G.daysLeft() <= 3 ? Ui.Bad : Ui.Gold, true));
-                var p = G.promNow(); string ps = G.promState();
-                if (p != null) hudBar.Add(L($"미래 부탁: {p.hud} · " + (ps == "bad" ? "어김" : ps == "todo" ? "아직" : "지킴"), 20, ps == "bad" ? Ui.Bad : ps == "todo" ? Ui.Gold : Ui.Good, true));
-                // 털기 루트: 준비 단계 + 미래 각오 (성공 조건 = 호감 V4_AFF_HEIST · 욕심 V4_GREED_HEIST, 숫자 대신 뭐가 모자란지만)
-                if (S.heist > 0)
-                {
-                    string mind = S.aff < D.RULES.V4_AFF_HEIST ? "아직 날 덜 믿음 (호감)" : S.greed < D.RULES.V4_GREED_HEIST ? "아직 겁먹음 (욕심)" : "단단함";
-                    hudBar.Add(L($"금고 털기 준비 {S.heist}/3 · 미래 각오: {mind}" + (S.heistGo ? " · 오늘 밤 턴다" : ""), 20, G.heistOk() ? Ui.Good : Ui.Gold, true));
-                }
-                if (S.pending?.t == "watch") SpeedRow(rtSpeed == 0 ? "Ⅱ 멈춤 (Space 재개)" : "▶ 흐르는 중 (키 1·2·4 · Space)", rtSpeed > 0);
-            }
-            // 시간 속도 (폰을 열어도 가리지 않게 상태 카드 안)
-            else if (S.rt)
-            {
-                bool flowing = PHONE_OK.Contains(S.pending?.t);
-                SpeedRow(!flowing ? "Ⅱ 고르는 중엔 멈춤" : rtSpeed == 0 ? "Ⅱ 멈춤" : "▶ 시간 흐름", flowing && rtSpeed > 0);
-            }
-            void SpeedRow(string label, bool on)
-            {
-                var spd = Ui.Row(); spd.style.alignItems = Align.Center; spd.style.marginTop = 6; hudBar.Add(spd);
-                var sl = L(label, 18, on ? Ui.Good : Ui.Dim); sl.style.flexShrink = 1; sl.style.whiteSpace = WhiteSpace.Normal; spd.Add(sl);
-                var g0 = new VisualElement(); g0.style.flexGrow = 1; spd.Add(g0);
+            bool watch = G.v4 && S.pending?.t == "watch";
+            if (watch)
+            {   // 장 보기: 시계(흰색) + 장중 칩 + 속도 (키 1 · 2 · 4 · Space)
+                hudBar.Add(L(G.clockNow(), 30, Ui.Text, true));
+                if (G.stockOpen()) Chip("장중", StkUp, new Color(1f, 0.3f, 0.37f, 0.16f));
+                var g0 = new VisualElement(); g0.style.width = 14; g0.style.flexShrink = 0; hudBar.Add(g0);
                 foreach (var (v0, l) in new[] { (0, "Ⅱ"), (1, "1x"), (2, "2x"), (4, "4x") })
                 {
                     int v = v0; var c = Ui.Chip(l, () => SetSpeed(v), false, rtSpeed == v ? Ui.Accent : new Color(1, 1, 1, 0.06f));
-                    c.style.marginLeft = 4; c.style.marginRight = 0; c.style.paddingTop = 4; c.style.paddingBottom = 4; c.style.flexShrink = 0; c.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap; spd.Add(c);
+                    c.style.marginLeft = 0; c.style.marginRight = 6; c.style.marginBottom = 0; c.style.flexShrink = 0; c.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap; hudBar.Add(c);
                 }
+                hudBar.Add(L(rtSpeed == 0 ? "멈춤 · Space 재개" : "Space 멈춤", 18, Ui.Dim));
+                Gap();
             }
-            // 2줄: 돈 (만 단위). 빚 = 경고색 · 현금 = 초록 · 평가 · 순자산(현금 + 보유 평가, 빚 제외)
-            var money = Ui.Row(); money.style.marginTop = 8; money.style.flexWrap = Wrap.Wrap; money.style.alignItems = Align.FlexStart; hudBar.Add(money);
-            Label M(string k, string v, Color c) { var b = new VisualElement(); b.style.marginRight = 18; b.pickingMode = PickingMode.Ignore; b.Add(L(k, 18, Ui.Dim)); var vl = L(v, 24, c, true); b.Add(vl); money.Add(b); return vl; }
-            M("빚", Man(h.debt), Ui.Bad);
+            else
+            {   // 날짜 · 칸
+                string dayTxt = G.v4 ? $"{G.absDay()}일째 ({"월화수목금토일"[(h.day - 1) % 7]})" : $"{h.month}개월 {h.day}일";   // v4: 1주 = 월~일, 토·일 휴장
+                string slotTxt = (G.v4 ? new[] { "오전", "오후", "밤" } : D.SLOT_NAME.ToArray())[Math.Min(h.slot, 2)];
+                hudBar.Add(L($"{dayTxt} · {slotTxt}", 24, Ui.Text, true));
+                if (S.rt && !G.v4) hudBar.Add(L("  " + G.clockNow(), 20, Ui.Dim));   // 옛 칸 방식 실시간
+                Gap();
+                M("빚", Man(h.debt), Ui.Bad);
+            }
             hudCash = M("현금", Man(h.cash), Ui.Good);
             // 현금이 바뀌면 어떤 경로든(매매 · 리포트 · 대출 · 상점 …) 옆에 ± 숫자. 새 판·불러오기 직후엔 기준만 잡음
             if (hudCashG != G) { hudCashG = G; hudCashPrev = h.cash; }
             else if (Math.Abs(h.cash - hudCashPrev) >= 1) { CashFloat(h.cash - hudCashPrev); hudCashPrev = h.cash; }
-            if (h.hv != 0) M("평가", Man(h.hv), Ui.Text);
-            if (G.v4) M("순자산", Man(G.equity()), Ui.Text);
+            if (watch) M("평가", Man(h.hv), Ui.Text);
+            else if (G.v4) M("순자산", Man(G.equity()), Ui.Text);
+            else if (h.hv != 0) M("평가", Man(h.hv), Ui.Text);
+            Gap();
             if (G.gateOn)
-            {   // 이번 주 납부 = 돈 줄 바로 아래 가장 큰 줄: 금액 · D-n · 막대(현금 ÷ 납부액) + 숫자
-                double due = G.gateDue(), intr = h.paidMonth == h.month ? 0 : G.interestDue();
+            {   // 이번 주 납부: 금액 · 막대(현금 ÷ 납부액) · 숫자 · D-n
+                double due = G.gateDue();
                 int gd = G.gateDays(); string dd = gd <= 0 ? "D-DAY" : $"D-{gd}";
-                var gr = Ui.Row(); gr.style.alignItems = Align.Center; gr.style.marginTop = 10; hudBar.Add(gr);
                 if (due <= 0)
                 {
                     bool lastWk = h.month >= D.RULES.V4_GATE_CAP.Length;
-                    var ok = L(lastWk ? "이번 주 납부 끝" : G.T("v4.gate.hudOk", "cap", G.man(G.gateCap(h.month + 1))), 22, Ui.Good, true); ok.style.whiteSpace = WhiteSpace.Normal; ok.style.flexShrink = 1; gr.Add(ok);
+                    var ok = L(lastWk ? "이번 주 납부 끝" : G.T("v4.gate.hudOk", "cap", G.man(G.gateCap(h.month + 1))), 22, Ui.Good, true); ok.style.flexShrink = 1; ok.style.overflow = Overflow.Hidden; hudBar.Add(ok);
                 }
                 else
                 {
-                    gr.Add(L($"이번 주 납부 {Man(due)}", 22, Ui.Gold, true));
-                    gr.Add(Chip(dd, gd <= 1 ? Ui.Ink : Ui.Gold, gd <= 1 ? Ui.Bad : new Color(1f, 0.82f, 0.4f, 0.16f)));
-                }
-                if (S.missN > 0) gr.Add(Chip($"미납 {S.missN}/{D.RULES.V4_MISS_MAX}", Ui.Ink, Ui.Bad));
-                if (due > 0)
-                {
+                    hudBar.Add(L(watch ? $"납부 {Man(due)}" : $"이번 주 납부 {Man(due)}", 22, Ui.Gold, true));
                     bool full = h.cash >= due; double fr = Math.Min(1, Math.Max(0, h.cash / due));
-                    var br = Ui.Row(); br.style.alignItems = Align.Center; br.style.marginTop = 6; br.pickingMode = PickingMode.Ignore; hudBar.Add(br);
-                    var tr = Ui.Box(new Color(1, 1, 1, 0.14f), 0, 6); tr.style.height = 12; tr.style.flexGrow = 1; tr.style.marginRight = 10; tr.pickingMode = PickingMode.Ignore;
+                    var tr = Ui.Box(new Color(1, 1, 1, 0.14f), 0, 6); tr.style.height = 12; tr.style.flexGrow = 1; tr.style.flexShrink = 1; tr.style.minWidth = 60; tr.style.maxWidth = 240;
+                    tr.style.marginLeft = 12; tr.style.marginRight = 12; tr.pickingMode = PickingMode.Ignore;
                     var f = Ui.Box(full ? Ui.Good : Ui.Gold, 0, 6); f.style.height = Length.Percent(100); f.style.width = Length.Percent((float)(fr * 100)); f.pickingMode = PickingMode.Ignore; tr.Add(f);
-                    br.Add(tr);
-                    br.Add(full ? L($"다 모음 · 내면 {Man(h.cash - due)} 남음", 20, Ui.Good, true) : L($"현금 {Man(h.cash)} / 납부 {Man(due)}", 20, Ui.Text, true));   // 가득 찬 막대도 '내고 나면 얼마 남나'로 읽히게
-                    hudBar.Add(L($"이자 {Man(intr)} + 원금 {Man(G.gatePrincipal())}", 18, Ui.Dim));
+                    hudBar.Add(tr);
+                    hudBar.Add(full ? L($"다 모음 · 내면 {Man(h.cash - due)} 남음", 20, Ui.Good, true) : L($"현금 {Man(h.cash)} / 납부 {Man(due)}", 20, Ui.Text, true));   // 가득 찬 막대도 '내고 나면 얼마 남나'로 읽히게
+                    Chip(dd, gd <= 1 ? Ui.Ink : Ui.Gold, gd <= 1 ? Ui.Bad : new Color(1f, 0.82f, 0.4f, 0.16f));
                 }
+                if (S.missN > 0) Chip($"미납 {S.missN}/{D.RULES.V4_MISS_MAX}", Ui.Ink, Ui.Bad);
             }
             else hudBar.Add(L(h.paidMonth == h.month ? (G.v4 ? "이번 주 이자 냄" : "이번 달 이자 냄") : $"이자 {(MD - h.day == 0 ? "D-DAY" : $"D-{MD - h.day}")} · {Man(MathK.Round1k(h.debt * G.rate()))}", 22, h.paidMonth == h.month ? Ui.Good : Ui.Gold, true));
-            // v4 목표: 주 목표 = 빚 0 (클리어) · 차선 = 만기 때 못 갚아도 미래가 같이 가 주는 조건
+            var sp = new VisualElement(); sp.style.flexGrow = 1; sp.style.minWidth = 12; sp.pickingMode = PickingMode.Ignore; hudBar.Add(sp);
+            if (watch)
+            {   // 그만 보기: 포지션을 들고 있으면 4초 안에 한 번 더 (Chart 의 rptArm 방식)
+                int nPos = S.cps.Count + G.STK().Count(hk => S.hold.Has(hk));
+                bool armed = nPos > 0 && Time.realtimeSinceStartup - watchEndArm < 4;
+                var end = Ui.Chip(armed ? "한 번 더 누르면 남은 시간 넘김" : "그만 보기", () =>
+                {
+                    if (nPos == 0 || Time.realtimeSinceStartup - watchEndArm < 4) { watchEndArm = -10; Send("watchEnd"); }
+                    else { watchEndArm = Time.realtimeSinceStartup; Toast($"포지션 {nPos}개를 든 채로 시간이 흘러가요 · 4초 안에 다시 누르기", ""); RenderHud(G.HudSnapOf()); }
+                }, false, new Color(0, 0, 0, 0));
+                Ui.Border(end, armed ? Ui.Bad : new Color(1, 1, 1, 0.35f), 2); end.style.marginRight = 0; end.style.marginBottom = 0; end.style.flexShrink = 0; end.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap;
+                hudBar.Add(end);
+            }
+            else
+            {   // 스트레스 · 호감 (찰수록 경고색 · 같이 엔딩 문턱 넘으면 분홍)
+                hudBar.Add(L($"스트레스 {h.stress:0}", 22, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : Ui.Dim, true));
+                if (G.v4) hudBar.Add(L($" · 호감 {S.aff:0}", 22, S.aff >= D.RULES.V4_AFF_GOOD ? new Color(1f, 0.45f, 0.65f) : S.aff < 30 ? Ui.Bad : Ui.Dim, true));
+            }
+            if (statusCard != null) RenderStatusCard();
+        }
+
+        // ---------- 자세한 상태 카드 (띠 아래): 띠를 다시 누르거나 바깥 클릭 · Esc 로 닫힘 ----------
+        VisualElement statusCard; ScrollView statusSv; bool statusHooked;
+        void ToggleStatusCard() { if (statusCard != null) CloseStatusCard(); else OpenStatusCard(); }
+        void CloseStatusCard() { statusCard?.RemoveFromHierarchy(); statusCard = null; statusSv = null; }
+        void OpenStatusCard()
+        {
+            if (G == null || S.pending?.t == "start" || S.phase == "opening") return;
+            CloseStatusCard(); CloseHudTip();
+            if (!statusHooked)
+            {   // 바깥을 누르면 닫기 (카드 · 띠를 누른 건 빼고 — 띠는 자기 클릭으로 닫음)
+                statusHooked = true;
+                root.RegisterCallback<PointerDownEvent>(ev =>
+                {
+                    if (statusCard == null) return;
+                    for (var v = ev.target as VisualElement; v != null; v = v.parent) if (v == statusCard || v == hudBar) return;
+                    CloseStatusCard();
+                }, TrickleDown.TrickleDown);
+            }
+            statusCard = GlassBox(22, 16); Ui.Border(statusCard, Ui.Gold, 2); Ui.Abs(statusCard, 24, StripH + 8); statusCard.style.width = 760;
+            float H = stage.layout.height > 10 ? stage.layout.height : 1080;
+            statusCard.style.maxHeight = H - StripH - 32;
+            statusSv = new ScrollView(ScrollViewMode.Vertical); statusSv.style.flexShrink = 1; statusSv.style.maxHeight = H - StripH - 32 - 44 - 80;
+            statusSv.contentViewport.style.overflow = Overflow.Hidden;
+            statusCard.Add(statusSv);
+            stage.Add(statusCard);
+            RenderStatusCard();
+        }
+        /// 예전 왼쪽 위 상태판에 있던 것 전부 (장 · 만기 · 목표 · 부탁 · 털기 · 납부 내역 · 막대 · 버프 · 유물) + 도움말 · 설정 · 저장 · 타이틀
+        void RenderStatusCard()
+        {
+            if (statusCard == null || statusSv == null || G == null) return;
+            var h = G.HudSnapOf();
+            var body = statusSv.contentContainer; body.Clear();
+            while (statusCard.childCount > 1) statusCard.RemoveAt(statusCard.childCount - 1);   // 스크롤 영역만 남기고 (스크롤 위치 유지)
+            Label T(string t, float size, Color c, bool bold = false, float top = 6)
+            {
+                var l = Ui.Label(t, size, c, bold); l.style.whiteSpace = WhiteSpace.Normal; l.style.marginTop = top; l.pickingMode = PickingMode.Ignore; body.Add(l); return l;
+            }
+            void Head(string t) { var l = T(t, 22, Ui.Gold, true, 16); l.style.paddingTop = 10; l.style.borderTopWidth = 1; l.style.borderTopColor = new Color(1, 1, 1, 0.12f); }
+            int MD = D.RULES.MONTH_DAYS;
             if (G.v4)
             {
-                var g1 = L("목표: 빚 0원 = 클리어", 20, Ui.Text, true); g1.style.marginTop = 6; hudBar.Add(g1);
-                var gl = L(DuoGoal(), 18, DuoOk() ? Ui.Good : Ui.Dim); gl.style.whiteSpace = WhiteSpace.Normal; hudBar.Add(gl);
+                T($"{(S.part > 1 ? "2부 " : "")}{G.chapter()}장 {G.chapterName()} · 만기 D-{G.daysLeft()}" + (G.weekend() ? " · 주말 휴장" : ""), 26, G.daysLeft() <= 3 ? Ui.Bad : Ui.Gold, true, 0);
+                T("목표: 빚 0원 = 클리어", 24, Ui.Text, true);
+                T(DuoGoal(), 20, DuoOk() ? Ui.Good : Ui.Dim);
+                var p = G.promNow(); string ps = G.promState();
+                if (p != null) T($"미래 부탁: {p.hud} · " + (ps == "bad" ? "어김" : ps == "todo" ? "아직" : "지킴"), 22, ps == "bad" ? Ui.Bad : ps == "todo" ? Ui.Gold : Ui.Good, true);
+                // 털기 루트: 준비 단계 + 미래 각오 (숫자 대신 뭐가 모자란지만)
+                if (S.heist > 0)
+                {
+                    string mind = S.aff < D.RULES.V4_AFF_HEIST ? "아직 날 덜 믿음 (호감)" : S.greed < D.RULES.V4_GREED_HEIST ? "아직 겁먹음 (욕심)" : "단단함";
+                    T($"금고 털기 준비 {S.heist}/3 · 미래 각오: {mind}" + (S.heistGo ? " · 오늘 밤 턴다" : ""), 22, G.heistOk() ? Ui.Good : Ui.Gold, true);
+                }
             }
-            // 3줄: 수치 막대
-            var bars = Ui.Row(); bars.style.marginTop = 10; hudBar.Add(bars);
+            else T($"{h.month}개월 {h.day}일 · {G.clockNow()}", 26, Ui.Gold, true, 0);
+            T("지금 있는 곳: " + Ui.Clean(LocTitle()), 20, Ui.Dim);
+            // 돈 · 납부 내역
+            Head("돈");
+            T($"빚 {Man(h.debt)} · 현금 {Man(h.cash)}" + (h.hv != 0 ? $" · 평가 {Man(h.hv)}" : "") + (G.v4 ? $" · 순자산 {Man(G.equity())}" : ""), 22, Ui.Text);
+            if (G.gateOn)
+            {
+                double due = G.gateDue(), intr = h.paidMonth == h.month ? 0 : G.interestDue();
+                int gd = G.gateDays(); string dd = gd <= 0 ? "D-DAY" : $"D-{gd}";
+                if (due > 0) T($"이번 주 납부 {Man(due)} ({dd}) = 이자 {Man(intr)} + 원금 {Man(G.gatePrincipal())}", 22, gd <= 1 ? Ui.Bad : Ui.Gold, true);
+                else T("이번 주 납부는 다 냈어요", 22, Ui.Good, true);
+                if (S.missN > 0) T($"미납 {S.missN}/{D.RULES.V4_MISS_MAX} — 이번 주도 못 내면 원양어선", 20, Ui.Bad, true);
+            }
+            else T(h.paidMonth == h.month ? (G.v4 ? "이번 주 이자 냄" : "이번 달 이자 냄") : $"이자 {(MD - h.day == 0 ? "D-DAY" : $"D-{MD - h.day}")} · {Man(MathK.Round1k(h.debt * G.rate()))}", 22, h.paidMonth == h.month ? Ui.Good : Ui.Gold, true);
+            // 막대
+            Head("몸 · 마음");
+            var bars = Ui.Row(); bars.style.marginTop = 8; bars.style.flexWrap = Wrap.Wrap; body.Add(bars);
             void Bar(string k, double v, Color c, string tail, double tick = -1)
             {
-                var b = new VisualElement(); b.style.flexGrow = 1; b.style.flexBasis = 0; b.style.marginRight = 12; b.style.overflow = Overflow.Hidden;   // 글자가 옆 막대로 넘어가지 않게
-                b.Add(L($"{k} {v:0}{tail}", 18, Ui.Dim));
+                var b = new VisualElement(); b.style.width = Length.Percent(48); b.style.marginRight = Length.Percent(2); b.style.marginBottom = 8; b.style.overflow = Overflow.Hidden;
+                b.Add(Ui.Label($"{k} {v:0}{tail}", 20, Ui.Text));
                 var tr = Ui.Box(new Color(1, 1, 1, 0.12f), 0, 5); tr.style.height = 10; tr.style.marginTop = 4;
                 var f = Ui.Box(c, 0, 5); f.style.height = Length.Percent(100); f.style.width = Length.Percent((float)Math.Max(0, Math.Min(100, v))); tr.Add(f);
-                if (tick >= 0)   // 목표 눈금 (호감 60 = 같이 엔딩)
+                if (tick >= 0)   // 목표 눈금 (호감 = 같이 엔딩)
                 {
                     var tk = new VisualElement(); tk.style.position = Position.Absolute; tk.style.left = Length.Percent((float)tick); tk.style.top = -3; tk.style.bottom = -3; tk.style.width = 2;
                     tk.style.backgroundColor = Color.white; tk.pickingMode = PickingMode.Ignore; tr.Add(tk);
@@ -579,45 +686,56 @@ namespace KwGame.View
                 b.Add(tr); bars.Add(b);
             }
             if (!G.hpOff) Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, h.faint ? " 기절" : "");
-            // 스트레스: 찰수록 나쁨 (예전 이름 "멘탈"은 높을수록 좋은 것처럼 읽혀서) → 차오를수록 경고색
             string men = h.stress >= G.menLine() ? " 멘헤라" : h.stress >= 40 ? " 불안" : "";
             Bar("스트레스", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : Ui.Dim, men);
             if (G.v4) Bar("호감", S.aff, S.aff >= D.RULES.V4_AFF_GOOD ? new Color(1f, 0.45f, 0.65f) : S.aff < 30 ? Ui.Bad : Ui.Gold, "", D.RULES.V4_AFF_GOOD);
-            if (!G.v4 || h.addict >= 50) Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");   // v4 는 위험할 때만
-            // v4 호감 버프 칩 (도시락 · 미래의 감 · 응원): 누르면 효과 카드
-            if (G.v4 && G.buffs() is List<string> bfs && bfs.Count > 0)
-            {
-                var br = Ui.Row(); br.style.marginTop = 6; br.style.flexWrap = Wrap.Wrap; hudBar.Add(br);
-                var segs = (G.T("v4.buff.help") ?? "").Split(new[] { " · " }, StringSplitOptions.RemoveEmptyEntries);
-                for (int i = 0; i < bfs.Count; i++)
-                {
-                    string name = Ui.Clean(bfs[i]), body = i < segs.Length ? segs[i].Trim() : G.T("v4.buff.help");
-                    if (!body.StartsWith("호감")) body = "호감 " + body;
-                    var c = L(name, 18, new Color(1f, 0.75f, 0.85f), true); c.style.backgroundColor = new Color(1f, 0.45f, 0.65f, 0.18f); Ui.Radius(c, 8);
-                    c.style.paddingLeft = 8; c.style.paddingRight = 8; c.style.paddingTop = 2; c.style.paddingBottom = 2; c.style.marginRight = 6; c.style.marginTop = 2; br.Add(c);
-                    TipSource(c, "buff" + i, name, body);
-                }
-            }
-            // 몸 상태 줄: 병·숙취·내일 아플 확률 (막대 글자에 붙이면 옆 막대를 가려서 따로 뺌). v4 는 병 없음
+            Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");
+            // 몸 상태 (옛 칸 방식: 병 · 숙취 · 내일 아플 확률)
             if (S.rt && !G.v4)
             {
                 double sickPr = G.sickP();
-                string body = G.sickName() != null ? $"{G.sickName()} 앓는 중 · {S.sickD}일 남음" : $"내일 아플 확률 {sickPr * 100:0}%";
-                if (S.hang) body += " · 숙취";
-                hudBar.Add(L(body, 18, G.sickName() != null || sickPr >= 0.2 ? Ui.Bad : Ui.Dim, G.sickName() != null));
+                string sick = G.sickName() != null ? $"{G.sickName()} 앓는 중 · {S.sickD}일 남음" : $"내일 아플 확률 {sickPr * 100:0}%";
+                if (S.hang) sick += " · 숙취";
+                T(sick, 20, G.sickName() != null || sickPr >= 0.2 ? Ui.Bad : Ui.Dim, G.sickName() != null);
             }
-            // 4줄: 유물 (누르면 이름 · 효과 카드)
+            // 호감 버프와 효과
+            if (G.v4 && G.buffs() is List<string> bfs && bfs.Count > 0)
+            {
+                Head("호감 버프");
+                var segs = (G.T("v4.buff.help") ?? "").Split(new[] { " · " }, StringSplitOptions.RemoveEmptyEntries);
+                for (int i = 0; i < bfs.Count; i++)
+                {
+                    string name = Ui.Clean(bfs[i]), bd = i < segs.Length ? segs[i].Trim() : G.T("v4.buff.help");
+                    if (!bd.StartsWith("호감")) bd = "호감 " + bd;
+                    T(name, 22, new Color(1f, 0.75f, 0.85f), true, 8);
+                    T(bd, 20, Ui.Text, false, 2);
+                }
+            }
+            // 유물: 아이콘 + 이름 + 효과
             if (h.augs.Count > 0)
             {
-                var icons = Ui.Row(); icons.style.marginTop = 10; icons.style.alignItems = Align.Center; hudBar.Add(icons);
-                foreach (var id in h.augs.Take(9))
+                Head($"유물 {h.augs.Count}개");
+                foreach (var id in h.augs)
                 {
                     var a = D.AUGS.FirstOrDefault(x => x.id == id);
-                    var ic = Icon(ArtCatalog.Relic(id), 36); ic.style.marginRight = 4; icons.Add(ic);
-                    TipSource(ic, "relic:" + id, a?.name ?? id, a?.d ?? "");
+                    var r = Ui.Row(); r.style.alignItems = Align.FlexStart; r.style.marginTop = 10; r.pickingMode = PickingMode.Ignore;
+                    var ic = Icon(ArtCatalog.Relic(id), 48); ic.style.marginRight = 12; ic.style.flexShrink = 0; r.Add(ic);
+                    var col = new VisualElement(); col.style.flexShrink = 1; col.pickingMode = PickingMode.Ignore; r.Add(col);
+                    col.Add(Ui.Label(a?.name ?? id, 22, Ui.Gold, true));
+                    if (!string.IsNullOrEmpty(a?.d)) col.Add(Ui.Label(a.d, 20, Ui.Text));
+                    body.Add(r);
                 }
-                if (h.augs.Count > 9) icons.Add(L($"+{h.augs.Count - 9}", 18, Ui.Gold, true));
             }
+            // 맨 아래: 집이 아닌 화면에서도 갈 수 있게
+            var foot = Ui.Row(); foot.style.marginTop = 14; foot.style.flexShrink = 0; foot.style.paddingTop = 12; foot.style.borderTopWidth = 1; foot.style.borderTopColor = new Color(1, 1, 1, 0.12f);
+            statusCard.Add(foot);
+            void B(string t, Action a, bool dis) { var b = Ui.Chip(t, () => { CloseStatusCard(); a(); }, dis, new Color(1, 1, 1, 0.06f)); b.style.marginBottom = 0; b.style.flexShrink = 0; foot.Add(b); }
+            B("도움말", CoachStart, playing);
+            B("설정", OpenSettings, playing);
+            B("저장", () => SaveCheckpoint(true), !CanSave);
+            B("타이틀", ReturnToTitle, playing);
+            var fs = new VisualElement(); fs.style.flexGrow = 1; foot.Add(fs);
+            var hint = Ui.Label("띠를 다시 누르거나 Esc", 18, Ui.Dim); hint.style.whiteSpace = WhiteSpace.NoWrap; foot.Add(hint);
         }
 
         // ---------- HUD 작은 설명 카드 (유물 · 버프): 누르면 열림, 다시 누르거나 바깥을 누르면 닫힘 ----------
@@ -732,7 +850,8 @@ namespace KwGame.View
                 else if (Input.GetKeyDown(KeyCode.Space)) SetSpeed(rtSpeed == 0 ? Math.Max(1, rtSpeedLast) : 0);
                 return;
             }
-            if (panel.resolvedStyle.display == DisplayStyle.None) return;
+            bool plan = G.v4 && t == "home" && planEl != null && planEl.resolvedStyle.display != DisplayStyle.None;   // 집 = 계획판 지금 칸의 행동 카드 순서
+            if (!plan && panel.resolvedStyle.display == DisplayStyle.None) return;
             for (int i = 0; i < 9 && i < panelActs.Count; i++)
             {
                 if (!Input.GetKeyDown(KeyCode.Alpha1 + i) && !Input.GetKeyDown(KeyCode.Keypad1 + i)) continue;
@@ -747,7 +866,7 @@ namespace KwGame.View
         void RenderMini()
         {
             mini.Clear();
-            if (G == null || !S.rt || S.mk == null) return;
+            if (G == null || G.v4 || !S.rt || S.mk == null) return;   // v4 는 시세를 데스크에서
             Label L(string t, float size, Color c, bool bold = false) { var l = Ui.Label(t, size, c, bold); l.style.whiteSpace = WhiteSpace.NoWrap; l.pickingMode = PickingMode.Ignore; return l; }
             var head = Ui.Row(); head.style.alignItems = Align.Center; head.pickingMode = PickingMode.Ignore; mini.Add(head);
             head.Add(L("개미증권", 20, Ui.Text, true));
@@ -845,8 +964,13 @@ namespace KwGame.View
                     }
                     Btn("상자 더 뒤지기 (1회)", () => Send("relicReroll"), null, P.rerolled);
                     break;
-                case "home":   // 집은 선택지 상자 없이 대사창 퀵메뉴로 (지도 · 쉬기 · 대출)
-                    Title($"집 · {D.SLOT_NAME[S.slot]}");
+                case "home":   // 집은 선택지 상자 없이: v4 = 계획판 (GameController.Plan.cs) · 옛 칸 방식 = 대사창 퀵메뉴
+                    Title($"집 · {D.SLOT_NAME[Math.Min(S.slot, D.SLOT_NAME.Count - 1)]}");
+                    RenderPlan();
+                    break;
+                case "watch" when G.v4:   // 장 보기 = 데스크 (GameController.Desk.cs) · 속도 · 그만 보기는 상태 띠
+                    Title("장 보기");
+                    CoachCtx("watch");   // 첫 장 보기 → 장 보기 설명 카드
                     break;
                 case "watch":
                     Title(G.weekend() ? "장 보기 · 주말 (코인만)" : G.stockOpen() ? "장 보기 · 장중" : "장 보기 · 장 닫힘 (코인만)");

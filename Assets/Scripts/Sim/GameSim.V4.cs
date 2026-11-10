@@ -285,11 +285,11 @@ namespace KwGame.Sim
         }
         List<Opt> gateOpts(double need)
         {
-            double hv = holdVal(), part = Math.Floor(Math.Min(S.cash, need) / 10000) * 10000;
+            double hv = stockValFree() + coinVal(), part = Math.Floor(Math.Min(S.cash, need) / 10000) * 10000;   // 잠긴 주식은 급매로도 못 팖
             string left = $"{S.missN + 1}/{R.V4_MISS_MAX}";
             return new List<Opt> {
                 new Opt { k = "gatePay", l = T("v4.gate.pay", "p", won(need)), sub = T("pd.cash", "c", won(S.cash)), dis = S.cash < need },
-                new Opt { k = "gateSell", l = T("pd.sell"), sub = hv > 0 ? T("pd.sellSub", "v", won(hv)) : T("pd.sellNone"), dis = hv <= 0 || S.cash >= need },
+                new Opt { k = "gateSell", l = T("pd.sell"), sub = hv > 0 ? T("pd.sellSub", "v", won(hv)) : stockVal() > 0 ? T("v4.op.lock") : T("pd.sellNone"), dis = hv <= 0 || S.cash >= need },
                 new Opt { k = "gatePart", l = T("v4.gate.part", "c", won(part)), sub = T("v4.gate.missSub", "s", won(need - part), "f", won(round1k((need - part) * R.V4_LATE_FEE)), "n", left), dis = part < 10000 || S.cash >= need },
                 new Opt { k = "gateSkip", l = T("v4.gate.skip"), sub = T("v4.gate.missSub", "s", won(need), "f", won(round1k(need * R.V4_LATE_FEE)), "n", left) },
             };
@@ -307,7 +307,7 @@ namespace KwGame.Sim
             var P = S.pending; var o = P.opts.FirstOrDefault(x => x.k == ck); if (o == null || o.dis) return false;
             double need = gatePrincipal();
             if (ck == "gatePay") { repay(need); gatePass(); return true; }
-            if (ck == "gateSell") { double sv = stockVal(); double t = closeAll(); t -= fireSale(sv); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); gateStart(false); return true; }
+            if (ck == "gateSell") { double sv = stockValFree(); double t = closeAll(); t -= fireSale(sv); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); gateStart(false); return true; }
             if (ck == "gatePart") { double part = Math.Floor(Math.Min(S.cash, need) / 10000) * 10000; repay(part); gateMiss(need - part); return true; }
             if (ck == "gateSkip") { gateMiss(need); return true; }
             return false;
@@ -447,7 +447,18 @@ namespace KwGame.Sim
         void watchStart() { slotMark("watch"); S.pending = new Pending("watch") { n0 = S.st.invest }; Emit("watch"); }
         // ---------- 하루 계획판: 칸마다 한 일과 손익 (화면용 기록, 규칙에는 영향 없음) ----------
         int slotDayKey() => absDay() * 10 + S.part;
-        void slotLogDayCheck() { if (S.slotLogDay == slotDayKey() && S.slotAct != null && S.slotAct.Length == R.SLOTS) return; S.slotLogDay = slotDayKey(); S.slotAct = new string[R.SLOTS]; S.slotNet = new double[R.SLOTS]; }
+        void slotLogDayCheck()
+        {
+            if (S.slotLogDay == slotDayKey() && S.slotAct != null && S.slotAct.Length == R.SLOTS) return;
+            // 날이 바뀜: 지난 기록은 '어제'로 넘기고 새 판
+            if (S.slotAct != null && S.slotAct.Length == R.SLOTS && S.slotLogDay > 0) { S.slotActY = S.slotAct; S.slotNetY = S.slotNet; S.slotLogDayY = S.slotLogDay; }
+            S.slotLogDay = slotDayKey(); S.slotAct = new string[R.SLOTS]; S.slotNet = new double[R.SLOTS];
+        }
+        bool slotYOk(int s) => v4 && S.slotActY != null && S.slotNetY != null && S.slotLogDayY == (absDay() - 1) * 10 + S.part && s >= 0 && s < S.slotActY.Length && s < S.slotNetY.Length;
+        /// 어제 그 칸에 한 일 · 번 돈 (어제 기록이 없으면 null · 0)
+        public string slotActYOf(int s) => slotYOk(s) ? S.slotActY[s] : null;
+        public double slotNetYOf(int s) => slotYOk(s) ? S.slotNetY[s] : 0;
+        public bool slotYHas() => slotYOk(0);
         void slotMark(string act) { if (!v4) return; slotLogDayCheck(); if (S.slot >= 0 && S.slot < R.SLOTS && S.slotAct[S.slot] == null) S.slotAct[S.slot] = act; }
         void slotOpen() { if (!v4) return; slotLogDayCheck(); S.slotLed0 = S.today.Count; S.slotReal0 = S.realized; }
         void slotClose()

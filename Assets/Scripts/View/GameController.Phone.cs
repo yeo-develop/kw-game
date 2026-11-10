@@ -28,6 +28,8 @@ namespace KwGame.View
         {
             bool can = PHONE_OK.Contains(S.pending?.t);
             phone.Clear();
+            bool desk = DeskActive;   // 장 보기 데스크 위의 폰 = 카톡 · 주갤 · 뉴스 · 정보 수첩만 (매매는 데스크 주문 패널 한 곳)
+            if (desk && phoneTab == "stock") phoneTab = "kakao";
 
             // 상태 표시줄
             var bar = Ui.Row(); bar.style.flexShrink = 0; bar.style.height = 40; bar.style.paddingLeft = 18; bar.style.paddingRight = 6; phone.Add(bar);
@@ -69,6 +71,7 @@ namespace KwGame.View
                 ("stock", "개미증권", StkUp, 0), ("kakao", "카톡", KkMe, G.kUnread()), ("gall", "주갤", DcBlue, Math.Min(S.gNew, 99)),
                 ("news", "뉴스", NewsGreen, news), ("tips", "정보 수첩", NoteGold, G.activeTips().Count) })
             {
+                if (desk && k == "stock") continue;
                 string kk = k; bool on = phoneTab == k;
                 var b = new VisualElement(); b.style.alignItems = Align.Center; b.style.width = 120; b.style.paddingTop = 4; Ui.Radius(b, 14);
                 if (on) b.style.backgroundColor = new Color(1, 1, 1, 0.08f);
@@ -98,6 +101,7 @@ namespace KwGame.View
         /// 정보 → 개미증권 차트·주문으로 바로
         void OpenTrade(string tk)
         {
+            if (DeskActive) { stkSel = tk; stkAmt = null; stkMsg = ""; phoneOpen = false; RenderAll(); return; }   // 데스크: 폰을 닫고 그 종목을 고름
             phoneTab = "stock"; stkTab = "detail"; stkSel = tk; stkAmt = null; stkMsg = "";
             RenderAll();
         }

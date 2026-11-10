@@ -71,6 +71,7 @@ namespace KwGame.View
         /// 조용한 분마다: 보고 있는 차트만 새 시세로
         void LiveChart()
         {
+            DeskChartTick();   // 장 보기 데스크의 큰 차트 (GameController.Desk.cs)
             if (liveChart == null || liveChart.panel == null || stkSel == null || !S.mk.tk.Has(stkSel)) return;
             liveChart.Set(S.mk.tk[stkSel].p, ChartLines(stkSel));
         }
@@ -199,7 +200,7 @@ namespace KwGame.View
                 if (op == "open") { stkSl = 0; stkTp = 0; }   // 예약 칩은 주문마다 새로 고름 (지난 주문 것이 조용히 따라붙지 않게)
                 bool good = op == "buy" || op == "open" || pnl >= 0;
                 string line = good ? bubbleOk : bubbleBad;
-                if (line != null) { Toast("미래: " + line, "bubble"); SetFace(good ? (op == "buy" || op == "open" ? "smug" : "happy") : "cry"); }
+                if (line != null) MiraiLine(line, good ? (op == "buy" || op == "open" ? "smug" : "happy") : "cry");
             };
             Send(new SimCommand(kv[0] as string, kv.Skip(1).ToArray()));
         }
@@ -537,13 +538,14 @@ namespace KwGame.View
 
         /// 주문 바 한 덩어리: 금액 · 배율 · 롱/숏(매수/매도) · 결과 줄 · 진입 버튼. 부가 정보(예약 · 청산가 · 수수료)는 접었다 펴기.
         /// 폰 요소에 묶지 않음 (돌려준 요소를 아무 데나 붙임) → 장 보기 전용 화면에서도 그대로 재사용
-        VisualElement OrderBar(Ticker t, string where, double fee)
+        /// desk = 장 보기 데스크 오른쪽 주문 패널 (청산 확률 막대를 접힌 상태에서도 보임)
+        VisualElement OrderBar(Ticker t, string where, double fee, bool desk = false)
         {
             var R = D.RULES; var mk = S.mk.tk[t.id]; bool isC = t.IsCoin, open = isC || G.stockTradeOk();   // v4: 국장은 장 보기 칸에서만
             var bar = Ui.Box(StkCard); bar.style.flexShrink = 0;
             bar.style.paddingLeft = 16; bar.style.paddingRight = 16; bar.style.paddingTop = 10; bar.style.paddingBottom = 4;
             bar.style.borderTopWidth = 2; bar.style.borderTopColor = StkLine;
-            if (isC && phoneOpen) CoachCtx("coin");   // 첫 코인 주문 화면 → 롱/숏 설명 카드 (폰 위에 덮음)
+            if (isC && (phoneOpen || desk)) CoachCtx("coin");   // 첫 코인 주문 화면 → 롱/숏 설명 카드 (폰 위에 덮음)
             if (isC && stkLev > t.maxLev) stkLev = t.maxLev;
             if (isC && stkDir < 0 && !G.shortOk()) stkDir = 1;   // v4: 숏 잠김 (이유 = G.shortLockWhy)
             double maxAmt = Math.Max(0, Math.Floor((isC ? S.cash / (1 + stkLev * (R.COIN_FEE + G.sickSlip() / 5)) : S.cash) / 10000) * 10000);
@@ -589,7 +591,7 @@ namespace KwGame.View
                 foreach (var l in new[] { 1.0, 2, 3, 5, 10, 25, 50 }.Where(x => x <= t.maxLev))
                 {
                     double ll = l;
-                    var b = Ui.Chip($"{l:0}x", () => { stkLev = ll; stkAmt = null; if (ll >= 25) { Toast("미래: " + (ll >= 50 ? "50배!!! 자기 최고야 사랑해" : "오 좀 치네?"), "bubble"); SetFace("happy"); } RenderAll(); }, false,
+                    var b = Ui.Chip($"{l:0}x", () => { stkLev = ll; stkAmt = null; if (ll >= 25) MiraiLine(ll >= 50 ? "50배!!! 자기 최고야 사랑해" : "오 좀 치네?", "happy"); RenderAll(); }, false,
                         stkLev == l ? (l >= 25 ? (Color)StkUp : Ui.Accent) : (Color?)null);
                     b.style.marginBottom = 4; lr.Add(b);
                 }
@@ -604,6 +606,7 @@ namespace KwGame.View
                     string st = G.v4 && G.stopsOk() && (stkSl > 0 || stkTp > 0) ? " · 예약 " + string.Join(" ", new[] { stkSl > 0 ? $"손절 −{stkSl * 100:0}%" : null, stkTp > 0 ? $"익절 +{stkTp * 100:0}%" : null }.Where(x => x != null)) : "";
                     var sm = Ui.Label($"청산가 ≈ {G.fmtP(estLiq)} ({90 / stkLev:0.0}% 역행)" + (stkLev > 1 ? $" · 이번 칸 청산 확률 ≈ {odds * 100:0}%" : "") + st, 18, odds >= 0.3 ? StkUp : StkAxis, odds >= 0.3);
                     sm.style.marginTop = 2; sm.style.marginBottom = 4; bar.Add(sm);
+                    if (desk && stkLev > 1) bar.Add(RiskBar((float)odds));   // 데스크는 자리가 있으니 청산 확률을 막대로도
                     // 증거금 상한 · 숏 잠김 이유는 접힌 상태에서도 보임 (펴야만 보이면 왜 주문이 안 되는지 모름)
                     if (G.v4 && G.gateOn) { var mr = Ui.Label($"증거금 상한 {G.man(G.marginCap())}원 중 {G.man(Math.Max(0, G.marginRoom()))}원 남음", 18, G.marginRoom() < amt ? Ui.Bad : StkAxis); mr.style.marginBottom = 4; bar.Add(mr); }
                     if (G.shortLockWhy() is string slw0) { var sl0 = Ui.Label(slw0, 18, Ui.Gold); sl0.style.whiteSpace = WhiteSpace.Normal; sl0.style.marginBottom = 4; bar.Add(sl0); }
@@ -667,7 +670,8 @@ namespace KwGame.View
                 }
                 else { var nh = Ui.Label("보유 없음 · 매도할 주식 없음", 18, StkAxis); nh.style.marginTop = 6; bar.Add(nh); }
                 // 매도: 비율 막대로 원하는 만큼 (피드백: 절반·전량만 있어서 답답) + 빠른 칩
-                bool can = has && open;
+                string lockWhy = G.sellLockWhy(t.id);   // 작전주 설거지 → 하한가 잠김 (그날은 안 팔림)
+                bool can = has && open && lockWhy == null;
                 stkSellF = Math.Max(0.01, Math.Min(1, stkSellF));
                 if (has)
                 {
@@ -689,6 +693,12 @@ namespace KwGame.View
                     foreach (var (f, l) in new[] { (0.1, "10%"), (0.25, "25%"), (0.5, "50%"), (1.0, "전량") })
                     { double ff = f; var sc = Ui.Chip(l, () => { stkSellF = ff; RenderAll(); }, !can, Math.Abs(stkSellF - ff) < 1e-9 ? (Color?)StkDn : null); sc.style.marginBottom = 0; sr.Add(sc); }
                 }
+                // 작전 종목: 한 번에 많이 사고팔수록 값이 나빠짐 (미리 보기 = 누적 안 함). 0.1% 넘을 때만
+                double bSlip = open && amt >= 10000 ? G.opSlip(t.id, amt, true) : 0;
+                if (bSlip > 0.001) { var bl = Ui.Label($"예상 미끄러짐 −{bSlip * 100:0.0}% (약 −{G.man(amt * bSlip)}원) — 한 번에 많이 살수록 비싸게 삼", 18, Ui.Bad, true); bl.style.whiteSpace = WhiteSpace.Normal; bl.style.marginTop = 4; bar.Add(bl); }
+                double sSlip = can ? G.opSlip(t.id, hvNow * stkSellF, true) : 0;
+                if (sSlip > 0.001) { var sl2 = Ui.Label($"매도 미끄러짐 −{sSlip * 100:0.0}% (약 −{G.man(hvNow * stkSellF * sSlip)}원) — 나눠 팔면 덜 깎임", 18, Ui.Bad, true); sl2.style.whiteSpace = WhiteSpace.Normal; sl2.style.marginTop = 4; bar.Add(sl2); }
+                if (has && lockWhy != null) { var lw = Ui.Label(lockWhy, 18, Ui.Bad, true); lw.style.whiteSpace = WhiteSpace.Normal; lw.style.marginTop = 4; bar.Add(lw); }
 
                 // 결과 줄 바로 아래: 매수 · 매도 (한 줄)
                 bar.Add(MsgLine());
@@ -701,7 +711,7 @@ namespace KwGame.View
                 bool all = stkSellF >= 1; string skey = $"sell|{t.id}|all"; bool sArmed = all && can && OrdArmed(skey);
                 var sell = Ui.Button(sArmed ? "한 번 더 누르면 전량 매도" : all ? "전량 매도" : $"{stkSellF * 100:0}% 매도",
                     Confirm(skey, all, () => Order(all ? "전량 매도" : "일부 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", t.id, "frac", stkSellF, "where", where)),
-                    !has ? "보유 없음" : sArmed ? "4초 안에 한 번 더" : all ? "두 번 눌러 확인" : null, !can, sArmed ? Ui.Bad : StkDn, 26);
+                    !has ? "보유 없음" : lockWhy != null ? "하한가 잠김" : sArmed ? "4초 안에 한 번 더" : all ? "두 번 눌러 확인" : null, !can, sArmed ? Ui.Bad : StkDn, 26);
                 sell.style.flexGrow = 1; sell.style.flexBasis = 0; sell.style.alignItems = Align.Center; sell.style.justifyContent = Justify.Center; SubMin(sell); act.Add(sell);
                 FailShake(act);
             }
@@ -774,7 +784,11 @@ namespace KwGame.View
     {
         public static readonly Color Ma5C = new Color32(0xff, 0xd1, 0x66, 0xff);
         public static readonly Color Ma20C = new Color32(0xb4, 0x8c, 0xff, 0xff);
-        const float PadL = 8, PadR = 150, PadT = 14, PadB = 26, VolH = 70, Gap = 10;
+        const float PadL = 8, PadR = 150, PadT = 14, PadB = 26, Gap = 10;
+        /// 거래량 막대 칸 높이 (폰 70 · 장 보기 데스크는 더 크게)
+        readonly float VolH;
+        /// 거래량 배수가 이 이상이면 금색 (작전 매집 · 끌어올리기 · 가짜 매집을 눈에 띄게)
+        const double VolHot = 2;
 
         readonly List<Candle> all; readonly int bars; int n, off; double last;
         List<(double y, Color c, string l)> lines; readonly Func<double, string> fmt; readonly bool lineMode;
@@ -782,9 +796,9 @@ namespace KwGame.View
         double lo, hi; int hover = -1; float grow = 1;
         readonly VisualElement labels; readonly Label tip;
 
-        public CandleChart(List<Candle> hist, int bars, double lastPx, List<(double y, Color c, string l)> lines, Func<double, string> fmt, bool lineMode)
+        public CandleChart(List<Candle> hist, int bars, double lastPx, List<(double y, Color c, string l)> lines, Func<double, string> fmt, bool lineMode, float volH = 70)
         {
-            all = hist; this.bars = bars; this.fmt = fmt; this.lineMode = lineMode;
+            all = hist; this.bars = bars; this.fmt = fmt; this.lineMode = lineMode; VolH = volH;
             style.backgroundColor = (Color)new Color32(0x0d, 0x0f, 0x16, 0xff); Ui.Radius(this, 10); style.overflow = Overflow.Hidden;
             labels = new VisualElement(); Ui.Fill(labels); labels.pickingMode = PickingMode.Ignore; Add(labels);
             tip = Ui.Label("", 18, Ui.Text, true); Ui.Abs(tip, 14, 10); tip.style.backgroundColor = new Color(0.05f, 0.06f, 0.1f, 0.92f); Ui.Pad(tip, 8); Ui.Radius(tip, 8);
@@ -859,13 +873,13 @@ namespace KwGame.View
             for (int k = 0; k <= 4; k++) { float y = PadT + k * (PriceBottom - PadT) / 4; Seg(p, PadL, y, W - PadR, y); }
             float vt = PriceBottom + Gap; Seg(p, PadL, vt, W - PadR, vt);
 
-            // 거래량 (봉 크기로 추정)
-            double vmax = 1e-9; var vol = new double[all.Count];
-            for (int i = off; i < all.Count; i++) { var b = all[i]; vol[i] = (b.h - b.l) / Math.Max(1e-9, b.o) + 2 * Math.Abs(b.c - b.o) / Math.Max(1e-9, b.o); vmax = Math.Max(vmax, vol[i]); }
+            // 거래량 (봉의 v = 평소의 몇 배). 최소 눈금 2배: 평소 봉이 꽉 차 보이지 않게
+            double vmax = VolHot;
+            for (int i = off; i < all.Count; i++) vmax = Math.Max(vmax, Vol(all[i]));
             for (int i = off; i < all.Count; i++)
             {
-                var b = Bar(i); float h = (float)(vol[i] / vmax) * (VolH - 6) * (i == all.Count - 1 ? grow : 1);
-                var c = b.c >= b.o ? Up : Dn; c.a = 0.45f;
+                var b = Bar(i); double vv = Vol(all[i]); float h = (float)(vv / vmax) * (VolH - 6) * (i == all.Count - 1 ? grow : 1);
+                Color c; if (vv >= VolHot) { c = Ui.Gold; c.a = 0.85f; } else { c = b.c >= b.o ? Up : Dn; c.a = 0.45f; }
                 Rect(p, X(i) - Cw * 0.34f, Hh - PadB - h, Cw * 0.68f, h, c);
             }
 
@@ -903,6 +917,8 @@ namespace KwGame.View
 
         static Color Up => GameController.StkUp;
         static Color Dn => GameController.StkDn;
+        /// 옛 저장의 봉은 거래량이 없음 (0 이하) → 평소 1배
+        static double Vol(Candle b) => b.v > 0 ? b.v : 1;
 
         void Poly(Painter2D p, double[] m, Color c)
         {
@@ -956,7 +972,7 @@ namespace KwGame.View
             if (ma5.Length != all.Count) Recalc(last, lines);
             var b = all[hover]; double r = b.c / b.o - 1; int ago = all.Count - 1 - hover;
             tip.text = $"{(ago == 0 ? "지금 봉" : $"{ago}봉 전")}  시 {fmt(b.o)}  고 {fmt(b.h)}  저 {fmt(b.l)}  종 {fmt(b.c)}  {GameSim.pct(r)}"
-                + (!double.IsNaN(ma5[hover]) ? $"  MA5 {fmt(ma5[hover])}" : "");
+                + (!double.IsNaN(ma5[hover]) ? $"  MA5 {fmt(ma5[hover])}" : "") + $"  거래량 ×{Vol(b):0.0}";
             tip.style.color = GameController.UpDn(r);
             tip.style.display = DisplayStyle.Flex;
         }

@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 namespace KwGame.View
 {
     // v4 첫 집 화면 튜토리얼 (피드백: 프롤로그 뒤 설명 · 첫 화면 기능/해금/롱숏).
-    // 짚을 UI 를 뺀 나머지를 어둡게 덮고(구멍 4장) 금테 + 설명 카드. 클릭/Space = 다음, 건너뛰기, 퀵메뉴 "도움말"로 다시.
+    // 짚을 UI 를 뺀 나머지를 어둡게 덮고(구멍 4장) 금테 + 설명 카드. 클릭/Space = 다음, 건너뛰기, 판 아래 · 상태 카드 "도움말"로 다시.
     public partial class GameController
     {
         const string CoachPref = "kw.v4.coach", CoachName = "kw-coach";
@@ -18,22 +18,22 @@ namespace KwGame.View
         bool coachIntro;        // 첫 3장 (마지막 버튼 "시작!")
         readonly List<string> coachQueue = new List<string>();   // 막혀서 못 띄운 상황 카드 id (다음 RenderAll 끝에)
 
-        // (짚을 UI 이름 · 제목 · 본문). 이름은 RenderSaveControls 의 버튼 name, 또는 "hud"/"mini"/"mirai"/null(가운데)
+        // (짚을 UI 이름 · 제목 · 본문). 이름은 계획판 · 작은 줄의 name (GameController.Plan.cs), 또는 "hud"(상태 띠) · "mini"(데스크 종목 목록) · "act-row"(계획판 지금 칸) · "desk-order" · "desk-chart" · null(가운데)
         // 첫 집 화면: 3장만. 나머지는 처음 마주칠 때 한 장씩 (COACH_CTX)
         static readonly (string target, string title, string body)[] COACH_INTRO = {
             (null, "목표: 28일 안에 빚 3,000만", "7일마다 밤에 김사장이 이자({rate}%)와 원금 분납을 받으러 와요. 두 번 연속 못 내면 원양어선.\n다 갚으면 엔딩, 28일이 만기."),
-            ("hud", "상태 카드", "빚 · 현금 · 날짜 · 미래 호감.\n호감이 높아야 둘이 같이 웃는 엔딩이에요."),
-            ("act-row", "하루 = 오전 · 오후 · 밤 3칸", "행동 하나 고르면 그 칸이 끝나요. 시계는 멈춰 있으니 천천히.\n낮(오전·오후)은 장 · 알바, 밤은 미래 · 생활 시간 —\n밤에 놀아 주면 호감이 더 오르고, 야간 알바는 덜 벌려요.\n돈 버는 핵심은 '장 보기': 그 칸 동안 시세가 움직이고 폰(P)으로 사고팔아요."),
+            ("hud", "상태 띠", "빚 · 현금 · 이번 주 납부 · 미래 호감.\n띠를 누르면 목표 · 유물 · 버프가 자세히 나와요.\n호감이 높아야 둘이 같이 웃는 엔딩이에요."),
+            ("act-row", "하루 = 오전 · 오후 · 밤 3칸", "오른쪽 '오늘' 판에서 행동 하나 고르면 그 칸이 끝나요. 시계는 멈춰 있으니 천천히.\n낮(오전·오후)은 장 · 알바, 밤은 미래 · 생활 시간 —\n밤에 놀아 주면 호감이 더 오르고, 야간 알바는 덜 벌려요.\n돈 버는 핵심은 '장 보기': 그 칸 동안 시세가 움직이고 데스크에서 사고팔아요."),
         };
         static readonly string[] CTX_ORDER = { "watch", "news", "coin", "mirai", "map", "unlock" };
         static readonly Dictionary<string, (string target, string title, string body)> COACH_CTX = new Dictionary<string, (string, string, string)>
         {
-            ["watch"] = ("act-watch", "장 보기 (돈 버는 핵심)", "그 칸 동안 시세가 실시간으로 움직이고 폰으로 사고팔아요.\n주식 주문·리포트는 장 보기 칸에서만, 코인은 언제든.\n리포트는 분석가마다 실력이 달라요 — 전적을 보세요. 빗나가면 시세가 반대로 가고, 결과는 기한 안 어느 순간에 발표돼요."),
+            ["watch"] = ("act-watch", "장 보기 (돈 버는 핵심)", "그 칸 동안 시세가 실시간으로 움직이고 오른쪽 주문 패널에서 사고팔아요.\n주식 주문·리포트는 장 보기 칸에서만, 코인은 언제든.\n리포트는 분석가마다 실력이 달라요 — 전적을 보세요. 빗나가면 시세가 반대로 가고, 결과는 기한 안 어느 순간에 발표돼요."),
             ["news"] = ("mini", "속보 = 이번 칸 시세", "칸이 시작할 때 뉴스가 떠요. 호재면 오르고 악재면 내려요.\n단 30%는 가짜! 출처랑 본문 단서로 가려내기."),
             ["coin"] = ("act-phone", "롱 / 숏 · 증거금 상한", "롱 = 오르는 데 걸기, 숏 = 내리는 데 걸기. 배율은 처음부터 자유지만 증거금 합계에 상한이 있어요 (주문 바에 '상한 중 얼마 남음'으로 표시).\n반대로 가면 청산 = 넣은 돈 증발.\n상한은 주차마다 올라요. 숏은 2주차부터 저절로, 대출은 첫 주 납부를 통과하면 열려요.\n장 보기 칸에선 예약 손절·익절도 걸 수 있어요."),
             ["mirai"] = ("act-date", "미래 (호감)", "놀아 주면 호감 ↑, 하루 종일 안 놀아 주면 ↓.\n아침마다 부탁 하나 → 지키면 ↑ 어기면 ↓."),
-            ["map"] = ("act-map", "외출", "알바 = 미니게임으로 느리지만 안전한 돈.\n단 알바 중에도 시세는 흘러요. 구석에 내 포지션 손익이 보이고, 몰래 폰 보기로 골라서 정리할 수 있어요 — 정리할 때마다 일당이 깎이고 들킬 수도 (상하차는 폰을 못 봐요).\n카지노 · 한강 · 김사장 캐피탈도 여기서."),
-            ["unlock"] = (null, "해금 · 주말", "종목은 장마다 새로 상장돼요 (8 · 15 · 22일).\n6·7일째(주말)는 주식장 휴장 → 금요일에 들고 갈지 정리할지!\n이 설명은 아래 '도움말'로 언제든 다시 볼 수 있어요."),
+            ["map"] = ("act-map", "알바 · 외출", "알바 = 미니게임으로 느리지만 안전한 돈. 판의 '알바 가기'에서 종류를 바로 골라요.\n단 알바 중에도 시세는 흘러요. 구석에 내 포지션 손익이 보이고, 몰래 폰 보기로 골라서 정리할 수 있어요 — 정리할 때마다 일당이 깎이고 들킬 수도 (상하차는 폰을 못 봐요).\n은행 · 한강 · 카지노 · 복권소 · 대출은 판 아래 칩으로."),
+            ["unlock"] = (null, "해금 · 주말", "종목은 장마다 새로 상장돼요 (8 · 15 · 22일).\n6·7일째(주말)는 주식장 휴장 → 금요일에 들고 갈지 정리할지!\n이 설명은 판 아래 '도움말'(또는 상태 띠를 눌러서)로 언제든 다시 볼 수 있어요."),
         };
 
         static bool CoachSeen(string pref) { try { return PlayerPrefs.GetInt(pref, 0) != 0; } catch { return false; } }
@@ -51,7 +51,7 @@ namespace KwGame.View
                 string id = coachQueue[0]; coachQueue.RemoveAt(0);
                 string pref = CoachPref + "." + id;
                 if (CoachSeen(pref) || !COACH_CTX.TryGetValue(id, out var c)) continue;
-                if (id == "watch" && S.pending?.t == "watch") c.target = null;   // 장 보기 화면에선 버튼이 없으니 가운데
+                if (id == "watch" && S.pending?.t == "watch") c.target = "desk-order";   // 장 보기 화면에선 데스크 주문 패널 (없으면 가운데)
                 CoachOpen(new List<(string, string, string)> { c }, pref, false, false);
                 return;
             }
@@ -65,7 +65,7 @@ namespace KwGame.View
             root.schedule.Execute(CoachMaybe);   // 그리는 도중이면 한 프레임 뒤에
         }
 
-        /// 퀵메뉴 "도움말": 9장 전부 (기록은 안 바꿈)
+        /// 판 아래 · 상태 카드 "도움말": 9장 전부 (기록은 안 바꿈)
         void CoachStart()
         {
             var all = COACH_INTRO.ToList();
@@ -113,9 +113,11 @@ namespace KwGame.View
         {
             null => null,
             "hud" => hudBar,
-            "mini" => mini,
-            "act-row" => saveControls,
-            _ => saveControls.Q(name),
+            "mini" => DeskActive ? DeskPart("list") : null,
+            "act-row" => planCur != null && PlanHome ? planCur : null,
+            "desk-order" => DeskActive ? DeskPart("order") : null,
+            "desk-chart" => DeskActive ? DeskPart("chart") : null,
+            _ => planEl?.Q(name) ?? planFoot?.Q(name) ?? saveControls.Q(name),
         };
 
         void CoachDraw()

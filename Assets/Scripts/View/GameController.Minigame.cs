@@ -192,40 +192,47 @@ namespace KwGame.View
                 var l = Ui.Label(g.label, 18, Color.white, true); l.style.flexShrink = 1; l.pickingMode = PickingMode.Ignore; r.Add(l);
                 mgLiveRows.Add(r);
             }
-            bool any = S.cps.Count > 0, rows = any || mgLiqGone.Count > 0;
+            bool any = MgPeekAny(), rows = S.cps.Count > 0 || mgLiqGone.Count > 0;   // 주식만 들고 와도 몰래 폰 보기 버튼은 보임 (작전주 설거지 대비)
             mgLiveRows.style.display = rows ? DisplayStyle.Flex : DisplayStyle.None;
             var area = mgLive.Q("peekArea"); if (area != null) area.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
             mgPeekState.text = caught ? "들킴 — 이번 일당 0" : peeks > 0 ? $"일당 −{G.peekCut(P) * 100:0}%" : "";
             mgPeekState.style.color = caught ? Ui.Bad : Ui.Gold;
             mgPeekState.style.display = peeks > 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            mgLive.style.display = (rows || peeks > 0) && mgPeekBox == null ? DisplayStyle.Flex : DisplayStyle.None;   // 선택 창이 떠 있으면 구석 판 대신 창
+            mgLive.style.display = (rows || any || peeks > 0) && mgPeekBox == null ? DisplayStyle.Flex : DisplayStyle.None;   // 선택 창이 떠 있으면 구석 판 대신 창
             MgPeekRender();
         }
 
         /// 몰래 폰 보기 버튼: 고르는 창만 띄움 (명령을 안 보내므로 비용 없음). 미니게임·시세는 계속 흐름 (규칙)
         void MgPeekOpen()
         {
-            if (mg == null || mgLive == null || mgPeekBox != null || !G.peekOk() || S.cps.Count == 0) return;
+            if (mg == null || mgLive == null || mgPeekBox != null || !G.peekOk() || !MgPeekAny()) return;
             mgPeekBox = Ui.Box(new Color(0.07f, 0.05f, 0.11f, 0.95f), 16, 14); Ui.Abs(mgPeekBox, null, null, 24, 24); mgPeekBox.style.width = 600; Ui.Border(mgPeekBox, Ui.Gold, 2);
             mg.Add(mgPeekBox);
             MgLiveRender();
         }
         void MgPeekClose()
         {
-            mgPeekBox?.RemoveFromHierarchy(); mgPeekBox = null; mgPeekSig = null; mgPeekPnl.Clear();
+            mgPeekBox?.RemoveFromHierarchy(); mgPeekBox = null; mgPeekSig = null; mgPeekPnl.Clear(); mgPeekStk.Clear();
             MgLiveRender();
         }
+        /// 몰래 폰 보기로 정리할 게 있나 (코인 포지션 또는 주식)
+        bool MgPeekAny() => S.cps.Count > 0 || G.STK().Any(k => S.hold.Has(k));
+        /// 몰래 폰 보기 창의 주식 줄 글자 (등락 · 온도 · 거래량 · 손익, 다시 그리지 않고 글만 바꿈)
+        readonly Dictionary<string, Label> mgPeekStk = new Dictionary<string, Label>();
+        /// 주식 줄 [팔기]를 못 누르는 이유 (장 마감 · 하한가 잠김). 팔 수 있으면 null
+        string MgStkWhy(string k) => !G.stockOpen() ? (G.weekend() ? "주말 휴장" : "장 마감") : G.opLocked(k) ? "하한가 잠김" : null;
 
         /// 선택 창: 포지션마다 한 줄(종목 · 배율 · 손익) + [정리], 맨 아래 [전부 정리] [그냥 닫기]. 비용은 본문 크기로
         void MgPeekRender()
         {
             if (mgPeekBox == null) return;
-            if (S.cps.Count == 0 || !G.peekOk()) { MgPeekClose(); return; }
+            if (!MgPeekAny() || !G.peekOk()) { MgPeekClose(); return; }
             var P = S.pending;
-            string sig = string.Join(",", S.cps.Select(c => c.id)) + "|" + P.peeks + "|" + P.caught;
+            var stks = G.STK().Where(k => S.hold.Has(k)).ToList();
+            string sig = string.Join(",", S.cps.Select(c => c.id)) + "|" + string.Join(",", stks.Select(k => k + (MgStkWhy(k) ?? ""))) + "|" + P.peeks + "|" + P.caught;
             if (sig != mgPeekSig)
             {
-                mgPeekSig = sig; mgPeekBox.Clear(); mgPeekPnl.Clear();
+                mgPeekSig = sig; mgPeekBox.Clear(); mgPeekPnl.Clear(); mgPeekStk.Clear();
                 mgPeekBox.Add(Ui.Label("몰래 폰 보기 — 뭘 정리할까?", 24, Ui.Gold, true));
                 string cost = P.caught ? "이미 들킴 — 이번 일당은 0. 더 정리해도 더 깎이진 않음"
                     : $"정리할 때마다 이번 일당 −{MathK.RoundHalfUp(D.RULES.V4_PEEK_PAY * 100)}% · 들킬 확률 {MathK.RoundHalfUp(G.peekRisk(P.key) * 100)}% (들키면 이번 일당 0)"
@@ -240,22 +247,40 @@ namespace KwGame.View
                     var v = Ui.Label("", 20, Ui.Text, true); v.style.marginRight = 10; v.style.whiteSpace = WhiteSpace.NoWrap; r.Add(v); mgPeekPnl[id] = v;
                     var b = Ui.Chip("정리", () => MgPeek(id)); b.focusable = false; b.style.marginBottom = 0; b.style.marginRight = 0; r.Add(b);
                 }
+                foreach (var k in stks)
+                {   // 주식 줄 (작전주를 들고 알바 옴): 이름 · 등락 · 온도 · 거래량 배수 · 손익 + [팔기] = 전량 매도
+                    string kk = k, why = MgStkWhy(k);
+                    var r = Ui.Row(); r.style.backgroundColor = MgLiveRowC; Ui.Radius(r, 8); r.style.paddingLeft = 10; r.style.paddingRight = 6; r.style.paddingTop = 4; r.style.paddingBottom = 4; r.style.marginBottom = 4; mgPeekBox.Add(r);
+                    var col = new VisualElement(); col.style.flexGrow = 1; col.style.flexShrink = 1; r.Add(col);
+                    col.Add(Ui.Label($"{D.TK[k].name} · 주식", 20, Ui.Text, true));
+                    var v = Ui.Label("", 18, Ui.Text); v.style.whiteSpace = WhiteSpace.Normal; col.Add(v); mgPeekStk[k] = v;
+                    var b = Ui.Chip(why ?? "팔기", () => MgPeek(0, kk), why != null); b.focusable = false; b.style.marginBottom = 0; b.style.marginRight = 0; r.Add(b);
+                }
+                bool stkAll = stks.Any(k => MgStkWhy(k) == null);   // 팔 수 있는 주식이 있으면 "전부 정리"에 같이
                 var br = Ui.Row(); br.style.marginTop = 8; mgPeekBox.Add(br);
-                var all = Ui.Button("전부 정리", () => MgPeek(0), null, false, Ui.Bad, 22); all.focusable = false; all.style.flexGrow = 1; all.style.flexBasis = 0; all.style.marginRight = 8; all.style.marginBottom = 0; all.style.alignItems = Align.Center; br.Add(all);
+                var all = Ui.Button("전부 정리", () => MgPeek(0, null, stkAll), null, false, Ui.Bad, 22); all.focusable = false; all.style.flexGrow = 1; all.style.flexBasis = 0; all.style.marginRight = 8; all.style.marginBottom = 0; all.style.alignItems = Align.Center; br.Add(all);
                 var no = Ui.Button("그냥 닫기", MgPeekClose, null, false, Ui.Panel2, 22); no.focusable = false; no.style.flexGrow = 1; no.style.flexBasis = 0; no.style.marginBottom = 0; no.style.alignItems = Align.Center; br.Add(no);
             }
             foreach (var c in S.cps)
                 if (mgPeekPnl.TryGetValue(c.id, out var v)) { double pnl = -G.posLoss(c) * 100; v.text = $"{MgPct(pnl)} · {G.sgnMan(G.cpnl(c) + c.bonus)}"; v.style.color = UpDn(pnl); }
+            foreach (var kv in mgPeekStk)
+            {
+                var h = S.hold.Get(kv.Key); if (h == null) continue;
+                double dr = G.dayR(kv.Key), pl = h.q * S.mk.tk[kv.Key].p - h.cost, vol = G.volNow(kv.Key);
+                kv.Value.text = $"오늘 {GameSim.pct(dr)} · 온도 {G.opTemp(kv.Key):0} · 거래량 ×{vol:0.0} · {G.sgnMan(pl)}";
+                kv.Value.style.color = vol >= 2 ? Ui.Gold : UpDn(pl);   // 거래량이 크면 금색 (사람이 몰림)
+            }
         }
 
         /// 정리 (id 하나, 0 = 전부) → sim workPeek: 일당 −15% · 들킬 확률. 조용히 적용 (Send 는 선택지 상자를 걷고 미니게임을 다시 맞춤)
-        void MgPeek(int id)
+        /// tk = 그 주식만 전량 매도 · stk = 코인과 함께 주식도 전부
+        void MgPeek(int id, string tk = null, bool stk = false)
         {
             if (mgLive == null || playing || !G.peekOk()) return;
             int before = S.cps.Count;
-            var evs = G.Apply(new SimCommand("workPeek", "id", id));
+            var evs = G.Apply(tk != null ? new SimCommand("workPeek", "id", 0, "tk", tk) : stk ? new SimCommand("workPeek", "id", id, "stk", true) : new SimCommand("workPeek", "id", id));
             MgLiveEvents(evs, before - S.cps.Count);
-            if (S.cps.Count == 0) MgPeekClose(); else MgLiveRender();
+            if (!MgPeekAny()) MgPeekClose(); else MgLiveRender();
         }
 
         /// 조용한 틱·폰 보기의 이벤트: 토스트 · 소리 · HUD · 경보 · 청산 연출만 (대사·장면·표정은 미니게임 중엔 무시)

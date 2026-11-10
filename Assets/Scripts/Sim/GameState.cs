@@ -127,6 +127,8 @@ namespace KwGame.Sim
         public List<Op> ops = new List<Op>(); public int opKey; public string opFakeTk; public int opFakeDay, opHit;
         /// 하루 계획판 (docs/UI_V2.md): 오늘 칸마다 한 일("watch" · "date" · "rest" · "work:cafe" · "out:park")과 그 칸의 손익 · 기록한 날 · 칸 시작 기준점
         public string[] slotAct = new string[3]; public double[] slotNet = new double[3]; public int slotLogDay, slotLed0; public double slotReal0;
+        /// 어제의 칸 기록 (계획판 "어제" 줄). slotLogDayY = 그 기록의 날 키
+        public string[] slotActY; public double[] slotNetY; public int slotLogDayY;
         /// 계획판에서 바로 가기(quick): 도착하면 할 행동(없으면 null) · 그렇게 와서 알바 설명 카드에 있나 (돌아가면 집으로)
         public string quick; public bool quickFrom;
         public Dictionary<string, List<KMsg>> kk = new Dictionary<string, List<KMsg>> { ["m"] = new List<KMsg>(), ["kim"] = new List<KMsg>(), ["hy"] = new List<KMsg>() };

@@ -12,11 +12,12 @@ namespace KwGame.View
         string saveMessage = "선택 완료 후 자동 저장";
         bool CanSave => G != null && !playing && S.pending != null && S.pending.t != "start" && !(S.pending.t == "work" && S.pending.setup != null);   // 알바 미니게임 중엔 저장 X (불러와서 결과를 보고 폰 볼 순간을 고르는 수 방지)
 
-        /// 대사창 아래 퀵메뉴 (문예부식): 집 행동 · 폰 · 저장 · 타이틀 · 시간 속도
+        /// 대사창 아래 퀵메뉴 (옛 칸 방식만, 문예부식): 집 행동 · 폰 · 저장 · 타이틀 · 시간 속도
         void RenderSaveControls()
         {
             saveControls.Clear();
             if (G == null || S.pending?.t == "start") return;
+            if (G.v4) { RenderPlanFoot(); return; }   // v4: 퀵메뉴 없음 — 폰 · 저장 · 타이틀은 계획판 아래 작은 줄 (GameController.Plan.cs) · 상태 카드
             bool home = S.pending?.t == "home" && !playing;
             Button Q(string text, System.Action a, bool dis = false, Color? bg = null)
             {
@@ -47,29 +48,6 @@ namespace KwGame.View
                 saveControls.Add(b); return b;
             }
             bool eve = G.isEve();
-            if (G.v4)
-            {
-                // v4: 행동 하나 = 칸 하나 (오전·오후·밤). 빚 갚기·대출은 시간 안 쓰니 작은 칩으로
-                string wh = G.weekend() ? "주말 휴장 · 코인만" : eve ? "밤 · 코인만" : "시세 보며 실시간 매매";
-                A(null, new Color(0.9f, 0.3f, 0.35f), "장 보기", wh, () => Send("watch"), !home).name = "act-watch";
-                // 시간대 비중: 낮 = 장·알바, 저녁 = 미래·생활 (부제에 배수 표시)
-                double dm = G.dateMult(), da = (S.dateN == 0 ? D.RULES.V4_DATE_AFF : 2) * dm;
-                string dmT = dm > 1 ? " · 밤 보너스" : dm < 1 ? " · 낮엔 반만" : "";
-                A(null, new Color(0.95f, 0.4f, 0.6f), "미래랑 놀기", (S.dateN == 0 ? $"호감 +{da:0.#} · 스트레스 풀림" : $"오늘 또? 호감 +{da:0.#}") + dmT, () => Send("date"), !home).name = "act-date";
-                A(null, new Color(0.25f, 0.5f, 0.95f), "외출", eve && !G.weekend() && D.RULES.V4_WORK_EVE < 1 ? $"야간 알바는 일당 ×{D.RULES.V4_WORK_EVE:0.##}" : "알바·카지노·한강…", () => Send("map"), !home).name = "act-map";
-                A(null, new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", G.restHint() ?? (G.hpOff ? "스트레스 풀기" : eve ? $"체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"체력 +{D.RULES.RT_HP_REST}"), () => Send("rest"), !home);
-                bool canPay4 = home && S.cash >= 10000 && S.debt > 0;
-                Q($"빚 갚기 ({G.man(S.debt)})", () => Send("repayOpen"), !canPay4, canPay4 ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null);
-                Q(G.loanOk() ? "대출" : "대출 (잠김)", () => Send("loanOpen"), !home);
-                int un4 = G.kUnread();
-                A("P", new Color(0.95f, 0.4f, 0.6f), phoneOpen ? "폰 닫기" : "폰", un4 > 0 ? $"카톡 {un4}" : "", TogglePhone, false, phoneOpen ? Ui.Accent : (Color?)null).name = "act-phone";
-                Q("도움말", CoachStart, playing);
-                Q("설정", OpenSettings, playing).name = "settingsButton";
-                var sp4 = new VisualElement(); sp4.style.flexGrow = 1; saveControls.Add(sp4);
-                var save4 = Q("저장", () => SaveCheckpoint(true), !CanSave); save4.name = "saveGameButton";
-                var title4 = Q("타이틀", ReturnToTitle, playing); title4.name = "returnToTitleButton";
-                return;
-            }
             A(null, new Color(0.25f, 0.5f, 0.95f), "외출", "알바·증권사·카지노…", () => Send("map"), !home);
             A(null, new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", S.rt ? (eve ? $"내일 아침까지 · 체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"{D.RULES.RT_REST / 60}시간 · 체력 +{D.RULES.RT_HP_REST}") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)}", () => Send("rest"), !home).tooltip = (S.rt ? (eve ? "자정까지 잠 · " : $"{D.RULES.RT_REST / 60}시간 · ") : "") + (S.rt ? $"체력 +{(eve ? D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP : D.RULES.RT_HP_REST)} · 스트레스 {D.RULES.RT_REST_ST:0}" + (G.sickName() != null ? $" · {G.sickName()} 반쯤 확률로 하루 빨리 나음" : "") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22");
             bool canPay = home && S.cash >= 10000 && S.debt > 0;

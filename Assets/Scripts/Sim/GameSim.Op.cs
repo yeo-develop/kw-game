@@ -220,5 +220,7 @@ namespace KwGame.Sim
         }
         /// 주식을 지금 못 파는 이유 (화면용). 팔 수 있으면 null
         public string sellLockWhy(string k) => opLocked(k) ? T("v4.op.lock") : null;
+        /// 지금 팔 수 있는 주식 평가액 (하한가에 잠긴 종목 제외). 관문 급매가 못 판 주식에 급매 손해를 매기거나, 팔 게 없는데 선택지가 열려 있지 않게
+        public double stockValFree() { double a = 0; foreach (var k in STK()) { var h = S.hold.Get(k); if (h != null && !opLocked(k)) a = a + h.q * S.mk.tk[k].p; } return a; }
     }
 }

@@ -279,10 +279,10 @@ namespace KwGame.Sim
         List<Opt> paydayOpts()
         {
             var P = S.pending; double due = P.due;
-            double hv = holdVal(), shortA = Math.Max(0, due - S.cash); bool canLoan = shortA > 0 && S.debt + shortA <= loanCap();
+            double hv = stockValFree() + coinVal(), shortA = Math.Max(0, due - S.cash); bool canLoan = shortA > 0 && S.debt + shortA <= loanCap();   // 하한가에 잠긴 주식은 급매로도 못 팖 (GameSim.Op.cs)
             return new List<Opt> {
                 new Opt { k = "pay", l = T("pd.pay", "d", won(due)), sub = T("pd.cash", "c", won(S.cash)), dis = S.cash < due },
-                new Opt { k = "sell", l = T("pd.sell"), sub = hv > 0 ? T("pd.sellSub", "v", won(hv)) : T("pd.sellNone"), dis = hv <= 0 || S.cash >= due },
+                new Opt { k = "sell", l = T("pd.sell"), sub = hv > 0 ? T("pd.sellSub", "v", won(hv)) : stockVal() > 0 ? T("v4.op.lock") : T("pd.sellNone"), dis = hv <= 0 || S.cash >= due },
                 new Opt { k = "loan", l = shortA > 0 ? T("pd.loan", "s", won(shortA)) : T("pd.loanNo"), sub = shortA > 0 ? (canLoan ? T("pd.loanSub", "a", won(S.debt), "b", won(S.debt + shortA)) : T("pd.loanCap", "m", S.month, "c", man(loanCap()))) : T("pd.loanEnough"), dis = !canLoan },
                 new Opt { k = "bet", l = T("pd.bet"), sub = P.betUsed ? T("pd.betUsed") : T("pd.betSub"), dis = P.betUsed },
             };
@@ -313,7 +313,7 @@ namespace KwGame.Sim
                 var o = P.opts.FirstOrDefault(x => x.k == ck); if (o == null || o.dis) return false;
                 double due = P.due;
                 if (o.k == "pay") { money(-due, "interest", T("lbl.interest")); S.st.interest += due; pushF("🧾", T("pd.feed", "m", S.month, "d", won(due)), "money"); KIM(T("pd.paid")); return paydayPaid(); }
-                if (o.k == "sell") { double sv = stockVal(); double t = closeAll(); t -= fireSale(sv); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); paydayChoose(); return true; }
+                if (o.k == "sell") { double sv = stockValFree(); double t = closeAll(); t -= fireSale(sv); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); paydayChoose(); return true; }
                 if (o.k == "loan") { double shortA = Math.Max(0, due - S.cash), have = S.cash; if (have != 0) money(-have, "interest", T("lbl.interestAll")); addDebt(shortA, T("lbl.interestLoan")); S.st.interest += due; KIM(T("pd.loaned", "s", won(shortA))); return paydayPaid(); }
                 if (o.k == "bet") { P.betUsed = true; greedD(8); KIM(T("pd.betAsk")); P.stage = "side"; P.opts = new List<Opt> { new Opt { k = "odd", l = T("cas.odd") }, new Opt { k = "even", l = T("cas.even") } }; return true; }
             }

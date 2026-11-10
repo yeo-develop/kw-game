@@ -109,13 +109,15 @@ namespace KwGame.View
         {
             playing = true; FacePlayBegin();
             MinigameSync();                            // 알바 결과 카드도 바로 걷음
-            LayoutForMode(); RenderMini();             // 알바 뒤 정산 · 밤 대사 동안에도 HUD · 미니 시세가 보이게 (예전엔 알바 화면 배치가 남아 숨겨짐)
+            RenderPlan();                              // 재생 중 계획판은 새 칸으로 (안 눌리게 — DlgSync)
+            LayoutForMode(); RenderDesk(); RenderMini();   // 알바 뒤 정산 · 밤 대사 동안에도 상태 띠가 보이게 (예전엔 알바 화면 배치가 남아 숨겨짐)
             panel.style.display = DisplayStyle.None;   // 이벤트 재생 중엔 지난 선택지를 아예 걷음 (반투명으로 남아 보이던 문제)
             saveControls.SetEnabled(false);
             foreach (var e in evs)
             {
                 SoundEventAdapter.Play(e, closedCoins);
                 if (e.h != null) RenderHud(e.h);
+                if (DeskActive && DeskEvent(e)) continue;   // 데스크가 다 보여 준 사건 (GameController.Desk.cs)
                 switch (e.t)
                 {
                     case "say": yield return Say(e.Str("who"), e.Str("name"), e.Str("text"), e.Str("face")); break;
@@ -160,7 +162,7 @@ namespace KwGame.View
                     case "unlock": CoachCtx("unlock"); break;   // 첫 해금 → 해금 · 주말 설명 카드
                     case "story": yield return PlayScene(e.Str("key")); break;
                     case "aff": Toast($"미래 호감 {(e.Num("d") > 0 ? "+" : "")}{e.Num("d"):0} → {e.Num("v"):0}", e.Num("d") > 0 ? "good" : "liq"); break;
-                    case "watch": if (!phoneOpen) TogglePhone(); break;
+                    case "watch": if (!G.v4 && !phoneOpen) TogglePhone(); break;   // v4 는 폰 대신 데스크가 뜸
                     case "ending":
                         if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely")) yield return PlayScene("clear");
                         if (e.Str("kind") == "clear") JuiceConfetti(stage);   // 빚 다 갚음
@@ -189,6 +191,7 @@ namespace KwGame.View
             text = FillRules(text);
             dlg.style.display = DisplayStyle.Flex;
             dlgText.style.display = DisplayStyle.Flex; idleText.style.display = DisplayStyle.None; dlgHint.style.display = DisplayStyle.Flex;
+            DlgSync();   // 대사 동안은 계획판 · 말풍선 대신 대사창 (같은 프레임이라 깜빡임 없음)
             dlgName.text = Ui.Clean(who == "m" ? "미래" : who == "me" ? "나" : who == "kim" ? "김사장" : who == "npc" ? name : "");
             dlgName.style.display = dlgName.text == "" ? DisplayStyle.None : DisplayStyle.Flex;
             dlgText.style.unityFontStyleAndWeight = who == "nar" ? FontStyle.Italic : FontStyle.Normal;
@@ -241,7 +244,7 @@ namespace KwGame.View
             {
                 rtDirty = false; rtPhoneT = 0; rtWasOpen = G.stockOpen();
                 RenderHud(G.HudSnapOf());
-                if (G.v4 && S.pending?.t == "watch") RenderPanel();   // 장 보기 상자: 시각·장 열림
+                if (DeskActive) RenderDesk(); else if (G.v4 && S.pending?.t == "watch") RenderPanel();   // 장 보기: 데스크 시세 · 장 열림
                 if (phoneOpen) RenderPhone();
                 RenderMini();
             }
@@ -254,6 +257,7 @@ namespace KwGame.View
             if (settingsEl != null) { if (Input.GetKeyDown(KeyCode.Escape)) CloseSettings(); return; }   // 설정 창 (GameController.Settings.cs)
             RtUpdate();
             if (CoachKeys()) return;
+            if (statusCard != null && Input.GetKeyDown(KeyCode.Escape)) { CloseStatusCard(); return; }   // 상태 카드가 먼저 닫힘 (폰 Esc 보다)
             if (!waiting && mg == null && G != null && S.pending?.t != "start")
             {
                 if (Input.GetKeyDown(KeyCode.P) || (phoneOpen && Input.GetKeyDown(KeyCode.Escape))) TogglePhone();
@@ -300,6 +304,7 @@ namespace KwGame.View
             dlgText.PauseAnimation();
             dlgText.style.display = DisplayStyle.None; idleText.style.display = DisplayStyle.Flex; dlgHint.style.display = DisplayStyle.None;
             if (G != null) SetIdle();
+            DlgSync();   // v4 집 · 데스크: 대사가 끝나면 대사창을 걷고 계획판으로
         }
 
         void OnDestroy()
