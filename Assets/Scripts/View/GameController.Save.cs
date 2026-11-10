@@ -77,10 +77,14 @@ namespace KwGame.View
         }
         static bool GameController_PhoneOk(string t) => PHONE_OK.Contains(t);
 
+        /// WebGL: PlayerPrefs.Save() 가 IndexedDB 동기화(FS.syncfs)를 걸어 persistentDataPath 파일(저장·기록)도 브라우저에 남음. 데스크톱은 그냥 설정 저장
+        public static void FlushPrefs() { try { PlayerPrefs.Save(); } catch (System.Exception) { } }
+
         public bool SaveCheckpoint(bool notify)
         {
             if (!CanSave) return false;
             bool success = SaveStore.Default.TrySave(S, out var error);
+            if (success) FlushPrefs();
             saveMessage = success ? $"저장 완료 · {System.DateTime.Now:HH:mm}" : error;
             if (notify || !success) Toast(saveMessage, success ? "good" : "liq");
             if (notify) RenderSaveControls();

@@ -746,7 +746,7 @@ namespace KwGame.View
             var r = G.Result();   // newAch 포함
             var meta = MetaStore.Default.Load();
             var u = meta.Apply(r, DateTime.UtcNow.ToString("O"));
-            if (u != null) MetaStore.Default.TrySave(meta, out _);
+            if (u != null && MetaStore.Default.TrySave(meta, out _)) FlushPrefs();   // WebGL 에서 기록 파일이 브라우저에 남게
             bool any = u != null && (u.newEndings?.Count > 0 || u.newAch?.Count > 0);
             lastUnlock = any ? u : null;
         }
