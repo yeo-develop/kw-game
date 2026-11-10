@@ -54,6 +54,7 @@ namespace KwGame.View
             BuildUi();
             LoadPlayPrefs();   // 글자 속도 · 화면 효과 · 읽은 대사 (GameController.Settings.cs) — 이어하기에도 적용
             bool requested = TitleStartup.Consume(out var restored);
+            if (ShotMode.On) restored = null;   // 웹 캡처 모드: 저장을 불러오지 않음 (늘 새 판)
             if (restored != null)
             {
                 G = new GameSim(D, restored) { Hud = true };
@@ -71,6 +72,7 @@ namespace KwGame.View
             if (shots != null) StartCoroutine(DemoShots(shots));
             var fxShots = ArgValue("-kwFxShots");
             if (fxShots != null) StartCoroutine(FxShots(fxShots));
+            if (ShotMode.On) StartCoroutine(WebShots());   // 웹 캡처 모드 (GameController.WebShots.cs)
         }
 
         public static GameData LoadData()
@@ -323,7 +325,7 @@ namespace KwGame.View
         {
             int seen = 0;
             try { seen = PlayerPrefs.GetInt(OpeningPref, 0); } catch { }
-            bool full = seen == 0 || autoSkipDialog;
+            bool full = seen == 0 || autoSkipDialog || ShotMode.On;
             if (!full)
             {
                 SetScene("room", "pout");
@@ -344,7 +346,7 @@ namespace KwGame.View
             }
             if (!full) yield break;
             yield return PlayScene("opening");
-            try { PlayerPrefs.SetInt(OpeningPref, 1); PlayerPrefs.Save(); } catch { }
+            if (!ShotMode.On) try { PlayerPrefs.SetInt(OpeningPref, 1); PlayerPrefs.Save(); } catch { }
         }
 
         IEnumerator PlayScene(string key)

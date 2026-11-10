@@ -90,7 +90,7 @@ namespace KwGame.View
 
         public bool SaveCheckpoint(bool notify)
         {
-            if (!CanSave) return false;
+            if (!CanSave || ShotMode.On) return false;   // 웹 캡처 모드: 자동 저장 포함 저장 안 함
             bool success = SaveStore.Default.TrySave(S, out var error);
             if (success) FlushPrefs();
             saveMessage = success ? $"저장 완료 · {System.DateTime.Now:HH:mm}" : error;

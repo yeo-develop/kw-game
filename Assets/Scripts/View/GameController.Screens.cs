@@ -665,7 +665,7 @@ namespace KwGame.View
                 if (Math.Abs(v) < 1 || hudCash == null || hudCash.panel == null) return;
                 var wb = hudCash.worldBound; if (wb.width < 1) return;
                 var p = stage.WorldToLocal(new Vector2(wb.xMax, wb.yMin));
-                var f = Ui.Label(G.sgnMan(v), 24, v > 0 ? Ui.Good : Ui.Text, true);   // 손익이 아니라 현금 변화(포지션에 넣은 돈도 포함)라 손익 색을 안 씀 f.pickingMode = PickingMode.Ignore; f.style.whiteSpace = WhiteSpace.NoWrap;
+                var f = Ui.Label(G.sgnMan(v), 24, v > 0 ? Ui.Good : Ui.Text, true); f.pickingMode = PickingMode.Ignore; f.style.whiteSpace = WhiteSpace.NoWrap;   // 손익이 아니라 현금 변화(포지션에 넣은 돈도 포함)라 손익 색을 안 씀
                 Ui.Abs(f, p.x + 8, p.y); f.style.opacity = 0;
                 stage.Add(f);
                 var seq = DOTween.Sequence().SetTarget(f).SetLink(gameObject).SetUpdate(true);
@@ -1095,7 +1095,7 @@ namespace KwGame.View
             var r = G.Result();   // newAch 포함
             var meta = MetaStore.Default.Load();
             var u = meta.Apply(r, DateTime.UtcNow.ToString("O"));
-            if (u != null && MetaStore.Default.TrySave(meta, out _)) FlushPrefs();   // WebGL 에서 기록 파일이 브라우저에 남게
+            if (u != null && !ShotMode.On && MetaStore.Default.TrySave(meta, out _)) FlushPrefs();   // 웹 캡처 모드: 화면에 'NEW 엔딩'만 보이고 기록은 안 씀   // WebGL 에서 기록 파일이 브라우저에 남게
             bool any = u != null && (u.newEndings?.Count > 0 || u.newAch?.Count > 0);
             lastUnlock = any ? u : null;
         }

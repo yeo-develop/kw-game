@@ -23,7 +23,7 @@ namespace KwGame.View
         void LlmNewGame()
         {
             newsAsked.Clear(); flavorT = int.MinValue; aiLine = (int.MinValue, null); aiKakao.Clear(); aiPosts.Clear(); gallNewsSeen = 0;
-            if (LlmSettings.On) G.Apply(new SimCommand("llmMode", "on", true));
+            if (LlmSettings.On && !ShotMode.On) G.Apply(new SimCommand("llmMode", "on", true));   // 웹 캡처 모드: AI 요청 안 함 (내장 문구)
         }
         void LlmToggle(bool on)
         {
@@ -35,7 +35,7 @@ namespace KwGame.View
         /// 명령 처리 직후마다: 새 뉴스 요청·새 칸 연출 요청을 미리 보냄 (화면 재생이 끝나기 전부터 → 지연 숨김)
         void LlmTick()
         {
-            if (!LlmSettings.On || S == null) return;
+            if (!LlmSettings.On || S == null || ShotMode.On) return;
             // v4 는 칸이 행동 하나로 금방 끝나서 다음 칸 것도 미리 물음 (칸 시작 속보가 거의 늘 AI 기사가 되게)
             foreach (var q in new[] { G.NewsReq(), G.NewsReqNext() })
             {

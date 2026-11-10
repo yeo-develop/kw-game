@@ -38,7 +38,7 @@ namespace KwGame.View
 
         static bool CoachSeen(string pref) { try { return PlayerPrefs.GetInt(pref, 0) != 0; } catch { return false; } }
 
-        bool CoachBlocked() => coach != null || autoSkipDialog || G == null || !G.v4 || playing || mg != null || settingsEl != null || modal.style.display == DisplayStyle.Flex;
+        bool CoachBlocked() => coach != null || autoSkipDialog || ShotMode.On || G == null || !G.v4 || playing || mg != null || settingsEl != null || modal.style.display == DisplayStyle.Flex;
 
         /// RenderAll 끝에서: v4 첫 집 화면이면 3장, 아니면 밀려 있던 상황 카드 한 장
         void CoachMaybe()
@@ -60,7 +60,7 @@ namespace KwGame.View
         /// 상황 카드: 처음 마주칠 때 한 번 (kw.v4.coach.&lt;id&gt;). 지금 못 띄우면 줄 세워 두고 다음 RenderAll 끝에
         void CoachCtx(string id)
         {
-            if (autoSkipDialog || G == null || !G.v4 || coachQueue.Contains(id) || CoachSeen(CoachPref + "." + id)) return;
+            if (autoSkipDialog || ShotMode.On || G == null || !G.v4 || coachQueue.Contains(id) || CoachSeen(CoachPref + "." + id)) return;
             coachQueue.Add(id);
             root.schedule.Execute(CoachMaybe);   // 그리는 도중이면 한 프레임 뒤에
         }

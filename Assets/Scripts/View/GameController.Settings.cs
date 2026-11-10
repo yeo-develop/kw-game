@@ -46,7 +46,7 @@ namespace KwGame.View
 
         void MarkSceneSeen(string key)
         {
-            if (string.IsNullOrEmpty(key) || key.Contains(",")) return;
+            if (string.IsNullOrEmpty(key) || key.Contains(",") || ShotMode.On) return;   // 웹 캡처 모드: 읽은 대사 기록 안 씀
             seenScenes ??= new List<string>();
             if (seenScenes.Contains(key)) return;
             seenScenes.Add(key);

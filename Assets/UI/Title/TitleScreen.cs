@@ -227,6 +227,7 @@ namespace KwGame.Title
         // 스크린샷 데모(-kwShots <폴더>): 타이틀을 찍고 바로 게임 씬으로 (게임 씬이 나머지를 찍음)
         private System.Collections.IEnumerator Start()
         {
+            if (ShotMode.On) { yield return WebShots(); yield break; }   // 웹 캡처 모드 (?kwShots=1)
             var args = System.Environment.GetCommandLineArgs();
             int i = System.Array.IndexOf(args, "-kwShots");
             if (i < 0 || i + 1 >= args.Length) yield break;
@@ -235,6 +236,24 @@ namespace KwGame.Title
             yield return new WaitForEndOfFrame();
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(args[i + 1], "00_title_scene.png"));
             yield return new WaitForSeconds(0.5f);
+            SceneManager.LoadScene(gameScene);
+        }
+
+        /// 웹 캡처 모드: 타이틀 · 새로 시작(난이도) 창 · 설정 창 · 기록 창을 찍고 게임 씬으로 (저장 불러오기 · 난이도 기억 없이 바로 새 판)
+        private System.Collections.IEnumerator WebShots()
+        {
+            ShotMode.Begin();
+            yield return new WaitForSecondsRealtime(2.5f);   // 등장 페이드 · 한 줄 이야기 타자
+            yield return ShotMode.Shot("title", 0);
+            foreach (var (name, open) in new (string, System.Action)[] { ("title_newgame", new System.Action(StartGame)), ("title_settings", new System.Action(ShowSettings)), ("title_records", new System.Action(ShowRecords)) })
+            {
+                bool ok = true;
+                try { open(); } catch (System.Exception e) { ok = false; ShotMode.Skip(name, e.GetType().Name + ": " + e.Message); }
+                if (ok && overlay.ClassListContains("hidden")) { ok = false; ShotMode.Skip(name, "창이 안 열림"); }
+                if (ok) yield return ShotMode.Shot(name, 0.4f);
+                try { CloseDialog(); } catch (System.Exception) { }
+                yield return new WaitForSecondsRealtime(0.2f);
+            }
             SceneManager.LoadScene(gameScene);
         }
 
