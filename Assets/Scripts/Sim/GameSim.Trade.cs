@@ -60,7 +60,7 @@ namespace KwGame.Sim
             if (!byMirai) S.maxLev = Math.Max(S.maxLev, (int)Math.Round(lev));   // 메타: 내가 연 최고 배율 (미래 돌발 매수는 빼고)
             S.cash -= margin + fee; S.cps.Add(c); S.st.invest++; S.workStreak = 0; S.invIn = S.invIn + margin; S.realized -= fee;
             if (lev >= R.ADD_COIN_LEV) { double f = Math.Min(1, margin / Math.Max(1, S.cash + margin + fee)); addict(R.Gain("coin") * (0.1 + 0.9 * f * f) * (has("addict") ? 1.5 : 1)); }
-            if (v4) { if (!byMirai) promHit("coin"); greedD(lev >= 25 ? 8 : lev >= 10 ? 4 : 0); }
+            if (v4) { if (!byMirai) promHit("coin"); greedD(lev >= 25 ? 8 : lev >= 10 ? 4 : lev >= 5 && gateOn ? 2 : 0); }   // 관문 규칙: 5배부터 욕심이 조금씩
             if (mult > 1) augFx("allin", T("aug.allin"));
             if (c.bonus != 0) augFx("kimp", T("aug.kimp", "m", man(c.bonus)));
             return c;

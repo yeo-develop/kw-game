@@ -9,7 +9,7 @@ namespace KwGame.Sim
     {
         void hp(double d, string why = null)
         {
-            d = rhu(d); if (d == 0) return;
+            d = rhu(d); if (d == 0 || hpOff) return;
             double b = S.hp;
             S.hp = clamp(S.hp + d, 0, R.HP_MAX);
             if (S.hp != b) Emit("hp", "d", S.hp - b, "why", why ?? "");

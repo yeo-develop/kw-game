@@ -31,11 +31,21 @@ namespace KwGame.Sim
         public int sT = int.MinValue, cb = int.MinValue; public double so, sh, sl, ref0; public bool warn; public int relist;
     }
     public class MarketState { public int reg; public OMap<TkState> tk = new OMap<TkState>(); }
-    public class MarketPlan { public Dictionary<string, double> r = new Dictionary<string, double>(); public Dictionary<string, double[]> w = new Dictionary<string, double[]>(); public bool whale; public int T = int.MinValue; }
+    public class MarketPlan
+    {
+        public Dictionary<string, double> r = new Dictionary<string, double>(); public Dictionary<string, double[]> w = new Dictionary<string, double[]>(); public bool whale; public int T = int.MinValue;
+        /// v4 칸 안 경유점: 종목 → [u1, x1, u2, x2, …] (u = 장 시간 중 위치 0~1, x = 칸 시가 대비 로그수익). 없으면 종가까지 곧장
+        public Dictionary<string, double[]> way = new Dictionary<string, double[]>();
+        /// v4 칸 중간 사건 (후속 속보 · 리포트 결과 발표): u 지점에서 알림
+        public List<PlanEv> evs = new List<PlanEv>();
+        /// v4 분석가 리포트 결과 = 발표 순간의 갭: 종목 → [u, 충격(단순수익률)]. 그 전까지는 발표 몫을 뺀 길로 가다가 u 에서 한 번에 뜀 (예약 손절이 못 피함)
+        public Dictionary<string, double[]> jmp = new Dictionary<string, double[]>();
+    }
+    public class PlanEv { public double u; public string k, tk; public bool ok, done; public int id; }
     public class Move { public double o, c, h, l, r; }
     public class News { public string tk, h; public int dir; public double r; public bool fake; public bool llm; public string body, src, ev, arc; public int? step; }
     public class Holding { public double q, cost; public int t0, bday; }
-    public class CoinPos { public int id; public string tk; public int dir; public double lev, margin, entry, mult; public int t0; public double bonus; public bool mirai; }   // mirai = 미래 돌발 매수 (v4: '코인 금지' 부탁 어김으로 안 침)
+    public class CoinPos { public int id; public string tk; public int dir; public double lev, margin, entry, mult; public int t0; public double bonus; public bool mirai; public double sl, tp; }   // mirai = 미래 돌발 매수 (v4: '코인 금지' 부탁 어김으로 안 침)
     public class Ledger { public string kind; public double amt; public string label; }
     public class KMsg { public string w, x, t; public int d; }
     public class Cm { public string au, x; public double up; public int res, tipc; }
@@ -44,7 +54,7 @@ namespace KwGame.Sim
         public int id, T; public string lab, au, tag, title, body; public double up, dn; public List<Cm> cm = new List<Cm>(); public bool best;
         public int mine, pend; public string wk, wtk; public bool ok, big; public double pnl; public int? tip; public int res; public double rr; public bool pd; public double fm; public int myUp;
     }
-    public class Tip { public int id; public string who, tier, tk; public int dir; public double mag; public int T0, Tr; public string kind; public bool pre; public double p0; public string res = ""; public double rr; public string via; public int? pid; }
+    public class Tip { public int id; public string who, tier, tk; public int dir; public double mag; public int T0, Tr; /** v4 분석가 리포트: 화면에 보이는 기한 (실제 발표 칸 Tr 은 그 안 어딘가 — 숨김) */ public int Td; public string kind; public bool pre; public double p0; public string res = ""; public double rr; public string via; public int? pid; }
     public class Feed { public string ic, x, kind, lab; public List<string> rows; }
     public class Rsch { public int d, free, paid; }
     public class EqPoint { public int T; public double v; }
@@ -146,6 +156,8 @@ namespace KwGame.Sim
         /// 알바 중 청산 경보: 마지막 일당 · 경보를 띄운 칸 (한 칸 1회)
         public double lastPay; public int alertT = -1;
         /// 주간 납부 관문: 통과한 횟수(증거금 상한·숏·대출 해금 단계) · 연속 미납 횟수
-        public int gateTier, missN;   // promKept·promBroke = 누적 (오늘 어김 bool promBad 와 다름)
+        public int gateTier, missN;
+        /// 이번 주에 김사장한테 빌린 돈 (이번 주 원금 분납에선 빼 줌 = 다음 주로 미루는 다리)
+        public double loanWeek;   // promKept·promBroke = 누적 (오늘 어김 bool promBad 와 다름)
     }
 }

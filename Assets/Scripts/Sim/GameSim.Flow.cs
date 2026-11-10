@@ -148,7 +148,7 @@ namespace KwGame.Sim
                 if (e.cash != 0) { S.cash += e.cash; S.today.Add(new Ledger { kind = "ev", amt = e.cash, label = T("lbl.morningEv") }); }
                 if (e.st != 0) S.stress = clamp(S.stress + e.st, 0, 100);
                 if (e.fame != 0) fame(e.fame);
-                if (e.hp != 0) S.hp = clamp(S.hp + e.hp, 0, R.HP_MAX);
+                if (e.hp != 0 && !hpOff) S.hp = clamp(S.hp + e.hp, 0, R.HP_MAX);
             }
             healthMorning();
             if (!hasEv && S.hp < 40) { evT = T("morning.lowHp"); hasEv = true; }

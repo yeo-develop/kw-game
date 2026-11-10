@@ -56,7 +56,13 @@ namespace KwGame.Sim
         public double V4_NEWS_P = 0.5, V4_FIRESALE = 0.2;
         /// 2부: 알바 경력 배율 · 국면 세기 배율 (빚 1억이라 1부 수치로는 못 갚음)
         public double V4_P2_PAY = 1, V4_P2_REGIME = 1;
+        /// 2부 시작 때 굴릴 돈 바닥 (가진 돈이 이보다 적으면 김사장이 채워 줌 — 1억에 포함된 판돈). 0 = 없음
+        public double V4_P2_CASH;
         public Dictionary<string, double> V4_JOB_MULT;
+        /// v4 체력 삭제 (BLUEPRINT ②: 자원 = 현금·빚·스트레스·호감). 1 이면 체력이 안 깎이고 화면에서도 뺌. 알바 차이는 스트레스로 (V4_JOB_ST: 알바별 스트레스 배수)
+        /// v4 하루 무료 리포트 (기본 1 에 더하는 수)
+        public int V4_FREE_REP = 1;
+        public int V4_NO_HP; public Dictionary<string, double> V4_JOB_ST;
         /// 신용 단계(이자 낸 횟수): 김사장 대출 열리는 단계 (초반 = 시드머니 모으기)
         public int V4_CREDIT_LOAN = 0;
         /// 레버리지 = 실적: 실현수익 누적이 V4_LEV_PROFIT[i] 넘으면 코인 최대 배율 V4_LEV_CAP[i] (한 번 열리면 계속)
@@ -71,9 +77,21 @@ namespace KwGame.Sim
         public double V4_ALERT_LOSS = 0, V4_ALERT_PAY = 0.7, V4_ALERT_CAUGHT = 0.35;
         /// 주간 납부 관문 (docs/BLUEPRINT.md ②③): 주 w 이자일 뒤 빚이 V4_GATE_CAP[w-1] 이하여야 함 (원금 분납). null = 끔 (이자만)
         /// 못 낸 원금엔 V4_LATE_FEE 연체료, V4_MISS_MAX 주 연속 미납이면 만기 전에 끌려감. 통과할 때마다 유품 1개 + 증거금 상한 한 단계
-        public double[] V4_GATE_CAP; public double V4_LATE_FEE = 0.1; public int V4_MISS_MAX = 2, V4_SHORT_GATE = 1, V4_LOAN_GATE = 1;
-        /// 코인 증거금 합계 상한 (통과한 관문 수로 단계). 배율은 처음부터 자유 — 기능이 아니라 금액을 묶음. 단계를 넘으면 상한 없음
+        public double[] V4_GATE_CAP; public double V4_LATE_FEE = 0.1; public int V4_MISS_MAX = 2, V4_SHORT_WEEK = 2, V4_LOAN_GATE = 1;   // 숏은 2주차부터 · 대출은 첫 납부 통과 뒤
+        /// 관문 규칙: 한 주에 새로 빌릴 수 있는 돈 (그 주 원금 분납에선 빼 줌 = 다음 주로 미루는 다리). 0 = 제한 없음
+        public double V4_LOAN_WEEK;
+        /// 코인 증거금 합계 상한 = 주차별 (마지막 값이 끝까지). 배율은 처음부터 자유 — 기능이 아니라 금액을 묶음. 무제한 없음 (장만 보는 게 알바를 이기지 않게)
         public double[] V4_MARGIN_CAP;
+        /// 읽어야 하는 시장 (BLUEPRINT ①③): 후속 속보(확정/부인)가 뜰 확률 · 그게 맞을 확률
+        public double V4_FOLLOW_P = 0, V4_FOLLOW_ACC = 1;
+        /// 분석가 (unity_v4.json V4_AN): 리포트는 분석가 중 하나가 씀. 적중률 V4_AN_ACC 를 판마다 섞어 숨김 (전적으로만 드러남), 틀리면 반대로 움직임. 코인 리포트 비율 · 코인일 때 충격 배수
+        public double[] V4_AN_ACC; public double V4_AN_COINP = 0.5, V4_AN_COIN = 1;
+        /// 분석가마다 시작할 때 보이는 지난 전적 건수 (진짜 적중률로 뽑음 → 첫날부터 읽을 거리)
+        public int V4_AN_PRIOR;
+        /// 속보 종목의 칸 초반(30% 지점) 움직임 = 뉴스 크기 × [lo, hi] 사이 (진짜·가짜 같은 분포 → 초반 시세만으론 못 가림). null = 끔
+        public double[] V4_EARLY;
+        /// 신호 대 잡음: v4 변동성 배수(0 = RT_VOL 그대로) · 속보 종목 뽑기에서 코인 가중 · 리포트가 코인을 다룰 확률 (결과가 1~2칸 뒤 → 잡고 자리를 비울 이유)
+        public double V4_VOL = 0, V4_NEWS_COIN_W = 1, V4_NEWS_COIN_MAG = 1, V4_TIP_MAG = 1;   // V4_TIP_MAG = 찌라시(리포트 말고) 충격 배수
 
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;
@@ -103,6 +121,8 @@ namespace KwGame.Sim
         public double? pre, up;
         public double[] mag; public int[] lag;
         public bool stock, coin, meme;
+        /// v4 분석가 (리포트를 쓰는 사람). 적중률은 판마다 섞임 — GameSim.anAcc
+        public bool an; public string flav;
     }
 
     public class Aug { public string id, cat, ic, name, d, fl; public int tier; }
@@ -261,6 +281,8 @@ namespace KwGame.Sim
             into("V4_RULES", "RULES"); into("V4_STR", "STR"); into("V4_SCENES", "SCENES"); into("V4_ENDINGS", "ENDINGS");
             if (j["V4_LOCS"] is JObject vl && j["LOCS"] is JObject locs)   // 장소는 필드만 덮음 (설명 등)
                 foreach (var p in vl.Properties()) if (locs[p.Name] is JObject L0 && p.Value is JObject L1) foreach (var f in L1.Properties()) L0[f.Name] = f.Value.DeepClone();
+            if (j["V4_AN"] is JArray an && j["SRC"] is JObject src0)   // 분석가 = 리포트 출처 (tier rep). 신뢰 별은 다 같게 (적중률은 전적으로만)
+                foreach (var a in an.OfType<JObject>()) { var o = (JObject)a.DeepClone(); string id = (string)o["id"]; o.Remove("id"); o["tier"] = "rep"; o["an"] = true; o["trust"] = 3; o["acc"] = 0.5; if (o["lag"] == null) o["lag"] = new JArray(1, 2); src0[id] = o; }
             if (j["V4_EVENTS"] is JArray ev) { if (!(j["EVENTS"] is JArray e0)) j["EVENTS"] = e0 = new JArray(); foreach (var x in ev) e0.Add(x.DeepClone()); }
         }
 

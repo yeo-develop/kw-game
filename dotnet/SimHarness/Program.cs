@@ -27,20 +27,23 @@ static class P {
       RtBots.ForceRelic = Environment.GetEnvironmentVariable("BAL_FORCE");
       RtBots.Part2 = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("BAL_PART2"));
       RtBots.Diff = Environment.GetEnvironmentVariable("BAL_DIFF") is string bd && bd.Length > 0 ? bd : "normal";
+      if (Environment.GetEnvironmentVariable("BAL_RIDE") is string br && br.Split(',').Length == 3) { var rp = br.Split(',').Select(x => double.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray(); RtBots.RideLev = rp[0]; RtBots.RideSl = rp[1]; RtBots.RideFrac = rp[2]; }
+      if (Environment.GetEnvironmentVariable("BAL_CASUAL") is string bc0 && bc0.Length > 0) RtBots.CasualLev = double.Parse(bc0, System.Globalization.CultureInfo.InvariantCulture);
+      if (Environment.GetEnvironmentVariable("BAL_PLAY") is string bp0 && bp0.Split(',').Length >= 2) { var pp = bp0.Split(',').Select(x => double.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray(); RtBots.PlayLev = pp[0]; RtBots.PlayFrac = pp[1]; if (pp.Length > 2) RtBots.PlaySl = pp[2]; }   // BAL_PLAY="배율,비중[,손절]"
       string tr = Environment.GetEnvironmentVariable("BAL_TRACE");
       if (tr != null) { RtBots.Trace = Console.WriteLine; var rr = RtBots.Run(BD, int.Parse(tr) * 104729, strats[0]); Console.WriteLine($"{rr.end} d{rr.day} errs {rr.errs} {rr.lastErr}"); return 0; }
       if (Environment.GetEnvironmentVariable("BAL_MKT") != null) {
         // 시장 국면 진단: 쉬기만 하면서 28일 → 장마다(시작·끝 아침) 종목별 로그 수익을 그 장의 국면 이름별로 평균 (v4 는 판마다 시나리오가 달라서 국면별로 묶음)
-        var sums = new Dictionary<string, Dictionary<string, double>>(); var cnt = new Dictionary<string, int>();
+        var sums = new Dictionary<string, Dictionary<string, double>>(); var sumsA = new Dictionary<string, Dictionary<string, double>>(); var cnt = new Dictionary<string, int>(); var slotR = new List<(double, string)>();
         void add(GameSim g, int ch, Dictionary<string, double> p0) {
           string rg = g.regime(ch) ?? (ch + "장"); cnt[rg] = (cnt.TryGetValue(rg, out var c0) ? c0 : 0) + 1;
-          if (!sums.ContainsKey(rg)) sums[rg] = new Dictionary<string, double>();
-          foreach (var t in BD.TKList) if (p0.ContainsKey(t.id)) sums[rg][t.id] = (sums[rg].TryGetValue(t.id, out var v0) ? v0 : 0) + Math.Log(g.S.mk.tk[t.id].p / p0[t.id]);
+          if (!sums.ContainsKey(rg)) { sums[rg] = new Dictionary<string, double>(); sumsA[rg] = new Dictionary<string, double>(); }
+          foreach (var t in BD.TKList) if (p0.ContainsKey(t.id)) { sums[rg][t.id] = (sums[rg].TryGetValue(t.id, out var v0) ? v0 : 0) + Math.Log(g.S.mk.tk[t.id].p / p0[t.id]); sumsA[rg][t.id] = (sumsA[rg].TryGetValue(t.id, out var a0) ? a0 : 0) + g.S.mk.tk[t.id].p / p0[t.id] - 1; }
         }
         for (int sd = 1; sd <= n; sd++) {
           var g = GameSim.Create(BD, sd * 104729, new GameSim.Opts { rt = true }); g.Apply(new SimCommand("start"));
           if (RtBots.Part2) g.S.part = 2;
-          var p0 = new Dictionary<string, double>(); int lastCh = 0;
+          var p0 = new Dictionary<string, double>(); int lastCh = 0; double btk0 = 0; int btkT = -1;
           for (int i = 0; i < 4000 && g.S.pending != null && g.S.pending.t != "ending"; i++) {
             var P = g.S.pending; int ch = g.absDay() >= 29 ? 5 : g.chapter();
             if (P.t == "home" && g.S.slot == 0 && ch != lastCh) {
@@ -48,15 +51,27 @@ static class P {
               p0.Clear(); foreach (var t in BD.TKList) p0[t.id] = g.S.mk.tk[t.id].p;
               lastCh = ch;
             }
+            if (P.t == "home" && g.Tnow() != btkT) {   // 칸마다 대장코인 수익률 (분포 진단)
+              double bpx = g.S.mk.tk["BTK"].p; if (btkT >= 0 && btk0 > 0) slotR.Add((bpx / btk0 - 1, $"시드{sd} d{g.absDay()} s{g.S.slot} {g.regime(ch > 4 ? 4 : ch)}"));
+              btk0 = bpx; btkT = g.Tnow();
+            }
+            if (P.t == "home" && g.S.day == BD.RULES.MONTH_DAYS && g.gateOn) g.S.cash = Math.Max(g.S.cash, g.gateDue() + 100000);   // 진단용: 납부일엔 낼 돈을 채워 둠
+            if (P.t == "payday" && P.stage == "gate") { g.Apply(new SimCommand("payday", "k", "gatePay")); continue; }   // 진단은 28일을 다 봐야 하니 납부는 통과시킴 (현금은 이자 단계에서 채워 둠)
             SimCommand c = P.t == "home" ? new SimCommand("rest") : P.t == "relic" ? new SimCommand("pickRelic", "i", 0) : P.t == "event" ? new SimCommand("evPick", "k", P.opts.First(o => !o.dis).k)
-              : P.t == "menhera" || P.t == "impulse" ? new SimCommand("reply", "i", 0) : P.t == "payday" ? new SimCommand("payday", "k", P.stage == "repay" ? "keep" : P.opts.FirstOrDefault(o => !o.dis)?.k ?? "pay") : P.t == "tempt" ? new SimCommand("tempt", "k", "no") : null;
+              : P.t == "menhera" || P.t == "impulse" ? new SimCommand("reply", "i", Math.Max(0, P.opts.FindIndex(o => o.ok))) : P.t == "payday" ? new SimCommand("payday", "k", P.stage == "repay" ? "keep" : P.opts.FirstOrDefault(o => !o.dis)?.k ?? "pay") : P.t == "tempt" ? new SimCommand("tempt", "k", "no") : null;
             if (c == null) break;
-            if (P.t == "payday" && P.stage == "choose") g.S.cash = Math.Max(g.S.cash, P.due + 1);
+            if (P.t == "payday" && P.stage == "choose") g.S.cash = Math.Max(g.S.cash, P.due + g.gatePrincipal() + 2);
             if (P.t == "payday" && g.absDay() >= 28 && p0.Count > 0) { add(g, 4, p0); p0.Clear(); }
             g.Apply(c);
           }
+          if (sd <= 2) Console.WriteLine($"진단 시드{sd} 끝 d{g.absDay()} pending {g.S.pending?.t} {g.S.pending?.stage} ending {g.S.ending} 빚 {g.S.debt / 1e4:F0} 미납 {g.S.missN}");
         }
-        foreach (var t in BD.TKList) Console.WriteLine($"{t.id,-6} beta {t.beta,4} " + string.Join("  ", sums.Keys.OrderBy(k => k).Select(rg => $"{rg} {(sums[rg].TryGetValue(t.id, out var v) ? Math.Exp(v / cnt[rg]) - 1 : 0),7:P1}")));
+        if (slotR.Count > 0) {
+          var rs = slotR.Select(x => x.Item1).OrderBy(x => x).ToList(); double mean = rs.Average(), sd0 = Math.Sqrt(rs.Average(x => (x - mean) * (x - mean)));
+          Console.WriteLine($"BTK 칸 수익률 n={rs.Count} 평균 {mean:P2} 표준편차 {sd0:P1} · 1% {rs[rs.Count / 100]:P0} · 5% {rs[rs.Count / 20]:P0} · 중앙 {rs[rs.Count / 2]:P1} · 95% {rs[rs.Count * 19 / 20]:P0} · 99% {rs[rs.Count * 99 / 100]:P0} · |r|>20% {rs.Count(x => Math.Abs(x) > 0.2) / (double)rs.Count:P1}");
+          foreach (var x in slotR.OrderByDescending(x => Math.Abs(x.Item1)).Take(4)) Console.WriteLine($"   큰 움직임 {x.Item1:P0} ({x.Item2})");
+        }
+        foreach (var t in BD.TKList) Console.WriteLine($"{t.id,-6} beta {t.beta,4} " + string.Join("  ", sums.Keys.OrderBy(k => k).Select(rg => $"{rg} {(sums[rg].TryGetValue(t.id, out var v) ? Math.Exp(v / cnt[rg]) - 1 : 0),6:P0}(평균 {(sumsA[rg].TryGetValue(t.id, out var va) ? va / cnt[rg] : 0),5:P0})")));   // 중앙값에 가까운 기하평균 (산술평균)
         return 0;
       }
       if (Environment.GetEnvironmentVariable("BAL_RELIC") != null) {

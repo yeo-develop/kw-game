@@ -15,7 +15,7 @@ namespace KwGame.Sim
         public int slotStartMin(int s) => s <= 0 ? R.RT_DAY0 : R.RT_SLOT_END[s - 1];
         public int slotEndMin(int s) => R.RT_SLOT_END[Math.Min(s, R.RT_SLOT_END.Length - 1)];
         public static string clockOf(int m) => $"{m / 60 % 24:00}:{m % 60:00}";
-        double rtVol() => S.rt ? R.RT_VOL : 1;
+        double rtVol() => !S.rt ? 1 : v4 && R.V4_VOL > 0 ? R.V4_VOL : R.RT_VOL;   // v4: 잡음을 줄여 정보(속보·리포트)가 가격을 움직이게
         public bool limitUp(string k) { var t = D.TK[k]; var s = S.mk.tk[k]; return S.rt && t.IsStock && s.ref0 > 0 && s.p >= s.ref0 * (1 + R.RT_LIMIT) * 0.999; }
         public bool limitDn(string k) { var t = D.TK[k]; var s = S.mk.tk[k]; return S.rt && t.IsStock && s.ref0 > 0 && s.p <= s.ref0 * (1 - R.RT_LIMIT) * 1.001; }
         /// 하루 등락 (기준가 = 전날 마감 / 코인은 자정)
@@ -59,11 +59,17 @@ namespace KwGame.Sim
                 if (t.inv && t.of != null && M.tk.Has(t.of)) { rtMove(s, invPx(M, t, s), day, m); continue; }
                 double L = b - a, u = (m - a) / L, dt = 1 / L;
                 double X1 = Math.Log(rtClose(t, s, P) / s.so), x = Math.Log(s.p / s.so), x2;
-                if (u + dt >= 1 - 1e-9) x2 = X1;
+                // 발표 갭 (분석가 리포트 결과): 그 전까지는 발표 몫 J 를 뺀 길로 가다가 uj 에서 한 번에 뜀
+                double J = 0, uj = 9; if (P.jmp != null && P.jmp.TryGetValue(t.id, out var jp)) { uj = jp[0]; J = jmpLog(P, t.id); }
+                bool pre = u < uj - 1e-9;
+                double ub = 1, xb = X1 - (pre ? J : 0);   // 다음 목표: 경유점이 있으면 거기까지, 없으면 종가까지 (브라운 다리). 경유점은 발표 몫을 뺀 값
+                if (P.way != null && P.way.TryGetValue(t.id, out var W)) for (int i = 0; i + 1 < W.Length; i += 2) if (W[i] > u + 1e-9) { ub = W[i]; xb = W[i + 1] + (pre ? 0 : J); break; }
+                if (pre && u + dt >= uj - 1e-9) { x += J; xb += J; }   // 발표: 이번 1분에 갭
+                if (u + dt >= ub - 1e-9) x2 = xb;
                 else
                 {
                     double sig = t.vol * R.INTRA * rtVol() * (P.whale && !t.IsStock ? R.RT_WHALE_VOL : 1) * (t.meme ? 0.4 : 1);
-                    x2 = x + (X1 - x) * dt / (1 - u) + gauss() * sig * Math.Sqrt(dt * (1 - u - dt) / (1 - u));
+                    x2 = x + (xb - x) * dt / (ub - u) + gauss() * sig * Math.Sqrt(dt * (ub - u - dt) / (ub - u));
                 }
                 double p = s.so * Math.Exp(x2);
                 if (t.IsStock) p = limit(s, p);
@@ -123,6 +129,7 @@ namespace KwGame.Sim
                 var P = curPlan();
                 rtStep(S.mk, P, Tnow(), S.slot, S.min, absDay());
                 S.min++; mins--;
+                if (v4) { planEvFire(P); rtStops(); }
                 rtLiq(liqs);
                 if (liqAlertCheck()) { S.owe += mins; mins = 0; break; }   // 알바 중 청산 경보: 남은 시간은 선택 뒤에 (spend 가 다시 흘림)
                 if (S.min % 60 == 0 && (!v4 || S.pending?.t == "watch")) readIgnored();   // v4: 행동으로 몇 시간 건너뛸 땐 읽씹 페널티 안 쌓음 (장 볼 때만)
@@ -136,6 +143,51 @@ namespace KwGame.Sim
             }
             if (over) after(AFTER_SLOT);
             return over;
+        }
+        /// 칸 중간 사건 알림 (후속 속보 · 리포트 결과 발표): 그 종목 장 시간의 u 지점을 지날 때 한 번
+        void planEvFire(MarketPlan P)
+        {
+            if (P.evs == null) return;
+            foreach (var e in P.evs)
+            {
+                if (e.done) continue;
+                var (a, b) = rtWindow(D.TK[e.tk], S.slot);
+                if (b <= a) { e.done = true; continue; }   // 이번 칸엔 장이 안 열림
+                if ((S.min - a) / (double)(b - a) < e.u) continue;
+                e.done = true;
+                string nm = D.TK[e.tk].name;
+                if (e.k == "report")
+                {   // 분석가 리포트 결과 발표 (같은 1분에 시세가 갭으로 뜀)
+                    var tp = S.tips.FirstOrDefault(q => q.id == e.id); if (tp == null) continue;
+                    int up = e.ok ? tp.dir : -tp.dir; var d = srcOf(tp);
+                    string x = T(e.ok ? "v4.an.hit" : "v4.an.miss", "ic", d.ic, "a", d.name, "n", nm, "d", T(up > 0 ? "v4.an.up" : "v4.an.dn"));
+                    pushF("📊", x, "tip"); toast(x, "news", "news", "report");
+                }
+                else { string x = T(e.ok ? "v4.follow.ok" : "v4.follow.no", "n", nm); pushF("📰", x, "news"); toast(x, e.ok ? "good" : "liq", "news", "follow"); }
+                Emit("planEv", "k", e.k, "tk", e.tk, "ok", e.ok, "id", e.id);
+            }
+        }
+        /// 예약 손절·익절 (코인 포지션): 증거금 대비 손익이 걸어 둔 선에 닿으면 정리. 청산(−90%)보다 먼저 봄
+        void rtStops()
+        {
+            foreach (var c in S.cps.ToList())
+            {
+                if (c.sl <= 0 && c.tp <= 0) continue;
+                double g = c.lev * c.mult * c.dir * (S.mk.tk[c.tk].p / c.entry - 1);
+                bool tp = c.tp > 0 && g >= c.tp, sl = c.sl > 0 && g <= -c.sl;
+                if (!tp && !sl) continue;
+                double pnl = closeCoin(c, true) ?? 0;
+                toast(T(tp ? "v4.stop.tp" : "v4.stop.sl", "n", D.TK[c.tk].name, "pnl", sgnWon(pnl)), tp ? "good" : "liq", "coin");
+                Emit("stop", "id", c.id, "k", tp ? "tp" : "sl", "pnl", pnl, "tk", c.tk);
+            }
+        }
+        /// 예약은 장 보기 칸에서만 걸 수 있음 (집에서 급히 잡은 포지션은 예약 없이 감)
+        public bool stopsOk() => !v4 || S.pending?.t == "watch";
+        bool setStops(CoinPos c, double sl, double tp)
+        {
+            if (c == null || !stopsOk()) return false;
+            c.sl = double.IsNaN(sl) ? 0 : clamp(sl, 0, 0.85); c.tp = double.IsNaN(tp) ? 0 : clamp(tp, 0, 50);
+            return true;
         }
         /// 실시간 청산: 가격이 청산가를 건드리는 순간
         void rtLiq(List<Liq> liqs)

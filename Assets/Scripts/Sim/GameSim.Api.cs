@@ -27,6 +27,7 @@ namespace KwGame.Sim
             S.rt = opts != null && opts.rt; S.min = r.RT_DAY0;
             if (S.rt && r.V4 > 0) { S.aff = r.V4_AFF0; S.cash = round1k(S.cash * g.dv("cash")); S.st.maxAsset = S.cash; }   // 난이도별 시작 현금
             S.mk = g.initMarket(); S.news = g.genNews();
+            if (g.v4) g.anSeed();
             S.pending = new Pending("start");
             g.ev.Clear();
             return g;
@@ -119,8 +120,15 @@ namespace KwGame.Sim
                     {
                         string tk = c.Str("tk"); int dir = c.Int("dir", 0);
                         var cc = openCoin(tk, dir, c.Num("lev"), c.Num("amt"));
+                        if (cc != null && v4 && (c.Truthy("sl") || c.Truthy("tp"))) setStops(cc, c.Num("sl"), c.Num("tp"));   // 예약 손절·익절 (장 보기 칸에서만 걸림)
                         if (cc != null) galReact("trade", V("tk", D.TK[tk].name, "side", T("side.coin", "lev", cc.lev, "d", T(dir > 0 ? "long" : "short"))), 1);
                         Emit("trade", "op", "open", "ok", cc != null, "id", cc?.id, "tk", tk, "dir", dir, "lev", cc?.lev, "margin", cc?.margin); return true;
+                    }
+                case "stops":
+                    {
+                        int id0 = c.Int("id", int.MinValue); var x0 = S.cps.FirstOrDefault(y => y.id == id0);
+                        bool ok0 = setStops(x0, c.Num("sl"), c.Num("tp"));
+                        Emit("trade", "op", "stops", "ok", ok0, "id", id0); return true;
                     }
                 case "close":
                     {
@@ -135,7 +143,7 @@ namespace KwGame.Sim
                     }
                 case "report":
                     {
-                        bool paid = c.Truthy("paid"); var t = getReport(paid);
+                        bool paid = c.Truthy("paid"); var t = getReport(paid, c.Str("who"));
                         if (t != null) tipAnnounce(t, "app");
                         Emit("report", "ok", t != null, "id", t?.id, "paid", paid); return true;
                     }

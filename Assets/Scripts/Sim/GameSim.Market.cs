@@ -59,7 +59,35 @@ namespace KwGame.Sim
             S.shocks.Remove(T);
             if (S.news != null && !S.news.fake) sh0[S.news.tk] = sh(sh0, S.news.tk) + S.news.r;
             else if (S.news != null && v4 && R.V4_FAKE_HI > 0) sh0[S.news.tk] = sh(sh0, S.news.tk) - S.news.r * (R.V4_FAKE_LO + rnd() * (R.V4_FAKE_HI - R.V4_FAKE_LO));   // v4 가짜 속보 = 선반영 후 되돌림 (반대로 움직임 → 좋은 뉴스마다 사는 게 정답이 아님)
-            S.mplan = planMarket(sh0, isEve()); S.mplan.T = T; return S.mplan;
+            S.mplan = planMarket(sh0, isEve()); S.mplan.T = T; planEvents(S.mplan); return S.mplan;
+        }
+        /// v4 칸 안 흐름: 속보 종목은 경유점을 거쳐 움직이고 (가짜 = 먼저 뉴스 방향으로 튀었다 되돌림), 중간에 후속 속보(확정/부인)가 뜰 수 있음.
+        /// 뽑기는 씨앗 해시 (rng 흐름 안 건드림)
+        void planEvents(MarketPlan P)
+        {
+            if (!v4 || !S.rt) return;
+            var n = S.news; int T = Tnow();
+            // 분석가 리포트 결과가 이번 칸이면: 칸 안 어느 순간에 발표 → 갭 (맞으면 리포트 방향, 틀리면 반대)
+            foreach (var t in S.tips)
+            {
+                if (t.Tr != T || !string.IsNullOrEmpty(t.res) || (t.kind != "real" && t.kind != "anti") || !srcOf(t).an || !P.r.ContainsKey(t.tk)) continue;
+                double js = (t.kind == "real" ? 1 : -1) * t.dir * t.mag;
+                if (P.jmp.TryGetValue(t.tk, out var j0)) j0[1] += js; else P.jmp[t.tk] = new[] { 0.15 + 0.7 * hashU(T * 613 + t.id * 31), js };
+                P.evs.Add(new PlanEv { u = P.jmp[t.tk][0], k = "report", tk = t.tk, ok = t.kind == "real", id = t.id });
+            }
+            if (n != null && n.tk != "MKT" && D.TK.TryGetValue(n.tk, out var nt) && !nt.meme && P.r.ContainsKey(n.tk) && tkOpen(n.tk) && R.V4_EARLY != null && R.V4_EARLY.Length == 2)
+            {
+                // 초반엔 진짜든 가짜든 뉴스 방향으로 조금 가거나 흔들림 (같은 분포) → 진짜는 그 뒤로 쭉, 가짜는 되돌림. 초반 시세만 보고는 못 가리고, 후속 속보·출처로 가려야 함
+                double X1 = Math.Log(1 + P.r[n.tk]) - jmpLog(P, n.tk), N = Math.Log(1 + Math.Abs(n.r)) * n.dir, e0 = N * (R.V4_EARLY[0] + hashU(T * 211 + 41) * (R.V4_EARLY[1] - R.V4_EARLY[0]));
+                P.way[n.tk] = n.fake ? new[] { 0.3, e0, 0.6, e0 * 0.3 + X1 * 0.4 } : new[] { 0.3, e0, 0.7, e0 + (X1 - e0) * 0.75 };
+                if (hashU(T * 131 + 17) < R.V4_FOLLOW_P) P.evs.Add(new PlanEv { u = 0.35, k = "follow", tk = n.tk, ok = hashU(T * 389 + 71) < R.V4_FOLLOW_ACC ? !n.fake : n.fake });   // 후속 속보도 가끔 틀림
+            }
+        }
+        /// 발표 갭의 로그 크기 (칸 전체 수익률에서 발표 몫을 뺀 것과의 차)
+        double jmpLog(MarketPlan P, string tk)
+        {
+            if (P.jmp == null || !P.jmp.TryGetValue(tk, out var j) || !P.r.TryGetValue(tk, out var r)) return 0;
+            return Math.Log(Math.Max(0.05, 1 + r)) - Math.Log(Math.Max(0.05, 1 + r - j[1]));
         }
         MarketPlan curPlan() => (S.mplan != null && S.mplan.T == Tnow()) ? S.mplan : planNext();
         MarketState initMarket()
@@ -94,11 +122,13 @@ namespace KwGame.Sim
             if (S.llm) return genNewsLlm();
             if (rnd() > (v4 ? R.V4_NEWS_P : 0.32)) return null;
             var pool = TKS().Where(k => k != "INV" && tkOpen(k)).Concat(new[] { "MKT" }).ToList();
+            if (v4 && R.V4_NEWS_COIN_W > 1) { var coins = pool.Where(k => k != "MKT" && D.TK[k].IsCoin && !D.TK[k].meme).ToList(); for (int i = 1; i < R.V4_NEWS_COIN_W; i++) pool.AddRange(coins); }   // 레버리지를 걸 수 있는 코인 속보를 더 자주
             string tk = pick(pool);
             var nw = pick(D.NEWS[tk]);
             if (v4) { int want = newsDir(); var same = D.NEWS[tk].Where(x => x.dir == want).ToList(); if (same.Count > 0) nw = pick(same); }   // v4: 장별 국면 = 뉴스 방향 편향
             D.TK.TryGetValue(tk, out var t);
             double mag = (tk == "MKT" ? 0.02 + rnd() * 0.02 : t.type == "stock" ? 0.05 + rnd() * 0.07 : t.meme ? 0.4 : 0.07 + rnd() * 0.09) * (t != null ? t.nmag : 1);
+            if (v4 && t != null && t.IsCoin && !t.meme) mag *= R.V4_NEWS_COIN_MAG;   // 코인 속보는 자주 뜨는 대신 한 번의 크기는 작게 (들고 자리를 비운 사람에겐 속보가 잡음)
             var n = new News { tk = tk, h = nw.h, dir = nw.dir, r = nw.dir * mag, fake = rnd() < 0.3 };
             logNews(n);
             return n;

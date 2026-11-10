@@ -32,7 +32,7 @@ namespace KwGame.Sim
                     return D.JOBList.Select(J => new LocOpt
                     {
                         k = "l-" + J.id, ic = J.ic, l = J.name,
-                        sub = T("lo.pay", "a", man((S.rt ? jobPay(J, 0) : J.@base) * (has("grind") ? R.GRIND_PAY : 1)), "b", man((S.rt ? jobPay(J, 1) : J.@base + J.var) * (has("grind") ? R.GRIND_PAY : 1)), "h", jobHp(J)) + (S.hp <= jobHp(J) ? T("lo.faintRisk") : S.hp < R.HP_LOW ? T("lo.tiredPen") : "")
+                        sub = hpOff ? T("v4.lo.pay", "a", man(jobPay(J, 0) * (has("grind") ? R.GRIND_PAY : 1)), "b", man(jobPay(J, 1) * (has("grind") ? R.GRIND_PAY : 1)), "s", workStress(J, S.workStreak + 1)) : T("lo.pay", "a", man((S.rt ? jobPay(J, 0) : J.@base) * (has("grind") ? R.GRIND_PAY : 1)), "b", man((S.rt ? jobPay(J, 1) : J.@base + J.var) * (has("grind") ? R.GRIND_PAY : 1)), "h", jobHp(J)) + (S.hp <= jobHp(J) ? T("lo.faintRisk") : S.hp < R.HP_LOW ? T("lo.tiredPen") : "")
                     }).ToList();
                 case "pc":
                     return new List<LocOpt> {
@@ -192,9 +192,9 @@ namespace KwGame.Sim
         bool borrow(double L)
         {
             var P = S.pending; double fr = loanFee();
-            if (!R.LOAN_AMTS.Contains(L) || S.debt + L > loanCap() || !loanOk()) return false;
+            if (!R.LOAN_AMTS.Contains(L) || S.debt + L > loanCap() || !loanOk() || L > loanWeekRoom() + 0.5) return false;
             double net = rhu(L * (1 - fr));
-            addDebt(L, T("lbl.loanDebt")); S.cash += net; S.st.borrowed += L; P.took += L; fame(1);
+            addDebt(L, T("lbl.loanDebt")); S.cash += net; S.st.borrowed += L; P.took += L; fame(1); if (gateOn) S.loanWeek += L;
             S.today.Add(new Ledger { kind = "loan", amt = net, label = T("lbl.loan", "f", rhu(fr * 100)) });
             if (has("loanbro")) augFx("loanbro", T("aug.loanbro"));
             bubble(T(L >= 3e6 ? "loan.big" : "loan.small"), 2200, "smug");

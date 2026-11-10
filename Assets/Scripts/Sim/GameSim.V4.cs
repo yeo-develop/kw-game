@@ -129,7 +129,7 @@ namespace KwGame.Sim
         public double earlyCreditProfit() => R.V4_LEV_PROFIT != null && R.V4_LEV_PROFIT.Length > 1 ? R.V4_LEV_PROFIT[1] : 0;
         public bool loanOk() => gateOn ? S.part > 1 || S.gateTier >= R.V4_LOAN_GATE : credit() >= R.V4_CREDIT_LOAN;   // 관문 규칙: 첫 납부 통과 뒤
         /// 숏 = 실적으로 엶 (STONKS 의 '평판'): 실현수익 누적 V4_SHORT_PROFIT 넘으면. 신용(이자)으론 안 열림
-        public bool shortOk() => !v4 || (gateOn ? S.part > 1 || S.gateTier >= R.V4_SHORT_GATE : S.shortOn || R.V4_SHORT_PROFIT <= 0);
+        public bool shortOk() => !v4 || (gateOn ? S.part > 1 || S.month >= R.V4_SHORT_WEEK : S.shortOn || R.V4_SHORT_PROFIT <= 0);   // 관문 규칙: 2주차부터
         /// 레버리지 단계 = 실현수익으로 오른 최고 단계 (다시 잃어도 안 내려감). 2부는 다 열림
         public double levCap() { var L = R.V4_LEV_CAP; return !v4 || gateOn || S.part > 1 || L == null || L.Length == 0 ? 1000 : L[Math.Min(S.levTier, L.Length - 1)]; }   // 관문 규칙: 배율은 처음부터 자유 (증거금 상한으로 묶음 — marginCap)
         int levTierOf(double p) { var P = R.V4_LEV_PROFIT; int t = 0; for (int i = 1; i < (P?.Length ?? 0); i++) if (p >= P[i]) t = i; return t; }
@@ -174,24 +174,28 @@ namespace KwGame.Sim
             if (week <= 0) week = S.month;
             var C = R.V4_GATE_CAP; return C[(int)clamp(week, 1, C.Length) - 1] * debtScale();
         }
-        /// 이번 주에 갚아야 할 원금 (지금 빚 − 상한). 주중에 미리 갚으면 줄어듦, 빌리면 늘어남
-        public double gatePrincipal() => !gateOn ? 0 : Math.Max(0, S.debt - gateCap());
+        /// 이번 주에 갚아야 할 원금 (지금 빚 − 상한). 주중에 미리 갚으면 줄어듦. 이번 주에 빌린 돈은 다음 주 몫 (관문을 넘기는 비싼 다리 — 선이자 10% + 이자)
+        public double gatePrincipal() => !gateOn ? 0 : Math.Max(0, S.debt - (gateLast() ? 0 : S.loanWeek) - gateCap());
+        /// 이번 주에 더 빌릴 수 있는 돈 (관문 규칙: 주당 한도)
+        public double loanWeekRoom() => !gateOn || R.V4_LOAN_WEEK <= 0 ? double.MaxValue : Math.Max(0, R.V4_LOAN_WEEK * debtScale() - S.loanWeek);
+        /// 만기 주 (상한 0): 빌린 돈도 다 갚아야 함
+        bool gateLast() => S.month >= R.V4_GATE_CAP.Length;
         /// 이번 주 납부 총액 = 이자(아직 안 냈으면) + 원금 분납
         public double gateDue() => (S.paidMonth == S.month ? 0 : interestDue()) + gatePrincipal();
-        /// 코인 증거금 합계 상한 (통과한 관문 수 단계). 2부·단계 끝 = 상한 없음
-        public double marginCap()
+        /// 코인 증거금 합계 상한 = 주차별 (마지막 값이 끝까지, 2부는 빚 비율만큼)
+        public double marginCap(int week = 0)
         {
-            var M = R.V4_MARGIN_CAP;
-            return !v4 || M == null || S.part > 1 || S.gateTier >= M.Length ? double.MaxValue : M[S.gateTier];
+            var M = R.V4_MARGIN_CAP; if (week <= 0) week = S.month;
+            return !v4 || M == null || M.Length == 0 ? double.MaxValue : M[(int)clamp(week, 1, M.Length) - 1] * debtScale();
         }
         public double marginUsed() => S.cps.Where(c => !c.mirai).Sum(c => c.margin);
         public double marginRoom() => Math.Max(0, marginCap() - marginUsed());
         /// 증거금 상한 안내 (화면용). null = 상한 없음
         public string marginNext()
         {
-            var M = R.V4_MARGIN_CAP; double cap = marginCap();
+            double cap = marginCap(), nx = marginCap(S.month + 1);
             if (cap == double.MaxValue) return null;
-            return S.gateTier + 1 < M.Length ? T("v4.margin.next", "a", man(cap), "b", man(M[S.gateTier + 1])) : T("v4.margin.last", "a", man(cap));
+            return nx > cap ? T("v4.margin.next", "a", man(cap), "b", man(nx)) : T("v4.margin.last", "a", man(cap));
         }
         List<Opt> gateOpts(double need)
         {
@@ -209,7 +213,7 @@ namespace KwGame.Sim
         {
             double need = gatePrincipal();
             if (need <= 0) { gatePass(); return; }
-            if (say) KIM(T("v4.gate.ask", "p", won(need), "cap", won(gateCap())));
+            if (say) KIM(T("v4.gate.ask", "p", won(need), "cap", won(gateCap())) + (S.loanWeek > 0 && !gateLast() ? " " + T("v4.gate.askLoan", "l", won(S.loanWeek)) : ""));
             S.pending = new Pending("payday") { stage = "gate", due = need, opts = gateOpts(need) };
         }
         bool gateCmd(string ck)
@@ -228,11 +232,9 @@ namespace KwGame.Sim
             S.missN = 0; S.pending = null;
             bool last = absDay() >= R.V4_DAYS;
             if (last || S.debt <= 0) { paydayEnd(); return; }
-            double cap0 = marginCap(); bool short0 = shortOk(), loan0 = loanOk();
-            S.gateTier++;
-            var ups = new List<string>(); double cap1 = marginCap();
-            if (cap1 != cap0) ups.Add(cap1 == double.MaxValue ? T("v4.gate.upMarginMax") : T("v4.gate.upMargin", "a", man(cap1)));
-            if (!short0 && shortOk()) { S.shortOn = true; ups.Add(T("v4.gate.upShort")); Emit("unlock", "k", "short"); }
+            bool loan0 = loanOk();
+            S.gateTier++; S.loanWeek = 0;
+            var ups = new List<string>();
             if (!loan0 && loanOk()) { ups.Add(T("v4.gate.upLoan")); Emit("unlock", "k", "loan"); }
             KIM(T("v4.gate.pass", "cap", won(gateCap(S.month + 1))));
             if (ups.Count > 0) { string x = string.Join(" · ", ups); pushK("kim", T("v4.gate.kim", "x", x)); toast(T("v4.gate.passT", "x", x), "good", "kakao", "kim"); }
@@ -243,7 +245,7 @@ namespace KwGame.Sim
         /// 미납: 못 낸 원금에 연체료. 연속 V4_MISS_MAX 번이면 만기 전에 끌려감 (만기 주는 결산으로)
         void gateMiss(double shortA)
         {
-            S.missN++; S.pending = null;
+            S.missN++; S.pending = null; S.loanWeek = 0;
             double fee = round1k(shortA * R.V4_LATE_FEE);
             bool last = absDay() >= R.V4_DAYS;
             Emit("gate", "ok", false, "w", S.month, "short", shortA);
@@ -337,8 +339,19 @@ namespace KwGame.Sim
             promHit("date"); if (isEve()) promHit("datenight");
             S.actMin = slotLeft(); slotUsed();
         }
-        /// 집 '쉬기/자기' 버튼 부제 (화면용): 밤 = 체력 + 내일 무료 리포트 보너스
-        public string restHint() => !v4 ? null : isEve()
+        /// v4 체력 삭제: 체력은 늘 가득 (깎이지 않음) — 화면도 숨김
+        public bool hpOff => v4 && R.V4_NO_HP > 0;
+        /// 알바 한 번의 스트레스 (연속 근무 가산 포함). v4: 알바별 배수 (상하차가 제일 힘듦) · 산삼주(체력 삭제 뒤) = 알바 스트레스 −30%
+        public double workStress(Job J, int streak)
+        {
+            double b = S.rt ? R.RT_WORK_ST + R.RT_WORK_ST_STREAK * Math.Min(Math.Max(0, streak - 1), 4) : 5 + 2 * Math.Min(Math.Max(0, streak - 1), 4);
+            if (!v4) return b;
+            if (R.V4_JOB_ST != null && J != null && R.V4_JOB_ST.TryGetValue(J.id, out var m)) b *= m;
+            if (hpOff && has("ginseng")) b *= 0.7;
+            return rhu(b);
+        }
+        /// 집 '쉬기/자기' 버튼 부제 (화면용): 밤 = 푹 잠 + 내일 무료 리포트 보너스
+        public string restHint() => !v4 ? null : hpOff ? (isEve() && R.V4_SLEEP_RSCH > 0 ? T("v4.rest.noHpEve", "s", -R.RT_REST_ST, "n", R.V4_SLEEP_RSCH) : T("v4.rest.noHp", "s", -R.RT_REST_ST)) : isEve()
             ? (R.V4_SLEEP_RSCH > 0 ? T("v4.rest.subEve", "h", R.RT_HP_REST_EVE + R.RT_HP_SLEEP, "n", R.V4_SLEEP_RSCH) : T("v4.rest.subEve0", "h", R.RT_HP_REST_EVE + R.RT_HP_SLEEP))
             : T("v4.rest.sub", "h", R.RT_HP_REST);
         void watchStart() { S.pending = new Pending("watch") { n0 = S.st.invest }; Emit("watch"); }
@@ -410,12 +423,20 @@ namespace KwGame.Sim
         }
 
         // ---------- 2부 (B안: 아빠의 차용증) ----------
+        /// 2부 판돈: 가진 돈이 V4_P2_CASH 보다 적으면 거기까지 채움 (빚 1억에 포함된 돈이라는 설정 — 굴릴 돈이 없으면 읽기 엔진이 안 돎)
+        public void p2Seed()
+        {
+            if (R.V4_P2_CASH <= 0 || S.cash >= R.V4_P2_CASH) return;
+            S.cash = R.V4_P2_CASH; pushK("kim", T("v4.p2.seed", "a", man(R.V4_P2_CASH)));
+        }
         bool part2Start()
         {
             S.part = 2; S.cleared = 0; S.ending = null; S.endInfo = null; S.pending = null; S.phase = "home";
-            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.missN = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
+            anSeed();   // 2부: 분석가 폼이 바뀜 (적중률을 다시 섞고 전적도 새로)
+            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.missN = 0; S.loanWeek = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;
             S.today = new List<Ledger>(); S.resume = null;
+            p2Seed();
             foreach (var kv in S.mk.tk) { kv.Value.ref0 = kv.Value.p; kv.Value.sT = int.MinValue; }
             S.mplan = null;
             Emit("story", "key", "part2");

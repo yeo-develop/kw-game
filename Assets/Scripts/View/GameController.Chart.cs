@@ -111,9 +111,9 @@ namespace KwGame.View
             var e = evs.FirstOrDefault(x => x.t == "report");
             var tp = e != null && e["ok"] is bool ok && ok ? S.tips.FirstOrDefault(x => x.id == (int)e.Num("id")) : null;
             bool paid = e != null && e["paid"] is bool pd && pd;
-            stkMsg = tp != null ? $"리포트: {D.TK[tp.tk].name} {(tp.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.whenLabel(tp.Tr)}" : "리포트 못 받음 (오늘 다 씀 / 현금 부족)";
+            stkMsg = tp != null ? $"리포트: {D.TK[tp.tk].name} {(tp.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.tipWhen(tp)}" : "리포트 못 받음 (오늘 다 씀 / 현금 부족)";
             // 돈 나간 것·받은 내용이 확실히 보이게 큰 알림
-            if (tp != null) Toast((paid ? $"유료 리포트 −{G.won(S.rt ? D.RULES.RT_RSCH_FEE : D.RULES.RSCH_FEE)}\n" : "무료 리포트\n") + $"{D.TK[tp.tk].name} {(tp.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.whenLabel(tp.Tr)}", paid ? "big" : "good");
+            if (tp != null) Toast((paid ? $"유료 리포트 −{G.won(S.rt ? D.RULES.RT_RSCH_FEE : D.RULES.RSCH_FEE)}\n" : "무료 리포트\n") + $"{D.TK[tp.tk].name} {(tp.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.tipWhen(tp)}", paid ? "big" : "good");
             else Toast(stkMsg, "liq");
         }
 
@@ -129,7 +129,7 @@ namespace KwGame.View
             {
                 string res = string.IsNullOrEmpty(x.res) ? "" : x.res == "hit" ? " · 적중" : " · 빗나감";
                 var c = Ui.Box(StkCard, 8, 8); c.style.marginLeft = 8; c.style.marginBottom = 4; c.style.paddingTop = 4; c.style.paddingBottom = 4;
-                c.Add(Ui.Label($"{D.TK[x.tk].name} {(x.dir > 0 ? "▲" : "▼")} {G.whenLabel(x.Tr)}{res}", 18, x.dir > 0 ? StkUp : StkDn, true));
+                c.Add(Ui.Label($"{D.TK[x.tk].name} {(x.dir > 0 ? "▲" : "▼")} {G.tipWhen(x)}{res}", 18, x.dir > 0 ? StkUp : StkDn, true));
                 box.Add(c);
             }
         }
@@ -291,7 +291,7 @@ namespace KwGame.View
                 var c = Ui.Box(StkCard, 12, 10); c.style.marginRight = 10; c.style.marginBottom = 10; c.style.borderLeftWidth = 4; c.style.borderLeftColor = t.dir > 0 ? StkUp : StkDn;
                 c.Add(Ui.Label($"{s0.name} · 신뢰 {GameSim.stars(s0.trust)}", 17, StkAxis));
                 c.Add(Ui.Label($"{D.TK[t.tk].name} {(t.dir > 0 ? "▲ 오른다" : "▼ 내린다")}", 22, t.dir > 0 ? StkUp : StkDn, true));
-                c.Add(Ui.Label(G.whenLabel(t.Tr), 17, Ui.Text));
+                c.Add(Ui.Label(G.tipWhen(t), 17, Ui.Text));
                 row.Add(c);
             }
             if (S.whale != null && S.whale.T == G.Tnow() && (tk == null || tk == S.whale.tk))

@@ -106,12 +106,12 @@ namespace KwGame.Tests
         [Test]
         public void MaturityDuoResultAchievementsAndCard()
         {
-            var g = AtMaturity(10000000, 80, out var endEv, "hard");
+            var g = AtMaturity(6000000, 80, out var endEv, "hard");   // 매운맛 문턱(빚 25% 이하) 안
             var r = g.Result();
             Assert.That(r, Is.Not.Null);
             Assert.That(r.endKey, Is.EqualTo("bad1:duo"));
             Assert.That(r.diff, Is.EqualTo("hard"));
-            Assert.That(r.repaidPct, Is.EqualTo(67).Within(1));
+            Assert.That(r.repaidPct, Is.EqualTo(80).Within(1));
             Assert.That(r.cleared, Is.False);
             var ach = g.CheckAchievements();
             Assert.That(ach, Does.Contain("first_end"));

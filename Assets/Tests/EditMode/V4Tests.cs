@@ -228,6 +228,8 @@ namespace KwGame.Tests
             Assert.That(S.part, Is.EqualTo(2)); Assert.That(S.debt, Is.EqualTo(Data.RULES.V4_PART2_DEBT));
             Assert.That((S.month, S.day), Is.EqualTo((1, 1)));
             Assert.That(g.loanCap(), Is.GreaterThan(Data.RULES.V4_PART2_DEBT), "2부 한도도 1억 기준");
+            Assert.That(S.cash, Is.GreaterThanOrEqualTo(Data.RULES.V4_P2_CASH), "2부 판돈 (굴릴 돈 바닥)");
+            Assert.That(g.analysts().All(a => S.srcStat[a.id][1] == Data.RULES.V4_AN_PRIOR), "2부: 분석가 전적도 새로");
             ToHome(g);
             Assert.That(S.pending.t, Is.EqualTo("home"));
 
@@ -358,7 +360,7 @@ namespace KwGame.Tests
             Assert.Fail("ToGate: " + S.pending?.t);
         }
 
-        /// ⑥-1: 배율은 1일차부터 자유, 대신 증거금 합계가 상한(30만)을 넘는 주문은 거절. 숏·대출은 첫 납부 통과 뒤
+        /// ⑥-1: 배율은 1일차부터 자유, 대신 증거금 합계가 그 주 상한을 넘는 주문은 거절. 숏은 2주차부터, 대출은 첫 납부 통과 뒤
         [Test]
         public void LeverageIsOpenFromDayOneButMarginIsCapped()
         {
@@ -374,16 +376,17 @@ namespace KwGame.Tests
             Go(g, "close", "id", S.cps[0].id);
             Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", R.V4_MARGIN_CAP[0] + 10000);
             Assert.That(S.cps.Count, Is.EqualTo(0), "1배여도 금액이 넘으면 거절 (배율이 아니라 금액을 묶음)");
+            Assert.That(g.shortOk(), Is.False);
             Go(g, "open", "tk", coin.id, "dir", -1, "lev", 1, "amt", 100000);
-            Assert.That(S.cps.Count, Is.EqualTo(0), "숏은 첫 납부 통과 뒤");
+            Assert.That(S.cps.Count, Is.EqualTo(0), "숏은 2주차부터");
             Assert.That(g.loanOk(), Is.False);
             Go(g, "loanOpen");
-            Assert.That(g.Apply(C("borrow", "amt", 1000000.0)).Any(e => e.t == "error"), "대출도 첫 납부 통과 뒤");
+            Assert.That(g.Apply(C("borrow", "amt", 1000000.0)).Any(e => e.t == "error"), "대출은 첫 납부 통과 뒤");
         }
 
-        /// ⑥-7·8: 7일째 밤 이자 다음에 원금 분납. 통과하면 유품 하나 + 증거금 상한·숏·대출이 열리고, 다음 주 요구액은 더 큼
+        /// ⑥-7·8: 7일째 밤 이자 다음에 원금 분납. 통과하면 유품 하나 + 대출이 열리고, 증거금 상한·숏은 주차로 열림. 다음 주 요구액은 더 큼
         [Test]
-        public void WeeklyGateGrowsAndPassingRewardsRelicAndRaisesMarginCap()
+        public void WeeklyGateGrowsAndPassingRewardsRelic()
         {
             var g = New(); var S = g.S; S.cash = 20000000; var R = Data.RULES;
             int relics0 = S.augs.Count; double debt0 = S.debt;
@@ -400,16 +403,38 @@ namespace KwGame.Tests
             Assert.That(S.augs.Count, Is.EqualTo(relics0 + 1));
             ToHome(g);
             Assert.That(S.month, Is.EqualTo(2)); Assert.That(S.gateTier, Is.EqualTo(1)); Assert.That(S.missN, Is.EqualTo(0));
-            Assert.That(g.marginCap(), Is.EqualTo(R.V4_MARGIN_CAP[1]), "증거금 상한 한 단계 위");
-            Assert.That(g.shortOk()); Assert.That(g.loanOk());
-            Assert.That(S.kk["kim"].Any(m => m.x.Contains(g.T("v4.gate.upShort"))), "김사장 카톡으로 열린 것 알림");
-            // 주중에 빌리면 이번 주에 갚을 원금이 그만큼 늘어남 (대출 = 주 단위 단기 자금)
-            double p0 = g.gatePrincipal();
-            Go(g, "loanOpen"); Go(g, "borrow", "amt", 1000000.0); Go(g, "loanDone"); ToHome(g);
-            Assert.That(g.gatePrincipal(), Is.EqualTo(p0 + 1000000));
+            Assert.That(g.marginCap(), Is.EqualTo(R.V4_MARGIN_CAP[1]), "증거금 상한은 주차로 오름");
+            Assert.That(g.shortOk(), "숏은 2주차부터"); Assert.That(g.loanOk(), "대출은 첫 통과 뒤");
+            Assert.That(S.kk["kim"].Any(m => m.x.Contains(g.T("v4.gate.upLoan"))), "김사장 카톡으로 열린 것 알림");
             ToGate(g);
             Assert.That(S.pending.stage, Is.EqualTo("gate"));
             Assert.That(S.pending.due, Is.GreaterThan(need1), "요구액이 주마다 커짐");
+        }
+
+        /// 김사장 돈 = 관문을 넘기는 비싼 다리: 이번 주에 빌린 돈은 이번 주 원금 분납에서 빠지고 다음 주 몫이 됨. 한 주에 빌릴 수 있는 돈엔 한도
+        [Test]
+        public void LoanThisWeekIsDueNextWeekAndHasAWeeklyLimit()
+        {
+            var g = New(); var S = g.S; S.cash = 20000000; var R = Data.RULES;
+            ToGate(g); Go(g, "payday", "k", "gatePay"); ToHome(g);
+            Assert.That(S.month, Is.EqualTo(2)); Assert.That(g.loanOk());
+            double p0 = g.gatePrincipal(), debt = S.debt, lim = R.V4_LOAN_WEEK;
+            Assert.That(lim, Is.GreaterThan(0)); Assert.That(g.loanWeekRoom(), Is.EqualTo(lim));
+            double L = R.LOAN_AMTS.Where(x => x <= lim).Max();
+            Go(g, "loanOpen"); Go(g, "borrow", "amt", L);
+            Assert.That(S.debt, Is.EqualTo(debt + L)); Assert.That(S.loanWeek, Is.EqualTo(L));
+            Assert.That(g.gatePrincipal(), Is.EqualTo(p0), "이번 주에 빌린 돈은 이번 주 요구액에 안 얹힘");
+            Assert.That(g.loanWeekRoom(), Is.EqualTo(lim - L));
+            if (lim - L < R.LOAN_AMTS.Min()) Assert.That(g.Apply(C("borrow", "amt", R.LOAN_AMTS.Min())).Any(e => e.t == "error"), "주당 한도를 넘으면 거절");
+            Go(g, "loanDone"); ToHome(g);
+            ToGate(g);
+            Assert.That(S.pending.due, Is.EqualTo(p0), "관문 요구액에도 안 얹힘");
+            Go(g, "payday", "k", "gatePay");
+            Assert.That(S.debt, Is.EqualTo(R.V4_GATE_CAP[1] + L), "통과한 뒤 빚 = 상한 + 이번 주에 빌린 돈");
+            Assert.That(S.loanWeek, Is.EqualTo(0));
+            ToHome(g);
+            Assert.That(S.month, Is.EqualTo(3));
+            Assert.That(g.gatePrincipal(), Is.EqualTo(S.debt - R.V4_GATE_CAP[2]), "다음 주엔 그 돈까지 요구액");
         }
 
         /// 주중에 미리 갚아 상한 밑이면 이자만 내고 바로 통과
@@ -424,20 +449,24 @@ namespace KwGame.Tests
             Assert.That(S.gateTier, Is.EqualTo(1));
         }
 
-        /// 가진 만큼만 내면 못 낸 원금에만 연체료. 다음 주에 다 내면 미납 기록이 지워짐
+        /// 가진 만큼만 내면 못 낸 원금에만 연체료 · 유품 없음 · 대출은 안 열림. 그래도 증거금 상한은 주차로 오름 (첫 미납이 끝이 아니게). 다음 주에 다 내면 미납 기록이 지워짐
         [Test]
         public void PartialGatePaymentChargesLateFeeOnShortfall()
         {
             var g = New(); var S = g.S; var R = Data.RULES;
-            S.cash = g.interestDue() + 1000000;   // 이자 내고 100만 남음
+            S.cash = g.interestDue() + 500000;   // 이자 내고 50만 남음
             ToGate(g);
-            double need = S.pending.due, debt = S.debt;
+            double need = S.pending.due, debt = S.debt; int relics0 = S.augs.Count;
+            Assert.That(need, Is.GreaterThan(500000));
             Go(g, "payday", "k", "gatePart");
-            double shortA = need - 1000000;
-            Assert.That(S.debt, Is.EqualTo(debt - 1000000 + MathK.Round1k(shortA * R.V4_LATE_FEE)), "100만 갚고, 못 낸 원금의 연체료가 빚에 붙음");
-            Assert.That(S.missN, Is.EqualTo(1)); Assert.That(S.gateTier, Is.EqualTo(0), "미납이면 증거금 상한 그대로");
+            double shortA = need - 500000;
+            Assert.That(S.debt, Is.EqualTo(debt - 500000 + MathK.Round1k(shortA * R.V4_LATE_FEE)), "50만 갚고, 못 낸 원금의 연체료가 빚에 붙음");
+            Assert.That(S.missN, Is.EqualTo(1)); Assert.That(S.gateTier, Is.EqualTo(0));
             ToHome(g);
             Assert.That(S.month, Is.EqualTo(2)); Assert.That(S.ending, Is.Null);
+            Assert.That(S.augs.Count, Is.EqualTo(relics0), "미납이면 유품 없음");
+            Assert.That(g.loanOk(), Is.False, "통과한 적이 없으면 대출은 잠김");
+            Assert.That(g.marginCap(), Is.EqualTo(R.V4_MARGIN_CAP[1]), "증거금 상한은 미납과 상관없이 주차로");
             S.cash = 20000000;
             ToGate(g); Go(g, "payday", "k", "gatePay");
             Assert.That(S.missN, Is.EqualTo(0), "통과하면 미납 기록 지움");
@@ -459,6 +488,151 @@ namespace KwGame.Tests
             Go(g, "payday", "k", "gateSkip");
             Assert.That(S.ending, Is.EqualTo("bad1"));
             Assert.That(g.absDay(), Is.LessThan(Data.RULES.V4_DAYS), "만기 전에 끝남");
+        }
+
+        // ---------- 읽어야 하는 시장: 분석가 · 발표 갭 · 후속 속보 · 예약 주문 (docs/BLUEPRINT.md ①③ · ⑥-4·10) ----------
+        /// 분석가 4명의 진짜 적중률은 판마다 섞여 숨어 있고, 화면엔 지난 전적만 보임 (첫날부터 읽을 거리). 2부에선 다시 섞임
+        [Test]
+        public void AnalystsHaveHiddenShuffledAccuracyAndAVisibleRecord()
+        {
+            var R = Data.RULES; var g = New(); var S = g.S;
+            var A = g.analysts();
+            Assert.That(A.Count, Is.EqualTo(R.V4_AN_ACC.Length)); Assert.That(A.Count, Is.GreaterThanOrEqualTo(3));
+            Assert.That(A.Select(a => g.anAcc(a.id)).OrderBy(x => x), Is.EqualTo(R.V4_AN_ACC.OrderBy(x => x)), "적중률은 정해진 값들을 한 명씩 나눠 가짐");
+            Assert.That(A.Select(a => a.trust).Distinct().Count(), Is.EqualTo(1), "신뢰 별로는 구분이 안 됨");
+            foreach (var a in A) { Assert.That(S.srcStat.ContainsKey(a.id)); Assert.That(S.srcStat[a.id][1], Is.EqualTo(R.V4_AN_PRIOR), "지난 전적이 깔려 있음"); Assert.That(g.srcRec(a.id), Does.Contain("/")); }
+            string order(GameSim x) => string.Join(",", x.analysts().OrderByDescending(a => x.anAcc(a.id)).Select(a => a.id));
+            Assert.That(Enumerable.Range(1, 12).Select(sd => order(New(sd))).Distinct().Count(), Is.GreaterThan(1), "판마다 누가 잘 맞히는지 다름");
+            // 전적은 진짜 적중률을 따라감: 여러 판을 모으면 1등 분석가의 지난 전적이 꼴찌보다 뚜렷이 좋음
+            double best = 0, worst = 0; int n = 0;
+            for (int sd = 1; sd <= 20; sd++) { var x = New(sd); var L = x.analysts().OrderByDescending(a => x.anAcc(a.id)).ToList(); best += x.S.srcStat[L[0].id][0]; worst += x.S.srcStat[L[L.Count - 1].id][0]; n += R.V4_AN_PRIOR; }
+            Assert.That(best / n, Is.GreaterThan(worst / n + 0.4));
+            string o1 = order(g); S.part = 2;
+            Assert.That(Enumerable.Range(1, 12).Any(sd => { var x = New(sd); string p1 = order(x); x.S.part = 2; return order(x) != p1; }), "2부에선 다시 섞임");
+        }
+
+        /// 무료 리포트 = 아무 분석가, 유료 = 분석가를 골라서. 결과 시점은 기한만 보임 (정확한 칸은 숨김)
+        [Test]
+        public void FreeReportIsFromAnyAnalystAndPaidReportPicksOne()
+        {
+            var R = Data.RULES; var g = New(); var S = g.S; S.cash = 5000000;
+            Go(g, "watch");
+            int n0 = S.tips.Count;
+            Go(g, "report", "paid", false);
+            var t = S.tips.Last(); Assert.That(S.tips.Count, Is.EqualTo(n0 + 1));
+            Assert.That(g.srcOf(t).an, "v4 리포트는 분석가가 씀");
+            Assert.That(t.Td, Is.GreaterThanOrEqualTo(t.Tr)); Assert.That(t.Tr, Is.GreaterThan(g.Tnow()));
+            Assert.That(g.tipWhen(t), Does.EndWith(g.T("v4.an.by", "w", "")), "화면엔 '~까지' 기한만");
+            string who = g.analysts().Last().id; double cash = S.cash;
+            Go(g, "report", "paid", true, "who", who);
+            Assert.That(S.tips.Last().who, Is.EqualTo(who), "유료 = 고른 분석가");
+            Assert.That(S.cash, Is.EqualTo(cash - R.RT_RSCH_FEE));
+            var ev = g.Apply(C("report", "paid", true, "who", "없는사람"));
+            Assert.That(ev.Any(e => e.t == "report" && e["ok"] is bool ok && !ok), "없는 분석가면 안 받아짐");
+            Assert.That(S.cash, Is.EqualTo(cash - R.RT_RSCH_FEE), "돈도 안 나감");
+            Assert.That(g.freeMax(), Is.EqualTo(1 + R.V4_FREE_REP));
+        }
+
+        /// 리포트 결과 = 발표 순간의 갭: 맞으면 리포트 방향, 틀리면 반대로 한 번에 뜀 (예약 손절이 못 피함). 전적은 발표가 맞았나로 셈
+        [Test]
+        public void ReportResultLandsAsAGapAndWrongCallsGoTheOtherWay()
+        {
+            int seen = 0, anti = 0;
+            for (int sd = 1; sd <= 12 && (seen < 3 || anti < 1); sd++)
+            {
+                var g = New(sd); var S = g.S; S.cash = 5000000;
+                Go(g, "watch"); Go(g, "report", "paid", false);
+                var t = S.tips.Last(); if (!Data.TK[t.tk].IsCoin) continue;
+                int h0 = S.srcStat[t.who][0], n0 = S.srcStat[t.who][1];
+                bool real = t.kind == "real"; Assert.That(real || t.kind == "anti", "분석가 리포트는 맞거나 반대로 가거나");
+                // 발표 칸까지 감 (장 보기로 시간만 흘림) → 발표 사건이 뜨는 1분의 등락을 잼
+                Go(g, "watchEnd"); ToHome(g);
+                double jump = double.NaN; bool announced = false;
+                for (int guard = 0; guard < 8 && !announced && string.IsNullOrEmpty(t.res); guard++)
+                {
+                    if (g.Tnow() < t.Tr) { Go(g, "rest"); ToHome(g); continue; }
+                    Go(g, "watch");
+                    while (S.pending?.t == "watch" && !announced)
+                    {
+                        double p0 = S.mk.tk[t.tk].p;
+                        var ev = g.Apply(C("tick", "m", 1));
+                        if (ev.Any(e => e.t == "planEv" && e.Str("k") == "report" && e.Str("tk") == t.tk)) { announced = true; jump = S.mk.tk[t.tk].p / p0 - 1; }
+                    }
+                    if (S.pending?.t == "watch") Go(g, "watchEnd");
+                    ToHome(g);
+                }
+                Assert.That(announced, $"발표가 그 칸 안에 뜸 (씨앗 {sd})");
+                int want = real ? t.dir : -t.dir;
+                Assert.That(System.Math.Sign(jump), Is.EqualTo(want), "맞으면 리포트 방향, 틀리면 반대");
+                Assert.That(System.Math.Abs(jump), Is.GreaterThan(t.mag * 0.6), "한 번에 뜀 (1분 사이의 갭)");
+                while (string.IsNullOrEmpty(t.res) && S.pending?.t == "home") { Go(g, "rest"); ToHome(g); }
+                Assert.That(t.res, Is.EqualTo(real ? "hit" : "miss"));
+                Assert.That(S.srcStat[t.who][1], Is.EqualTo(n0 + 1)); Assert.That(S.srcStat[t.who][0], Is.EqualTo(h0 + (real ? 1 : 0)), "전적은 발표가 맞았나로");
+                seen++; if (!real) anti++;
+            }
+            Assert.That(seen, Is.GreaterThanOrEqualTo(3)); Assert.That(anti, Is.GreaterThanOrEqualTo(1), "틀린 리포트도 한 번은 봄");
+        }
+
+        /// 후속 속보(확정/부인)는 대체로 맞지만 가끔 틀림
+        [Test]
+        public void FollowUpNewsIsUsuallyButNotAlwaysRight()
+        {
+            int n = 0, right = 0;
+            for (int sd = 1; sd <= 80; sd++)
+            {
+                var g = New(sd); var S = g.S;
+                if (S.news == null) continue;
+                Go(g, "watch"); g.Apply(C("tick", "m", 1));
+                var e = S.mplan?.evs.FirstOrDefault(x => x.k == "follow"); if (e == null) continue;
+                n++; if (e.ok == !S.news.fake) right++;
+            }
+            Assert.That(n, Is.GreaterThanOrEqualTo(15));
+            Assert.That((double)right / n, Is.InRange(0.6, 0.95), "대체로 맞음");
+            Assert.That(right, Is.LessThan(n), "가끔 틀림 (답안지가 아님)");
+        }
+
+        /// ⑥-4: 예약 손절은 자리를 비운 사이에도 체결. 장 보기 칸에서만 걸 수 있음 (집에서 급히 잡으면 예약 없이 감)
+        [Test]
+        public void StopLossFillsWhileAwayAndOnlyWatchCanSetIt()
+        {
+            var g = New(5); var S = g.S; S.cash = 3000000;
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 5 && !t.meme);
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 2, "amt", 200000, "sl", 0.3);
+            Assert.That(S.cps.Single().sl, Is.EqualTo(0), "집에선 예약이 안 걸림");
+            Go(g, "close", "id", S.cps[0].id);
+            Go(g, "watch");
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 5, "amt", 500000, "sl", 0.3);
+            var c = S.cps.Single(); Assert.That(c.sl, Is.EqualTo(0.3));
+            Go(g, "watchEnd"); ToHome(g);
+            Assert.That(S.cps.Count, Is.EqualTo(1));
+            S.mk.tk[coin.id].p = c.entry * 0.92;   // 5배 × −8% = 증거금 −40% (예약선 −30% 밖, 청산선 안)
+            double liq0 = S.st.liq;
+            Go(g, "map"); Go(g, "goTo", "loc", "work");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            var ev = g.Apply(C("act", "k", "l-cafe")); ev.AddRange(g.Apply(C("mgSetup"))); ev.AddRange(g.Apply(C("mgResult", "score", 0.8)));
+            for (int i = 0; i < 6 && S.pending != null && S.pending.t != "home"; i++) { if (S.pending.t == "liqAlert") ev.AddRange(g.Apply(C("alertHold"))); else ToHome(g); }
+            Assert.That(S.cps.Count, Is.EqualTo(0), "알바하는 사이 예약 손절 체결");
+            Assert.That(S.st.liq, Is.EqualTo(liq0), "청산이 아니라 손절");
+        }
+
+        /// 체력 삭제 (BLUEPRINT ②): 알바해도 체력이 안 깎이고, 알바 차이는 일당 대 스트레스
+        [Test]
+        public void ThereIsNoHpAndJobsDifferByStress()
+        {
+            var R = Data.RULES; var g = New(); var S = g.S;
+            Assert.That(g.hpOff);
+            Assert.That(g.restHint(), Does.Not.Contain("체력"));
+            var opts = g.Query(() => g.locOpts("work"));
+            Assert.That(opts.All(o => !o.sub.Contains("체력")), "알바 설명에 체력이 없음");
+            Assert.That(opts.All(o => o.sub.Contains("스트레스")));
+            Assert.That(g.workStress(Data.JOBS["ware"], 1), Is.GreaterThan(g.workStress(Data.JOBS["cafe"], 1)), "많이 주는 알바가 더 힘듦");
+            Assert.That(g.jobPay(Data.JOBS["ware"], 0.5), Is.GreaterThan(g.jobPay(Data.JOBS["cafe"], 0.5)));
+            double st0 = S.stress;
+            Go(g, "map"); Go(g, "goTo", "loc", "work");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            Go(g, "act", "k", "l-ware"); Go(g, "mgSetup"); Go(g, "mgResult", "score", 0.8); ToHome(g);
+            Assert.That(S.hp, Is.EqualTo(R.HP_MAX), "체력은 늘 가득");
+            Assert.That(S.stress, Is.GreaterThan(st0));
         }
 
         /// 국면 시나리오: 판(씨앗)마다 장 순서가 다르고, 2부는 1부와 다른 순서. 장 이름엔 국면이 안 드러남
@@ -625,7 +799,7 @@ namespace KwGame.Tests
         static GameSim ToAlert(int seed, out string tk)
         {
             var g = New(seed); var S = g.S;
-            S.gateTier = 3; S.cash = 2000000;   // 증거금 상한 없는 단계 (상한은 다른 테스트)
+            S.cash = 2000000;
             var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
             Go(g, "open", "tk", coin.id, "dir", 1, "lev", 10, "amt", 500000);
             Assert.That(S.cps.Single().lev, Is.EqualTo(10));
@@ -672,7 +846,7 @@ namespace KwGame.Tests
         public void LiqAlertNeedsLeverageAndWork()
         {
             var g = New(5); var S = g.S;
-            S.cash = 2000000; S.gateTier = 3;
+            S.cash = 2000000;
             var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
             Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 500000);   // 1배 = 경보 없음
             Go(g, "map"); Go(g, "goTo", "loc", "work");
@@ -684,20 +858,31 @@ namespace KwGame.Tests
             Assert.That(S.alertT, Is.EqualTo(-1), "1배 현물은 경보 없음");
         }
 
-        /// 밸런스 범위 (판 수 적게, 범위 넓게 — 정확한 값은 docs/V4.md §7 300판)
+        /// 밸런스 범위 (판 수 적게, 범위 넓게 — 정확한 값은 docs/V4.md §7 300판). 루프 기준 (BLUEPRINT ⑥): 전적을 읽는 사람 > 전부 따라 타는 사람 · 알바만으론 못 깸 · 장만 봐선 못 이김 · 포지션 들고 알바 감
         [Test]
         public void BalanceBandsHold()
         {
             RtBots.Summary Sum(string st) => RtBots.Summarize(Data, st, 40, 1, 40);
-            var pro = Sum("pro"); var work = Sum("work"); var gamble = Sum("gamble"); var casual = Sum("casual");
-            TestContext.WriteLine(pro); TestContext.WriteLine(casual); TestContext.WriteLine(work); TestContext.WriteLine(gamble);
-            Assert.That(pro.clear, Is.InRange(0.2, 0.7), "잘하는 사람은 꽤 깸");
-            Assert.That(pro.clear + pro.End("bad1/duo"), Is.GreaterThanOrEqualTo(0.6));
-            Assert.That(casual.clear + casual.End("bad1/duo"), Is.InRange(0.15, 0.7));
+            var pro = Sum("pro"); var work = Sum("work"); var gamble = Sum("gamble"); var casual = Sum("casual"); var blind = Sum("proall"); var trader = Sum("trader");
+            foreach (var x in new[] { pro, casual, blind, trader, work, gamble }) TestContext.WriteLine(x);
+            Assert.That(pro.clear, Is.InRange(0.15, 0.7), "잘하는 사람은 꽤 깸");
+            Assert.That(casual.clear, Is.LessThanOrEqualTo(0.35), "보통 사람은 가끔");
             Assert.That(work.clear, Is.EqualTo(0), "알바만으론 못 깸");
             Assert.That(gamble.bad, Is.GreaterThanOrEqualTo(0.75), "도박 몰빵은 대부분 망함");
-            Assert.That(pro.errs + work.errs + gamble.errs + casual.errs, Is.EqualTo(0));
+            Assert.That(pro.errs + work.errs + gamble.errs + casual.errs + blind.errs + trader.errs, Is.EqualTo(0));
             foreach (var a in new[] { "watch", "work", "date" }) Assert.That(pro.acts.TryGetValue(a, out var v) ? v : 0, Is.GreaterThan(0.1), $"pro 가 {a} 를 씀 (죽은 선택지 없음)");
+            // ⑥-10: 리포트를 전부 따라 타면 남는 게 없고 (답안지 아님), 전적을 읽으면 번다
+            double tipPro = pro.pnl.TryGetValue("tip", out var tp) ? tp : 0, tipBlind = blind.pnl.TryGetValue("tip", out var tb) ? tb : 0;
+            Assert.That(tipBlind, Is.LessThan(4000000), "전부 따라 타기는 엔진이 못 됨");
+            Assert.That(tipPro, Is.GreaterThan(tipBlind + 3000000), "전적을 읽는 쪽이 뚜렷이 더 범");
+            Assert.That(pro.clear, Is.GreaterThan(blind.clear), "읽는 사람이 더 자주 깸");
+            Assert.That(pro.tipFade, Is.GreaterThan(0.1), "거꾸로 타는 것도 실력 (꼴찌 분석가)"); Assert.That(pro.tipSkip, Is.GreaterThan(0.05), "거를 줄도 앎");
+            // 장만 보는 사람이 알바 병행을 못 이김 (하루 종일 장 보기가 정답이 아니게)
+            Assert.That(trader.clear, Is.LessThan(pro.clear));
+            // ⑥-11: 제목의 장면 — 레버리지 포지션을 들고 알바 감
+            Assert.That(pro.workHeld, Is.GreaterThanOrEqualTo(5)); Assert.That(casual.workHeld, Is.GreaterThanOrEqualTo(3));
+            // ⑥-13·15: 대출 없이도 깸 · 원금이 첫 주부터 줄어듦
+            Assert.That(pro.noLoanClear, Is.GreaterThanOrEqualTo(0.3)); Assert.That(pro.firstRepay, Is.LessThanOrEqualTo(7));
         }
     }
 }

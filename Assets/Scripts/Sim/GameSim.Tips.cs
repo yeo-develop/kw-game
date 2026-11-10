@@ -18,22 +18,44 @@ namespace KwGame.Sim
             var d = D.SRC[who]; int T0 = Tnow(); var TK = D.TK;
             var cands = TKS().Where(k => tkOpen(k) && (!TK[k].meme || d.meme) && (d.stock ? TK[k].type == "stock" && !TK[k].inv : true) && (d.coin ? TK[k].type == "coin" : true)).ToList();
             if (d.meme && tkOpen("MMC") && rnd() < 0.5) cands = new List<string> { "MMC" };
+            bool an = v4 && d.an;
+            if (an && oTk == null) { bool coinRep = rnd() < R.V4_AN_COINP; var cc = TKS().Where(k => tkOpen(k) && !TK[k].meme && !TK[k].inv && (TK[k].type == "coin") == coinRep).ToList(); if (cc.Count > 0) cands = cc; }   // 분석가 리포트: 코인이면 결과가 1~2칸 뒤 → 잡고 자리를 비울 이유
             string tk = oTk != null && cands.Contains(oTk) ? oTk : cands[(int)Math.Floor(rnd() * cands.Count)];
             bool stockish = TK[tk].type == "stock";
             int dir = oDir != 0 ? oDir : (rnd() < (d.up ?? (stockish ? 0.65 : 0.5)) ? 1 : -1);
             double mag = d.mag[0] + rnd() * (d.mag[1] - d.mag[0]);
-            if (!stockish) mag = Math.Min(TK[tk].meme ? 1 : 0.6, mag * (TK[tk].meme ? 2.5 : 1.4));
+            if (an) { if (!stockish) mag *= R.V4_AN_COIN; }
+            else
+            {
+                if (v4 && d.tier != "rep") mag *= R.V4_TIP_MAG;   // 찌라시 한 방이 시세를 뒤엎지 않게 (레버리지가 잡음이 아니라 판단을 키우도록)
+                if (!stockish) mag = Math.Min(TK[tk].meme ? 1 : 0.6, mag * (TK[tk].meme ? 2.5 : 1.4));
+            }
             int Tr = T0 + d.lag[0] + (int)Math.Floor(rnd() * (d.lag[1] - d.lag[0] + 1));
-            double r = rnd(), acc = repAcc(d);
-            string kind = r < acc ? "real" : r < acc + d.pd ? "pd" : "fake";
+            int Td = 0;
+            if (an) { if (stockish) Tr = nextStockSlot(T0, Tr - T0); Td = stockish ? nextStockSlot(T0, d.lag[1]) : T0 + d.lag[1]; }   // 주식 리포트 결과는 장이 열린 칸에 (발표 = 장중 갭). 화면엔 기한(Td)만 — 정확한 칸은 숨김 (발표 직전에 양쪽으로 거는 수 방지)
+            double r = rnd(), acc = an ? anAcc(who) : repAcc(d);
+            string kind = r < acc ? "real" : an ? "anti" : r < acc + d.pd ? "pd" : "fake";   // 분석가가 틀리면 반대로 움직임 (전부 따라 타면 기대값 0)
             if (kind == "pd" && Tr < T0 + 1) Tr = T0 + 1;
             bool pre = false;
-            if (kind == "real") { pre = d.pre.HasValue && d.pre.Value != 0 && rnd() < d.pre.Value; addShock(Tr, tk, dir * mag * (pre ? 0.15 : 1)); }
+            if (kind == "real") { pre = !an && d.pre.HasValue && d.pre.Value != 0 && rnd() < d.pre.Value; addShock(Tr, tk, dir * mag * (pre ? 0.15 : 1)); }
             if (kind == "pd") { addShock(Tr - 1, tk, dir * mag * 0.4); addShock(Tr, tk, -dir * mag * 1.5); }
-            var t = new Tip { id = S.gid++, who = who, tier = d.tier, tk = tk, dir = dir, mag = mag, T0 = T0, Tr = Tr, kind = kind, pre = pre, p0 = S.mk.tk[tk].p, res = "" };
+            if (kind == "anti") addShock(Tr, tk, -dir * mag);
+            var t = new Tip { id = S.gid++, who = who, tier = d.tier, tk = tk, dir = dir, mag = mag, T0 = T0, Tr = Tr, Td = Td, kind = kind, pre = pre, p0 = S.mk.tk[tk].p, res = "" };
             S.tips.Add(t);
             if (S.tips.Count > 80) { int i = S.tips.FindIndex(x => !string.IsNullOrEmpty(x.res)); if (i >= 0) S.tips.RemoveAt(i); }
             return t;
+        }
+        /// 칸 T 에 국장이 열리나 (평일 + 그 칸이 장 시간과 겹침)
+        bool stockSlotAt(int T)
+        {
+            int n = R.SLOTS, slot = ((T % n) + n) % n, dow = (int)Math.Floor((double)T / n) % R.MONTH_DAYS + 1;
+            return dow <= R.V4_WEEKDAYS && Math.Max(slotStartMin(slot), R.RT_STOCK[0]) < Math.Min(slotEndMin(slot), R.RT_STOCK[1]);
+        }
+        /// T0 다음부터 nth 번째로 국장이 열리는 칸
+        int nextStockSlot(int T0, int nth)
+        {
+            for (int T = T0 + 1; T < T0 + 60; T++) if (stockSlotAt(T) && --nth <= 0) return T;
+            return T0 + 1;
         }
         List<Tip> resolveTips()
         {
@@ -44,6 +66,7 @@ namespace KwGame.Sim
                 if (t.Tr < Tnow()) { t.res = "void"; continue; }
                 if (t.Tr != Tnow()) continue;
                 double rr = S.mk.tk[t.tk].p / t.p0 - 1; bool hit = (rr >= 0 ? 1 : -1) == t.dir;
+                if (t.kind == "anti") hit = false; else if (v4 && t.kind == "real" && srcOf(t).an) hit = true;   // 분석가 전적은 발표가 맞았나로 (그 사이 시세 잡음에 안 흔들리게)
                 t.rr = rr; t.res = t.kind == "pd" ? "pd" : hit ? "hit" : "miss";
                 if (!S.srcStat.TryGetValue(t.who, out var g)) S.srcStat[t.who] = g = new int[2];
                 g[1]++; if (t.res == "hit") g[0]++;
@@ -53,12 +76,40 @@ namespace KwGame.Sim
         }
         public List<Tip> activeTips(string tk = null) => S.tips.Where(t => string.IsNullOrEmpty(t.res) && t.Tr >= Tnow() && (tk == null || t.tk == tk)).ToList();
         public Rsch rsch() { if (S.rsch == null || S.rsch.d != absDay()) S.rsch = new Rsch { d = absDay() }; return S.rsch; }
-        public int freeMax() => (has("vip") ? 2 : 1) + (v4 ? 1 + (S.sleepD == absDay() ? R.V4_SLEEP_RSCH : 0) : 0);   // v4: 증권사(박대리)가 없으니 무료 리포트 하나 더 · 전날 밤 푹 잤으면 +V4_SLEEP_RSCH
-        Tip getReport(bool paid)
+        public int freeMax() => (has("vip") ? 2 : 1) + (v4 ? R.V4_FREE_REP + (S.sleepD == absDay() ? R.V4_SLEEP_RSCH : 0) : 0);   // v4: 증권사(박대리)가 없으니 무료 리포트 하나 더 · 전날 밤 푹 잤으면 +V4_SLEEP_RSCH
+        /// v4 분석가 목록 · 이번 판에서 그 분석가의 진짜 적중률 (씨앗·부로 섞음 — 화면엔 안 보이고 전적으로만 드러남)
+        public List<Source> analysts() => v4 ? D.SRCList.Where(s => s.an).ToList() : new List<Source>();
+        public double anAcc(string who)
+        {
+            var A = R.V4_AN_ACC; var L = analysts(); int n = L.Count, i = L.FindIndex(s => s.id == who);
+            if (A == null || A.Length == 0 || i < 0) return 0.5;
+            var order = Enumerable.Range(0, n).OrderBy(k => hashU(k * 7919 + S.part * 101 + 13)).ToList();
+            return A[Math.Min(A.Length - 1, order.IndexOf(i))];
+        }
+        /// 새 판·2부 시작: 분석가마다 지난 전적 V4_AN_PRIOR 건을 진짜 적중률로 뽑아 깔아 둠 (프로필에 보임). 씨앗 해시라 rng 흐름과 무관
+        public void anSeedPublic() => anSeed();
+        void anSeed()
+        {
+            var L = analysts(); int n0 = R.V4_AN_PRIOR;
+            for (int i = 0; i < L.Count; i++)
+            {
+                if (n0 <= 0) { S.srcStat.Remove(L[i].id); continue; }
+                double acc = anAcc(L[i].id); int h = 0;
+                for (int k = 0; k < n0; k++) if (hashU(k * 331 + i * 7127 + S.part * 911 + 5) < acc) h++;
+                S.srcStat[L[i].id] = new[] { h, n0 };
+            }
+        }
+        /// 리포트 결과가 언제 나오나 (화면용): 분석가 = 기한만 ("오늘 저녁까지"), 나머지 = 그 칸
+        public string tipWhen(Tip t) => t.Td > 0 ? (t.Td <= Tnow() ? whenLabel(t.Td) : T("v4.an.by", "w", whenLabel(t.Td))) : whenLabel(t.Tr);
+        /// 리포트 받기. v4: 무료 = 아무 분석가, 유료 = 분석가를 골라서 (who)
+        Tip getReport(bool paid, string who = null)
         {
             var Rr = rsch(); double fee = S.rt ? R.RT_RSCH_FEE : R.RSCH_FEE;
+            var ans = analysts(); Source pickA = null;
+            if (ans.Count > 0) { pickA = paid && who != null ? ans.FirstOrDefault(x => x.id == who) : null; if (paid && who != null && pickA == null) return null; }
             if (paid) { if (Rr.paid >= R.RSCH_PAID_MAX || S.cash < fee) return null; S.cash -= fee; Rr.paid++; S.today.Add(new Ledger { kind = "ev", amt = -fee, label = T("lbl.paidReport") }); }
             else { if (Rr.free >= freeMax()) return null; Rr.free++; }
+            if (ans.Count > 0) return rollTip((pickA ?? ans[(int)Math.Min(ans.Count - 1, Math.Floor(rnd() * ans.Count))]).id);
             return rollTip(RES);
         }
         string encounterRoll() { var W = WALKERS(); return rnd() < R.ENCOUNTER_P ? W[(int)Math.Floor(rnd() * W.Count)] : null; }
@@ -78,7 +129,7 @@ namespace KwGame.Sim
         void tipAnnounce(Tip t, string via)
         {
             t.via = via; var d = srcOf(t);
-            pushF("🔎", T("tip.feed", "ic", d.ic, "n", d.name, "tk", D.TK[t.tk].name, "a", t.dir > 0 ? "▲" : "▼", "w", whenLabel(t.Tr), "s", stars(d.trust)), "tip");
+            pushF("🔎", T("tip.feed", "ic", d.ic, "n", d.name, "tk", D.TK[t.tk].name, "a", t.dir > 0 ? "▲" : "▼", "w", tipWhen(t), "s", d.an ? srcRec(t.who) : stars(d.trust)), "tip");
             string bub = via != "post" && S.phase == "home" ? fpick(D.TIP_REACT[t.who == HY ? HY : t.tier]) : null;
             Emit("tip", "id", t.id, "via", via, "bubble", bub, "face", t.tier == "rep" ? "tired" : "smug");
         }
