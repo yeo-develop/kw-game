@@ -403,8 +403,11 @@ namespace KwGame.View
                     var gln = Ui.Label(gs, 26, gd <= 0 ? Ui.Good : dd4 <= 1 ? Ui.Bad : Ui.Gold, true); gln.style.whiteSpace = WhiteSpace.Normal; card.Add(gln);
                     if (S.missN > 0) card.Add(Ui.Label($"미납 {S.missN}/{D.RULES.V4_MISS_MAX} — 이번 주도 못 내면 원양어선", 22, Ui.Bad, true));
                     if (G.marginNext() is string mn) card.Add(Ui.Label("코인: " + mn, 22, Ui.Dim));
-                    if (!loanNow || !shortNow) card.Add(Ui.Label("대출 · 숏: " + G.T("v4.gate.loanNext"), 22, Ui.Dim));
-                    else if (mLoanSeen == false || mShortSeen == false) card.Add(Ui.Label("대출 · 숏: 새로 열림!", 22, Ui.Good, true));
+                    // 숏 = 주차가 차면 자동으로 · 대출 = 첫 납부 통과 뒤 (따로 열림)
+                    if (!shortNow) card.Add(Ui.Label("숏: " + G.shortLockWhy(), 22, Ui.Dim));
+                    else if (mShortSeen == false) card.Add(Ui.Label("숏 · 곱버스: 새로 열림!", 22, Ui.Good, true));
+                    if (!loanNow) card.Add(Ui.Label("대출: " + G.T("v4.gate.loanNext"), 22, Ui.Dim));
+                    else if (mLoanSeen == false) card.Add(Ui.Label("대출: 새로 열림!", 22, Ui.Good, true));
                 }
                 else
                 {

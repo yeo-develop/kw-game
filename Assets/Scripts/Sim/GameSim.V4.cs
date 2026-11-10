@@ -176,6 +176,15 @@ namespace KwGame.Sim
         }
         /// 이번 주에 갚아야 할 원금 (지금 빚 − 상한). 주중에 미리 갚으면 줄어듦. 이번 주에 빌린 돈은 다음 주 몫 (관문을 넘기는 비싼 다리 — 선이자 10% + 이자)
         public double gatePrincipal() => !gateOn ? 0 : Math.Max(0, S.debt - (gateLast() ? 0 : S.loanWeek) - gateCap());
+        /// 숏이 잠겨 있으면 그 이유 (화면용). 열려 있으면 null
+        public string shortLockWhy() => shortOk() ? null : gateOn ? T("v4.short.week", "w", R.V4_SHORT_WEEK) : T("v4.short.lockOld");
+        /// 대출 화면 안내 (화면용): 이번 주에 얼마 더 빌릴 수 있나 · 빌린 돈은 다음 주 납부로. 관문 규칙이 아니면 null
+        public string loanWeekHint()
+        {
+            if (!gateOn || R.V4_LOAN_WEEK <= 0) return null;
+            double m = R.V4_LOAN_WEEK * debtScale(), r = loanWeekRoom();
+            return r < R.LOAN_AMTS.Min() ? T("v4.gate.loanFull", "m", man(m)) : T("v4.gate.loanWeek", "r", man(r), "m", man(m));
+        }
         /// 이번 주에 더 빌릴 수 있는 돈 (관문 규칙: 주당 한도)
         public double loanWeekRoom() => !gateOn || R.V4_LOAN_WEEK <= 0 ? double.MaxValue : Math.Max(0, R.V4_LOAN_WEEK * debtScale() - S.loanWeek);
         /// 만기 주 (상한 0): 빌린 돈도 다 갚아야 함

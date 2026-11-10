@@ -400,7 +400,7 @@ namespace KwGame.View
                 r1.Add(Avatar(s0.name, TierColor(s0.tier), 40));
                 var who = new VisualElement(); who.style.marginLeft = 10; who.style.flexGrow = 1; r1.Add(who);
                 var wn = Ui.Row(); who.Add(wn); wn.Add(Ui.Label(s0.name, 19, Ink, true)); var tg = Tag(TierName(s0.tier), Color.white, TierColor(s0.tier), 13); tg.style.marginLeft = 8; wn.Add(tg);
-                who.Add(Ui.Label($"신뢰 {GameSim.stars(s0.trust)} · 내 기록 {G.srcRec(t.who)}", 15, Ink2));
+                who.Add(Ui.Label(s0.an ? $"전적 {G.srcRec(t.who)}" : $"신뢰 {GameSim.stars(s0.trust)} · 내 기록 {G.srcRec(t.who)}", 15, Ink2));   // 분석가는 별이 다 같음 → 전적만
                 var dd = Ui.Label(G.tipWhen(t), 16, Ink, true); dd.style.backgroundColor = DueBg; Ui.Radius(dd, 6); dd.style.paddingLeft = 8; dd.style.paddingRight = 8; r1.Add(dd);
                 var r2 = Ui.Row(); r2.style.marginTop = 8; r2.style.flexWrap = Wrap.Wrap; card.Add(r2);
                 r2.Add(Ui.Label($"{D.TK[t.tk].name} {(t.dir > 0 ? "▲ 오른다" : "▼ 내린다")}", 24, t.dir > 0 ? StkUp : StkDn, true));
@@ -408,7 +408,7 @@ namespace KwGame.View
                 var r3 = Ui.Row(); r3.style.marginTop = 8; r3.style.flexWrap = Wrap.Wrap; card.Add(r3);
                 if (clash) r3.Add(Tag("의견 갈림", Color.white, Purple));
                 if (S.hold.Has(t.tk) || S.cps.Any(c => c.tk == t.tk)) r3.Add(Tag("보유 중", Ink, Ui.Gold));
-                if (t.tier == "rep") r3.Add(Tag("증권사는 대체로 맞음", Color.white, OkGreen));
+                if (t.tier == "rep" && !s0.an) r3.Add(Tag("증권사는 대체로 맞음", Color.white, OkGreen));
                 var sp = new VisualElement(); sp.style.flexGrow = 1; r3.Add(sp);
                 string tk0 = t.tk;
                 if (G.tkOpen(tk0)) r3.Add(LinkBtn("차트·주문 →", () => OpenTrade(tk0), Color.white, Ink));
@@ -457,7 +457,7 @@ namespace KwGame.View
             {
                 var s0 = G.srcOf(t); var r = Ui.Row(); r.style.marginBottom = 2; box.Add(r);
                 r.Add(Tag(TierName(s0.tier), Color.white, TierColor(s0.tier), 13));
-                var l = Ui.Label($"{s0.name} {(t.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.tipWhen(t)} · 기록 {G.srcRec(t.who)}", 17, t.dir > 0 ? StkUp : StkDn, true); l.style.flexShrink = 1; r.Add(l);
+                var l = Ui.Label($"{s0.name} {(t.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.tipWhen(t)} · {(s0.an ? "전적" : "기록")} {G.srcRec(t.who)}", 17, t.dir > 0 ? StkUp : StkDn, true); l.style.flexShrink = 1; r.Add(l);
             }
             if (tips.Select(t => t.dir).Distinct().Count() > 1) box.Add(Ui.Label("의견 갈림 — 누구 말 믿을지는 정보 수첩 성적표 참고", 15, Ui.Gold));
         }

@@ -49,7 +49,7 @@ namespace KwGame.View
                 string dmT = dm > 1 ? " · 밤 보너스" : dm < 1 ? " · 낮엔 반만" : "";
                 A("미", new Color(0.95f, 0.4f, 0.6f), "미래랑 놀기", (S.dateN == 0 ? $"호감 +{da:0.#} · 스트레스 풀림" : $"오늘 또? 호감 +{da:0.#}") + dmT, () => Send("date"), !home).name = "act-date";
                 A("→", new Color(0.25f, 0.5f, 0.95f), "외출", eve && !G.weekend() && D.RULES.V4_WORK_EVE < 1 ? $"야간 알바는 일당 ×{D.RULES.V4_WORK_EVE:0.##}" : "알바·카지노·한강…", () => Send("map"), !home).name = "act-map";
-                A("Z", new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", G.restHint() ?? (eve ? $"체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"체력 +{D.RULES.RT_HP_REST}"), () => Send("rest"), !home);
+                A("Z", new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", G.restHint() ?? (G.hpOff ? "스트레스 풀기" : eve ? $"체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"체력 +{D.RULES.RT_HP_REST}"), () => Send("rest"), !home);
                 bool canPay4 = home && S.cash >= 10000 && S.debt > 0;
                 Q($"빚 갚기 ({G.man(S.debt)})", () => Send("repayOpen"), !canPay4, canPay4 ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null);
                 Q(G.loanOk() ? "대출" : "대출 (잠김)", () => Send("loanOpen"), !home);

@@ -129,7 +129,8 @@ namespace KwGame.Sim
         void tipAnnounce(Tip t, string via)
         {
             t.via = via; var d = srcOf(t);
-            pushF("🔎", T("tip.feed", "ic", d.ic, "n", d.name, "tk", D.TK[t.tk].name, "a", t.dir > 0 ? "▲" : "▼", "w", tipWhen(t), "s", d.an ? srcRec(t.who) : stars(d.trust)), "tip");
+            pushF("🔎", d.an ? T("v4.an.feed", "ic", d.ic, "n", d.name, "tk", D.TK[t.tk].name, "a", t.dir > 0 ? "▲" : "▼", "w", tipWhen(t), "r", srcRec(t.who))
+                : T("tip.feed", "ic", d.ic, "n", d.name, "tk", D.TK[t.tk].name, "a", t.dir > 0 ? "▲" : "▼", "w", tipWhen(t), "s", stars(d.trust)), "tip");
             string bub = via != "post" && S.phase == "home" ? fpick(D.TIP_REACT[t.who == HY ? HY : t.tier]) : null;
             Emit("tip", "id", t.id, "via", via, "bubble", bub, "face", t.tier == "rep" ? "tired" : "smug");
         }

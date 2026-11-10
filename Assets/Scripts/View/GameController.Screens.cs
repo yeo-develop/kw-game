@@ -411,7 +411,7 @@ namespace KwGame.View
                 }
                 b.Add(tr); bars.Add(b);
             }
-            Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, h.faint ? " 기절" : "");
+            if (!G.hpOff) Bar("체력", h.hp, h.hp < D.RULES.HP_LOW ? Ui.Bad : Ui.Good, h.faint ? " 기절" : "");
             // 스트레스: 찰수록 나쁨 (예전 이름 "멘탈"은 높을수록 좋은 것처럼 읽혀서) → 차오를수록 경고색
             string men = h.stress >= G.menLine() ? " 멘헤라" : h.stress >= 40 ? " 불안" : "";
             Bar("스트레스", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : Ui.Dim, men);
@@ -567,7 +567,8 @@ namespace KwGame.View
                         Info(G.T("v4.loanLock", "next", G.creditNext() ?? "", "dd", dl <= 0 ? "D-DAY" : $"D-{dl}",
                             "r", G.sgnMan(S.realized), "p", G.man(LP != null && LP.Length > 1 ? LP[1] : 0)), 22, Ui.Gold);
                     }
-                    foreach (var amt in D.RULES.LOAN_AMTS) { var a = amt; Btn($"{G.man(a)}원 빌리기", () => Send("borrow", "amt", a), $"실수령 {G.won(MathK.RoundHalfUp(a * (1 - G.loanFee())))}", S.debt + a > G.loanCap() || !G.loanOk()); }
+                    if (G.loanOk() && G.loanWeekHint() is string lwh) Info(lwh, 22, Ui.Gold);   // 관문 규칙: 주당 한도
+                    foreach (var amt in D.RULES.LOAN_AMTS) { var a = amt; Btn($"{G.man(a)}원 빌리기", () => Send("borrow", "amt", a), $"실수령 {G.won(MathK.RoundHalfUp(a * (1 - G.loanFee())))}", S.debt + a > G.loanCap() || !G.loanOk() || a > G.loanWeekRoom()); }
                     Btn("됐어요", () => Send("loanDone"), null, false, Ui.Panel);
                     break;
                 case "work": RenderWork(P); break;
@@ -689,12 +690,12 @@ namespace KwGame.View
             {
                 Info(MG_RULES.TryGetValue(P.key, out var rule) ? rule : "", 22, Ui.Text);
                 Info("시작하면 조작법을 그림으로 한 번 더 보여 줘요", 20, Ui.Dim);
-                Info($"일당 {G.man(G.jobPay(J, 0))}~{G.man(G.jobPay(J, 1))}원 · 체력 −{G.jobHp(J)} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
-                if (G.workMult() < 1) Info($"체력이 낮아 점수 ×{G.workMult():0.00}", 20, Ui.Bad);
+                Info($"일당 {G.man(G.jobPay(J, 0))}~{G.man(G.jobPay(J, 1))}원{(G.hpOff ? "" : $" · 체력 −{G.jobHp(J)}")} · 난이도 ×{G.mgHard():0.00}", 22, Ui.Gold);
+                if (G.workMult() < 1 && !G.hpOff) Info($"체력이 낮아 점수 ×{G.workMult():0.00}", 20, Ui.Bad);
                 Btn("일 시작", () => Send("mgSetup"), "3·2·1 하고 바로 시작", false, Ui.Accent);
                 return;
             }
-            if (P.setup.hpm < 1) Info($"체력·멘탈 때문에 점수 ×{P.setup.hpm:0.00}", 20, Ui.Bad);
+            if (P.setup.hpm < 1) Info($"{(G.hpOff ? "스트레스" : "체력·멘탈")} 때문에 점수 ×{P.setup.hpm:0.00}", 20, Ui.Bad);
             MinigameEnsure(P);
         }
 
