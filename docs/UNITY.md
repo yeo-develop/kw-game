@@ -53,6 +53,8 @@ dotnet/SimHarness/          Unity 없이 sim 검증하는 콘솔 (Unity 번들 d
 | 에디터 메뉴 **KwGame → Sync Data (web → Resources)** | 같은 복사 + AssetDatabase.Refresh (`./unity exec KwGame.EditorTools.BuildCli.SyncData` 도 가능) |
 | `./unity sync-golden [ref]` (인자 없으면 4ff230c) | 테스트 픽스처(data + vectors)를 `Assets/Tests/EditMode/Golden` 로 교체 |
 
+`sync-data` 는 복사한 뒤 Unity 쪽 문구의 '유품'을 '유물'로 바꾼다 (사용자 결정 2026-11-11, 웹 원본은 그대로). 에디터 메뉴로 동기화했다면 `./unity sync-data` 를 한 번 더 돌릴 것 — 안 그러면 `RelicsAreNeverCalledKeepsakes` 가 실패한다.
+
 런타임은 `Resources.LoadAll<TextAsset>("Data")` → `GameData.Load` (파일 이름순 병합, `tools/load-data.mjs` 와 같음).
 테스트는 픽스처만 본다 → web 이 바뀌어도 테스트는 안 깨짐. 기준을 옮길 때만 `sync-golden <새 ref>`.
 

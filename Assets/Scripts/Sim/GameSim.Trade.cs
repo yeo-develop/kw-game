@@ -13,6 +13,7 @@ namespace KwGame.Sim
             amt = Math.Floor(Math.Min(amt, S.cash) / 1000) * 1000;
             if (amt < 10000 || !stockOpen() || !tkOpen(tk) || D.TK[tk].inv && !shortOk()) return null;   // 곱버스(주식 숏)도 실적 넘어야
             fee += sickSlip();   // 아파서 손 떨림
+            fee += opSlip(tk, amt);   // 작전 종목: 한 번에 많이 살수록 비싸게 삼
             double p = S.mk.tk[tk].p;
             var h = S.hold.Get(tk);
             if (h == null) { h = new Holding { q = 0, cost = 0, t0 = Tnow(), bday = 0 }; S.hold.Set(tk, h); }
@@ -24,8 +25,10 @@ namespace KwGame.Sim
         double? sellStock(string tk, double frac, double fee, bool force = false)
         {
             var h = S.hold.Get(tk); if (h == null || h.q <= 0 || (!stockOpen() && !force)) return null;
+            if (opLocked(tk)) return null;   // 설거지당해 하한가에 잠김: 받아 줄 사람이 없어 안 팔림 (관문 급매도 못 팖)
             fee += sickSlip();
             double p = S.mk.tk[tk].p, q = h.q * frac, basis = h.cost * frac, gross = q * p;
+            fee += opSlip(tk, gross);   // 작전 종목: 한 번에 많이 팔수록 싸게 팔림 → 나눠 팔아야 함
             double pnl = gross - basis;
             if (pnl > 0)
             {

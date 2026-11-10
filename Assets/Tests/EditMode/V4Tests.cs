@@ -1288,5 +1288,109 @@ namespace KwGame.Tests
                 Assert.That(System.IO.File.ReadAllText(f), Does.Not.Contain("유" + "품"), System.IO.Path.GetFileName(f));
             Assert.That(Data.S("aug.reasonStart"), Does.Contain("유물"));
         }
+
+        // ---------- 작전주 (docs/BLUEPRINT_V3.md ⑥-1~10). 화면이 붙기 전이라 데이터에선 꺼 둠(V4_OP 0) → 테스트에서만 켬 ----------
+        static void OpOn(System.Action body) { double v0 = Data.RULES.V4_OP; Data.RULES.V4_OP = 1; try { body(); } finally { Data.RULES.V4_OP = v0; } }
+        /// 한 칸 쉬고 집으로 (시세는 그 칸만큼 흐름)
+        static void RestSlot(GameSim g) { if (g.S.pending?.t == "home") Go(g, "rest"); if (g.S.pending != null && g.S.pending.t != "home" && g.S.pending.t != "ending") ToHome(g); }
+        /// ⑥-1·2: 1주차엔 작전이 없고, 2주차부터 그 주에 상장된 후보 주식 하나에 매집 → 끌어올리기 → (설거지 | 식음)이 순서대로. 매집 구간은 거래량이 평소의 2배 이상
+        [Test]
+        public void OperationsStartInWeekTwoAndRunInOrder() => OpOn(() =>
+        {
+            var R = Data.RULES; int seenPump = 0, seenEnd = 0;
+            for (int sd = 1; sd <= 6; sd++)
+            {
+                var g = New(sd); var S = g.S; var maxPh = new Dictionary<string, int>(); double accVol = 0; int accN = 0;
+                for (int i = 0; i < 3 * 14 && S.pending?.t != "ending" && g.absDay() <= 14; i++)
+                {
+                    if (S.month == 1) Assert.That(S.ops, Is.Empty, $"씨앗 {sd}: 1주차엔 작전 없음");
+                    foreach (var o in S.ops)
+                    {
+                        Assert.That(R.V4_OP_TK, Does.Contain(o.tk)); Assert.That(Data.TK[o.tk].IsStock && !Data.TK[o.tk].inv); Assert.That(g.absDay(), Is.GreaterThanOrEqualTo(Data.TK[o.tk].day), "상장된 종목만");
+                        int p0 = maxPh.TryGetValue(o.tk, out var q) ? q : 0; Assert.That(o.ph, Is.GreaterThanOrEqualTo(p0), $"씨앗 {sd}: 단계는 뒤로 안 감 ({p0}→{o.ph})"); maxPh[o.tk] = o.ph;
+                        if (o.ph == 1 && g.stockOpen()) { accVol += g.volAvg(o.tk, 3); accN++; }
+                        if (o.ph == 2) { seenPump++; Assert.That(o.heat, Is.LessThanOrEqualTo(o.cap + 1e-9), "열기는 상한을 안 넘음"); }
+                        if (o.ph >= 3) seenEnd++;
+                    }
+                    RestSlot(g);
+                }
+                if (S.pending?.t != "ending") Assert.That(maxPh.Count, Is.GreaterThanOrEqualTo(1), $"씨앗 {sd}: 2주차에 작전이 하나는 있음");
+                if (accN > 0) Assert.That(accVol / accN, Is.GreaterThanOrEqualTo(1.6), $"씨앗 {sd}: 매집 구간 거래량");
+            }
+            Assert.That(seenPump, Is.GreaterThan(0)); Assert.That(seenEnd, Is.GreaterThan(0), "끌어올린 작전은 설거지나 식음으로 끝남");
+        });
+        /// ⑥-3: 설거지 확률은 열기 25 이하에서 0 이고 그 위로 계속 커짐 (위험이 0 인 문턱이 60 같은 높은 곳에 없음)
+        [Test]
+        public void DumpHazardRisesContinuouslyWithHeat() => OpOn(() =>
+        {
+            var g = New(3); var R = Data.RULES;
+            Assert.That(g.opHazard(R.V4_OP_HZ0), Is.EqualTo(0)); Assert.That(g.opHazard(R.V4_OP_HZ0 + 5), Is.GreaterThan(0));
+            double prev = 0; for (int h = 30; h <= 100; h += 10) { double z = g.opHazard(h); Assert.That(z, Is.GreaterThan(prev), $"열기 {h}"); prev = z; }
+            Assert.That(g.opHazard(100), Is.EqualTo(R.V4_OP_HZ).Within(1e-9)); Assert.That(g.opHazard(55), Is.LessThan(0.03), "중간 온도에선 아직 낮음");
+        });
+        /// ⑥-4·5·7·10: 설거지당한 주식은 그날 안 팔리고(관문 급매 포함) 다음 거래일에 풀림 · 큰 주문일수록 값이 나빠짐(나눠 팔면 더 받음) · 알바 중 몰래 폰으로 주식을 팔 수 있음 · 끌어올리는 종목은 분석가·속보에서 빠짐
+        [Test]
+        public void DumpLocksTheStockAndBigOrdersSlip() => OpOn(() =>
+        {
+            var R = Data.RULES; bool sawDump = false, sawSlip = false;
+            for (int sd = 1; sd <= 30 && !(sawDump && sawSlip); sd++)
+            {
+                var g = New(sd); var S = g.S;
+                for (int i = 0; i < 3 * 20 && S.pending?.t == "home" && g.absDay() <= 20 && !(sawDump && sawSlip); i++)
+                {
+                    var live = S.ops.FirstOrDefault(o => o.ph == 2);
+                    if (live != null && !sawSlip && S.slot <= 1 && !g.weekend())
+                    {   // 끌어올리는 중: 분석가 후보에서 빠지고, 미끄러짐은 주문 크기에 비례
+                        Go(g, "watch"); while (S.pending?.t == "watch" && !g.stockOpen()) g.Apply(C("tick", "m", 10));
+                        if (S.pending?.t == "watch" && live.ph == 2)
+                        {
+                            Assert.That(g.anTickers(), Does.Not.Contain(live.tk), "끌어올리는 종목은 분석가가 안 다룸");
+                            double s1 = g.opSlip(live.tk, 2e6, true), s2 = g.opSlip(live.tk, 2e7, true);
+                            Assert.That(s1, Is.GreaterThan(0)); Assert.That(s2, Is.GreaterThan(s1)); Assert.That(s2, Is.LessThanOrEqualTo(R.V4_OP_SLIP_MAX + 1e-9));
+                            Assert.That(2e7 * (1 - s2), Is.LessThan(2 * 1e7 * (1 - g.opSlip(live.tk, 1e7, true))), "두 봉에 나눠 팔면 더 받음");
+                            S.cash = 5000000; double c0 = S.cash; Go(g, "buy", "tk", live.tk, "amt", 2000000, "where", "app");
+                            var h = S.hold.Get(live.tk); Assert.That(h, Is.Not.Null); Assert.That(h.q * S.mk.tk[live.tk].p, Is.LessThan(2000000 * (1 - s1 * 0.9)), "산 만큼 못 받음 (미끄러짐)");
+                            sawSlip = true;
+                        }
+                        if (S.pending?.t == "watch") Go(g, "watchEnd"); if (S.pending?.t != "home") ToHome(g);
+                        continue;
+                    }
+                    var lk = S.ops.FirstOrDefault(o => o.ph == 4 && g.opLocked(o.tk));
+                    if (lk != null && !sawDump)
+                    {
+                        sawDump = true; var s = S.mk.tk[lk.tk];
+                        Assert.That(g.limitDn(lk.tk), "하한가에 붙음"); Assert.That(g.sellLockWhy(lk.tk), Is.Not.Null);
+                        S.hold.Set(lk.tk, new Holding { q = 10, cost = s.p * 10, t0 = g.Tnow(), bday = g.absDay() });
+                        Assert.That(g.Query(() => g.opOf(lk.tk) != null));
+                        int day = g.absDay(); double px = s.p;
+                        // 잠긴 날: 장 보기에서도, 관문 급매 경로(closeAll)에서도 안 팔림
+                        if (S.slot <= 1 && !g.weekend()) { Go(g, "watch"); while (S.pending?.t == "watch" && !g.stockOpen() && S.min < R.RT_STOCK[1]) g.Apply(C("tick", "m", 10)); if (S.pending?.t == "watch" && g.stockOpen()) { var ev = g.Apply(C("sell", "tk", lk.tk, "frac", 1, "where", "app")); Assert.That(S.hold.Has(lk.tk), "잠긴 날엔 안 팔림"); Assert.That(s.p, Is.EqualTo(px).Within(px * 0.002), "하한가에 고정"); } if (S.pending?.t == "watch") Go(g, "watchEnd"); if (S.pending?.t != "home") ToHome(g); }
+                        // 다음 거래일: 갭으로 내려 시작하고 팔림
+                        for (int j = 0; j < 12 && S.pending?.t == "home" && !(g.absDay() >= lk.lockDay && S.slot == 0); j++) RestSlot(g);
+                        if (S.pending?.t == "home" && g.absDay() == lk.lockDay && S.hold.Has(lk.tk))
+                        {
+                            Assert.That(g.opLocked(lk.tk), Is.False, "다음 거래일에 풀림");
+                            Go(g, "watch"); while (S.pending?.t == "watch" && S.min < R.RT_STOCK[0] + 30) g.Apply(C("tick", "m", 10));
+                            if (S.pending?.t == "watch") { Assert.That(s.p, Is.LessThan(px * 0.95), "풀리는 날 갭으로 한 번 더 내림"); Go(g, "sell", "tk", lk.tk, "frac", 1, "where", "app"); Assert.That(S.hold.Has(lk.tk), Is.False, "풀린 뒤엔 팔림"); Go(g, "watchEnd"); }
+                            if (S.pending?.t != "home") ToHome(g);
+                        }
+                        continue;
+                    }
+                    RestSlot(g);
+                }
+            }
+            Assert.That(sawSlip, "끌어올리는 작전을 한 번은 봄"); Assert.That(sawDump, "설거지를 한 번은 봄");
+
+            // 알바 중 몰래 폰으로 주식을 팖 (장이 열려 있을 때)
+            var w = New(5); var W = w.S; W.cash = 2000000;
+            Go(w, "watch"); while (W.pending?.t == "watch" && !w.stockOpen()) w.Apply(C("tick", "m", 10));
+            var stk = Data.TKList.First(t => t.IsStock && !t.inv && w.tkOpen(t.id)); Go(w, "buy", "tk", stk.id, "amt", 500000, "where", "app"); Assert.That(W.hold.Has(stk.id));
+            Go(w, "watchEnd"); if (W.pending?.t != "home") ToHome(w);
+            Assert.That(W.slot, Is.EqualTo(1), "오후 칸 (장중)");
+            Go(w, "map"); Go(w, "goTo", "loc", "work"); if (W.pending.t == "encounter") Go(w, "encounter", "ask", false);
+            Go(w, "act", "k", "l-cafe"); Go(w, "mgSetup");
+            Go(w, "workPeek", "tk", stk.id);
+            Assert.That(W.hold.Has(stk.id), Is.False, "몰래 폰으로 주식 정리"); Assert.That(W.pending.peeks, Is.EqualTo(1));
+        });
     }
 }

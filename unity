@@ -99,7 +99,9 @@ case "$cmd" in
       webgl)   batch build-webgl   -quit -buildTarget WebGL        -executeMethod KwGame.EditorTools.BuildCli.BuildWebGL "$@" ;;
       *)       die "build mac|windows|webgl [-development] [-outputPath 경로]" ;;
     esac ;;
-  sync-data)   sync_json "${1:-}" web/src/data "$PROJECT/Assets/Resources/Data" ;;
+  sync-data)   sync_json "${1:-}" web/src/data "$PROJECT/Assets/Resources/Data"
+    # 사용자 결정(2026-11-11): 아이템 이름은 '유물' ('부모님 유품'은 미래가 가족을 다 잃은 것처럼 읽힘). 웹 원본은 그대로 두고 Unity 쪽만 바꿔 씀 — 테스트 RelicsAreNeverCalledKeepsakes 가 지킴
+    perl -pi -e 's/부모님 유품/집안 유물/g; s/유품/유물/g' "$PROJECT"/Assets/Resources/Data/*.json ;;
   sync-golden)
     ref="${1:-4ff230c}"
     sync_json "$ref" web/src/data "$PROJECT/Assets/Tests/EditMode/Golden/data"

@@ -26,9 +26,11 @@ namespace KwGame.View
             // 집 행동은 큰 타일 (피드백: 외출·쉬기·빚 갚기·대출이 잘 안 보임) — 왼쪽 색 띠 + 이름 + 한 줄 설명.
             // 동그라미 글자는 진짜 단축키(P)에만 (예전 장·미·→·Z 동그라미는 키처럼 보였지만 눌러도 안 됐음)
             bool compact = phoneOpen;   // 폰 열리면 대사창이 좁아져서 작게
+            saveControls.style.flexWrap = compact ? Wrap.Wrap : Wrap.NoWrap;   // 좁을 때 넘치면 다음 줄로 (예전엔 오른쪽 버튼이 잘림)
             Button A(string glyph, Color c, string text, string hint, System.Action a, bool dis = false, Color? bg = null)
             {
                 var b = Ui.Button("", a, null, dis, bg ?? new Color(1, 1, 1, 0.08f));
+                if (compact && dis && glyph == null) { b.style.display = DisplayStyle.None; return b; }   // 폰이 열려 좁을 땐 지금 못 누르는 큰 타일(장 보는 중의 놀기·외출·쉬기)은 뺌
                 b.Clear(); b.style.flexDirection = FlexDirection.Row; b.style.alignItems = Align.Center; b.style.flexShrink = 0;
                 b.style.marginRight = compact ? 6 : 10; b.style.marginBottom = 0; b.style.paddingTop = 8; b.style.paddingBottom = 8; b.style.paddingLeft = 10; b.style.paddingRight = 16;
                 if (!dis) Ui.Border(b, new Color(c.r, c.g, c.b, 0.7f), 2);

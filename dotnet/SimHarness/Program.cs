@@ -30,6 +30,7 @@ static class P {
       if (Environment.GetEnvironmentVariable("BAL_RIDE") is string br && br.Split(',').Length == 3) { var rp = br.Split(',').Select(x => double.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray(); RtBots.RideLev = rp[0]; RtBots.RideSl = rp[1]; RtBots.RideFrac = rp[2]; }
       if (Environment.GetEnvironmentVariable("BAL_CASUAL") is string bc0 && bc0.Length > 0) RtBots.CasualLev = double.Parse(bc0, System.Globalization.CultureInfo.InvariantCulture);
       if (Environment.GetEnvironmentVariable("BAL_PLAY") is string bp0 && bp0.Split(',').Length >= 2) { var pp = bp0.Split(',').Select(x => double.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray(); RtBots.PlayLev = pp[0]; RtBots.PlayFrac = pp[1]; if (pp.Length > 2) RtBots.PlaySl = pp[2]; }   // BAL_PLAY="배율,비중[,손절]"
+      if (Environment.GetEnvironmentVariable("BAL_OPLOG") is string opl && opl.Length > 0) { var ow = new System.IO.StreamWriter(opl) { AutoFlush = true }; RtBots.OpLog = x => ow.WriteLine(x); }   // 작전주 진단 (전략에 +opscan)
       string tr = Environment.GetEnvironmentVariable("BAL_TRACE");
       if (tr != null) { RtBots.Trace = Console.WriteLine; var rr = RtBots.Run(BD, int.Parse(tr) * 104729, strats[0]); Console.WriteLine($"{rr.end} d{rr.day} errs {rr.errs} {rr.lastErr}"); return 0; }
       if (Environment.GetEnvironmentVariable("BAL_MKT") != null) {

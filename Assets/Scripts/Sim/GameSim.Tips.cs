@@ -19,6 +19,7 @@ namespace KwGame.Sim
             var cands = TKS().Where(k => tkOpen(k) && (!TK[k].meme || d.meme) && (d.stock ? TK[k].type == "stock" && !TK[k].inv : true) && (d.coin ? TK[k].type == "coin" : true)).ToList();
             if (d.meme && tkOpen("MMC") && rnd() < 0.5) cands = new List<string> { "MMC" };
             bool an = v4 && d.an;
+            if (!an && opOn) { var nc = cands.Where(k => opOf(k) == null).ToList(); if (nc.Count > 0) cands = nc; }   // 찌라시는 작전 중인 종목을 안 다룸 (세력 얘기는 온도계 몫)
             if (an && oTk == null) { bool coinRep = rnd() < R.V4_AN_COINP; var all = anTickers(); var cc = all.Where(k => (TK[k].type == "coin") == coinRep).ToList(); cands = cc.Count > 0 ? cc : all; }   // 분석가 리포트: 코인이면 결과가 1~2칸 뒤 → 잡고 자리를 비울 이유
             string tk = oTk != null && cands.Contains(oTk) ? oTk : cands[(int)Math.Floor(rnd() * cands.Count)];
             bool stockish = TK[tk].type == "stock";
@@ -88,7 +89,8 @@ namespace KwGame.Sim
         }
         /// 새 판·2부 시작: 분석가마다 지난 전적 V4_AN_PRIOR 건을 진짜 적중률로 뽑아 깔아 둠 (프로필에 보임). 씨앗 해시라 rng 흐름과 무관
         /// 분석가가 다루는 종목 (열린 것 중 밈·곱버스 빼고)
-        List<string> anTickers() => TKS().Where(k => tkOpen(k) && !D.TK[k].meme && !D.TK[k].inv).ToList();
+        /// 분석가가 다루는 종목. 세력이 끌어올리는 중(~잠김)인 종목은 뺌: 발표 갭(±10~15%)이 하루 치 끌어올리기만 해서 작전이 안 읽힘. 매집 때는 평소처럼 다룸 (빠진 것이 단서가 되지 않게)
+        public List<string> anTickers() => TKS().Where(k => tkOpen(k) && !D.TK[k].meme && !D.TK[k].inv && !(opOf(k) is Op o && o.ph >= 2)).ToList();
         public void anSeedPublic() => anSeed();
         void anSeed()
         {

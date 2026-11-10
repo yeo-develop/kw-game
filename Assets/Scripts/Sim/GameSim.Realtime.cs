@@ -57,7 +57,9 @@ namespace KwGame.Sim
                 var s = M.tk[t.id]; rtOpen(s, T);
                 var (a, b) = rtWindow(t, slot);
                 if (m < a || m >= b) continue;
-                if (t.inv && t.of != null && M.tk.Has(t.of)) { rtMove(s, invPx(M, t, s), day, m); continue; }
+                double vol = v4 ? opVol(t.id, day, m, M) : 1;
+                if (M == S.mk && opPinned(t.id, out double fp)) { rtMove(s, fp, day, m, vol); continue; }   // 설거지당한 종목: 하한가에 고정
+                if (t.inv && t.of != null && M.tk.Has(t.of)) { rtMove(s, invPx(M, t, s), day, m, vol); continue; }
                 double L = b - a, u = (m - a) / L, dt = 1 / L;
                 double X1 = Math.Log(rtClose(t, s, P) / s.so), x = Math.Log(s.p / s.so), x2;
                 // 발표 갭 (분석가 리포트 결과): 그 전까지는 발표 몫 J 를 뺀 길로 가다가 uj 에서 한 번에 뜀
@@ -78,18 +80,19 @@ namespace KwGame.Sim
                 }
                 double p = s.so * Math.Exp(x2);
                 if (t.IsStock) p = limit(s, p);
-                rtMove(s, p, day, m);
+                rtMove(s, p, day, m, vol);
             }
         }
-        void rtMove(TkState s, double p, int day, int m)
+        /// vol = 그 봉의 거래량 배수 (봉 안에서는 가장 큰 값이 남음 — 설거지 순간에 튐)
+        void rtMove(TkState s, double p, int day, int m, double vol = 1)
         {
             int bk = day * 1000 + m / R.RT_CANDLE;
             if (s.cb != bk)
             {
-                s.hist.Add(new Candle { o = s.p, h = s.p, l = s.p, c = s.p }); s.cb = bk;
+                s.hist.Add(new Candle { o = s.p, h = s.p, l = s.p, c = s.p, v = vol }); s.cb = bk;
                 while (s.hist.Count > R.RT_HIST) s.hist.RemoveAt(0);
             }
-            var k = s.hist[s.hist.Count - 1]; k.h = Math.Max(k.h, p); k.l = Math.Min(k.l, p); k.c = p;
+            var k = s.hist[s.hist.Count - 1]; k.h = Math.Max(k.h, p); k.l = Math.Min(k.l, p); k.c = p; if (vol > k.v) k.v = vol;
             s.p = p; s.sh = Math.Max(s.sh, p); s.sl = Math.Min(s.sl, p);
         }
         /// 시간대 끝: 계획한 종가로 맞춤 (장 닫힌 시간대의 주식은 여기서 갭) → 시간대 전체 움직임
@@ -134,7 +137,7 @@ namespace KwGame.Sim
                 var P = curPlan();
                 rtStep(S.mk, P, Tnow(), S.slot, S.min, absDay());
                 S.min++; mins--;
-                if (v4) { planEvFire(P); rtStops(); }
+                if (v4) { planEvFire(P); opTick(P); rtStops(); }
                 rtLiq(liqs);
                 if (S.min % 60 == 0 && (!v4 || S.pending?.t == "watch")) readIgnored();   // v4: 행동으로 몇 시간 건너뛸 땐 읽씹 페널티 안 쌓음 (장 볼 때만)
             }
@@ -239,6 +242,7 @@ namespace KwGame.Sim
             foreach (var t in D.TKList.Where(x => x.junk))
             {
                 var s = S.mk.tk[t.id];
+                if (opOf(t.id) != null) continue;   // 작전 중인 종목은 관리종목 · 상장폐지 판정에서 빠짐
                 if (s.warn)
                 {
                     s.warn = false;

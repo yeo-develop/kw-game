@@ -32,6 +32,8 @@ namespace KwGame.Sim
             public string scen;
             /// v4 행동(칸) 사용 횟수: watch · work · date · rest · casino · lotto · park · 기타
             public Dictionary<string, int> acts = new Dictionary<string, int>();
+            /// 작전주 (docs/BLUEPRINT_V3.md ⑥-6·8): 작전 종목 매매 손익(끝에 들고 있는 것은 평가로) · 탄 횟수 · 판 횟수 · 들고 있다 설거지 맞은 횟수 · 팔 때의 온도들 · 칸 시작 30분 뒤에 낸 주문 수
+            public double opPnl; public int opBuys, opSells, opHits, lateOrd; public List<double> opSellTemp = new List<double>();
         }
         public class Summary
         {
@@ -52,12 +54,15 @@ namespace KwGame.Sim
             /// 끝났을 때 남은 빚 분위 (10/25/50/75/90%, 클리어 = 0)
             public double[] debtQ = new double[5];
             public Dictionary<string, double> pnl = new Dictionary<string, double>(), pnlN = new Dictionary<string, double>();
+            /// 작전주: 판당 손익 · 판당 탄 횟수 · 탄 것 중 설거지 맞은 비율 · 팔 때 온도 평균과 표준편차 · 칸(장) 시작 30분 뒤에 낸 주문 판당
+            public double opPnl, opBuys, opHitRate, opTempAvg, opTempSd, lateOrd;
             public double End(string kind) => ends.Where(kv => kv.Key == kind || kv.Key.StartsWith(kind + "/")).Sum(kv => kv.Value);
             public override string ToString() =>
                 $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1}" + (newsN > 0 ? $" · 속보 매매 {newsN:F1}회 평균 {newsRet:P1}" : "") + $" · 에러 {errs:F1}"
                 + $"\n        루프 7일째 자산 {asset7 / 1e4:F0}만 · 14일째 번 것 {asset14 / 1e4:F0}만 · 원금 첫 상환 {firstRepay:F0}일째 · 포지션 들고 알바 {workHeld:F1}칸/판 · 만기 전 탈락 {early:P0} · 대출 없이 클리어 {noLoanClear:P0} · 관문 통과 {gatePass:F1}/미납 {gateMiss:F1} · 매도 중앙 {sellMed:P1}"
                 + (tips > 0 ? $"\n        읽기 리포트 {tips:F1}건/판 (따라 {tipFollow:P0} · 반대 {tipFade:P0} · 거름 {tipSkip:P0}) · 유료 {paidRep:F1}건/판 · 코인 리포트 매매 건당 {tipRet:+0%;-0%} (증거금 대비) · 미납한 판 {missRuns:P0} 중 만기까지 {missRecover:P0} · 대출 {borrowed / 1e4:F0}만/판" : "")
                 + (wkAlive[1] > 0 ? $"\n        남은 빚 분위 10/25/50/75/90% = {string.Join(" / ", debtQ.Select(x => (x / 1e4).ToString("F0")))}만" : "")
+                + (wkAlive[1] > 0 ? $"\n        작전 판당 {opPnl / 1e4:+0;-0}만 · 탄 횟수 {opBuys:F1} · 설거지 맞음 {opHitRate:P0} · 매도 온도 평균 {opTempAvg:F0} (표준편차 {opTempSd:F0}) · 30분 뒤 주문 {lateOrd:F1}건/판" : "")
                 + (wkAlive[1] > 0 ? "\n        주차 " + string.Join(" · ", Enumerable.Range(1, 4).Select(w => $"{w}주 [{wkAlive[w]:P0} 생존] 굴릴 돈 {wkBank[w] / 1e4:F0} → 매매 {wkPnl[w] / 1e4:+0;-0}만 ({wkOpens[w]:F1}건 × {wkMargin[w] / 1e4:F0}만)")) : "")
                 + (pnl.Count > 0 ? "\n        손익(판당) " + string.Join(" · ", pnl.OrderByDescending(kv => Math.Abs(kv.Value)).Select(kv => $"{kv.Key} {kv.Value / 1e4:+0;-0}만({pnlN[kv.Key]:F1}건)")) : "")
                 + (alerts > 0 ? $" · 경보 {alerts:F2}회/판 ({alertRuns:P0} 판, 폰 봄 {peekRate:P0}, 알바 중 청산 {liqWork:F2}회/판)" : "")
@@ -104,6 +109,20 @@ namespace KwGame.Sim
         readonly GameData D; readonly string strat; readonly bool heistRoute; readonly Random r; readonly double mgLo, mgHi;
         /// pro 변형 (측정용): trader = 알바 없이 칸마다 장만 봄 · proloan = 납부일에 모자라면 김사장 돈으로 메움 · proall = 전적을 안 읽고 리포트를 전부 따라 탐
         readonly bool allWatch, bridge, blind;
+        /// 작전주 봇 변형 (측정용). 지켜보는 쪽: opread = 끌어올리기가 시작되면 타고 온도 추세·전조를 보며 나눠 팖 · opfix = 거래량이 오르면 타서 온도 55 에 전부 · opchase = 온도 80 에 올라탐.
+        /// 안 지켜보는 쪽: opwork = 거래량이 오르면 타고 알바 감, 일하다 +15% 면 몰래 폰으로 팖 (제목의 장면) · ophold = 작전이 끝날 때까지 듦
+        readonly string opMode;
+        readonly Dictionary<string, double> opIn = new Dictionary<string, double>(), opTop = new Dictionary<string, double>();   // 종목 → 넣은 돈 · 본 온도 최고
+        readonly Dictionary<string, int> opTopAt = new Dictionary<string, int>(), opPre = new Dictionary<string, int>();         // 온도 최고를 본 봉 · 전조를 본 칸
+        readonly HashSet<string> opTried = new HashSet<string>(), opHalf = new HashSet<string>(); int opSellBar = -1;
+        public static double OpFrac = 0.5, OpTake = 0.15, ReadTop = 85, ReadPre = 40; int opPeekT = -1;
+        bool OpWatcher => opMode == "opread" || opMode == "opfix" || opMode == "opchase";
+        readonly Dictionary<string, double> opWant = new Dictionary<string, double>(); int opBuyBar = -1;
+        /// 지금 봉에서 미끄러짐 2.5% 안쪽으로 살 수 있는 금액
+        double OpChunk(string k) { double s1 = G.opSlip(k, 1e6, true); return s1 <= 0 ? 1e12 : 0.025 / s1 * 1e6; }
+        /// opscan (진단): 작전주를 사지 않고 장중 30분마다 작전 상태를 한 줄씩 적음 (씨앗,주,종목,날,분,단계,열기,온도,매집가 대비 가격,거래량) — 하네스 BAL_OPLOG
+        public static Action<string> OpLog;
+        int Bar => G.absDay() * 1000 + S.min / R.RT_CANDLE;
         GameSim G; GameState S => G.S; Rules R => D.RULES;
         string wantLoc, wantAct; double repayAmt;
         int lastSickT = -1; bool seeded; int bullLoan; int loanT = -1, lottoT = -1, casinoT = -1;
@@ -117,12 +136,13 @@ namespace KwGame.Sim
 
         RtBots(GameData d, int seed, string strat, double mgLo, double mgHi)
         {
+            foreach (var om in new[] { "opread", "opfix", "opwork", "ophold", "opchase", "opscan" }) if (strat.EndsWith("+" + om)) { opMode = om; strat = strat.Substring(0, strat.Length - om.Length - 1); }   // "pro+opread" = pro 인데 작전주도 탐 (측정용)
             heistRoute = strat.EndsWith("+heist"); if (heistRoute) strat = strat.Substring(0, strat.Length - 6);   // "pro+heist" = pro 인데 털기 루트를 끝까지 탐
             string name = strat;
             allWatch = strat == "trader"; blind = strat == "proall"; if (allWatch || blind || strat == "proloan") strat = "pro";
             D = d; this.strat = strat; r = new Random(seed * 7919 + 13); this.mgLo = mgLo; this.mgHi = mgHi;
             bridge = name == "proloan" || strat == "casual" && r.NextDouble() < 0.5;   // 보통 사람의 절반은 모자라면 빌려서 메움
-            res = new Result { seed = seed, strat = name + (heistRoute ? "+heist" : "") };
+            res = new Result { seed = seed, strat = name + (heistRoute ? "+heist" : "") + (opMode != null ? "+" + opMode : "") };
         }
 
         public static Result Run(GameData data, int seed, string strat, int maxDays = 70, double mgLo = 0.55, double mgHi = 0.85)
@@ -164,11 +184,14 @@ namespace KwGame.Sim
                 alerts = L.Average(x => x.alerts), alertRuns = L.Average(x => x.alerts > 0 ? 1.0 : 0), peekRate = L.Sum(x => x.peeks) / Math.Max(1.0, L.Sum(x => x.alerts)), liqWork = L.Average(x => x.liqWork),
                 aff = L.Average(x => x.aff), greed = L.Average(x => x.greed), promRate = L.Sum(x => x.promOk) / Math.Max(1, L.Sum(x => x.promN)),
                 acts = L.SelectMany(x => x.acts.Keys).Distinct().ToDictionary(k => k, k => L.Average(x => { double n = x.acts.Values.Sum(); return n > 0 && x.acts.TryGetValue(k, out var v) ? v / n : 0; })),
+                opPnl = L.Average(x => x.opPnl), opBuys = L.Average(x => (double)x.opBuys), opHitRate = L.Sum(x => (double)x.opHits) / Math.Max(1, L.Sum(x => (double)x.opBuys)), lateOrd = L.Average(x => (double)x.lateOrd),
+                opTempAvg = Avg(L.SelectMany(x => x.opSellTemp)), opTempSd = Sd(L.SelectMany(x => x.opSellTemp)),
             };
         }
 
         static double Share(List<Result> L, Func<Result, int> f) => L.Sum(x => (double)f(x)) / Math.Max(1, L.Sum(x => (double)(x.tipFollow + x.tipFade + x.tipSkip)));
         static double Avg(IEnumerable<double> xs) { var a = xs.ToList(); return a.Count == 0 ? 0 : a.Average(); }
+        static double Sd(IEnumerable<double> xs) { var a = xs.ToList(); if (a.Count < 2) return 0; double m = a.Average(); return Math.Sqrt(a.Sum(x => (x - m) * (x - m)) / a.Count); }
         static double Med(IEnumerable<double> xs) { var a = xs.OrderBy(x => x).ToList(); return a.Count == 0 ? 0 : a[a.Count / 2]; }
         /// 클리어 일수 분위 (못 깬 판 = 무한대 → 999)
         static double Pct(List<Result> L, double q) { var d = L.Select(x => x.end == "clear" ? x.day : 999).OrderBy(x => x).ToList(); return d[Math.Min(d.Count - 1, (int)(q * d.Count))]; }
@@ -194,6 +217,7 @@ namespace KwGame.Sim
             }
             if (S.pending != null && S.pending.t != "ending" && G.absDay() <= maxDays) { res.errs++; res.lastErr = "step cap @" + S.pending.t; }   // 6만 수 안에 70일을 못 채움 = 봇이 헛돎
             if (S.ending != null) { res.end = S.ending; res.variant = S.endInfo?.variant ?? ""; }
+            foreach (var k in opIn.Keys) if (S.hold.Has(k)) res.opPnl += S.hold.Get(k).q * S.mk.tk[k].p - S.hold.Get(k).cost;   // 끝까지 들고 있는 작전주는 평가손익으로
             if (G.v4) res.scen = string.Join(">", Enumerable.Range(1, 4).Select(c => G.regime(c)));
             res.day = G.absDay(); res.debt = S.debt; res.cash = S.cash; res.earned = S.st.earned; res.interest = S.st.interest;
             res.repaid = S.st.repaid; res.gnet = S.st.gnet; res.invest = S.realized; res.faints = (int)S.st.faint;
@@ -215,7 +239,16 @@ namespace KwGame.Sim
             if (c.t == "workPeek") res.peeks++;
             double cash0 = S.cash; int cps0 = S.cps.Count;
             double real0 = S.realized; var ids0 = G.v4 ? S.cps.Select(x => x.id).ToList() : null; var mg0 = G.v4 ? S.cps.ToDictionary(x => x.id, x => x.margin) : null;
+            bool order = c.t == "buy" || c.t == "sell" || c.t == "open" || c.t == "close" || c.t == "closeCoins";
+            if (order && G.v4 && S.pending?.t == "watch" && S.min > (c.t == "buy" || c.t == "sell" ? Math.Max(G.slotStartMin(S.slot), R.RT_STOCK[0]) : G.slotStartMin(S.slot)) + 30) res.lateOrd++;   // 칸(주식은 장) 시작 30분 뒤의 주문 = 지켜보다 낸 결정
+            string otk = c.t == "sell" || c.t == "workPeek" ? c.Str("tk") : null; double otemp = otk != null && opIn.ContainsKey(otk) ? G.opTemp(otk) : -1;
             var evs = G.Apply(c);
+            if (otemp >= 0 && (c.t == "workPeek" ? !S.hold.Has(otk) : evs.Any(e => e.t == "trade" && e["ok"] is bool sok && sok))) { res.opSells++; res.opSellTemp.Add(otemp); res.opPnl += S.realized - real0; Trace?.Invoke($"   작전 매도 {otk} {c.Num("frac"):P0} 온도 {otemp:F0} {(S.realized - real0) / 1e4:+0;-0}만 (d{G.absDay()} {S.min / 60}:{S.min % 60:00})"); }
+            foreach (var e in evs)
+            {
+                if (e.t == "opPre") opPre[e.Str("tk")] = G.Tnow();
+                else if (e.t == "opDump") { if (e["hold"] is bool oh && oh && opIn.ContainsKey(e.Str("tk"))) res.opHits++; Trace?.Invoke($"   설거지 {e.Str("tk")} {e.Num("r"):P0} (d{G.absDay()} {S.min / 60}:{S.min % 60:00}) 보유 {e["hold"]}"); }
+            }
             if (ids0 != null)
             {   // 손익 귀속: 이번 명령으로 사라진 포지션의 종류 (여럿이면 첫째 것으로)
                 var gone = ids0.Where(id => S.cps.All(x => x.id != id)).ToList();
@@ -294,6 +327,12 @@ namespace KwGame.Sim
                     {
                         if (P.setup == null) return C("mgSetup");
                         int left = G.v4 ? G.slotEndMin(S.slot) - 1 - S.min : 0;
+                        if (left > 0 && opMode == "opwork" && G.stockOpen() && opIn.Keys.FirstOrDefault(k => S.hold.Has(k) && !G.opLocked(k)) is string ok0)
+                        {   // 작전주를 들고 일하는 중: 구석의 손익이 +OpTake 를 넘으면 몰래 폰으로 익절 (한 칸에 한 번)
+                            var oh = S.hold.Get(ok0);
+                            if (oh.q * S.mk.tk[ok0].p / oh.cost - 1 >= OpTake && G.peekOk() && opPeekT != G.Tnow()) { opPeekT = G.Tnow(); return C("workPeek", "tk", ok0); }
+                            if (!S.cps.Any(x => !x.mirai)) return C("workTick", "m", Math.Min(30, left));
+                        }
                         if (left > 0 && S.cps.Any(x => !x.mirai))
                         {   // 포지션을 들고 일하는 중: 30분씩 흘리며 지켜봄 (사람 = 미니게임 구석의 내 포지션). 손실이 깊으면 몰래 폰을 볼지 정함 (한 칸에 한 번)
                             var worst = S.cps.Where(x => !x.mirai && x.lev * x.mult >= 2).OrderByDescending(x => G.posLoss(x)).FirstOrDefault();
@@ -329,7 +368,7 @@ namespace KwGame.Sim
                 case "watch":
                     {
                         // v4 장 보기: 매매할 게 있으면 하고, 아니면 시계를 흘림 (칸 끝나면 알아서 나감). 아침 장 열리기 전엔 9시까지
-                        if (strat != "random" && G.daysLeft() <= 3 && S.hold.Count > 0 && G.stockTradeOk()) return C("sell", "tk", S.hold.Keys.First(), "frac", 1, "where", "app");   // 만기 직전 정리
+                        if (strat != "random" && G.daysLeft() <= 3 && Sellable() != null && G.stockTradeOk()) return C("sell", "tk", Sellable(), "frac", 1, "where", "app");   // 만기 직전 정리
                         if (G.gateOn && Human) return TradeGate() ?? C("watchEnd");
                         var t = strat == "random" ? (r.NextDouble() < 0.1 ? C("watchEnd") : null) : Trade(); if (t != null) return t;
                         if (Smart && S.debt > 0 && S.cash >= S.debt + Int) return C("watchEnd");   // 다 팔았으면 집에 가서 갚기
@@ -419,7 +458,7 @@ namespace KwGame.Sim
             {
                 if (S.cash >= S.debt) { repayAmt = S.debt; return C("repayOpen"); }
                 if (S.cps.Count > 0) return C("closeCoins");
-                if (G.stockTradeOk()) { var k = S.hold.Keys.FirstOrDefault(); if (k != null) return C("sell", "tk", k, "frac", 1, "where", "app"); }
+                if (G.stockTradeOk()) { var k = Sellable(); if (k != null) return C("sell", "tk", k, "frac", 1, "where", "app"); }
                 if (G.v4 && S.hold.Count > 0 && S.slot <= 1 && !G.weekend()) return C("watch");   // v4: 국장은 장 보기에서 팔아야 함
             }
             double keep = Due * (DaysToPay <= 2 ? 1.05 : 0.6) + 150000;
@@ -461,7 +500,7 @@ namespace KwGame.Sim
             // 만기 직전: 들고 있는 거 정리해서 갚을 수 있는 만큼 갚음 (빚 절반 밑이면 엔딩이 달라짐)
             if (G.daysLeft() <= 3 && strat != "random")
             {
-                if (G.stockTradeOk() && S.hold.Count > 0) return C("sell", "tk", S.hold.Keys.First(), "frac", 1, "where", "app");
+                if (G.stockTradeOk() && Sellable() != null) return C("sell", "tk", Sellable(), "frac", 1, "where", "app");
                 if (G.stockOpen() && S.hold.Count > 0) return C("watch");   // v4: 국장은 장 보기 칸에서만 팔 수 있음
                 if (S.cps.Count > 0) return C("closeCoins");
                 double spare = S.cash - Due - 50000;
@@ -578,6 +617,8 @@ namespace KwGame.Sim
             if (S.stress >= 60) return S.dateN == 0 && S.aff < 85 ? C("date") : C("rest");
             bool stockSlot = S.slot <= 1 && !G.weekend();
             if (allWatch) return eve && S.aff < 70 ? C("date") : C("watch");                                                           // trader: 알바 없이 칸마다 장만 봄
+            if (opMode == "opscan" && stockSlot) return C("watch");
+            if (OpWatcher && stockSlot && G.opOn && (opIn.Keys.Any(k => S.hold.Has(k) && !G.opLocked(k)) || opMode != "opfix" && OpSuspect())) return C("watch");   // 작전주를 읽는 사람: 들고 있거나 수상한 종목이 있으면 낮에도 장을 봄 (알바를 포기)
             if (S.slot == 0 && (pro || r.NextDouble() < (stockSlot ? 0.85 : 0.5))) return C("watch");                                  // 아침 장 보기 (주말엔 코인 리포트)
             if (stockSlot && S.slot == 1 && DaysToPay <= 2 && S.cash < Due * 1.05 && S.hold.Count > 0) return C("watch");               // 금요일 오후: 납부금 모자라면 주식 정리
             if (stockSlot && S.slot == 1 && S.debt > 0 && S.hold.Count > 0 && S.cash + G.holdVal() >= S.debt + Int) return C("watch");  // 다 갚을 수 있으면 팔러 감
@@ -634,11 +675,12 @@ namespace KwGame.Sim
         {
             bool pro = strat == "pro", open = G.stockTradeOk();
             var th = TradeHomeGate(); if (th != null) return th;
+            var oc = OpTrade(); if (oc != null) return oc;
             // 다 갚을 수 있으면 전부 정리
             if (S.debt > 0 && S.cash + G.holdVal() >= S.debt + Int && S.cash < S.debt + Int)
             {
                 if (S.cps.Count > 0) return C("closeCoins");
-                if (open && S.hold.Count > 0) return C("sell", "tk", S.hold.Keys.First(), "frac", 1, "where", "app");
+                if (open && Sellable() != null) return C("sell", "tk", Sellable(), "frac", 1, "where", "app");
             }
             // 후속 속보가 오보라고 하면 pro 는 바로 정리
             if (pro && S.mplan != null)
@@ -646,7 +688,7 @@ namespace KwGame.Sim
                     if (e.done && e.k == "follow" && !e.ok && newsPos.TryGetValue(e.tk, out var eT) && eT == G.Tnow() && evDone.Add(G.Tnow() + ":" + e.tk))
                     {
                         var cf = S.cps.FirstOrDefault(c => c.tk == e.tk && !c.mirai); if (cf != null) return C("close", "id", cf.id);
-                        if (open && S.hold.Has(e.tk)) return C("sell", "tk", e.tk, "frac", 1, "where", "app");
+                        if (open && S.hold.Has(e.tk) && !G.opLocked(e.tk)) return C("sell", "tk", e.tk, "frac", 1, "where", "app");
                     }
             var rs = G.rsch();
             if (rs.free < G.freeMax()) return C("report", "paid", false);
@@ -659,6 +701,8 @@ namespace KwGame.Sim
                 foreach (var k in S.hold.Keys.ToList())
                 {
                     if (newsPos.TryGetValue(k, out var nT) && nT == G.Tnow()) continue;
+                    if (G.opLocked(k)) continue;   // 설거지당해 하한가에 잠긴 건 못 팖
+                    if (opIn.ContainsKey(k)) continue;   // 작전주는 OpTrade 가 따로 정함
                     bool up = G.activeTips(k).Any(x => Eff(x) > 0), down = G.activeTips(k).Any(x => Eff(x) < 0);
                     if (up && !(pro && down)) continue;
                     var h = S.hold.Get(k); double ret = h.q * S.mk.tk[k].p / h.cost - 1; res.sells++; res.sellRet += ret; res.sellRets.Add(ret);
@@ -666,9 +710,9 @@ namespace KwGame.Sim
                     return C("sell", "tk", k, "frac", 1, "where", "app");
                 }
                 // 금요일: 납부금이 모자라면 주식부터 (주말엔 못 팔고, 이자일 급매는 20% 손해)
-                if (DaysToPay <= 2 && S.cash < Due * 1.05 && S.hold.Count > 0)
+                if (DaysToPay <= 2 && S.cash < Due * 1.05 && Sellable() != null)
                 {
-                    var k0 = S.hold.Keys.OrderByDescending(k => S.hold.Get(k).q * S.mk.tk[k].p).First();
+                    var k0 = S.hold.Keys.Where(k9 => !G.opLocked(k9)).OrderByDescending(k => S.hold.Get(k).q * S.mk.tk[k].p).First();
                     double need = Due * 1.05 - S.cash, v = S.hold.Get(k0).q * S.mk.tk[k0].p;
                     return C("sell", "tk", k0, "frac", Math.Min(1, Math.Ceiling(need / Math.Max(1, v) * 20) / 20 + 0.05), "where", "app");
                 }
@@ -739,6 +783,80 @@ namespace KwGame.Sim
             if (pro && !blind && rs.paid < R.RSCH_PAID_MAX && free >= R.RT_RSCH_FEE + 200000 && (G.marginRoom() >= 200000 || open && free >= 500000) && BestAnalyst() is string ba)
                 return C("report", "paid", true, "who", ba);
             if (pro && newsPos.Any(kv => kv.Value == G.Tnow() && !PastFollow(kv.Key))) return C("tick", "m", 10);   // 후속 속보가 뜰 때까지 지켜봄
+            if (opMode != null && G.opOn && !G.weekend() && S.slot <= 1)
+            {   // 작전주: 장이 열릴 때까지 기다렸다 한 번 훑고, 읽는 봇은 들고 있거나 수상한 종목이 있는 동안 계속 지켜봄
+                if (S.min < R.RT_STOCK[0]) return C("tick", "m", R.RT_STOCK[0] - S.min);
+                if (opMode == "opscan" && G.stockOpen())
+                {
+                    foreach (var o in S.ops) if (o.ph >= 1 && o.ph <= 4) OpLog?.Invoke($"{res.seed},{o.key},{o.tk},{G.absDay()},{S.min},{o.ph},{o.heat:F1},{G.opTemp(o.tk):F1},{(o.basePx > 0 ? S.mk.tk[o.tk].p / o.basePx : 1):F4},{G.volNow(o.tk):F2},{o.cap:F0}");
+                    return C("tick", "m", 30);
+                }
+                if (OpWatcher && G.stockOpen() && (opIn.Keys.Any(k => S.hold.Has(k) && !G.opLocked(k)) || opMode != "opfix" && OpSuspect())) return C("tick", "m", 10);
+            }
+            return null;
+        }
+        /// 팔 수 있는 보유 주식 하나 (설거지당해 하한가에 잠긴 건 못 팖 → 팔려고 들면 헛돎)
+        string Sellable() => S.hold.Keys.FirstOrDefault(k => !G.opLocked(k));
+        // ---------- 작전주 (측정용 변형) ----------
+        /// 수상한 종목이 있나: 후보 주식 중 최근 거래량이 평소의 1.8배 이상 (매집일 수도 가짜일 수도) — 아직 안 탄 것만
+        bool OpSuspect() => R.V4_OP_TK.Any(k => D.TK.ContainsKey(k) && G.tkOpen(k) && !S.hold.Has(k) && !G.opLocked(k) && !opTried.Contains(S.part + ":" + S.month + ":" + k) && G.volAvg(k, 6) >= 1.8);
+        SimCommand OpTrade()
+        {
+            if (opMode == null || opMode == "opscan" || !G.opOn || !G.stockTradeOk()) return null;
+            foreach (var k in opIn.Keys.ToList())
+            {   // 들고 있는 작전주: 팔지 정함
+                if (!S.hold.Has(k)) { opIn.Remove(k); opHalf.Remove(k); continue; }
+                if (G.opLocked(k)) continue;
+                double temp = G.opTemp(k), val = S.hold.Get(k).q * S.mk.tk[k].p;
+                if (!opTop.TryGetValue(k, out var top) || temp > top + 0.5) { opTop[k] = temp; opTopAt[k] = Bar; }
+                // 작전이 끝났거나 애초에 가짜였나: 화면으로 볼 수 있는 것만으로 (거래량이 평소로 돌아오고 온도가 바닥) — 산 날은 봐줌
+                bool live = !(G.volAvg(k, 6) < 1.5 && temp < 20 && S.hold.Get(k).bday < G.absDay()), all = false, half = false;
+                if (!live) all = true;
+                else if (opMode == "opfix") all = temp >= 55;
+                else if (opMode == "opwork") all = temp >= 40;                                  // 아침에 볼 때 이미 뜨거우면 정리 (낮엔 알바하며 몰래 폰으로)
+                else if (opMode == "opchase") all = S.hold.Get(k).bday < G.absDay();
+                else if (opMode == "opread")
+                {
+                    bool pre = opPre.TryGetValue(k, out var pt) && pt == G.Tnow() && temp >= ReadPre;   // 이번 칸에 '큰손 매도' 띠를 봄. 온도가 낮을 때 뜬 띠는 헛것이라 넘김
+                    bool stall = Bar - opTopAt[k] >= 4 && opTop[k] >= 25;                      // 온도가 4봉째 새 고점을 못 냄 = 식는 중
+                    bool fri = S.day >= R.V4_WEEKDAYS && S.min >= R.RT_STOCK[1] - 90;          // 금요일 막판 (세력은 주말을 안 넘김)
+                    all = pre || temp >= ReadTop || stall || fri;                              // 띠를 믿고 문턱보다 오래 듦
+                }
+                if (!all && !half) continue;
+                double frac = 1;
+                if (opMode == "opread")
+                {   // 나눠 팔기: 한 봉에 다 던지면 미끄러지는 물량은 절반씩, 같은 봉엔 한 번만
+                    double slip = G.Query(() => G.opSlip(k, val, true));
+                    if (opSellBar == Bar && slip > 0.02) continue;
+                    if (half) { frac = 0.5; opHalf.Add(k); } else if (slip > 0.03) frac = 0.5;
+                    opSellBar = Bar;
+                }
+                Trace?.Invoke($"   작전 매도 직전 {k} 평가 {val / 1e4:F0}만 지금봉 {G.volNow(k):F1} 미끄러짐 {G.opSlip(k, val * frac, true):P1} 가격 {S.mk.tk[k].p:F0} 원가 {S.hold.Get(k).cost / 1e4:F0}만");
+                return C("sell", "tk", k, "frac", frac, "where", "app");
+            }
+            if (DaysToPay == 0) return null;
+            foreach (var k in R.V4_OP_TK)
+            {   // 새로 탈 것 (주에 종목당 한 번. 큰돈은 미끄러지니 봉마다 나눠 삼 — 지켜보는 봇만 이어서 삼)
+                if (!D.TK.ContainsKey(k) || !G.tkOpen(k) || G.opLocked(k)) continue;
+                string wk = S.part + ":" + S.month + ":" + k;
+                if (opWant.TryGetValue(wk, out var left) && left >= 100000 && S.hold.Has(k) && opIn.ContainsKey(k) && opBuyBar != Bar && G.Query(() => G.opOf(k) != null) && G.opTemp(k) < 45)
+                {   // 덜 산 몫을 다음 봉에 이어서
+                    double more = Math.Min(left, OpChunk(k)); more = Math.Floor(Math.Min(more, S.cash - 100000) / 1000) * 1000;
+                    if (more >= 100000) { opWant[wk] = left - more; opIn[k] += more; opBuyBar = Bar; return C("buy", "tk", k, "amt", more, "where", "app"); }
+                }
+                if (S.hold.Has(k) || opTried.Contains(wk)) continue;
+                double temp = G.opTemp(k), v6 = G.volAvg(k, 6), v3 = G.volAvg(k, 3);
+                bool go = opMode == "opchase" ? temp >= 80
+                    : v6 >= 1.8 && Math.Abs(G.dayR(k)) < 0.04;                                 // 거래량이 오르면 탐 (가짜 매집에도 타게 됨 → 다음 날 거래량이 식으면 정리)
+                if (!go) continue;
+                double want = Math.Floor(Math.Max(0, S.cash - 100000 - (DaysToPay <= 2 ? Due * 1.05 : 0)) * OpFrac / 1000) * 1000;
+                double amt = Math.Floor(Math.Min(want, OpChunk(k)) / 1000) * 1000;   // 한 봉에 미끄러짐 2.5% 안쪽만
+                if (amt < 100000) continue;
+                opTried.Add(wk); opIn[k] = amt; opTop[k] = temp; opTopAt[k] = Bar; res.opBuys++; opBuyBar = Bar;
+                if (OpWatcher) opWant[wk] = want - amt;
+                Trace?.Invoke($"   작전 매수 {k} {amt / 1e4:F0}만 온도 {temp:F0} 거래량 {v3:F1}배 지금봉 {G.volNow(k):F1} 미끄러짐 {G.opSlip(k, amt, true):P1} 가격 {S.mk.tk[k].p:F0} (d{G.absDay()} {S.min / 60}:{S.min % 60:00})");
+                return C("buy", "tk", k, "amt", amt, "where", "app");
+            }
             return null;
         }
         bool rideNext; string nextCat; readonly Dictionary<int, string> posCat = new Dictionary<int, string>();
@@ -773,16 +891,16 @@ namespace KwGame.Sim
                 if (G.v4 && S.debt > 0 && S.cash + G.holdVal() >= S.debt + Int && S.cash < S.debt + Int)
                 {
                     if (S.cps.Count > 0) return C("closeCoins");
-                    if (open && S.hold.Count > 0) return C("sell", "tk", S.hold.Keys.First(), "frac", 1, "where", "app");
+                    if (open && Sellable() != null) return C("sell", "tk", Sellable(), "frac", 1, "where", "app");
                 }
                 var rs = G.rsch();
                 bool canRep = !G.v4 || S.pending?.t == "watch";   // v4: 리포트는 장 보기 칸에서만
                 if (canRep && rs.free < G.freeMax()) return C("report", "paid", false);
                 if (canRep && rs.paid < R.RSCH_PAID_MAX && S.cash >= 1500000 && S.cash + G.holdVal() >= 8000000 && Due <= S.cash * 0.5) return C("report", "paid", true);   // 10만짜리는 굴릴 돈이 클 때만 본전
                 // v4 금요일: 이자 낼 현금이 모자라면 주식 정리 (주말 지나 이자일에 급매하면 20% 손해)
-                if (G.v4 && open && DaysToPay <= 2 && S.cash < Due * 1.05 && S.hold.Count > 0)
+                if (G.v4 && open && DaysToPay <= 2 && S.cash < Due * 1.05 && Sellable() != null)
                 {
-                    var k0 = S.hold.Keys.OrderByDescending(k => S.hold.Get(k).q * S.mk.tk[k].p).First();
+                    var k0 = S.hold.Keys.Where(k9 => !G.opLocked(k9)).OrderByDescending(k => S.hold.Get(k).q * S.mk.tk[k].p).First();
                     double need = Due * 1.05 - S.cash, v = S.hold.Get(k0).q * S.mk.tk[k0].p;
                     return C("sell", "tk", k0, "frac", Math.Min(1, Math.Ceiling(need / Math.Max(1, v) * 20) / 20 + 0.05), "where", "app");
                 }
@@ -793,7 +911,7 @@ namespace KwGame.Sim
                         if (e.done && e.k == "follow" && !e.ok && newsPos.TryGetValue(e.tk, out var eT) && eT == G.Tnow() && evDone.Add(G.Tnow() + ":" + e.tk))
                         {
                             var cf = S.cps.FirstOrDefault(c => c.tk == e.tk && !c.mirai); if (cf != null) return C("close", "id", cf.id);
-                            if (open && S.hold.Has(e.tk)) return C("sell", "tk", e.tk, "frac", 1, "where", "app");
+                            if (open && S.hold.Has(e.tk) && !G.opLocked(e.tk)) return C("sell", "tk", e.tk, "frac", 1, "where", "app");
                         }
                 if (G.v4 && S.pending?.t == "watch" && (strat == "pro" || strat == "casual") && newsT != G.Tnow() && S.news != null && S.news.dir > 0 && D.TK.TryGetValue(S.news.tk, out var nt) && G.tkOpen(nt.id) && !nt.inv)
                 {
@@ -821,10 +939,10 @@ namespace KwGame.Sim
                 {
                     // 국면 바뀌면 지난 탈 것 정리 (코인 롱 · 주식)
                     foreach (var c in S.cps.ToList()) if (c.tk != ride && !newsPos.ContainsKey(c.tk)) return C("close", "id", c.id);
-                    if (open) foreach (var k in S.hold.Keys.ToList()) if (k != ride && (k == "INV" || D.TK[k].beta >= 1.2) && !G.activeTips(k).Any(x => Follow(x) && x.dir > 0)) return C("sell", "tk", k, "frac", 1, "where", "app");
+                    if (open) foreach (var k in S.hold.Keys.ToList()) if (k != ride && !G.opLocked(k) && (k == "INV" || D.TK[k].beta >= 1.2) && !G.activeTips(k).Any(x => Follow(x) && x.dir > 0)) return C("sell", "tk", k, "frac", 1, "where", "app");
                     if (ride != null && D.TK[ride].IsCoin && RideWanted() && PendingBuy() == null && Room(RideAmt) >= 100000) return G.gateOn ? C("open", "tk", ride, "dir", 1, "lev", 3, "amt", Room(RideAmt), "sl", 0.5) : C("open", "tk", ride, "dir", 1, "lev", 2, "amt", Room(RideAmt));
                 }
-                if (ride != null && S.hold.Has(ride) && PendingBuy() != null && S.cash < 500000 && open) return C("sell", "tk", ride, "frac", 1, "where", "app");
+                if (ride != null && S.hold.Has(ride) && !G.opLocked(ride) && PendingBuy() != null && S.cash < 500000 && open) return C("sell", "tk", ride, "frac", 1, "where", "app");
                 if (strat == "casual" && G.v4 && S.cps.Count == 0 && S.cash >= 300000 && r.NextDouble() < 0.04 && !(G.promNow()?.avoid == "coin" && r.NextDouble() < 0.6))
                 {
                     var cs = D.TKList.Where(x => x.IsCoin && G.tkOpen(x.id) && !x.inv).ToList(); var tk = cs[r.Next(cs.Count)];
@@ -877,7 +995,7 @@ namespace KwGame.Sim
             if (x < 0.7 && G.stockTradeOk()) { var ks = G.STK().Where(G.tkOpen).ToList(); return C("buy", "tk", ks[r.Next(ks.Count)], "amt", S.cash * 0.3, "where", "app"); }
             if (x < 0.8) { var cs = D.TKList.Where(t => t.IsCoin && G.tkOpen(t.id)).ToList(); var t0 = cs[r.Next(cs.Count)]; return C("open", "tk", t0.id, "dir", r.Next(2) * 2 - 1, "lev", new[] { 1, 5, 25, 50 }[r.Next(4)], "amt", Room(S.cash * 0.2)); }
             if (x < 0.85) return C("closeCoins");
-            if (x < 0.88 && G.stockTradeOk()) { var h = S.hold.Keys.FirstOrDefault(); if (h != null) return C("sell", "tk", h, "frac", 1, "where", "app"); }
+            if (x < 0.88 && G.stockTradeOk()) { var h = Sellable(); if (h != null) return C("sell", "tk", h, "frac", 1, "where", "app"); }
             if (x < 0.9 && S.cash < 100000) return C("loanOpen");
             return C("map");
         }

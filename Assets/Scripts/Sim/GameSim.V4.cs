@@ -89,15 +89,17 @@ namespace KwGame.Sim
         public bool peekOk() => v4 && S.pending?.t == "work" && S.pending.setup != null && !S.pending.setup.practice && peekRisk(S.pending.key) < 1;
         /// 지금까지 폰을 본 만큼 깎이는 일당 비율 (들켰으면 전부)
         public double peekCut(Pending P) => P == null ? 0 : P.caught ? 1 : Math.Min(1, R.V4_PEEK_PAY * P.peeks);
-        /// 몰래 폰 보기: 포지션 정리 (id 하나, 0 이하면 전부). 볼 때마다 일당 −V4_PEEK_PAY, 들키면 그 칸 일당 0
-        Sub workPeek(int id)
+        /// 몰래 폰 보기: 포지션 정리 (코인 id 하나, 0 이하면 코인 전부). tk = 그 주식을 전량 매도, stk = 주식도 전부. 볼 때마다 일당 −V4_PEEK_PAY, 들키면 그 칸 일당 0
+        Sub workPeek(int id, string tk = null, bool stk = false)
         {
             var P = S.pending; if (!peekOk()) return Sub.Err("peek");
             P.peeks++;
             bool was = P.caught;
             if (!P.caught && hashU(Tnow() * 31 + 7 + P.peeks * 97) < peekRisk(P.key)) P.caught = true;
             double s = 0; int n = 0;
-            foreach (var x in S.cps.ToList()) if (id <= 0 || x.id == id) { s += closeCoin(x) ?? 0; n++; }
+            if (tk == null) foreach (var x in S.cps.ToList()) if (id <= 0 || x.id == id) { s += closeCoin(x) ?? 0; n++; }
+            // 주식 (작전주를 들고 알바 간 사람): 장이 열려 있고 하한가에 잠기지 않았어야 팔림
+            if (tk != null || stk) foreach (var k in STK().ToList()) if (S.hold.Has(k) && (tk == null || k == tk)) { var r = sellStock(k, 1, stockFee("app")); if (r.HasValue) { s += r.Value; n++; } }
             Emit("trade", "op", "closeCoins", "ok", true, "pnl", s);
             Emit("peek", "n", P.peeks, "caught", P.caught, "pnl", s, "closed", n, "cut", peekCut(P));
             if (P.caught && !was) { stress(8); toast(T("v4.peek.caught"), "liq"); }
@@ -396,6 +398,7 @@ namespace KwGame.Sim
             if (S.day == 1 && S.chSeen != key) { S.chSeen = key; Emit("story", "key", (S.part > 1 ? "p2ch" : "ch") + chapter()); }
             promPick();
             dayBaseSet();   // 오늘 결과(정산 카드)의 기준점
+            opWeek();       // 작전주: 주가 바뀌면 새로 뽑고, 아침마다 단계를 넘김
             if (buffTier() >= 1 && R.V4_BUFF_LUNCH > 0) { stress(-R.V4_BUFF_LUNCH); toast(T("v4.buff.lunch", "s", R.V4_BUFF_LUNCH), "good"); }   // 호감 버프: 도시락
             if (S.sleepD == absDay() && R.V4_SLEEP_RSCH > 0) toast(T("v4.rest.morning", "n", R.V4_SLEEP_RSCH), "good");   // 어젯밤 푹 잠
             if (S.greed >= R.V4_GREED_HEIST) pushK("m", fpick(TA("v4.greedK2")));        // 털기 문턱 넘음
@@ -528,6 +531,7 @@ namespace KwGame.Sim
         {
             S.part = 2; S.cleared = 0; S.ending = null; S.endInfo = null; S.pending = null; S.phase = "home";
             anSeed();   // 2부: 분석가 폼이 바뀜 (적중률을 다시 섞고 전적도 새로)
+            S.ops.Clear(); S.opKey = 0; S.opFakeTk = null;   // 작전도 처음부터
             S.settleD = S.nightEvD = S.senseD = S.dayBase = 0; S.alertT = -1; S.dayRes = null;   // 날짜가 1일부터 다시 → 날짜 기준 표식도 처음으로
             S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.missN = 0; S.loanWeek = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;

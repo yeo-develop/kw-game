@@ -318,6 +318,10 @@ namespace KwGame.View
             dlg.style.display = Show(!mgFull);
             panel.style.display = Show(!mgFull && P != null && P.t != "home");
             panel.style.left = Length.Percent(phoneOpen ? 26 : 50);   // 폰 열리면 선택지는 왼쪽으로
+            // 폰이 열리면 왼쪽 위 HUD 와 겹치지 않게 아래로 내림 (대사 글줄은 가려도 됨: "위에서 골라 줘"뿐. 퀵메뉴 줄은 안 가림). 스크롤 영역에 최대 높이를 직접 줘야 넘칠 때 스크롤 · "더 있음"이 됨
+            bool low = !mgFull && phoneOpen;
+            panel.style.bottom = low ? 190 : 330; panel.style.maxHeight = low ? 380 : 620;
+            if (panelSv != null) panelSv.style.maxHeight = (low ? 380 : 620) - 100;
             phone.style.display = Show(!mgFull && phoneOpen);
             dlg.style.right = !mgFull && phoneOpen ? PhoneW + 20 + 16 : 40;   // 폰 열리면 대사창 · 퀵메뉴를 폰 왼쪽까지만 (오른쪽 저장·타이틀이 폰 뒤로 숨던 문제)
             PlaceAlerts();

@@ -23,7 +23,7 @@ namespace KwGame.Sim
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    public class Candle { public double o, h, l, c; }
+    public class Candle { public double o, h, l, c; /** 거래량 (평소 = 1). 옛 저장엔 없음 → 1 */ public double v = 1; }
     public class TkState
     {
         public double p; public int tr; public List<Candle> hist = new List<Candle>();
@@ -123,6 +123,8 @@ namespace KwGame.Sim
         public double debt, cash, hp, stress = 20, addict = 0;
         public string outfit = "hoodie"; public OMap<int> owned = new OMap<int>(), props = new OMap<int>();
         public List<Ledger> yday = new List<Ledger>(), today = new List<Ledger>();
+        /// 작전주 (GameSim.Op.cs): 이번 주 작전들 · 뽑은 주(부×10+주차) · 가짜 매집 종목과 요일 · 들고 있다 설거지 맞은 횟수
+        public List<Op> ops = new List<Op>(); public int opKey; public string opFakeTk; public int opFakeDay, opHit;
         public Dictionary<string, List<KMsg>> kk = new Dictionary<string, List<KMsg>> { ["m"] = new List<KMsg>(), ["kim"] = new List<KMsg>(), ["hy"] = new List<KMsg>() };
         public Dictionary<string, int> kun = new Dictionary<string, int> { ["m"] = 0, ["kim"] = 0, ["hy"] = 0 };
         public KQState kq; public List<Post> posts = new List<Post>(); public int gid = 1; public List<Tip> tips = new List<Tip>();

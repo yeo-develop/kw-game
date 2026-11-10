@@ -65,6 +65,12 @@ namespace KwGame.Sim
         public int V4_NO_HP; public Dictionary<string, double> V4_JOB_ST;
         /// 알바 중 몰래 폰 보기 (BLUEPRINT ①): 알바별 들킬 확률 (1 이상 = 폰을 못 꺼냄. 없으면 예전 경보 확률) · 볼 때마다 일당이 깎이는 비율
         public Dictionary<string, double> V4_PEEK; public double V4_PEEK_PAY = 0.15;
+        /// 작전주 (GameSim.Op.cs · docs/BLUEPRINT_V3.md): 켜기 · 후보 주식 · 주차별 개수 · 봉당 상승 · 봉당 열기 · 열기 상한 범위 · 설거지 확률 계수와 시작 열기 · 전조/헛전조 확률 · 풀리는 날 갭
+        public double V4_OP = 0; public string[] V4_OP_TK = { }; public int[] V4_OP_WEEK = { };
+        public double[] V4_OP_UP = { 0.007, 0.015 }, V4_OP_HEAT = { 2, 4 }, V4_OP_CAP = { 35, 100 }, V4_OP_GAP = { 0.10, 0.20 }, V4_OP_VOL_ACC = { 2, 3 }, V4_OP_VOL_PUMP = { 4, 8 };
+        public double V4_OP_HZ = 0.12, V4_OP_HZ0 = 25, V4_OP_PRE = 0.85, V4_OP_FAKEPRE = 0.12, V4_OP_FAKE = 0.35, V4_OP_VOL_DUMP = 10, V4_OP_TEMP_NOISE = 8;
+        /// 미끄러짐 = V4_OP_SLIP × 주문 금액 ÷ (봉당 거래대금 × 그 봉 거래량 배수), 최대 V4_OP_SLIP_MAX
+        public double V4_OP_SLIP = 0.5, V4_OP_SLIP_MAX = 0.15, V4_OP_TURN = 4e7; public Dictionary<string, double> V4_OP_TURN_TK;
         /// 기둥 연결: 호감 구간 버프 문턱 [도시락, 미래의 감, 응원] · 도시락 = 아침 스트레스 −N · 응원 = 일당 배수 · 알바 점수가 이 이상이면 손님 정보(분석가 전적 +1건)
         public double[] V4_BUFF_AFF; public double V4_BUFF_LUNCH = 5, V4_BUFF_CHEER = 1.1, V4_WORK_INFO = 0.7;
         /// 미래의 감이 맞을 확률 (그날 첫 속보가 진짜인지 가짜인지 — 틀릴 때도 있음. 100% 면 "경고가 없으면 진짜"가 돼 버림)

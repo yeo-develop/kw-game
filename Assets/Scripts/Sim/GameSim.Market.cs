@@ -27,7 +27,9 @@ namespace KwGame.Sim
                 else if (t.meme) r = S.rt ? (rnd() < R.RT_MEME_UP ? 0.4 + rnd() * 0.4 : -(0.3 + rnd() * 0.3)) : rnd() < 0.46 ? 0.45 + rnd() * 0.45 : -(0.28 + rnd() * 0.3);   // 실시간: 기대값 ≈ 0 (예전엔 칸당 +8% 라 몰빵이 정답)
                 else if (t.type == "stock") r = t.beta * mret + s.tr * t.tr + gauss() * t.vol * v * (evening ? 1.3 : 1);
                 else r = (s.tr * t.tr + gauss() * t.vol * v) * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) + (rg != null ? rg[1] * p2reg() : 0);
-                if (!(t.inv && t.of != null)) r += sh(shock, k);
+                Op op0 = v4 && M == S.mk ? opOf(k) : null;
+                if (op0 != null) r = opSlotR(op0, t, s, P);   // 작전 종목: 세력이 정한 길 (rng 는 위에서 평소대로 씀). 리포트 발표 충격은 아래에서 그 위에 얹힘
+                if (!(t.inv && t.of != null) && !(op0 != null && opLocked(k))) r += sh(shock, k);   // 하한가에 잠긴 동안은 충격도 안 먹음
                 r = wkGap(t, r, M);   // v4 주말 휴장: 국장은 안 움직이고 월요일 오전에 몰아서
                 P.r[k] = clamp(r, -0.7, 1.5);
                 double wig = t.vol * (whale ? (S.rt ? R.RT_WHALE_VOL : 2) : 1) * (0.2 + rnd() * 0.6);
@@ -133,7 +135,7 @@ namespace KwGame.Sim
         {
             if (S.llm) return genNewsLlm();
             if (rnd() > (v4 ? R.V4_NEWS_P : 0.32)) return null;
-            var pool = TKS().Where(k => k != "INV" && tkOpen(k)).Concat(new[] { "MKT" }).ToList();
+            var pool = TKS().Where(k => k != "INV" && tkOpen(k) && opOf(k) == null).Concat(new[] { "MKT" }).ToList();   // 작전 중인 종목엔 속보를 안 붙임
             if (v4 && R.V4_NEWS_COIN_W > 1) { var coins = pool.Where(k => k != "MKT" && D.TK[k].IsCoin && !D.TK[k].meme).ToList(); for (int i = 1; i < R.V4_NEWS_COIN_W; i++) pool.AddRange(coins); }   // 레버리지를 걸 수 있는 코인 속보를 더 자주
             string tk = pick(pool);
             var nw = pick(D.NEWS[tk]);
