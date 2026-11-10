@@ -32,6 +32,7 @@ namespace KwGame.Sim
         {
             string key = S.pending.loc ?? S.visit?.key ?? "work";
             if (S.pending.rng0.HasValue) S.rng = S.pending.rng0.Value;   // 들어올 때 쓴 난수(인사말 고르기)를 되돌림
+            if (S.quickFrom) { S.visit = null; toHome(); return; }       // 계획판에서 바로 온 경우: 알바 목록 화면이 아니라 집(계획판)으로
             if (D.LOCS.TryGetValue(key, out var L)) { scene(L.bg, "face", "neutral", "mode", "loc"); npc(L.npc); }
             hideDlg();
             S.pending = new Pending("loc") { key = key, first = false };
@@ -68,6 +69,7 @@ namespace KwGame.Sim
         Sub workResult(double score)
         {
             var P = S.pending; var J = D.JOBS[P.key]; string key = P.key;
+            slotMark("work:" + key);
             score = clamp(double.IsNaN(score) ? 0 : score, 0, 1);
             double hm = workMult(), sc = score * hm;
             double pay = jobPay(J, sc);

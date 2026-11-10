@@ -15,7 +15,7 @@ namespace KwGame.Sim
             if (S.rt) { S.owe += actMinutes(); after("endCheck", "faintCheck", "menCheck", "spend"); return; }   // 실시간: 행동한 만큼 시계가 감
             after(AFTER_SLOT);
         }
-        void toHome() { S.pending = null; after("home"); }
+        void toHome() { S.pending = null; S.quick = null; S.quickFrom = false; after("home"); }
         bool fainted() => S.faint >= Tnow();
 
         void run()
@@ -70,6 +70,7 @@ namespace KwGame.Sim
         void slotStart()
         {
             if (S.startT == Tnow()) return; S.startT = Tnow();
+            slotOpen();   // 계획판: 이 칸의 손익 기준점
             var P = curPlan();
             if (isEve() && has("whale"))
             {
@@ -613,6 +614,7 @@ namespace KwGame.Sim
         }
         void advance()
         {
+            slotClose();   // 계획판: 방금 끝난 칸의 손익
             S.slot++;
             if (S.rt) S.min = slotStartMin(S.slot >= R.SLOTS ? 0 : S.slot);
             if (S.slot >= R.SLOTS)

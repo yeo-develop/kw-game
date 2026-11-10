@@ -58,7 +58,7 @@ namespace KwGame.Sim
         void actDone(bool r)
         {
             var Vv = S.visit;
-            if (r) { Vv.used = true; if (Vv.key != "broker") { S.visit = null; slotUsed(); return; } }
+            if (r) { Vv.used = true; if (Vv.key != "broker") { slotMark("out:" + Vv.key); S.visit = null; slotUsed(); return; } }
             S.pending = new Pending("loc") { key = Vv.key, first = false };
         }
         void restHome()
@@ -214,7 +214,17 @@ namespace KwGame.Sim
                     if (t == "continue") { if (!continueGame()) err("continue"); return; }
                     break;
                 case "home":
-                    if (t == "rest") { S.pending = null; if (v4) S.actMin = slotLeft(); else if (S.rt) S.actMin = isEve() ? Math.Max(1, slotEndMin(S.slot) - S.min) : R.RT_REST; restHome(); slotUsed(); return; }
+                    if (v4 && t == "quick")
+                    {   // 계획판에서 바로: 지도 → 장소 → (행동)을 한 번에. 지도로 갈 때와 같은 순서로 같은 판정을 거침 (말 거는 사람 포함)
+                        string qL = c.Str("loc"), qK = c.Str("k");
+                        if (qL == null || !D.LOCS.TryGetValue(qL, out var QL) || !QL.open.Contains(S.slot) || (QL.rt && !S.rt) || locHidden(qL)) { err("closed"); return; }
+                        if (isEve()) promHit("out");
+                        S.quick = qK; S.quickFrom = true;
+                        string qw = !string.IsNullOrEmpty(S.tg) ? null : encounterRoll();
+                        if (qw != null) { encounterStart(qw, qL); return; }
+                        visit(qL); quickAct(); return;
+                    }
+                    if (t == "rest") { slotMark("rest"); S.pending = null; if (v4) S.actMin = slotLeft(); else if (S.rt) S.actMin = isEve() ? Math.Max(1, slotEndMin(S.slot) - S.min) : R.RT_REST; restHome(); slotUsed(); return; }
                     if (t == "map") { S.pending = new Pending("map"); return; }
                     if (v4 && t == "watch") { watchStart(); return; }
                     if (v4 && t == "date") { S.pending = null; dateHome(); return; }
@@ -238,7 +248,7 @@ namespace KwGame.Sim
                     }
                     break;
                 case "encounter":
-                    if (t == "encounter") { if (!encounterAnswer(c.Truthy("ask"))) { err("enc"); return; } visit(P.loc); return; }
+                    if (t == "encounter") { if (!encounterAnswer(c.Truthy("ask"))) { err("enc"); return; } visit(P.loc); quickAct(); return; }
                     break;
                 case "loc":
                     if (t == "act") { act(c.Str("k")); return; }

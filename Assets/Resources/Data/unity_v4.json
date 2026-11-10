@@ -119,7 +119,7 @@
   "V4_FREE_REP": 2,
   "V4_PEEK": { "cafe": 0.2, "store": 0.2, "mart": 0.35, "ware": 1 },
   "V4_PEEK_PAY": 0.15,
-  "V4_OP": 0,
+  "V4_OP": 1,
   "V4_OP_TK": ["BAT", "OIL", "GUK", "TAL", "AMV", "JHS"],
   "V4_OP_WEEK": [0, 1, 1, 2],
   "V4_OP_UP": [0.007, 0.015],

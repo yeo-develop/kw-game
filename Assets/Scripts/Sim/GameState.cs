@@ -125,6 +125,10 @@ namespace KwGame.Sim
         public List<Ledger> yday = new List<Ledger>(), today = new List<Ledger>();
         /// 작전주 (GameSim.Op.cs): 이번 주 작전들 · 뽑은 주(부×10+주차) · 가짜 매집 종목과 요일 · 들고 있다 설거지 맞은 횟수
         public List<Op> ops = new List<Op>(); public int opKey; public string opFakeTk; public int opFakeDay, opHit;
+        /// 하루 계획판 (docs/UI_V2.md): 오늘 칸마다 한 일("watch" · "date" · "rest" · "work:cafe" · "out:park")과 그 칸의 손익 · 기록한 날 · 칸 시작 기준점
+        public string[] slotAct = new string[3]; public double[] slotNet = new double[3]; public int slotLogDay, slotLed0; public double slotReal0;
+        /// 계획판에서 바로 가기(quick): 도착하면 할 행동(없으면 null) · 그렇게 와서 알바 설명 카드에 있나 (돌아가면 집으로)
+        public string quick; public bool quickFrom;
         public Dictionary<string, List<KMsg>> kk = new Dictionary<string, List<KMsg>> { ["m"] = new List<KMsg>(), ["kim"] = new List<KMsg>(), ["hy"] = new List<KMsg>() };
         public Dictionary<string, int> kun = new Dictionary<string, int> { ["m"] = 0, ["kim"] = 0, ["hy"] = 0 };
         public KQState kq; public List<Post> posts = new List<Post>(); public int gid = 1; public List<Tip> tips = new List<Tip>();

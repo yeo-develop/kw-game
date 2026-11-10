@@ -1392,5 +1392,33 @@ namespace KwGame.Tests
             Go(w, "workPeek", "tk", stk.id);
             Assert.That(W.hold.Has(stk.id), Is.False, "몰래 폰으로 주식 정리"); Assert.That(W.pending.peeks, Is.EqualTo(1));
         });
+
+        // ---------- 하루 계획판 (docs/UI_V2.md) ----------
+        /// 계획판에서 알바를 바로 고르면 지도·장소 화면 없이 설명 카드로 가고, "다른 알바 고르기"는 집으로 돌아옴 (칸을 안 씀). 한 일과 손익이 칸마다 남음
+        [Test]
+        public void PlanBoardGoesStraightToTheJobAndLogsEachSlot()
+        {
+            var g = New(5); var S = g.S; int t0 = g.Tnow();
+            Assert.That(g.slotActOf(0), Is.Null);
+            Go(g, "quick", "loc", "work", "k", "l-cafe");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);   // 말 거는 사람은 그대로 끼어듦 → 지나치면 하던 대로 이어짐
+            Assert.That(S.pending.t, Is.EqualTo("work")); Assert.That(S.pending.key, Is.EqualTo("cafe")); Assert.That(S.pending.setup, Is.Null);
+            Go(g, "workBack");
+            Assert.That(S.pending.t, Is.EqualTo("home"), "계획판에서 왔으면 집으로"); Assert.That(g.Tnow(), Is.EqualTo(t0)); Assert.That(g.slotActOf(0), Is.Null, "아직 아무것도 안 함");
+            Go(g, "quick", "loc", "work", "k", "l-store");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            Assert.That(S.pending.key, Is.EqualTo("store"));
+            double c0 = S.cash; Go(g, "mgSetup"); Go(g, "mgResult", "score", 0.8); ToHome(g);
+            Assert.That(S.slot, Is.EqualTo(1)); Assert.That(g.slotActOf(0), Is.EqualTo("work:store")); Assert.That(g.slotNetOf(0), Is.EqualTo(S.cash - c0).Within(1), "그 칸에 번 돈");
+            Go(g, "quick", "loc", "park");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            Assert.That(S.pending.t, Is.EqualTo("loc")); Assert.That(S.pending.key, Is.EqualTo("park"), "행동 없이 가면 장소 화면");
+            Go(g, "leave"); Assert.That(S.pending.t, Is.EqualTo("home")); Assert.That(S.slot, Is.EqualTo(1), "그냥 나오면 칸을 안 씀");
+            Go(g, "rest"); ToHome(g);
+            Assert.That(g.slotActOf(1), Is.EqualTo("rest")); Assert.That(g.slotActOf(2), Is.Null);
+            Go(g, "date"); ToHome(g);
+            Assert.That(g.absDay(), Is.EqualTo(2)); Assert.That(g.slotActOf(0), Is.Null, "다음 날엔 새 판");
+            Assert.That(g.Apply(C("quick", "loc", "shop")).Any(e => e.t == "error"), "숨긴 장소는 못 감");
+        }
     }
 }

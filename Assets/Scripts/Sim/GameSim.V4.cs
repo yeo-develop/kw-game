@@ -418,6 +418,7 @@ namespace KwGame.Sim
         /// 미래랑 놀기: 칸 하나. 같은 날 두 번째부턴 호감 조금만
         void dateHome()
         {
+            slotMark("date");
             S.dateN++;
             affD((S.dateN == 1 ? R.V4_DATE_AFF : 2) * dateMult());
             stress(R.V4_DATE_ST); hp(5, T("why.date"));
@@ -443,7 +444,31 @@ namespace KwGame.Sim
         public string restHint() => !v4 ? null : hpOff ? (isEve() && R.V4_SLEEP_RSCH > 0 ? T("v4.rest.noHpEve", "s", -R.RT_REST_ST, "n", R.V4_SLEEP_RSCH) : T("v4.rest.noHp", "s", -R.RT_REST_ST)) : isEve()
             ? (R.V4_SLEEP_RSCH > 0 ? T("v4.rest.subEve", "h", R.RT_HP_REST_EVE + R.RT_HP_SLEEP, "n", R.V4_SLEEP_RSCH) : T("v4.rest.subEve0", "h", R.RT_HP_REST_EVE + R.RT_HP_SLEEP))
             : T("v4.rest.sub", "h", R.RT_HP_REST);
-        void watchStart() { S.pending = new Pending("watch") { n0 = S.st.invest }; Emit("watch"); }
+        void watchStart() { slotMark("watch"); S.pending = new Pending("watch") { n0 = S.st.invest }; Emit("watch"); }
+        // ---------- 하루 계획판: 칸마다 한 일과 손익 (화면용 기록, 규칙에는 영향 없음) ----------
+        int slotDayKey() => absDay() * 10 + S.part;
+        void slotLogDayCheck() { if (S.slotLogDay == slotDayKey() && S.slotAct != null && S.slotAct.Length == R.SLOTS) return; S.slotLogDay = slotDayKey(); S.slotAct = new string[R.SLOTS]; S.slotNet = new double[R.SLOTS]; }
+        void slotMark(string act) { if (!v4) return; slotLogDayCheck(); if (S.slot >= 0 && S.slot < R.SLOTS && S.slotAct[S.slot] == null) S.slotAct[S.slot] = act; }
+        void slotOpen() { if (!v4) return; slotLogDayCheck(); S.slotLed0 = S.today.Count; S.slotReal0 = S.realized; }
+        void slotClose()
+        {
+            if (!v4 || S.slot < 0 || S.slot >= R.SLOTS) return;
+            slotLogDayCheck();
+            double net = S.realized - S.slotReal0;
+            for (int i = Math.Min(S.slotLed0, S.today.Count); i < S.today.Count; i++) { var x = S.today[i]; if (x.kind != "invest" && x.kind != "debt" && x.kind != "loan" && x.kind != "repay" && x.kind != "interest") net += x.amt; }
+            S.slotNet[S.slot] = net;
+        }
+        /// 오늘 s 번째 칸에 한 일 (아직 안 했으면 null) · 그 칸의 손익 (끝난 칸만)
+        public string slotActOf(int s) => v4 && S.slotLogDay == slotDayKey() && S.slotAct != null && s >= 0 && s < S.slotAct.Length ? S.slotAct[s] : null;
+        public double slotNetOf(int s) => v4 && S.slotLogDay == slotDayKey() && S.slotNet != null && s >= 0 && s < S.slotNet.Length && s < S.slot ? S.slotNet[s] : 0;
+        /// 계획판에서 바로 가기: 도착한 장소에서 예약해 둔 행동을 바로 함 (못 하는 행동이면 장소 화면에 머묾)
+        void quickAct()
+        {
+            string k = S.quick; S.quick = null;
+            if (string.IsNullOrEmpty(k) || S.pending?.t != "loc" || S.visit == null) return;
+            var o = locOpts(S.visit.key).FirstOrDefault(x => x.k == k);
+            if (o != null && !o.dis) act(k);
+        }
         void watchEnd()
         {
             bool traded = S.st.invest > S.pending.n0;
