@@ -10,7 +10,7 @@ namespace KwGame.View
     {
         VisualElement saveControls;
         string saveMessage = "선택 완료 후 자동 저장";
-        bool CanSave => G != null && !playing && S.pending != null && S.pending.t != "start";
+        bool CanSave => G != null && !playing && S.pending != null && S.pending.t != "start" && !(S.pending.t == "work" && S.pending.setup != null);   // 알바 미니게임 중엔 저장 X (불러와서 결과를 보고 폰 볼 순간을 고르는 수 방지)
 
         /// 대사창 아래 퀵메뉴 (문예부식): 집 행동 · 폰 · 저장 · 타이틀 · 시간 속도
         void RenderSaveControls()

@@ -159,6 +159,8 @@ namespace KwGame.Sim
         public double lastPay; public int alertT = -1;
         /// 하루 결과 (정산 카드 · 밤의 미래): 아침 기준 실현손익·청산 수 · 그날 결과 종류 · 정산/청산 밤 장면/미래의 감을 쓴 날
         public double dayReal0, dayLiq0; public string dayRes; public int settleD, nightEvD, senseD;
+        /// 하루 기준점(dayReal0·dayLiq0)을 잡은 날 (옛 저장·2부 시작처럼 기준점이 없으면 그날은 정산을 건너뜀)
+        public int dayBase;
         /// 주간 납부 관문: 통과한 횟수(증거금 상한·숏·대출 해금 단계) · 연속 미납 횟수
         public int gateTier, missN;
         /// 이번 주에 김사장한테 빌린 돈 (이번 주 원금 분납에선 빼 줌 = 다음 주로 미루는 다리)

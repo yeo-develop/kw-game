@@ -81,8 +81,9 @@ namespace KwGame.Sim
             if (n != null && n.tk != "MKT" && D.TK.TryGetValue(n.tk, out var nt) && !nt.meme && P.r.ContainsKey(n.tk) && tkOpen(n.tk) && R.V4_EARLY != null && R.V4_EARLY.Length == 2)
             {
                 // 초반엔 진짜든 가짜든 뉴스 방향으로 조금 가거나 흔들림 (같은 분포) → 진짜는 그 뒤로 쭉, 가짜는 되돌림. 초반 시세만 보고는 못 가리고, 후속 속보·출처로 가려야 함
-                var ns = S.mk.tk[n.tk]; var JJ = jmpLogs(P, nt, ns, ns.p);   // 계획은 칸 시작 = 지금 가격이 시가
-                double X1 = Math.Log(Math.Max(1e-9, rtCloseAt(nt, ns, P, ns.p) / ns.p)) - (JJ?.Sum() ?? 0), N = Math.Log(1 + Math.Abs(n.r)) * n.dir, e0 = N * (R.V4_EARLY[0] + hashU(T * 211 + 41) * (R.V4_EARLY[1] - R.V4_EARLY[0]));
+                var ns = S.mk.tk[n.tk]; double so0 = ns.sT == T && ns.so > 0 ? ns.so : ns.p;   // 칸 시가 (칸 중간에 다시 짜는 경우엔 이미 잡힌 시가)
+                var JJ = jmpLogs(P, nt, ns, so0);
+                double X1 = Math.Log(Math.Max(1e-9, rtCloseAt(nt, ns, P, so0) / so0)) - (JJ?.Sum() ?? 0), N = Math.Log(1 + Math.Abs(n.r)) * n.dir, e0 = N * (R.V4_EARLY[0] + hashU(T * 211 + 41) * (R.V4_EARLY[1] - R.V4_EARLY[0]));
                 P.way[n.tk] = n.fake ? new[] { 0.3, e0, 0.6, e0 * 0.3 + X1 * 0.4 } : new[] { 0.3, e0, 0.7, e0 + (X1 - e0) * 0.75 };
                 if (hashU(T * 131 + 17) < R.V4_FOLLOW_P) P.evs.Add(new PlanEv { u = 0.35, k = "follow", tk = n.tk, ok = hashU(T * 389 + 71) < R.V4_FOLLOW_ACC ? !n.fake : n.fake });   // 후속 속보도 가끔 틀림
             }

@@ -67,6 +67,8 @@ namespace KwGame.Sim
         public Dictionary<string, double> V4_PEEK; public double V4_PEEK_PAY = 0.15;
         /// 기둥 연결: 호감 구간 버프 문턱 [도시락, 미래의 감, 응원] · 도시락 = 아침 스트레스 −N · 응원 = 일당 배수 · 알바 점수가 이 이상이면 손님 정보(분석가 전적 +1건)
         public double[] V4_BUFF_AFF; public double V4_BUFF_LUNCH = 5, V4_BUFF_CHEER = 1.1, V4_WORK_INFO = 0.7;
+        /// 미래의 감이 맞을 확률 (그날 첫 속보가 진짜인지 가짜인지 — 틀릴 때도 있음. 100% 면 "경고가 없으면 진짜"가 돼 버림)
+        public double V4_SENSE_ACC = 0.8;
         /// 그날 결과 4종 (정산 카드 · 밤의 미래): 낮 매매 실현손익이 +BIG 이상 = 대박, −LOSS 이하 = 손실 (청산이 있었으면 청산). 대박이면 욕심 +GREED
         public double V4_NIGHT_BIG = 1000000, V4_NIGHT_LOSS = 500000, V4_NIGHT_GREED = 4;
         /// 신용 단계(이자 낸 횟수): 김사장 대출 열리는 단계 (초반 = 시드머니 모으기)

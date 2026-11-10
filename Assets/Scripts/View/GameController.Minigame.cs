@@ -124,7 +124,7 @@ namespace KwGame.View
                 var P = S.pending;
                 if (mg == null || P == null || P.t != "work" || P.setup != su) { mgLiveCo = null; yield break; }
                 acc += per; int m = (int)acc;
-                if (m >= 1) { acc -= m; MgLiveEvents(G.Apply(new SimCommand("workTick", "m", m)), 0); }
+                if (m >= 1 && !playing) { acc -= m; MgLiveEvents(G.Apply(new SimCommand("workTick", "m", m)), 0); }   // 이벤트 재생 중엔 쉼 (밀린 분은 다음에)
                 MgLiveRender();
             }
         }
@@ -184,7 +184,7 @@ namespace KwGame.View
 
         void MgPeek()
         {
-            if (mgLive == null || !G.peekOk()) return;
+            if (mgLive == null || playing || !G.peekOk()) return;
             int before = S.cps.Count;
             var evs = G.Apply(new SimCommand("workPeek", "id", 0));
             MgLiveEvents(evs, before - S.cps.Count);
@@ -388,7 +388,7 @@ namespace KwGame.View
         IEnumerator ResultCard(string key, WorkSetup su, double score)
         {
             var J = D.JOBS[key];
-            double pay = G.jobPay(J, score * su.hpm);
+            double pay = G.jobPay(J, score * su.hpm) * (G.v4 ? 1 - G.peekCut(S.pending) : 1);   // 몰래 폰 본 만큼 깎인 일당 (들켰으면 0)
             string g = score >= 0.95 ? "S" : score >= 0.75 ? "A" : score >= 0.5 ? "B" : score >= 0.3 ? "C" : "F";
             string cm = g == "S" ? "알바의 신. 근데 일당은 그대로임" : g == "A" ? "점장: 내일도 나와" : g == "B" ? "평범하게 착취당함" : g == "C" ? "점장 표정 안 좋음" : "잘리기 직전";
             Color gc = g == "S" || g == "A" ? Ui.Gold : g == "F" ? Ui.Bad : Ui.Text;

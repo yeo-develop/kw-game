@@ -916,6 +916,14 @@ namespace KwGame.Tests
             double aff = d.S.aff; Go(d, "evPick", "k", d.S.pending.opts[0].k);
             Assert.That(d.S.aff, Is.GreaterThan(aff), "위로받으면 호감↑");
             ToHome(d); Assert.That(d.S.pending.t, Is.EqualTo("home"), "하루 한 번만");
+            // 손으로 넣은 수치 말고 진짜 청산도 '청산'으로 정산됨
+            var q = New(7); var Q = q.S; Q.cash = 3000000;
+            var qc = Data.TKList.First(t => t.IsCoin && q.tkOpen(t.id) && t.maxLev >= 25);
+            Go(q, "watch"); Go(q, "open", "tk", qc.id, "dir", 1, "lev", 10, "amt", 500000);
+            Q.mk.tk[qc.id].p = Q.cps[0].entry * 0.89; Go(q, "tick", "m", 1); Assert.That(Q.cps.Count, Is.EqualTo(0));
+            Go(q, "watchEnd"); if (Q.pending.t != "home") ToHome(q);
+            var eq2 = ToEvening(q); var sq = eq2.Single(e => e.t == "settle");
+            Assert.That(sq.Str("cls"), Is.EqualTo("liq")); Assert.That(sq.Num("liq"), Is.EqualTo(1)); Assert.That(sq.Num("pnl"), Is.LessThan(0));
             // 알바한 날: 일당이 정산에 잡힘
             var w = ToWork(7, "cafe", 0, out _); Go(w, "mgResult", "score", 0.8); ToHome(w);
             var ew = ToEvening(w); var sw = ew.Single(e => e.t == "settle");
@@ -946,17 +954,21 @@ namespace KwGame.Tests
             }
             Assert.That(S.day, Is.EqualTo(2)); Assert.That(g.buffTier(), Is.GreaterThanOrEqualTo(1));
             Assert.That(ev.Any(e => e.t == "toast" && (e.Str("text") ?? "").Contains("도시락")), "아침에 도시락");
-            // 미래의 감: 호감 60↑ 이면 그날 첫 가짜 속보에서 카톡 (하루 한 번), 진짜 속보엔 조용
-            int fakeSeen = 0, realSeen = 0;
-            for (int sd = 1; sd <= 40 && (fakeSeen < 2 || realSeen < 2); sd++)
+            // 미래의 감: 호감 60↑ 이면 그날 첫 속보에 대해 한 번 말해 줌 (쎄하다 / 괜찮다). 대체로 맞지만 가끔 틀림 → '말이 없으면 진짜'가 되지 않음
+            int n = 0, right = 0;
+            for (int sd = 1; sd <= 80; sd++)
             {
                 var h = New(sd); var H = h.S; H.aff = A[1] + 5;
-                Go(h, "rest"); if (H.pending.t != "home") ToHome(h);
+                var e1 = h.Apply(C("rest")); if (H.pending.t != "home") ToHome(h);
                 if (H.slot != 1 || H.news == null || H.news.tk == "MKT") continue;
-                if (H.news.fake) { fakeSeen++; Assert.That(H.senseD, Is.EqualTo(h.absDay()), "가짜 속보를 알아챔"); Assert.That(h.buffs().Any(x => x.Contains("오늘 씀"))); }
-                else { realSeen++; Assert.That(H.senseD, Is.Not.EqualTo(h.absDay()), "진짜 속보엔 안 뜸"); }
+                var se = e1.SingleOrDefault(e => e.t == "sense"); Assert.That(se, Is.Not.Null, "그날 첫 속보엔 진짜든 가짜든 한마디");
+                Assert.That(H.senseD, Is.EqualTo(h.absDay()));
+                n++; if ((se["warn"] is bool w && w) == H.news.fake) right++;
+                var e2 = h.Apply(C("rest"));
+                Assert.That(e2.Any(e => e.t == "sense"), Is.False, "하루 한 번");
             }
-            Assert.That(fakeSeen, Is.GreaterThanOrEqualTo(2)); Assert.That(realSeen, Is.GreaterThanOrEqualTo(2));
+            Assert.That(n, Is.GreaterThanOrEqualTo(20));
+            Assert.That((double)right / n, Is.InRange(R.V4_SENSE_ACC - 0.2, 0.97), "대체로 맞음"); Assert.That(right, Is.LessThan(n), "가끔 틀림");
         }
         /// 기둥 연결: 알바를 잘하면 손님이 분석가 전적 한 건을 흘림 (읽을 거리가 알바에서 옴)
         [Test]
@@ -970,6 +982,124 @@ namespace KwGame.Tests
             var h = ToWork(5, "cafe", 0, out _); int m0 = total(h);
             Go(h, "mgResult", "score", System.Math.Max(0, R.V4_WORK_INFO - 0.2));
             Assert.That(total(h), Is.EqualTo(m0), "대충 하면 정보 없음");
+        }
+
+        // ---------- 독립 검토에서 나온 구멍들 (docs/PROGRESS.md) ----------
+        /// 리포트 한 건을 상태에 직접 심음 (who = 분석가, 다음 칸 발표). withShock 이면 실제 게임처럼 그 칸 시세 계획에도 충격을 얹음
+        static Tip Plant(GameSim g, string tk, int dir, bool real, double mag, bool withShock)
+        {
+            var S = g.S; int Tr = g.Tnow() + 1;
+            var t = new Tip { id = S.gid++, who = g.analysts()[0].id, tier = "rep", tk = tk, dir = dir, mag = mag, T0 = g.Tnow(), Tr = Tr, Td = Tr, kind = real ? "real" : "anti", p0 = S.mk.tk[tk].p, res = "" };
+            S.tips.Add(t);
+            if (withShock)
+            {
+                if (!S.shocks.TryGetValue(Tr, out var o)) S.shocks[Tr] = o = new Dictionary<string, double>();
+                o[tk] = (o.TryGetValue(tk, out var v) ? v : 0) + (real ? 1 : -1) * dir * mag;
+            }
+            return t;
+        }
+        /// 장 보기로 한 칸을 1분씩 흘리며: 발표가 뜬 순간마다 (리포트 id, 그 1분의 등락) · 발표 전 최저가/시가
+        static List<(int id, double jump)> WatchSlot(GameSim g, string tk, out double preLow)
+        {
+            var S = g.S; var outp = new List<(int, double)>(); Go(g, "watch"); double so = S.mk.tk[tk].p, low = so; bool any = false;
+            while (S.pending?.t == "watch")
+            {
+                double p0 = S.mk.tk[tk].p;
+                var ev = g.Apply(C("tick", "m", 1));
+                foreach (var e in ev.Where(e => e.t == "planEv" && e.Str("k") == "report" && e.Str("tk") == tk)) { outp.Add(((int)e.Num("id"), S.mk.tk[tk].p / p0 - 1)); any = true; }
+                if (!any) low = System.Math.Min(low, S.mk.tk[tk].p);
+            }
+            preLow = low / so;
+            return outp;
+        }
+        /// 같은 종목·같은 칸에 발표가 둘이면 각자 자기 순간에 따로 뜀 (상쇄돼서 둘 다 "적중"인데 시세는 제자리가 되지 않게)
+        [Test]
+        public void TwoReportsOnOneTickerLandAsSeparateGaps()
+        {
+            var g = New(4); var S = g.S; string tk = "BTK";
+            var a = Plant(g, tk, +1, true, 0.12, true); var b = Plant(g, tk, -1, true, 0.12, true);   // ▲ 적중 + ▼ 적중
+            Go(g, "rest"); ToHome(g);
+            var J = WatchSlot(g, tk, out _);
+            Assert.That(J.Count, Is.EqualTo(2), "발표 두 번");
+            Assert.That(J.Single(x => x.id == a.id).jump, Is.GreaterThan(0.07), "▲ 발표는 위로 갭");
+            Assert.That(J.Single(x => x.id == b.id).jump, Is.LessThan(-0.07), "▼ 발표는 아래로 갭");
+            ToHome(g);
+            Assert.That(a.res, Is.EqualTo("hit")); Assert.That(b.res, Is.EqualTo("hit"));
+        }
+        /// 가격제한에 걸린 주식: 호재 발표인데 발표 전에 먼저 크게 빠졌다가 튀는 일이 없어야 함 (갭 크기를 제한 적용 뒤 값으로)
+        [Test]
+        public void StockAtPriceLimitDoesNotDipBeforeAGoodAnnouncement()
+        {
+            var g = New(4); var S = g.S; var stk = Data.TKList.First(t => t.IsStock && !t.inv && g.tkOpen(t.id) && t.vol <= 0.012);
+            Plant(g, stk.id, +1, true, 0.12, true);
+            Go(g, "rest"); ToHome(g);
+            Assert.That(S.slot, Is.EqualTo(1)); Assert.That(g.weekend(), Is.False);
+            S.mk.tk[stk.id].ref0 = S.mk.tk[stk.id].p / 1.26;   // 이미 +26% (상한 +30% 바로 밑)
+            var J = WatchSlot(g, stk.id, out double preLow);
+            Assert.That(J.Count, Is.EqualTo(1));
+            Assert.That(preLow, Is.GreaterThan(0.95), "발표 전에 반대로 크게 밀리지 않음");
+            Assert.That(J[0].jump, Is.InRange(0.0, 0.06), "상한까지만 갭");
+        }
+        /// 갭이 청산선을 넘으면 예약 손절이 아니라 청산으로 처리 (손절을 걸었다고 더 잃지 않게)
+        [Test]
+        public void StopDoesNotPreemptLiquidationBeyondTheLiqLine()
+        {
+            var g = New(5); var S = g.S; S.cash = 3000000;
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
+            Go(g, "watch");
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 10, "amt", 500000, "sl", 0.3);
+            var c = S.cps.Single(); double liq0 = S.st.liq;
+            S.mk.tk[coin.id].p = c.entry * 0.88;   // 10배 × −12% = 증거금 −120% (청산선 밖)
+            var ev = g.Apply(C("tick", "m", 1));
+            Assert.That(S.cps.Count, Is.EqualTo(0));
+            Assert.That(ev.Any(e => e.t == "stop"), Is.False, "손절로 처리되지 않음");
+            Assert.That(S.st.liq, Is.EqualTo(liq0 + 1), "청산으로 처리");
+        }
+        /// 2부 판돈은 순자산(현금 + 보유) 기준: 현금만 비워 두고 또 받을 수 없음. 카톡 금액 = 실제로 넣어 준 돈
+        [Test]
+        public void Part2SeedIsByEquityNotCash()
+        {
+            var R = Data.RULES; var g = New(); var S = g.S; S.cash = 3000000;
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 1000000);
+            double eq = S.cash + g.holdVal(); Assert.That(eq, Is.LessThan(R.V4_P2_CASH));
+            g.p2Seed();
+            Assert.That(S.cash + g.holdVal(), Is.EqualTo(R.V4_P2_CASH).Within(1), "모자란 만큼만 채움");
+            double c1 = S.cash; g.p2Seed(); Assert.That(S.cash, Is.EqualTo(c1), "이미 넘으면 안 줌");
+        }
+        /// 사나운 코인의 발표 폭은 그 코인 변동성만큼 큼 (잡음에 묻히지 않게)
+        [Test]
+        public void CoinAnnouncementSizeScalesWithItsVolatility()
+        {
+            var R = Data.RULES; double baseMax = 0, wildMin = 9; int wild = 0, calm = 0;
+            for (int sd = 1; sd <= 12; sd++)
+            {
+                var g = New(sd); var S = g.S; S.month = 3; S.day = 2; Go(g, "watch");   // 3주차: 코인이 다 상장된 뒤
+                for (int i = 0; i < 3; i++) { var ev = g.Apply(C("report", "paid", false)); if (ev.Any(e => e.t == "error")) break; }
+                foreach (var t in S.tips.Where(t => g.srcOf(t).an && Data.TK[t.tk].IsCoin))
+                {
+                    double ratio = System.Math.Min(R.V4_AN_VOLX, System.Math.Max(1, Data.TK[t.tk].vol / R.V4_AN_VOL0));
+                    Assert.That(t.mag, Is.InRange(0.099 * R.V4_AN_COIN * ratio, System.Math.Min(0.6, 0.151 * R.V4_AN_COIN * ratio)));
+                    if (ratio > 1.5) { wild++; wildMin = System.Math.Min(wildMin, t.mag); } else { calm++; baseMax = System.Math.Max(baseMax, t.mag); }
+                }
+            }
+            Assert.That(calm, Is.GreaterThan(0)); Assert.That(wild, Is.GreaterThan(0));
+            Assert.That(wildMin, Is.GreaterThan(baseMax), "사나운 코인 쪽이 늘 더 큼");
+        }
+        /// 루프 재설계 전 저장 호환: 없어진 경보 화면에서 저장한 판은 이어지고, 하루 기준점이 없는 판은 그날 정산을 건너뜀
+        [Test]
+        public void OldSavesKeepWorking()
+        {
+            var g = ToWork(5, "cafe", 0, out _); var S = g.S;
+            Go(g, "mgResult", "score", 0.8);
+            // 예전 빌드라면 여기서 경보 화면(pending liqAlert)이 끼어들 수 있었음 → 그 상태로 저장했다고 치고 불러옴
+            S.flow.Clear(); S.pending = new Pending("liqAlert"); S.owe = 30;
+            g.EnableRt();
+            Assert.That(S.pending?.t, Is.EqualTo("home").Or.EqualTo("event").Or.EqualTo("menhera").Or.EqualTo("impulse"), "막히지 않고 이어짐");
+            // 기준점 없는 옛 저장 (청산 이력 있음): 그날 저녁에 가짜 '청산' 정산이 안 나옴
+            var h = New(7); var H = h.S; H.st.liq = 3; H.realized = 5000000; H.dayBase = 0; H.dayReal0 = 0; H.dayLiq0 = 0;
+            var ev = ToEvening(h);
+            Assert.That(ev.Any(e => e.t == "settle"), Is.False); Assert.That(H.pending.t, Is.EqualTo("home")); Assert.That(H.dayRes, Is.Null);
         }
 
         /// 밸런스 범위 (판 수 적게, 범위 넓게 — 정확한 값은 docs/V4.md §7 300판). 루프 기준 (BLUEPRINT ⑥): 전적을 읽는 사람 > 전부 따라 타는 사람 · 알바만으론 못 깸 · 장만 봐선 못 이김 · 포지션 들고 알바 감

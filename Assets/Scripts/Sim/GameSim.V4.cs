@@ -101,11 +101,12 @@ namespace KwGame.Sim
             Emit("trade", "op", "closeCoins", "ok", true, "pnl", s);
             Emit("peek", "n", P.peeks, "caught", P.caught, "pnl", s, "closed", n, "cut", peekCut(P));
             if (P.caught && !was) { stress(8); toast(T("v4.peek.caught"), "liq"); }
-            else toast(T("v4.peek.ok", "pnl", sgnWon(s), "p", rhu(peekCut(P) * 100)), "info");
+            else toast(was ? T("v4.peek.again", "pnl", sgnWon(s)) : T("v4.peek.ok", "pnl", sgnWon(s), "p", rhu(peekCut(P) * 100)), "info");
             return Sub.Go();
         }
 
         // ---------- 하루 결과: 정산 카드 · 밤의 미래 · 호감 버프 (docs/BLUEPRINT.md ① ⑥-5·6) ----------
+        void dayBaseSet() { S.dayReal0 = S.realized; S.dayLiq0 = S.st.liq; S.dayRes = null; S.dayBase = absDay() * 10 + S.part; }
         /// 오늘(아침 이후) 매매 실현손익 · 청산 횟수
         public double dayPnl() => S.realized - S.dayReal0;
         public int dayLiq() => (int)Math.Round(S.st.liq - S.dayLiq0);
@@ -116,6 +117,7 @@ namespace KwGame.Sim
         {
             if (!v4 || !isEve() || S.settleD == absDay()) return;
             S.settleD = absDay();
+            if (S.dayBase != absDay() * 10 + S.part) { dayBaseSet(); return; }   // 기준점이 오늘 것이 아님 (루프 재설계 전 저장을 낮에 불러옴): 누적값으로 가짜 정산이 나오지 않게 오늘은 건너뜀
             double wage = 0; foreach (var x in S.today) if (x.kind == "work") wage += x.amt;
             double pnl = dayPnl(); int liq = dayLiq(), day = Tnow() / R.SLOTS;
             var reps = S.tips.Where(t => !string.IsNullOrEmpty(t.res) && srcOf(t).an && t.Tr / R.SLOTS == day).ToList();
@@ -161,10 +163,12 @@ namespace KwGame.Sim
             // AI 기사면 출처·본문까지 (가짜 30% 는 기사 속 단서로 가려냄 → 칸 끝에 [오보] 정정)
             pushF("🚨", T("v4.newsFlash", "h", n.h), "news", n.llm ? new List<string> { T("news.src", "s", n.src, "b", n.body) } : null);
             toast(T("v4.newsFlash", "h", n.h), "news", "news", "flash");   // room "flash" = 칸 시작 속보 (소리 구분용)
-            if (n.fake && buffTier() >= 2 && S.senseD != absDay() && n.tk != "MKT")
-            {   // 호감 버프: 미래의 감 — 하루에 한 번, 그날 첫 가짜 속보를 알아챔
-                S.senseD = absDay(); string x = T("v4.buff.sense", "n", D.TK.TryGetValue(n.tk, out var nt) ? nt.name : n.tk);
-                pushK("m", x); toast(x, "info", "kakao", "m"); Emit("sense", "tk", n.tk);
+            if (buffTier() >= 2 && S.senseD != absDay() && n.tk != "MKT")
+            {   // 호감 버프: 미래의 감 — 하루에 한 번, 그날 첫 속보가 쎄한지 괜찮은지 말해 줌. 감이라 가끔 틀림 (늘 맞으면 '말이 없으면 진짜'가 됨)
+                S.senseD = absDay();
+                bool right = hashU(Tnow() * 47 + 29) < R.V4_SENSE_ACC, warn = n.fake == right;
+                string x = T(warn ? "v4.buff.sense" : "v4.buff.senseOk", "n", D.TK.TryGetValue(n.tk, out var nt) ? nt.name : n.tk);
+                pushK("m", x); toast(x, "info", "kakao", "m"); Emit("sense", "tk", n.tk, "warn", warn);
             }
         }
         /// 장별 뉴스 방향 편향 (국면 = 확률). 좋은 뉴스가 나올 확률
@@ -381,7 +385,7 @@ namespace KwGame.Sim
             int key = S.part * 10 + chapter();
             if (S.day == 1 && S.chSeen != key) { S.chSeen = key; Emit("story", "key", (S.part > 1 ? "p2ch" : "ch") + chapter()); }
             promPick();
-            S.dayReal0 = S.realized; S.dayLiq0 = S.st.liq; S.dayRes = null;   // 오늘 결과(정산 카드)의 기준점
+            dayBaseSet();   // 오늘 결과(정산 카드)의 기준점
             if (buffTier() >= 1 && R.V4_BUFF_LUNCH > 0) { stress(-R.V4_BUFF_LUNCH); toast(T("v4.buff.lunch", "s", R.V4_BUFF_LUNCH), "good"); }   // 호감 버프: 도시락
             if (S.sleepD == absDay() && R.V4_SLEEP_RSCH > 0) toast(T("v4.rest.morning", "n", R.V4_SLEEP_RSCH), "good");   // 어젯밤 푹 잠
             if (S.greed >= R.V4_GREED_HEIST) pushK("m", fpick(TA("v4.greedK2")));        // 털기 문턱 넘음
@@ -508,12 +512,13 @@ namespace KwGame.Sim
         {
             double eq = S.cash + holdVal();   // 들고 넘어온 포지션·주식도 가진 돈 (현금만 비우고 판돈을 또 받는 수 방지)
             if (R.V4_P2_CASH <= 0 || eq >= R.V4_P2_CASH) return;
-            S.cash += R.V4_P2_CASH - eq; pushK("kim", T("v4.p2.seed", "a", man(R.V4_P2_CASH)));
+            S.cash += R.V4_P2_CASH - eq; pushK("kim", T("v4.p2.seed", "a", man(R.V4_P2_CASH - eq)));
         }
         bool part2Start()
         {
             S.part = 2; S.cleared = 0; S.ending = null; S.endInfo = null; S.pending = null; S.phase = "home";
             anSeed();   // 2부: 분석가 폼이 바뀜 (적중률을 다시 섞고 전적도 새로)
+            S.settleD = S.nightEvD = S.senseD = S.dayBase = 0; S.alertT = -1; S.dayRes = null;   // 날짜가 1일부터 다시 → 날짜 기준 표식도 처음으로
             S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.missN = 0; S.loanWeek = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;
             S.today = new List<Ledger>(); S.resume = null;
