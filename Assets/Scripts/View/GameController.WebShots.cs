@@ -122,11 +122,13 @@ namespace KwGame.View
         /// 고를 것들을 무난한 쪽으로 넘기며 stop 중 하나가 될 때까지 (예전 데모 ToHome 의 v4 판)
         IEnumerator WResolve(params string[] stop)
         {
-            for (int g = 0; g < 30; g++)
+            int nul = 0;
+            for (int g = 0; g < 40; g++)
             {
                 yield return WIdle();
                 var P = S.pending;
-                if (P == null) { yield return null; continue; }
+                // debug 로 띄운 멘헤라는 답장 뒤에 이어질 흐름이 없어 대기 상태가 비어 버림 → 캡처용으로 집에 돌려놓음 (실제 게임에선 칸 끝 흐름이 이어 감)
+                if (P == null) { if (++nul >= 8) { S.pending = new Pending("home"); RenderAll(); nul = 0; } else yield return null; continue; }
                 if (stop.Contains(P.t)) yield break;
                 switch (P.t)
                 {
