@@ -141,5 +141,9 @@ namespace KwGame.Sim
         public double aff = -1, greed; public int part = 1; public string prom; public bool promBad, promDone; public int chSeen, dateN, nflashT = -1, gapT = -1, heist, earlyM, sleepD; public bool heistGo;   // heist = 털기 준비 단계(0~3), heistGo = 만기 밤에 턴다, earlyM = 실적 없이 이자 미리 낸 달(신용은 이자일에), sleepD = 밤에 푹 자서 무료 리포트 +1 받는 날(absDay)
         /// v4 주말 갭: 주말 동안 쌓인 국장 수익률 (월요일 오전에 반영)
         public Dictionary<string, double> wkGap = new Dictionary<string, double>();
+        // 메타 (GameSim.Meta.cs, 다이제스트 밖): 난이도("easy"|"normal"|"hard") · 알바 중 청산 횟수 · 내가 연 코인 최고 배율 · 자정 부탁 판정(지킴/어김) 횟수 · 지금 알바 나가 있음(알바 끝 ~ 그 시간 다 흐를 때까지)
+        public string diff = "normal"; public int liqWork, maxLev, promKept, promBroke; public bool awayWork;
+        /// 알바 중 청산 경보: 마지막 일당 · 경보를 띄운 칸 (한 칸 1회)
+        public double lastPay; public int alertT = -1;   // promKept·promBroke = 누적 (오늘 어김 bool promBad 와 다름)
     }
 }

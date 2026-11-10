@@ -48,11 +48,17 @@ namespace KwGame.Tests
         public void OpeningStatesV4NumbersFromRules()
         {
             var R = Data.RULES; var ci = CultureInfo.InvariantCulture;
-            string all = string.Join("\n", Strings(Data.J["SCENES"]["opening"], "opening").Select(x => x.text));
+            string raw = string.Join("\n", Strings(Data.J["SCENES"]["opening"], "opening").Select(x => x.text));
+            // 이자·현금은 난이도별이라 자리표시자 ({rate} {due} {cash} {debt}) → 화면(GameController.FillRules)이 이 판 값으로 채움. 여기선 같은 치환으로 보통 난이도 값을 확인
+            Assert.That(raw, Does.Contain("{rate}%").And.Contain("{due}").And.Contain("{cash}"), "오프닝은 자리표시자로 (난이도별 수치)");
+            var g = GameSim.Create(Data, 3, new GameSim.Opts { rt = true });
+            string all = raw.Replace("{rate}", (g.rate() * 100).ToString("0.#", ci)).Replace("{due}", g.won(g.interestDue())).Replace("{cash}", g.won(g.S.cash)).Replace("{debt}", g.won(g.debtStart()));
             Assert.That(all, Does.Contain((R.RT_RATE * 100).ToString("0.#", ci) + "%"), "주 이자율");
-            Assert.That(all, Does.Contain(MathK.Round1k(R.DEBT0 * R.RT_RATE) / 10000 + "만"), "주 이자 금액");
-            Assert.That(all, Does.Contain(R.RT_CASH0.ToString("#,0", ci) + "원"), "시작 현금");
+            Assert.That(all, Does.Contain(g.won(MathK.Round1k(R.DEBT0 * R.RT_RATE))), "주 이자 금액");
+            Assert.That(all, Does.Contain(g.won(R.RT_CASH0)), "시작 현금");
             Assert.That(all, Does.Contain(R.V4_DAYS + "일"), "만기");
+            var hard = GameSim.Create(Data, 3, new GameSim.Opts { rt = true, diff = "hard" });
+            Assert.That(raw.Replace("{rate}", (hard.rate() * 100).ToString("0.#", ci)), Does.Not.Contain((R.RT_RATE * 100).ToString("0.#", ci) + "%"), "매운맛은 다른 이자율이 보임");
             int says = Data.J["SCENES"]["opening"].Count(s => s["say"] != null);
             Assert.That(says, Is.LessThanOrEqualTo(12), "오프닝 대사는 핵심만");
         }

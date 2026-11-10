@@ -26,6 +26,7 @@ static class P {
       var strats = a.Length > 2 ? a[2].Split(',') : new[] { "work", "smart", "gamble", "random" };
       RtBots.ForceRelic = Environment.GetEnvironmentVariable("BAL_FORCE");
       RtBots.Part2 = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("BAL_PART2"));
+      RtBots.Diff = Environment.GetEnvironmentVariable("BAL_DIFF") is string bd && bd.Length > 0 ? bd : "normal";
       string tr = Environment.GetEnvironmentVariable("BAL_TRACE");
       if (tr != null) { RtBots.Trace = Console.WriteLine; var rr = RtBots.Run(BD, int.Parse(tr) * 104729, strats[0]); Console.WriteLine($"{rr.end} d{rr.day} errs {rr.errs} {rr.lastErr}"); return 0; }
       if (Environment.GetEnvironmentVariable("BAL_MKT") != null) {

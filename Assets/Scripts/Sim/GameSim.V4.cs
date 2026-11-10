@@ -44,6 +44,56 @@ namespace KwGame.Sim
         /// 2부는 빚 1억 → 한도·상한·만기 판정도 같은 비율로
         public double debtScale() => v4 && S.part > 1 ? R.V4_PART2_DEBT / R.DEBT0 : 1;
         public double debtStart() => R.DEBT0 * debtScale();
+        /// 난이도 값 (unity_v4.json V4_DIFF[S.diff][k]). 없으면 기본값. v4 아니면 기본값
+        public double dv(string k, double dflt = 1) => v4 && R.V4_DIFF != null && S.diff != null && R.V4_DIFF.TryGetValue(S.diff, out var m) && m.TryGetValue(k, out var x) ? x : dflt;
+        /// 같이 원양어선 문턱 (만기 빚 ≤ 시작 빚 × 이 값). 난이도별
+        public double duoDebt() => dv("duo", R.V4_DUO_DEBT);
+
+        // ---------- 알바 중 청산 경보 (docs/STORE.md §3 ⑦: 제목 그대로의 순간) ----------
+        /// 씨앗 + 시각 해시 → [0,1). rng 를 안 써서 골든·시세 흐름과 무관
+        double hashU(int salt)
+        {
+            uint h = unchecked((uint)S.seed * 0x9E3779B1u ^ (uint)salt * 0x85EBCA6Bu); h ^= h >> 15; h = unchecked(h * 0x2C1B3C6Du); h ^= h >> 12; h = unchecked(h * 0x297A2D39u); h ^= h >> 15;
+            return h / 4294967296.0;
+        }
+        /// 포지션 손실률 (증거금 대비, 0 = 본전, 1 = 전부). 청산은 0.9
+        public double posLoss(CoinPos c) => c.entry > 0 ? -(c.lev * c.mult * c.dir * (S.mk.tk[c.tk].p / c.entry - 1)) : 0;
+        /// 청산가
+        public double liqPrice(CoinPos c) => c.entry * (1 - 0.9 * c.dir / Math.Max(1e-9, c.lev * c.mult));
+        /// 알바 나가 있는 동안 레버리지 포지션 손실이 문턱을 넘으면 한 칸에 한 번 경보 pending (true = 시계 멈춤)
+        bool liqAlertCheck()
+        {
+            if (!v4 || !S.awayWork || R.V4_ALERT_LOSS <= 0 || S.alertT == Tnow() || S.pending != null) return false;
+            CoinPos worst = null; double wl = 0;
+            foreach (var c in S.cps) { if (c.lev * c.mult < 2 || c.margin <= 0) continue; double l = posLoss(c); if (l >= R.V4_ALERT_LOSS && l > wl) { wl = l; worst = c; } }
+            if (worst == null) return false;
+            S.alertT = Tnow();
+            double took = round1k(S.lastPay * (1 - R.V4_ALERT_PAY));
+            S.pending = new Pending("liqAlert") { tk = worst.tk, n0 = Math.Min(1, wl), total = rhu(worst.margin * Math.Min(1, wl)), due = liqPrice(worst), took = took, half = R.V4_ALERT_CAUGHT, key = S.lastJob };
+            face("panic");
+            toast(T("v4.alert.toast", "n", D.TK[worst.tk].name, "p", rhu(wl * 100)), "liq", "coin");
+            Emit("liqAlert", "tk", worst.tk, "loss", wl);
+            return true;
+        }
+        /// 경보 선택. peek = 몰래 폰 본다 (전부 정리 + 일당 깎임 + 들킬 수도), 아니면 참는다. 남은 알바 시간은 spend 로 이어 흘림
+        Sub liqAlertPick(bool peek)
+        {
+            var P = S.pending; if (P == null || P.t != "liqAlert") return Sub.Err("state");
+            S.pending = null;
+            if (peek)
+            {
+                double s = 0; foreach (var x in S.cps.ToList()) s += closeCoin(x) ?? 0;
+                Emit("trade", "op", "closeCoins", "ok", true, "pnl", s);
+                bool caught = hashU(Tnow() * 31 + 7) < P.half;
+                double cut = caught ? S.lastPay : P.took;
+                if (cut > 0) { money(-cut, "work", T(caught ? "lbl.alertCaught" : "lbl.alertCut")); coverNeg(); }   // 돌발 매수 뒤라 현금이 모자라면 빚으로
+                if (caught) { stress(8); pushK("m", T("v4.alert.caughtM")); toast(T("v4.alert.caught", "p", won(S.lastPay)), "liq"); }
+                else toast(T("v4.alert.peek", "p", won(cut), "pnl", sgnWon(s)), "info");
+            }
+            else toast(T("v4.alert.hold"), "info");
+            after("spend");
+            return Sub.Go();
+        }
         public bool locHidden(string id) => v4 && R.V4_HIDE_LOCS != null && R.V4_HIDE_LOCS.Contains(id);
         /// 국장 주문 가능: v4 는 장 보기 칸에서만 (행동 → 소재 → 본 행동). 코인은 어디서나
         public bool stockTradeOk() => stockOpen() && (!v4 || S.pending?.t == "watch");
@@ -154,6 +204,7 @@ namespace KwGame.Sim
             var p = promNow(); if (p == null) return;
             if (p.avoid == "coin" && S.cps.Any(c => !c.mirai)) S.promBad = true;   // 코인 금지 = 자정에 들고 있어도 어김 (미래가 돌발로 산 건 빼고)
             bool kept = !S.promBad && (p.@do == null || S.promDone);
+            if (kept) S.promKept++; else S.promBroke++;   // 메타 업적용 (하루 한 번 확정 판정 — 행동 순간의 Emit("prom") 은 '하지 마' 부탁을 지킨 날엔 안 나옴)
             if (kept) { affD(p.@do != null ? R.V4_PROM_OK : R.V4_PROM_OK / 2); stress(-5); pushK("m", p.endOk); }   // 하지 마 부탁은 가만있어도 지켜지니 절반
             else { affD(R.V4_PROM_BAD); stress(10); pushK("m", p.endBad); }
             S.prom = null;
@@ -175,7 +226,7 @@ namespace KwGame.Sim
         {
             if (!v4) return;
             promJudge();
-            if (S.dateN == 0) affD(-R.V4_AFF_DECAY);   // 하루 종일 안 놀아 주면 식음
+            if (S.dateN == 0) affD(-R.V4_AFF_DECAY * dv("decay"));   // 하루 종일 안 놀아 주면 식음 (난이도별)
             S.dateN = 0;
         }
 
@@ -259,7 +310,7 @@ namespace KwGame.Sim
                 variant = good ? "true" : "lonely";
                 lead = T(good ? (S.part > 1 ? "v4.end.true2" : "v4.end.true") : "v4.end.lonely", v);
             }
-            else if (kind == "bad1" && absDay() >= R.V4_DAYS && S.debt <= debtStart() * R.V4_DUO_DEBT)
+            else if (kind == "bad1" && absDay() >= R.V4_DAYS && S.debt <= debtStart() * duoDebt())
             {
                 variant = good ? "duo" : "sea";
                 lead = T(good ? "v4.end.duo" : "v4.end.half", v);

@@ -18,6 +18,8 @@ namespace KwGame.Sim
             public int newsN; public double newsRet;
             public double debt, cash, earned, interest, repaid, gnet, invest, aff, greed, promOk, promN; public int heistMax; public bool heistGo;
             public string lastErr, relic;
+            /// v4 알바 중 청산 경보 횟수 · 그중 몰래 폰 본 횟수 · 경보 뒤 실제 청산(알바 중)
+            public int alerts, peeks, liqWork;
             /// v4 이번 판 국면 시나리오 (장 1~4, 하네스 BAL_SCEN 진단용)
             public string scen;
             /// v4 행동(칸) 사용 횟수: watch · work · date · rest · casino · lotto · park · 기타
@@ -31,9 +33,11 @@ namespace KwGame.Sim
             public Dictionary<string, double> ends = new Dictionary<string, double>();
             /// 행동별 평균 비율 (v4)
             public Dictionary<string, double> acts = new Dictionary<string, double>();
+            /// v4 경보: 판당 평균 횟수 · 경보가 한 번이라도 뜬 판 비율 · 몰래 폰 본 비율 · 알바 중 청산 판당
+            public double alerts, alertRuns, peekRate, liqWork;
             public double End(string kind) => ends.Where(kv => kv.Key == kind || kv.Key.StartsWith(kind + "/")).Sum(kv => kv.Value);
             public override string ToString() =>
-                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1}" + (newsN > 0 ? $" · 속보 매매 {newsN:F1}회 평균 {newsRet:P1}" : "") + $" · 에러 {errs:F1}"
+                $"{strat,-7} n={n} 클리어 {clear:P0} (평균 {clearDay:F1}일, 4주 안 {clear28:P0}, 25/50/75% {p25}/{p50}/{p75}일) · 배드 {bad:P0} (평균 {badDay:F1}일) · 생존 {alive:P0} · 남은빚 {debtEnd / 1e4:F0}만 · 알바 {earnPerDay / 1e4:F1}만/일 · 투자 {invest / 1e4:F0}만 · 도박 {gnet / 1e4:F0}만 · 기절 {faints:F1} · 멘헤라 {menheras:F1} · 아픈날 {sickDays:F1} · 매도 {sells:F0}회 평균 {sellRet:P1}" + (newsN > 0 ? $" · 속보 매매 {newsN:F1}회 평균 {newsRet:P1}" : "") + $" · 에러 {errs:F1}" + (alerts > 0 ? $" · 경보 {alerts:F2}회/판 ({alertRuns:P0} 판, 폰 봄 {peekRate:P0}, 알바 중 청산 {liqWork:F2}회/판)" : "")
                 + (ends.Count > 0 ? "\n        엔딩 " + string.Join(" · ", ends.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value:P1}")) : "")
                 + (aff > 0 ? $"\n        호감 {aff:F0} · 욕심 {greed:F0} · 부탁 지킴 {promRate:P0}" : "")
                 + (heist[0] > 0 ? $"\n        털기 루트 1단계 {heist[0]:P0} · 2단계 {heist[1]:P0} · 3단계 {heist[2]:P0} · 턴다 {heist[3]:P0}" : "") + (acts.Count > 0 ? "\n        행동 " + string.Join(" · ", acts.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:P0}")) : "");
@@ -47,6 +51,8 @@ namespace KwGame.Sim
         public static string ForceRelic;
         /// v4 2부(빚 1억)부터 시작 (하네스 BAL_PART2)
         public static bool Part2;
+        /// 난이도 (하네스 BAL_DIFF=easy|normal|hard)
+        public static string Diff = "normal";
         int traceDay;
         readonly GameData D; readonly string strat; readonly bool heistRoute; readonly Random r; readonly double mgLo, mgHi;
         GameSim G; GameState S => G.S; Rules R => D.RULES;
@@ -88,6 +94,7 @@ namespace KwGame.Sim
                 faints = L.Average(x => x.faints), menheras = L.Average(x => x.menheras), sickDays = L.Average(x => x.sickDays),
                 ends = L.Where(x => x.end != "none").GroupBy(x => x.end + (x.variant != "" ? "/" + x.variant : "")).ToDictionary(g => g.Key, g => (double)g.Count() / L.Count),
                 heist = new[] { L.Average(x => x.heistMax >= 1 ? 1.0 : 0), L.Average(x => x.heistMax >= 2 ? 1.0 : 0), L.Average(x => x.heistMax >= 3 ? 1.0 : 0), L.Average(x => x.heistGo ? 1.0 : 0) },
+                alerts = L.Average(x => x.alerts), alertRuns = L.Average(x => x.alerts > 0 ? 1.0 : 0), peekRate = L.Sum(x => x.peeks) / Math.Max(1.0, L.Sum(x => x.alerts)), liqWork = L.Average(x => x.liqWork),
                 aff = L.Average(x => x.aff), greed = L.Average(x => x.greed), promRate = L.Sum(x => x.promOk) / Math.Max(1, L.Sum(x => x.promN)),
                 acts = L.SelectMany(x => x.acts.Keys).Distinct().ToDictionary(k => k, k => L.Average(x => { double n = x.acts.Values.Sum(); return n > 0 && x.acts.TryGetValue(k, out var v) ? v / n : 0; })),
             };
@@ -100,7 +107,7 @@ namespace KwGame.Sim
 
         Result Play(int maxDays)
         {
-            G = GameSim.Create(D, res.seed, new GameSim.Opts { rt = true });
+            G = GameSim.Create(D, res.seed, new GameSim.Opts { rt = true, diff = Diff });
             Go(C("start"));
             if (Part2 && G.v4) { S.part = 2; S.debt = R.V4_PART2_DEBT; S.st.maxDebt = S.st.minDebt = S.debt; }   // 2부부터 바로 (밸런스 측정용)
             for (int i = 0; i < 60000 && S.pending != null && G.absDay() <= maxDays; i++)
@@ -120,7 +127,7 @@ namespace KwGame.Sim
             if (G.v4) res.scen = string.Join(">", Enumerable.Range(1, 4).Select(c => G.regime(c)));
             res.day = G.absDay(); res.debt = S.debt; res.cash = S.cash; res.earned = S.st.earned; res.interest = S.st.interest;
             res.repaid = S.st.repaid; res.gnet = S.st.gnet; res.invest = S.realized; res.faints = (int)S.st.faint;
-            res.menheras = (int)(S.st.menOk + S.st.menBad); res.relic = S.augs.FirstOrDefault(); res.aff = S.aff; res.greed = S.greed;
+            res.menheras = (int)(S.st.menOk + S.st.menBad); res.relic = S.augs.FirstOrDefault(); res.aff = S.aff; res.liqWork = S.liqWork; res.greed = S.greed;
             return res;
         }
         void Go(SimCommand c)
@@ -130,6 +137,7 @@ namespace KwGame.Sim
             string ak = c.t == "watch" || c.t == "date" || c.t == "rest" ? c.t
                 : c.t == "act" ? (c.Str("k") is string k ? (k.StartsWith("l-cafe") || k == "l-store" || k == "l-ware" || k == "l-mart" ? "work" : k == "l-oddeven" || k == "l-slot" || k == "l-card" || k == "l-ladder" ? "casino" : k == "l-lotto" || k == "l-scratch" ? "lotto" : "out:" + k.Substring(2)) : null) : null;
             if (ak != null && G.v4) res.acts[ak] = (res.acts.TryGetValue(ak, out var n0) ? n0 : 0) + 1;
+            if (c.t == "alertPeek" || c.t == "alertHold") { res.alerts++; if (c.t == "alertPeek") res.peeks++; }
             foreach (var e in G.Apply(c)) if (e.t == "error") { res.errs++; res.lastErr = c.t + " @" + (S.pending?.t ?? "-"); }
             if (ps0 != null && G.absDay() != d0) { res.promN++; if (ps0 == "ok") res.promOk++; }   // 자정 넘긴 명령 직전 부탁 상태
             res.heistMax = Math.Max(res.heistMax, S.heist); res.heistGo |= S.heistGo;
@@ -231,6 +239,7 @@ namespace KwGame.Sim
                         return C("evPick", "k", o[r.Next(o.Count)].k);
                     }
                 case "tempt": return C("tempt", "k", strat == "gamble" && S.cash >= 10000 ? "go" : "no");
+                case "liqAlert": return C(strat == "pro" || (strat == "casual" && r.NextDouble() < 0.5) ? "alertPeek" : "alertHold");   // 알바 중 청산 경보: pro 는 정리, casual 반반, 나머지는 참음
                 case "payday":
                     {
                         if (P.stage == "side") return C("payday", "k", "odd");

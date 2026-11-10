@@ -65,6 +65,10 @@ namespace KwGame.Sim
         public double V4_SHORT_PROFIT = 0;
         /// 시간대 비중: 평일 낮 놀기 호감 배수 · 저녁 놀기 호감 배수 · 저녁 알바 일당 배수
         public double V4_DATE_DAY = 1, V4_DATE_EVE = 1, V4_WORK_EVE = 1;
+        /// 난이도 (easy·normal·hard) 배수: rate(주 이자, 절대값) · cash(시작 현금) · pay(알바) · duo(같이 원양어선 빚 문턱, 절대값) · decay(호감 감쇠) · imp(돌발 매수 확률)
+        public Dictionary<string, Dictionary<string, double>> V4_DIFF;
+        /// 알바 중 청산 경보: 레버리지 포지션 손실이 증거금의 V4_ALERT_LOSS 를 넘으면 한 칸에 한 번 끼어듦 (0 = 끔). 몰래 폰 보면 일당 ×V4_ALERT_PAY, V4_ALERT_CAUGHT 확률로 들켜 일당 0
+        public double V4_ALERT_LOSS = 0, V4_ALERT_PAY = 0.7, V4_ALERT_CAUGHT = 0.35;
 
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;

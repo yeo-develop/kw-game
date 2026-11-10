@@ -71,7 +71,7 @@
 .title-content {
     position: absolute;
     left: 7.5%;
-    top: 15%;
+    top: 13%;
     width: 40%;
 }
 
@@ -236,7 +236,7 @@
 }
 
 .dialog-panel {
-    width: 640px;
+    width: 720px;
     padding: 40px;
     background-color: rgb(32, 37, 50);
     border-width: 1px;
@@ -357,7 +357,7 @@
 }
 
 .short .title-content {
-    top: 11%;
+    top: 9%;
 }
 
 .short .title-line {
@@ -427,4 +427,166 @@
 
 .fullscreen-toggle:focus .unity-toggle__input {
     border-color: rgb(255, 255, 255);
+}
+
+.meta-label {
+    font-size: 19px;
+    color: rgb(174, 176, 188);
+    margin-top: 4px;
+}
+
+.newgame-body {
+    margin-bottom: 20px;
+}
+
+.diff-row {
+    flex-direction: row;
+    margin-bottom: 18px;
+}
+
+.diff-button {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin: 0 8px 0 0;
+    padding: 12px 12px;
+    min-height: 92px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    background-color: rgb(40, 44, 58);
+    border-width: 1px;
+    border-color: rgb(106, 107, 122);
+    border-radius: 6px;
+    color: rgb(248, 244, 243);
+}
+
+.diff-button:hover {
+    background-color: rgb(58, 63, 80);
+}
+
+.diff-button:focus {
+    border-color: rgb(255, 255, 255);
+    border-width: 3px;
+}
+
+.diff-selected,
+.diff-selected:hover {
+    background-color: rgb(242, 168, 190);
+    border-color: rgb(242, 168, 190);
+    color: rgb(37, 25, 35);
+}
+
+.diff-label {
+    font-size: 23px;
+    margin: 0;
+    padding: 0;
+    -unity-font-definition: url("project://database/Assets/Resources/Fonts/Pretendard-Bold.ttf?fileID=12800000&guid=c70d21a98011743c0997aca8fb95b5c8&type=3#Pretendard-Bold");
+}
+
+.diff-detail {
+    font-size: 16px;
+    margin: 4px 0 0 0;
+    padding: 0;
+    white-space: normal;
+    color: rgb(193, 197, 211);
+}
+
+.diff-selected .diff-detail {
+    color: rgb(70, 45, 60);
+}
+
+.seed-heading {
+    margin-top: 4px;
+}
+
+.seed-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.seed-field {
+    flex-grow: 1;
+    margin: 0;
+    font-size: 22px;
+}
+
+.seed-field .unity-base-text-field__input,
+.seed-field .unity-text-field__input {
+    min-height: 52px;
+    padding: 6px 12px;
+    background-color: rgb(24, 28, 40);
+    border-color: rgb(116, 123, 145);
+    border-width: 1px;
+    border-radius: 6px;
+    color: rgb(248, 244, 243);
+}
+
+.seed-field:focus .unity-base-text-field__input,
+.seed-field:focus .unity-text-field__input {
+    border-color: rgb(255, 255, 255);
+}
+
+.daily-button {
+    min-width: 0;
+    min-height: 52px;
+    background-color: rgb(53, 60, 78);
+    color: rgb(248, 244, 243);
+}
+
+.daily-note {
+    margin-top: 8px;
+    color: rgb(242, 168, 190);
+}
+
+.seed-error {
+    margin-top: 8px;
+    font-size: 20px;
+    color: rgb(255, 110, 110);
+}
+
+.overwrite-note {
+    margin-top: 12px;
+}
+
+.records-body {
+    max-height: 520px;
+    margin-bottom: 20px;
+}
+
+.short .records-body {
+    max-height: 400px;
+}
+
+.records-heading {
+    font-size: 23px;
+    color: rgb(242, 168, 190);
+    margin: 14px 0 6px 0;
+    -unity-font-definition: url("project://database/Assets/Resources/Fonts/Pretendard-Bold.ttf?fileID=12800000&guid=c70d21a98011743c0997aca8fb95b5c8&type=3#Pretendard-Bold");
+}
+
+.records-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 4px 0;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.records-line {
+    font-size: 20px;
+    color: rgb(248, 244, 243);
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.records-dim {
+    color: rgb(130, 134, 150);
+}
+
+.records-detail {
+    font-size: 17px;
+    color: rgb(174, 176, 188);
+    flex-shrink: 1;
+    white-space: normal;
+    -unity-text-align: upper-right;
 }

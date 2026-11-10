@@ -7,7 +7,7 @@ namespace KwGame.Sim
     // api.js — createGame · apply(명령) · query
     public partial class GameSim
     {
-        public class Opts { public bool tut, rt; }
+        public class Opts { public bool tut, rt; public string diff; }   // diff = "easy" | "normal" | "hard" (비면 normal)
 
         /// 새 게임 (createGame). rngv 2 만 지원 (rngv 1 은 웹 회귀 비교 전용).
         public static GameSim Create(GameData data, int seed, Opts opts = null)
@@ -23,8 +23,9 @@ namespace KwGame.Sim
             S.st.maxDebt = r.DEBT0; S.st.maxAsset = S.cash; S.st.minDebt = r.DEBT0;
             g.S = S;
             S.optTut = opts != null && opts.tut;
+            S.diff = string.IsNullOrEmpty(opts?.diff) ? "normal" : opts.diff;
             S.rt = opts != null && opts.rt; S.min = r.RT_DAY0;
-            if (S.rt && r.V4 > 0) S.aff = r.V4_AFF0;
+            if (S.rt && r.V4 > 0) { S.aff = r.V4_AFF0; S.cash = round1k(S.cash * g.dv("cash")); S.st.maxAsset = S.cash; }   // 난이도별 시작 현금
             S.mk = g.initMarket(); S.news = g.genNews();
             S.pending = new Pending("start");
             g.ev.Clear();
@@ -199,6 +200,9 @@ namespace KwGame.Sim
                     break;
                 case "impulse":
                     if (t == "reply") { if (!impulseReply(c.Int("i"))) err("reply"); return; }
+                    break;
+                case "liqAlert":
+                    if (t == "alertPeek" || t == "alertHold") { sub(liqAlertPick(t == "alertPeek")); return; }
                     break;
                 case "ending":
                     if (t == "continue") { if (!continueGame()) err("continue"); return; }

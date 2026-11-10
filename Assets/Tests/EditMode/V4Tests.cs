@@ -34,6 +34,7 @@ namespace KwGame.Tests
                     case "event": Go(g, "evPick", "k", P.opts.First(o => !o.dis).k); break;
                     case "menhera": case "impulse": Go(g, "reply", "i", P.opts.FindIndex(o => o.ok)); break;
                     case "tempt": Go(g, "tempt", "k", "no"); break;
+                    case "liqAlert": Go(g, "alertHold"); break;
                     case "payday": Go(g, "payday", "k", P.stage == "repay" ? "keep" : P.opts.First(o => !o.dis).k); break;
                     default: Assert.Fail("ToHome: " + P.t); break;
                 }
@@ -593,6 +594,86 @@ namespace KwGame.Tests
             Assert.That(payEve, Is.LessThan(payDay), "야간 알바는 덜 벌림");
             S.day = Data.RULES.V4_WEEKDAYS + 1;
             Assert.That(g.dateMult(), Is.EqualTo(1), "주말은 시간대 상관없음");
+        }
+
+        // ---------- 난이도 (docs/STORE.md §3 ④) ----------
+        [Test]
+        public void DifficultyChangesInterestCashAndThreshold()
+        {
+            var easy = GameSim.Create(Data, 3, new GameSim.Opts { rt = true, diff = "easy" });
+            var normal = GameSim.Create(Data, 3, new GameSim.Opts { rt = true });
+            var hard = GameSim.Create(Data, 3, new GameSim.Opts { rt = true, diff = "hard" });
+            Assert.That(normal.S.diff, Is.EqualTo("normal"));
+            Assert.That(easy.rate(), Is.LessThan(normal.rate())); Assert.That(hard.rate(), Is.GreaterThan(normal.rate()));
+            Assert.That(easy.S.cash, Is.GreaterThan(normal.S.cash)); Assert.That(hard.S.cash, Is.LessThan(normal.S.cash));
+            Assert.That(easy.duoDebt(), Is.GreaterThan(normal.duoDebt())); Assert.That(hard.duoDebt(), Is.LessThan(normal.duoDebt()));
+            Assert.That(easy.DiffName(), Is.Not.EqualTo(hard.DiffName()));
+            Go(easy, "start"); ToHome(easy);
+            Assert.That(easy.interestDue(), Is.EqualTo(MathK.Round1k(easy.S.debt * easy.rate())));
+        }
+
+        // ---------- 알바 중 청산 경보 (docs/STORE.md §3 ⑦) ----------
+        /// 10배 롱을 들고 알바 → 시세가 7% 빠지면(손실 70%) 알바 시간 중 경보가 한 번 끼어듦
+        static GameSim ToAlert(int seed, out string tk)
+        {
+            var g = New(seed); var S = g.S;
+            S.levTier = 2; S.cash = 2000000;   // 레버리지 열어 둠 (실적 해금은 다른 테스트)
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id) && t.maxLev >= 25);
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 10, "amt", 500000);
+            Assert.That(S.cps.Single().lev, Is.EqualTo(10));
+            tk = coin.id;
+            // 알바: 지도 → 일터 → 카페 → 미니게임 결과
+            Go(g, "map"); Go(g, "goTo", "loc", "work");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            var opt = g.Query(() => g.locOpts("work")).First(o => !o.dis && o.k == "l-cafe");
+            // 미니게임 직전에 시세를 떨어뜨려 둠 (알바 뒤 시간이 흐르자마자 손실 70%)
+            S.mk.tk[coin.id].p = S.cps[0].entry * 0.93;
+            Go(g, "act", "k", opt.k); Go(g, "mgSetup"); Go(g, "mgResult", "score", 0.8);
+            return g;
+        }
+        [Test]
+        public void LiqAlertInterruptsWorkOncePerSlot()
+        {
+            var g = ToAlert(5, out var tk); var S = g.S;
+            Assert.That(S.pending?.t, Is.EqualTo("liqAlert"), "알바 시간 중 경보");
+            var P = S.pending;
+            Assert.That(P.tk, Is.EqualTo(tk)); Assert.That(P.n0, Is.InRange(0.6, 1)); Assert.That(P.took, Is.GreaterThan(0)); Assert.That(P.key, Is.EqualTo("cafe"));
+            Assert.That(S.owe, Is.GreaterThan(0), "남은 알바 시간은 선택 뒤로");
+            double cash = S.cash, liq0 = S.st.liq;
+            Go(g, "alertHold");
+            Assert.That(S.pending?.t, Is.Not.EqualTo("liqAlert"), "참으면 한 칸에 다시 안 뜸");
+            Assert.That(S.cash, Is.EqualTo(cash).Within(1e-6).Or.GreaterThan(cash), "참으면 일당 안 깎임");
+            ToHome(g);
+            Assert.That(S.cps.Count == 0 || S.st.liq == liq0, "참은 뒤 청산됐으면 포지션이 없음");
+            if (S.st.liq > liq0) Assert.That(S.liqWork, Is.GreaterThanOrEqualTo(1), "알바 중 청산 집계 (도전과제 liq_work)");
+        }
+        [Test]
+        public void LiqAlertPeekClosesPositionsAndCutsPay()
+        {
+            var g = ToAlert(5, out _); var S = g.S;
+            Assert.That(S.pending?.t, Is.EqualTo("liqAlert"));
+            double took = S.pending.took, pay = S.lastPay;
+            Go(g, "alertPeek");
+            Assert.That(S.cps.Count, Is.EqualTo(0), "몰래 폰 봄 = 전부 정리");
+            var led = S.today.Last(l => l.kind == "work");
+            Assert.That(-led.amt, Is.EqualTo(took).Or.EqualTo(pay), "일당 깎임 또는 들켜서 전부");
+            ToHome(g);
+            Assert.That(S.pending?.t, Is.EqualTo("home").Or.EqualTo("ending"));
+        }
+        [Test]
+        public void LiqAlertNeedsLeverageAndWork()
+        {
+            var g = New(5); var S = g.S;
+            S.cash = 2000000;
+            var coin = Data.TKList.First(t => t.IsCoin && g.tkOpen(t.id));
+            Go(g, "open", "tk", coin.id, "dir", 1, "lev", 1, "amt", 500000);   // 1배 = 경보 없음
+            Go(g, "map"); Go(g, "goTo", "loc", "work");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            var opt = g.Query(() => g.locOpts("work")).First(o => !o.dis && o.k == "l-cafe");
+            S.mk.tk[coin.id].p = S.cps[0].entry * 0.3;
+            Go(g, "act", "k", opt.k); Go(g, "mgSetup"); Go(g, "mgResult", "score", 0.8);
+            ToHome(g);
+            Assert.That(S.alertT, Is.EqualTo(-1), "1배 현물은 경보 없음");
         }
 
         /// 밸런스 범위 (판 수 적게, 범위 넓게 — 정확한 값은 docs/V4.md §7 300판)

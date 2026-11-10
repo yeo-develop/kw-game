@@ -17,6 +17,8 @@ namespace KwGame.View
         public static readonly Color Text = new Color32(0xee, 0xee, 0xf4, 0xff);
         public static readonly Color Dim = new Color32(0x9a, 0x9a, 0xb0, 0xff);
         public static readonly Color Gold = new Color32(0xff, 0xd1, 0x66, 0xff);
+        /// 화면 효과 끔 (설정 · PlayerPrefs "kw.fx" = 0): 흔들림 · 폭죽 · 청산 터짐 · 멘헤라 탄막 생략
+        public static bool FxOff;
 
         /// 번들 폰트(Pretendard)에 없는 이모지(서로게이트 쌍·변형 선택자)를 화면 표시용으로만 지운다
         public static string Clean(string s)

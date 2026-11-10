@@ -59,6 +59,14 @@
   "RT_RATE": 0.03,
   "RT_CASH0": 3000000,
   "V4_DUO_DEBT": 0.6,
+  "V4_ALERT_LOSS": 0.6,
+  "V4_ALERT_PAY": 0.7,
+  "V4_ALERT_CAUGHT": 0.35,
+  "V4_DIFF": {
+   "easy":   { "rate": 0.02, "cash": 1.5, "pay": 1.15, "duo": 0.7, "decay": 0.5, "imp": 0.5 },
+   "normal": { "rate": 0.03, "cash": 1,   "pay": 1,    "duo": 0.6, "decay": 1,   "imp": 1 },
+   "hard":   { "rate": 0.04, "cash": 0.7, "pay": 0.9,  "duo": 0.5, "decay": 1.25, "imp": 1.3 }
+  },
   "V4_P2_PAY": 2,
   "V4_P2_REGIME": 2.5,
   "V4_GREED_DECAY_HEIST": 0,
@@ -189,6 +197,26 @@
   "v4.goalDuo": "만기 목표: 빚 {t} 이하 + 호감 {a} → 미래랑 같이 (지금 {d})",
   "v4.tag.duo": "만기 · 둘이 원양어선",
   "v4.tag.sea": "만기 · 원양어선",
+  "v4.diff.easy": "순한맛",
+  "v4.diff.normal": "보통맛",
+  "v4.diff.hard": "매운맛",
+  "v4.card.head": "🧾 롱잡고알바감 · {tag}",
+  "v4.card.part2": "2부 · ",
+  "v4.card.line1": "{p}{diff} · {d}일차 · 빚 {pct}% 갚음",
+  "v4.card.line2": "매매 실현 {r} · 최대 자산 {a} · 청산 {n}회{w}",
+  "v4.card.liqWork": " (알바 중 {n})",
+  "v4.card.line3": "미래 호감 {aff} · 최고 배율 {lev}",
+  "v4.card.lev": "{x}배",
+  "v4.card.none": "없음",
+  "v4.card.seed": "판 코드 {code}",
+  "v4.card.tail": "#롱잡고알바감",
+  "v4.alert.toast": "📉 알바 중인데 {n} 포지션이 증거금의 {p}% 를 잃었다…",
+  "v4.alert.peek": "몰래 정리했다 ({pnl}) · 사장한테 걸려 일당 {p} 깎임",
+  "v4.alert.caught": "사장: \"폰 그만 봐요!\" — 오늘 일당 {p} 전부 날아감",
+  "v4.alert.caughtM": "알바하다 잘렸다며? ㅋㅋ 폰 좀 그만 봐",
+  "v4.alert.hold": "…참았다. 계산대에서 폰이 계속 울린다",
+  "lbl.alertCut": "몰래 폰 봄 (일당 깎임)",
+  "lbl.alertCaught": "폰 보다 들킴 (일당 0)",
   "v4.loanLock": "김사장: \"신규 고객님은 이자 한 번 내 보시고 오세요^^ 미리 내는 건 장사 좀 해 보신 분만~\"\n{next}\n(이자일 {dd} · 매매 실현수익 지금 {r} / {p}원)",
   "feedLab": "{m}주차 {d}일 {s}",
   "gw.gain.b": "{m}주차 {d}일 오늘 손익 {pnl}\n= {c}\n{hold}\n빚은 {debt} 그대로임 ㅋ",
@@ -213,6 +241,174 @@
   "pd.monthEnd": "{m}주차 끝. 남은 빚 {d}. 다음 주 이자 {i}.",
   "pd.next": "{m}주차 가자! 이번 주는 진짜 다르게 살 거야. (똑같이 삼)"
  },
+ "V4_ACH": [
+  {
+   "id": "first_end",
+   "name": "첫 엔딩",
+   "hint": "아무 엔딩이나 한 번 보기"
+  },
+  {
+   "id": "true_end",
+   "name": "진엔딩",
+   "hint": "빚도 갚고, 미래도 곁에"
+  },
+  {
+   "id": "lonely",
+   "name": "돈은 갚았는데 혼자",
+   "hint": "빚 0원. 근데 옆자리가 비었다"
+  },
+  {
+   "id": "duo",
+   "name": "같이 원양어선",
+   "hint": "다 못 갚아도 같이 가 줄 사람이 있다면"
+  },
+  {
+   "id": "heist",
+   "name": "금고 털기 성공",
+   "hint": "김사장 금고에 관심을 가져 보자",
+   "secret": true
+  },
+  {
+   "id": "heist_fail",
+   "name": "금고 앞에서 잡힘",
+   "hint": "준비가 덜 된 채 금고 앞에 서면",
+   "secret": true
+  },
+  {
+   "id": "no_loan",
+   "name": "무대출 클리어",
+   "hint": "추가 대출 한 푼 없이 빚 다 갚기"
+  },
+  {
+   "id": "work_only",
+   "name": "정직한 알바생",
+   "hint": "매매 한 번 안 하고 클리어하거나 같이 원양어선"
+  },
+  {
+   "id": "lev100",
+   "name": "100배의 사나이",
+   "hint": "100배 포지션을 열고도 클리어"
+  },
+  {
+   "id": "liq_work",
+   "name": "롱 잡고 알바 감",
+   "hint": "알바 나가 있는 동안 청산당하기",
+   "secret": true
+  },
+  {
+   "id": "liq5",
+   "name": "청산 마니아",
+   "hint": "청산을 다섯 번 넘게 당하고 엔딩 보기"
+  },
+  {
+   "id": "speed14",
+   "name": "2주 컷",
+   "hint": "14일 안에 클리어"
+  },
+  {
+   "id": "aff100",
+   "name": "미래 바라기",
+   "hint": "미래 호감 100으로 엔딩 보기"
+  },
+  {
+   "id": "promise",
+   "name": "약속은 지킨다",
+   "hint": "부탁을 10번 넘게 지키고 한 번도 안 어기기"
+  },
+  {
+   "id": "hard_clear",
+   "name": "매운맛 클리어",
+   "hint": "매운맛 난이도로 클리어"
+  },
+  {
+   "id": "part2_true",
+   "name": "2부 진엔딩",
+   "hint": "아빠의 차용증까지 깨끗하게"
+  },
+  {
+   "id": "asset1e8",
+   "name": "1억 찍어 봄",
+   "hint": "최대 자산 1억 원 달성"
+  },
+  {
+   "id": "gamble_end",
+   "name": "도박 엔딩",
+   "hint": "카지노에 인생을 걸면…",
+   "secret": true
+  }
+ ],
+ "V4_END_LIST": [
+  {
+   "key": "clear:true",
+   "name": "진엔딩",
+   "hint": "빚도 갚고, 미래도 곁에"
+  },
+  {
+   "key": "clear:lonely",
+   "name": "돈은 갚았는데",
+   "hint": "빚은 0원. 근데 옆자리가 비었다"
+  },
+  {
+   "key": "clear:rich",
+   "name": "갚고도 FLEX",
+   "hint": "갚는 순간에도 통장이 넉넉하다면"
+  },
+  {
+   "key": "clear:gamble",
+   "name": "도박으로 갚음",
+   "hint": "알바보다 매매보다 도박이 더 벌어 줬다면"
+  },
+  {
+   "key": "bad1:duo",
+   "name": "둘이 같이 원양어선",
+   "hint": "만기까지 꽤 갚았고, 미래가 따라온다"
+  },
+  {
+   "key": "bad1:sea",
+   "name": "혼자 원양어선",
+   "hint": "갚을 만큼 못 갚았거나, 혼자였거나"
+  },
+  {
+   "key": "bad1:gall",
+   "name": "갤 운영자에게 팔려 감",
+   "hint": "갤에서 너무 유명해진 채 이자를 못 내면"
+  },
+  {
+   "key": "heist",
+   "name": "털고 튐",
+   "hint": "김사장 금고에 관심을 가져 보자"
+  },
+  {
+   "key": "heistFail",
+   "name": "금고 앞에서",
+   "hint": "준비가 덜 된 채 금고 앞에 서면"
+  },
+  {
+   "key": "bad2:casino",
+   "name": "도박 중독",
+   "hint": "중독된 채 빈털터리가 되면"
+  },
+  {
+   "key": "bad2:loop",
+   "name": "편의점 무한루프",
+   "hint": "알바는 많이 했는데 올인으로 끝나면"
+  },
+  {
+   "key": "bad3",
+   "name": "과로",
+   "hint": "너무 자주 쓰러지면"
+  },
+  {
+   "key": "bad4:sell",
+   "name": "미래 폭주",
+   "hint": "포지션 든 채로 미래 멘탈이 터지면"
+  },
+  {
+   "key": "bad4:run",
+   "name": "미래 가출",
+   "hint": "미래 카톡을 계속 나쁘게 받아치면"
+  }
+ ],
  "V4_ENDINGS": {
   "clear": {
    "tag": "CLEAR · 빚 0원",
@@ -269,7 +465,7 @@
    {"do": "scene", "bg": "room", "face": "happy"},
    {"do": "card", "h": "석 달 전", "t": "코스피 사상 최고치. 단톡방: \"아직도 적금 넣는 사람 있음?\"", "chart": "up", "sub": "전 종목 불장"},
    {"say": "m", "text": "마통 땡기고, 카드론 땡기고, 모자라면 김사장 캐피탈까지. 레버리지는 국룰 50배지 ㅎㅎ", "face": "smug"},
-   {"do": "card", "h": "그리고 한 달 뒤", "t": "금리 쇼크. 불장 끝.\n미래 계좌:", "chart": "crash", "sub": "−90% · 남은 돈 3,000,000원 · 빚 30,000,000원"},
+   {"do": "card", "h": "그리고 한 달 뒤", "t": "금리 쇼크. 불장 끝.\n미래 계좌:", "chart": "crash", "sub": "−90% · 남은 돈 {cash} · 빚 {debt}"},
    {"say": "m", "text": "…알바 가야 되네.", "face": "cry"},
    {"do": "flash", "on": false},
    {"do": "scene", "bg": "room", "face": "shy"},
@@ -280,7 +476,7 @@
    {"do": "shake"},
    {"do": "face", "f": "panic"},
    {"do": "kim", "on": true},
-   {"say": "kim", "text": "쾅쾅! 친절한 김사장 캐피탈입니다^^ 원금 3,000만 원, 이자는 매주 3%. 7일째 밤마다 90만 원 받으러 옵니다~"},
+   {"say": "kim", "text": "쾅쾅! 친절한 김사장 캐피탈입니다^^ 원금 3,000만 원, 이자는 매주 {rate}%. 7일째 밤마다 {due} 받으러 옵니다~"},
    {"say": "kim", "text": "28일째 밤엔 원금 만기. 못 갚으면? 요즘 원양어선이 성수기라~ 자리 있어요^^"},
    {"do": "kim", "on": false},
    {"say": "m", "text": "자기야… 같이 갚자. 사랑하잖아. 빚 공동체♥", "face": "menhera"},

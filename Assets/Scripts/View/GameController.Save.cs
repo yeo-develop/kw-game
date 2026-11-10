@@ -56,6 +56,7 @@ namespace KwGame.View
                 int un4 = G.kUnread();
                 A("P", new Color(0.95f, 0.4f, 0.6f), phoneOpen ? "폰 닫기" : "폰", un4 > 0 ? $"카톡 {un4}" : "", TogglePhone, false, phoneOpen ? Ui.Accent : (Color?)null).name = "act-phone";
                 Q("도움말", CoachStart, playing);
+                Q("설정", OpenSettings, playing).name = "settingsButton";
                 var sp4 = new VisualElement(); sp4.style.flexGrow = 1; saveControls.Add(sp4);
                 var save4 = Q("저장", () => SaveCheckpoint(true), !CanSave); save4.name = "saveGameButton";
                 var title4 = Q("타이틀", ReturnToTitle, playing); title4.name = "returnToTitleButton";
@@ -68,6 +69,7 @@ namespace KwGame.View
             A("金", new Color(0.85f, 0.25f, 0.25f), "김사장 대출", $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}", () => Send("loanOpen"), !home).tooltip = $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}";
             int unread = G.kUnread();
             A("P", new Color(0.95f, 0.4f, 0.6f), phoneOpen ? "폰 닫기" : "폰", phoneOpen ? "P 키" : unread > 0 ? $"안 읽은 카톡 {unread}" : "주식·코인·카톡·주갤", TogglePhone, false, phoneOpen ? Ui.Accent : (Color?)null);
+            Q("설정", OpenSettings, playing).name = "settingsButton";
             var sp = new VisualElement(); sp.style.flexGrow = 1; saveControls.Add(sp);
             var status = Ui.Label(saveMessage, 16, Ui.Dim); status.name = "saveStatus"; status.style.marginRight = 10; status.style.whiteSpace = WhiteSpace.NoWrap; if (!compact) saveControls.Add(status);
             var save = Q("저장", () => SaveCheckpoint(true), !CanSave); save.name = "saveGameButton";

@@ -56,6 +56,7 @@ namespace KwGame.Sim
             var c = new CoinPos { id = S.pid++, tk = tk, dir = dir, lev = lev, margin = margin, entry = S.mk.tk[tk].p, mult = mult, t0 = Tnow(),
                 bonus = has("kimp") && dir > 0 && S.kimpDay != absDay() ? Math.Min(300000, rhu(margin * 0.05)) : 0, mirai = byMirai };
             if (c.bonus != 0) S.kimpDay = absDay();
+            if (!byMirai) S.maxLev = Math.Max(S.maxLev, (int)Math.Round(lev));   // 메타: 내가 연 최고 배율 (미래 돌발 매수는 빼고)
             S.cash -= margin + fee; S.cps.Add(c); S.st.invest++; S.workStreak = 0; S.invIn = S.invIn + margin; S.realized -= fee;
             if (lev >= R.ADD_COIN_LEV) { double f = Math.Min(1, margin / Math.Max(1, S.cash + margin + fee)); addict(R.Gain("coin") * (0.1 + 0.9 * f * f) * (has("addict") ? 1.5 : 1)); }
             if (v4) { if (!byMirai) promHit("coin"); greedD(lev >= 25 ? 8 : lev >= 10 ? 4 : 0); }

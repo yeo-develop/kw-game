@@ -214,6 +214,7 @@ namespace KwGame.Sim
                     if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.Max(back, rhu(c.margin * (S.rt ? R.RT_INSURE : 0.5))); }
                     S.cash += back;
                     S.cps.Remove(c); S.st.liq++; S.st.iN++; S.realized += back - c.margin;
+                    if (S.awayWork) S.liqWork++;   // 메타: 알바한 칸 끝 시세 반영에서 청산 (v4 알바 = 칸 끝까지)
                     S.today.Add(new Ledger { kind = "invest", amt = back - c.margin, label = T("lbl.liq", "n", D.TK[c.tk].name, "lev", c.lev, "b", T("lbl.liqBack", "p", rhu(loss * 100))) });
                     liqs.Add(new Liq { c = c, back = back, lost = before["c" + c.id] - back });
                 }
@@ -536,7 +537,7 @@ namespace KwGame.Sim
                 noChar = E.noCharV != null && E.noCharV.TryGetValue(variant, out var nc) && nc != 0, night = kind == "clear", sb = sb, cont = kind == "clear"
             };
             pushK("sys", T("end.k", "h", S.endInfo.h));
-            Emit("ending", "kind", kind, "variant", variant, "sb", sb);
+            Emit("ending", "kind", kind, "variant", variant, "sb", sb, "card", D.STR["v4.card.head"] != null ? ResultCard() : null);   // card = 공유용 결과 카드 (unity_v4.json 없는 웹 골든 데이터엔 null)
         }
         bool continueGame()
         {
@@ -577,7 +578,7 @@ namespace KwGame.Sim
             if (S.dbgAug != 0) { S.dbgAug = 0; after("loopTop2"); relicStart(T("aug.reasonDebug")); return; }
             loopTop2();
         }
-        void loopTop2() { S.phase = "home"; slotStart(); Emit("save"); after(S.rt && S.owe > 0 ? "spend" : "home"); }
+        void loopTop2() { if (!(S.rt && S.owe > 0)) S.awayWork = false; S.phase = "home"; slotStart(); Emit("save"); after(S.rt && S.owe > 0 ? "spend" : "home"); }
         void homeStep()
         {
             S.phase = "home";
@@ -597,7 +598,7 @@ namespace KwGame.Sim
             if (fainted()) return;
             if (mental() == "men" && S.menKey != Tnow().ToString() && !(S.menCool.HasValue && S.menCool.Value > Tnow()))
             {
-                if (S.cash >= 50000 && rnd() < R.IMPULSE_P + (v4 ? S.greed / 200 : 0)) impulseStart(); else menheraStart();
+                if (S.cash >= 50000 && rnd() < (R.IMPULSE_P + (v4 ? S.greed / 200 : 0)) * dv("imp")) impulseStart(); else menheraStart();   // 난이도별 돌발 매수 확률
             }
         }
         void endSlot()

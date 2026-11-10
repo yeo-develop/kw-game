@@ -301,7 +301,7 @@ namespace KwGame.View
         void Fx(IEnumerator e) { if (isActiveAndEnabled) StartCoroutine(e); }
 
         void Flash(Color c) { mgFlash.style.backgroundColor = c; Fx(Tween(0.3f, p => { if (mgFlash != null) mgFlash.style.opacity = (1 - p) * 0.35f; })); }
-        void Shake(VisualElement v, float amp = 14) => Fx(Tween(0.3f, p => v.style.translate = new Translate(Mathf.Sin(p * 40) * amp * (1 - p), 0)));
+        void Shake(VisualElement v, float amp = 14) { if (!Ui.FxOff) Fx(Tween(0.3f, p => v.style.translate = new Translate(Mathf.Sin(p * 40) * amp * (1 - p), 0))); }
         void Pop(VisualElement v) => Fx(Tween(0.18f, p => v.style.scale = new Scale(Vector3.one * Mathf.Lerp(1.18f, 1f, p))));
 
         /// 떠오르며 사라지는 글자 (+1, 삑! 등)

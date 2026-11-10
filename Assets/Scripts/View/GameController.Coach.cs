@@ -13,47 +13,86 @@ namespace KwGame.View
         const string CoachPref = "kw.v4.coach", CoachName = "kw-coach";
         VisualElement coach;
         int coachStep;
+        List<(string target, string title, string body)> coachCards = new List<(string, string, string)>();
+        string coachDonePref;   // 다 보거나 건너뛰면 1 로 적을 PlayerPrefs 키 (도움말 다시 보기는 null = 안 적음)
+        bool coachIntro;        // 첫 3장 (마지막 버튼 "시작!")
+        readonly List<string> coachQueue = new List<string>();   // 막혀서 못 띄운 상황 카드 id (다음 RenderAll 끝에)
 
         // (짚을 UI 이름 · 제목 · 본문). 이름은 RenderSaveControls 의 버튼 name, 또는 "hud"/"mini"/"mirai"/null(가운데)
-        static readonly (string target, string title, string body)[] COACH = {
-            (null, "목표: 28일 안에 빚 3,000만", "7일마다 밤에 김사장이 이자(3%)를 받으러 와요.\n다 갚으면 엔딩, 28일 만기에 못 갚으면… 원양어선."),
+        // 첫 집 화면: 3장만. 나머지는 처음 마주칠 때 한 장씩 (COACH_CTX)
+        static readonly (string target, string title, string body)[] COACH_INTRO = {
+            (null, "목표: 28일 안에 빚 3,000만", "7일마다 밤에 김사장이 이자({rate}%)를 받으러 와요.\n다 갚으면 엔딩, 28일 만기에 못 갚으면… 원양어선."),
             ("hud", "상태 카드", "빚 · 현금 · 날짜 · 미래 호감.\n호감이 높아야 둘이 같이 웃는 엔딩이에요."),
-            ("act-row", "하루 = 오전 · 오후 · 밤 3칸", "행동 하나 고르면 그 칸이 끝나요. 시계는 멈춰 있으니 천천히.\n낮(오전·오후)은 장 · 알바, 밤은 미래 · 생활 시간 —\n밤에 놀아 주면 호감이 더 오르고, 야간 알바는 덜 벌려요."),
-            ("act-watch", "장 보기 (돈 버는 핵심)", "그 칸 동안 시세가 실시간으로 움직이고 폰으로 사고팔아요.\n주식 주문·리포트는 장 보기 칸에서만, 코인은 언제든."),
-            ("mini", "속보 = 이번 칸 시세", "칸이 시작할 때 뉴스가 떠요. 호재면 오르고 악재면 내려요.\n단 30%는 가짜! 출처랑 본문 단서로 가려내기."),
-            ("act-phone", "롱 / 숏 · 실적 해금", "롱 = 오르는 데 걸기, 숏 = 내리는 데 걸기. 배율을 올릴수록 크게 벌지만\n반대로 가면 청산 (넣은 돈 전부 증발).\n처음엔 현물 · 코인 1배만. 매매로 번 돈(실현수익)이 쌓이면 열려요:\n100만 → 레버리지 10배 · 200만 → 숏 · 500만 → 고배율.\n김사장 대출은 첫 이자를 내야 열려요. 1장은 알바 + 현물로 시드머니부터!"),
-            ("act-date", "미래 (호감)", "놀아 주면 호감 ↑, 하루 종일 안 놀아 주면 ↓.\n아침마다 부탁 하나 → 지키면 ↑ 어기면 ↓."),
-            ("act-map", "외출", "알바 = 미니게임으로 느리지만 안전한 돈.\n카지노 · 한강 · 김사장 캐피탈도 여기서."),
-            (null, "해금 · 주말", "종목은 장마다 새로 상장돼요 (8 · 15 · 22일).\n6·7일째(주말)는 주식장 휴장 → 금요일에 들고 갈지 정리할지!\n이 설명은 아래 '도움말'로 언제든 다시 볼 수 있어요."),
+            ("act-row", "하루 = 오전 · 오후 · 밤 3칸", "행동 하나 고르면 그 칸이 끝나요. 시계는 멈춰 있으니 천천히.\n낮(오전·오후)은 장 · 알바, 밤은 미래 · 생활 시간 —\n밤에 놀아 주면 호감이 더 오르고, 야간 알바는 덜 벌려요.\n돈 버는 핵심은 '장 보기': 그 칸 동안 시세가 움직이고 폰(P)으로 사고팔아요."),
+        };
+        static readonly string[] CTX_ORDER = { "watch", "news", "coin", "mirai", "map", "unlock" };
+        static readonly Dictionary<string, (string target, string title, string body)> COACH_CTX = new Dictionary<string, (string, string, string)>
+        {
+            ["watch"] = ("act-watch", "장 보기 (돈 버는 핵심)", "그 칸 동안 시세가 실시간으로 움직이고 폰으로 사고팔아요.\n주식 주문·리포트는 장 보기 칸에서만, 코인은 언제든."),
+            ["news"] = ("mini", "속보 = 이번 칸 시세", "칸이 시작할 때 뉴스가 떠요. 호재면 오르고 악재면 내려요.\n단 30%는 가짜! 출처랑 본문 단서로 가려내기."),
+            ["coin"] = ("act-phone", "롱 / 숏 · 실적 해금", "롱 = 오르는 데 걸기, 숏 = 내리는 데 걸기. 배율을 올릴수록 크게 벌지만\n반대로 가면 청산 (넣은 돈 전부 증발).\n처음엔 현물 · 코인 1배만. 매매로 번 돈(실현수익)이 쌓이면 열려요:\n100만 → 레버리지 10배 · 200만 → 숏 · 500만 → 고배율.\n김사장 대출은 첫 이자를 내야 열려요. 1장은 알바 + 현물로 시드머니부터!"),
+            ["mirai"] = ("act-date", "미래 (호감)", "놀아 주면 호감 ↑, 하루 종일 안 놀아 주면 ↓.\n아침마다 부탁 하나 → 지키면 ↑ 어기면 ↓."),
+            ["map"] = ("act-map", "외출", "알바 = 미니게임으로 느리지만 안전한 돈.\n카지노 · 한강 · 김사장 캐피탈도 여기서."),
+            ["unlock"] = (null, "해금 · 주말", "종목은 장마다 새로 상장돼요 (8 · 15 · 22일).\n6·7일째(주말)는 주식장 휴장 → 금요일에 들고 갈지 정리할지!\n이 설명은 아래 '도움말'로 언제든 다시 볼 수 있어요."),
         };
 
-        /// RenderAll 끝에서: v4 첫 집 화면이면 한 번 띄움
+        static bool CoachSeen(string pref) { try { return PlayerPrefs.GetInt(pref, 0) != 0; } catch { return false; } }
+
+        bool CoachBlocked() => coach != null || autoSkipDialog || G == null || !G.v4 || playing || mg != null || settingsEl != null || modal.style.display == DisplayStyle.Flex;
+
+        /// RenderAll 끝에서: v4 첫 집 화면이면 3장, 아니면 밀려 있던 상황 카드 한 장
         void CoachMaybe()
         {
-            if (coach != null || autoSkipDialog || G == null || !G.v4 || playing || S.pending?.t != "home" || modal.style.display == DisplayStyle.Flex) return;
-            int seen = 0;
-            try { seen = PlayerPrefs.GetInt(CoachPref, 0); } catch { }
-            if (seen == 0) CoachStart();
+            if (CoachBlocked()) return;
+            if (S.pending?.t == "home" && !CoachSeen(CoachPref)) { CoachOpen(COACH_INTRO.ToList(), CoachPref, true, true); return; }
+            if (!CoachSeen(CoachPref)) return;   // 첫 3장 전엔 상황 카드도 기다림
+            while (coachQueue.Count > 0)
+            {
+                string id = coachQueue[0]; coachQueue.RemoveAt(0);
+                string pref = CoachPref + "." + id;
+                if (CoachSeen(pref) || !COACH_CTX.TryGetValue(id, out var c)) continue;
+                if (id == "watch" && S.pending?.t == "watch") c.target = null;   // 장 보기 화면에선 버튼이 없으니 가운데
+                CoachOpen(new List<(string, string, string)> { c }, pref, false, false);
+                return;
+            }
         }
 
+        /// 상황 카드: 처음 마주칠 때 한 번 (kw.v4.coach.&lt;id&gt;). 지금 못 띄우면 줄 세워 두고 다음 RenderAll 끝에
+        void CoachCtx(string id)
+        {
+            if (autoSkipDialog || G == null || !G.v4 || coachQueue.Contains(id) || CoachSeen(CoachPref + "." + id)) return;
+            coachQueue.Add(id);
+            root.schedule.Execute(CoachMaybe);   // 그리는 도중이면 한 프레임 뒤에
+        }
+
+        /// 퀵메뉴 "도움말": 9장 전부 (기록은 안 바꿈)
         void CoachStart()
         {
+            var all = COACH_INTRO.ToList();
+            foreach (var id in CTX_ORDER) all.Add(COACH_CTX[id]);
+            CoachOpen(all, null, true, false);
+        }
+
+        void CoachOpen(List<(string target, string title, string body)> cards, string donePref, bool closePhone, bool intro)
+        {
             CoachClose();
+            coachCards = cards; coachDonePref = donePref; coachIntro = intro;
             coachStep = 0;
             // 덮개를 먼저 달아 둠: 아래 RenderAll 이 CoachMaybe 로 또 시작하면 덮개가 하나 더 남아 클릭을 다 먹음 (튜토리얼 끝나도 클릭 안 되던 버그)
             coach = new VisualElement { name = CoachName }; Ui.Fill(coach);
             coach.RegisterCallback<ClickEvent>(_ => CoachNext());
             root.Add(coach);
-            if (phoneOpen) { phoneOpen = false; RenderAll(); }
+            if (closePhone && phoneOpen) { phoneOpen = false; RenderAll(); }
             // 한 프레임 뒤에 (버튼 위치가 잡힌 다음) 그림
             coach.schedule.Execute(CoachDraw);
         }
 
-        void CoachNext() { if (coach == null) { CoachClose(); return; } coachStep++; if (coachStep >= COACH.Length) CoachEnd(); else CoachDraw(); }
+        void CoachNext() { if (coach == null) { CoachClose(); return; } coachStep++; if (coachStep >= coachCards.Count) CoachEnd(); else CoachDraw(); }
         void CoachEnd()
         {
-            try { PlayerPrefs.SetInt(CoachPref, 1); PlayerPrefs.Save(); } catch { }
+            if (coachDonePref != null) try { PlayerPrefs.SetInt(coachDonePref, 1); PlayerPrefs.Save(); } catch { }
             CoachClose();
+            if (coachQueue.Count > 0) root.schedule.Execute(CoachMaybe);   // 밀린 상황 카드
         }
         void CoachClose()
         {   // 혹시 남은 덮개까지 전부 걷기
@@ -83,7 +122,9 @@ namespace KwGame.View
         {
             if (coach == null) return;
             coach.Clear();
-            var (tn, title, body) = COACH[coachStep];
+            var (tn, title, body) = coachCards[coachStep];
+            body = body.Replace("{rate}", (G.rate() * 100).ToString("0.#"));   // 난이도별 이자
+            bool last = coachStep >= coachCards.Count - 1;
             var tgt = CoachTarget(tn);
             Rect r = default; bool has = false;
             if (tgt != null && tgt.resolvedStyle.display != DisplayStyle.None)
@@ -118,15 +159,15 @@ namespace KwGame.View
             card.style.position = Position.Absolute;
             var top = Ui.Row(); top.style.justifyContent = Justify.SpaceBetween; top.style.alignItems = Align.Center;
             top.Add(Ui.Label(title, 32, Ui.Gold, true));
-            top.Add(Ui.Label($"{coachStep + 1} / {COACH.Length}", 20, Ui.Dim));
+            top.Add(Ui.Label($"{coachStep + 1} / {coachCards.Count}", 20, Ui.Dim));
             card.Add(top);
             var b = Ui.Label(body, 25, Ui.Text); b.style.whiteSpace = WhiteSpace.Normal; b.style.marginTop = 12; card.Add(b);
             var row = Ui.Row(); row.style.justifyContent = Justify.FlexEnd; row.style.marginTop = 18;
-            if (coachStep < COACH.Length - 1)
+            if (!last)
             {
                 var skip = Ui.Chip("건너뛰기 (Esc)", CoachEnd); skip.focusable = false; skip.RegisterCallback<ClickEvent>(e => e.StopPropagation()); row.Add(skip);
             }
-            var next = Ui.Chip(coachStep < COACH.Length - 1 ? "다음 ▶ (Space)" : "시작! (Space)", CoachNext, false, Ui.Accent);
+            var next = Ui.Chip(!last ? "다음 ▶ (Space)" : coachCards.Count == 1 ? "알겠어요 (Space)" : coachIntro ? "시작! (Space)" : "닫기 (Space)", CoachNext, false, Ui.Accent);
             next.focusable = false; next.RegisterCallback<ClickEvent>(e => e.StopPropagation()); next.style.marginLeft = 10; row.Add(next);
             card.Add(row);
             coach.Add(card);

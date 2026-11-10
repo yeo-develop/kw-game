@@ -3,9 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using DG.Tweening;
 using Febucci.TextAnimatorForUnity;
 using KwGame.Sim;
+using KwGame.Persistence;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -262,7 +264,7 @@ namespace KwGame.View
         string StartLine()
         {
             var R = D.RULES;
-            return G.v4 ? $"빚 {G.man(R.DEBT0)} 원. 만기 {R.V4_DAYS}일. 매주({R.MONTH_DAYS}일) 이자 {R.RT_RATE * 100:0.#}% ({G.man(MathK.Round1k(R.DEBT0 * R.RT_RATE))} 원).\n하루 세 번: 장 보기 · 알바 · 미래랑 놀기 중에 골라."
+            return G.v4 ? $"빚 {G.man(R.DEBT0)} 원. 만기 {R.V4_DAYS}일. 매주({R.MONTH_DAYS}일) 이자 {G.rate() * 100:0.#}% ({G.man(G.interestDue())} 원).\n하루 세 번: 장 보기 · 알바 · 미래랑 놀기 중에 골라."
                 : $"빚 {G.man(R.DEBT0)} 원. 매달({R.MONTH_DAYS}일) 이자 {G.rate() * 100:0.#}%. 알바·주식·코인·도박… 갚을 방법은 많다.";
         }
 
@@ -508,9 +510,11 @@ namespace KwGame.View
                     Info($"{G.clockNow()} · 이 칸 끝({GameSim.clockOf(G.slotEndMin(S.slot))})까지 시세가 실시간으로 움직여요. 폰(P)으로 사고팔기.", 22, Ui.Text);
                     Btn("폰 열기 / 닫기", TogglePhone);
                     Btn("그만 보기 (남은 시간 넘기기)", () => Send("watchEnd"), null, false, Ui.Panel);
+                    CoachCtx("watch");   // 첫 장 보기 → 장 보기 설명 카드
                     break;
                 case "map":
                     Title("어디 갈까?");
+                    CoachCtx("map");   // 첫 외출 → 외출 설명 카드
                     Btn("집으로", () => Send("goTo", "loc", "home"));
                     foreach (var L in D.LOCList.Where(L => (!L.rt || S.rt) && !G.locHidden(L.id)))
                     {
@@ -621,6 +625,7 @@ namespace KwGame.View
                     foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("payday", "k", k), o.sub, o.dis); }
                     break;
                 case "ending": RenderEnding(P); break;
+                case "liqAlert": RenderLiqAlert(P); break;
                 default: Title(P.t); Info("(이 화면은 아직 없음)"); break;
             }
             NoShrink(panelBody);   // 스크롤 상자 안 버튼이 눌려 글자 겹치지 않게
@@ -633,6 +638,22 @@ namespace KwGame.View
             ["ware"] = "연타로 박스 올리기. 무거운 박스는 3번 쳐야 올라감(+2). 중간에 깨지기 쉬움 박스가 오면 1초 동안 손 떼기 (치면 −3, 콤보 끊김). 허리는 소모품.\nSpace / 클릭 연타 · 6초",
             ["mart"] = "떨어지는 박스와 돌진하는 진상 카트 피하기. 위에 뜨는 경고 보고 미리 피하기, 아슬하게 피하면 콤보. 박카스 먹으면 목숨 +1. 9초 버티기, 맞을 때마다 일당 깎임.\n← → / A D / 화면 드래그 · 목숨 4개 · 뒤로 갈수록 빨라짐",
         };
+
+        /// 알바 중 청산 경보: 몰래 폰 보고 다 정리할지, 참을지
+        Pending liqAlertSeen;
+        void RenderLiqAlert(Pending P)
+        {
+            if (liqAlertSeen != P) { liqAlertSeen = P; KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.Kakao); SetFace("panic"); }
+            string name = P.tk != null && D.TK.TryGetValue(P.tk, out var t) ? t.name : P.tk ?? "?";
+            string job = P.key != null && D.JOBS.TryGetValue(P.key, out var j) ? j.name : "알바";
+            Title("📉 알바 중… 폰이 울린다");
+            Info($"{job} 하는 중. 주머니에서 폰이 계속 진동한다.", 20, Ui.Dim);
+            Info($"{name} 포지션이 증거금의 {P.n0 * 100:0}% 를 잃었어요 (−{G.won(P.total)})", 24, Ui.Bad);
+            double now = S.mk.tk.Get(P.tk)?.p ?? 0;
+            Info($"청산가 {G.won(P.due)} · 지금 {G.won(now)}", 22, Ui.Text);
+            Btn("몰래 폰 본다 — 전부 정리", () => Send("alertPeek"), $"일당 −{G.won(P.took)} · {P.half * 100:0}% 확률로 사장한테 들킴 (일당 0)", false, Ui.Accent);
+            Btn("참는다 — 일단 일 계속", () => Send("alertHold"), "청산되면 넣은 돈은 거의 증발…", false, Ui.Panel);
+        }
 
         void RenderWork(Pending P)
         {
@@ -693,11 +714,14 @@ namespace KwGame.View
             bool matured = G.v4 && E != null && E.kind == "bad1" && E.days >= D.RULES.V4_DAYS && S.paidMonth == S.month;
             Title(matured ? G.T(E.variant == "duo" ? "v4.tag.duo" : "v4.tag.sea") : E?.tag ?? "엔딩");
             if (E == null) return;
+            Info($"판 코드 {GameSim.SeedCode(S.seed)} · {G.DiffName()}", 20, Ui.Dim);
             Info(E.h, 32, E.ok ? Ui.Good : Ui.Bad);
             Info(E.lead, 22, Ui.Text);
+            UnlockStrip();
             // 버튼을 먼저 (스코어보드가 길어 상자 아래로 잘리지 않게)
             if (P.cont) Btn(G.v4 && S.part == 1 ? "2부: 아빠의 차용증 →" : "계속하기 (빚 없는 자유 모드)", () => Send("continue"), G.v4 && S.part == 1 ? "김사장이 또 문을 두드린다" : null, false, Ui.Accent);
-            Btn("새 게임", () => NewGame(UnityEngine.Random.Range(1, 1000000)), null, false, P.cont ? (Color?)null : Ui.Accent);
+            Btn("새 게임", () => NewGame(UnityEngine.Random.Range(1, 1000000), S.diff ?? "normal"), null, false, P.cont ? (Color?)null : Ui.Accent);
+            ResultCardBox();
             var sb = E.sb;
             Info("스코어보드", 26, Ui.Gold);
             void Row(string k, string v) { var r = Ui.Row(); r.style.justifyContent = Justify.SpaceBetween; r.style.marginBottom = 4; r.Add(Ui.Label(k, 22, Ui.Dim)); r.Add(Ui.Label(v, 22, Ui.Text, true)); panelBody.Add(r); }
@@ -706,6 +730,81 @@ namespace KwGame.View
             Row("알바로 번 돈", G.won(sb.earned)); Row("투자 손익", G.sgnWon(sb.profit)); Row("도박 순손익", G.sgnWon(sb.gnet));
             Row("최대 자산", G.won(sb.maxAsset)); Row("도박 승/판", $"{sb.gW}/{sb.gN}"); Row("투자 승/매도", $"{sb.iW}/{sb.iN} · 청산 {sb.liq}");
             Row("갤 명성", $"{sb.fame} ({sb.rank})"); Row("중독도", $"{sb.addict}"); Row("기절 · 돌발 매수", $"{sb.faint} · {sb.impulse}");
+        }
+
+        // ---------- 엔딩 기록 · 결과 카드 ----------
+        string metaRunStamp; MetaUnlock lastUnlock; bool unlockSoundPlayed;
+
+        /// 엔딩 이벤트 때 한 번: 결과 → 메타 진행(엔딩·도전과제) 저장. 같은 판을 두 번 적지 않게 도장(seed:part:days:kind)
+        void RecordMeta()
+        {
+            var E = S.endInfo;
+            if (E == null) return;
+            string stamp = $"{S.seed}:{S.part}:{E.days}:{E.kind}";
+            if (stamp == metaRunStamp) return;
+            metaRunStamp = stamp; lastUnlock = null; unlockSoundPlayed = false;
+            var r = G.Result();   // newAch 포함
+            var meta = MetaStore.Default.Load();
+            var u = meta.Apply(r, DateTime.UtcNow.ToString("O"));
+            if (u != null) MetaStore.Default.TrySave(meta, out _);
+            bool any = u != null && (u.newEndings?.Count > 0 || u.newAch?.Count > 0);
+            lastUnlock = any ? u : null;
+        }
+
+        /// 새로 얻은 엔딩·도전과제 띠 (처음 보일 때 해금 소리 한 번)
+        void UnlockStrip()
+        {
+            var u = lastUnlock;
+            if (u == null) return;
+            var box = Ui.Box(new Color(0.4f, 0.3f, 0.05f, 0.95f), 14, 10); Ui.Border(box, Ui.Gold, 2); box.style.marginBottom = 12;
+            if (u.newEndings?.Count > 0)
+            {
+                var cat = GameSim.EndingCatalog(D);
+                var names = u.newEndings.Select(k => cat.FirstOrDefault(c => c.key == k)?.name ?? k);
+                box.Add(Ui.Label("NEW 엔딩: " + string.Join(", ", names), 24, Ui.Gold, true));
+            }
+            if (u.newAch?.Count > 0)
+            {
+                var ach = GameSim.Achievements(D);
+                var names = u.newAch.Select(id => ach.FirstOrDefault(a => a.id == id)?.name ?? id);
+                var l = Ui.Label("도전과제 달성: " + string.Join(", ", names), 22, Ui.Text, true); l.style.marginTop = 4; box.Add(l);
+            }
+            panelBody.Add(box);
+            if (!unlockSoundPlayed) { unlockSoundPlayed = true; KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.Unlock); }
+        }
+
+        /// 결과 카드 (친구한테 보낼 글) + 복사 버튼
+        void ResultCardBox()
+        {
+            string text = G.ResultCard();
+            if (string.IsNullOrEmpty(text)) return;
+            var box = Ui.Box(new Color(1, 1, 1, 0.05f), 16, 10); Ui.Border(box, new Color(1, 1, 1, 0.12f), 1); box.style.marginBottom = 14;
+            var head = Ui.Row(); head.style.marginBottom = 8; box.Add(head);
+            head.Add(Ui.Label("결과 카드", 24, Ui.Gold, true));
+            var sp = new VisualElement(); sp.style.flexGrow = 1; head.Add(sp);
+            Button copy = null;
+            copy = Ui.Chip("복사", () =>
+            {
+                CopyText(text);
+                Toast("복사했어요 · 안 되면 글을 드래그해서 복사하세요", "good");
+                var l = copy.Q<Label>(); l.text = "복사됨";
+                copy.schedule.Execute(() => l.text = "복사").ExecuteLater(2000);
+            });
+            copy.style.marginRight = 0; copy.style.marginBottom = 0; copy.style.flexShrink = 0;
+            head.Add(copy);
+            var body = Ui.Label(text, 20, Ui.Text); body.selection.isSelectable = true; box.Add(body);
+            panelBody.Add(box);
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")] static extern void KwCopyText(string s);
+#endif
+        static void CopyText(string text)
+        {
+            GUIUtility.systemCopyBuffer = text;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            KwCopyText(text);
+#endif
         }
     }
 }

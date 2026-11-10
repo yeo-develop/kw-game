@@ -99,6 +99,7 @@ namespace KwGame.View
 
         IEnumerator KakaoBarrage(string[] msgs)
         {
+            if (Ui.FxOff) yield break;   // 화면 효과 끔: 탄막 없이 토스트만
             var b = Barrage(); b.Clear();
             MenheraFx(true);
             float w = Mathf.Max(600, stage.resolvedStyle.width), h = Mathf.Max(400, stage.resolvedStyle.height);

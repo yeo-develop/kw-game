@@ -52,6 +52,7 @@ namespace KwGame.View
             font = Resources.Load<Font>("Fonts/Pretendard-Regular");
             fontBold = Resources.Load<Font>("Fonts/Pretendard-Bold");
             BuildUi();
+            LoadPlayPrefs();   // 글자 속도 · 화면 효과 · 읽은 대사 (GameController.Settings.cs) — 이어하기에도 적용
             bool requested = TitleStartup.Consume(out var restored);
             if (restored != null)
             {
@@ -62,7 +63,8 @@ namespace KwGame.View
             }
             else
             {
-                NewGame(seed != 0 ? seed : UnityEngine.Random.Range(1, 1000000));
+                int sd = requested && TitleStartup.Seed > 0 ? TitleStartup.Seed : seed != 0 ? seed : UnityEngine.Random.Range(1, 1000000);
+                NewGame(sd, requested ? TitleStartup.Diff : "normal");
                 if (requested) Send("start");
             }
             var shots = ArgValue("-kwShots");
@@ -77,9 +79,10 @@ namespace KwGame.View
             return GameData.Load(assets.Select(a => new KeyValuePair<string, string>(a.name + ".json", a.text)));
         }
 
-        void NewGame(int sd)
+        void NewGame(int sd, string diff = "normal")
         {
-            G = GameSim.Create(D, sd, new GameSim.Opts { rt = true });
+            G = GameSim.Create(D, sd, new GameSim.Opts { rt = true, diff = diff });
+            metaRunStamp = null; lastUnlock = null;
             G.Hud = true;
             phoneOpen = false;
             LlmNewGame();
@@ -120,7 +123,7 @@ namespace KwGame.View
                     case "kakao": KakaoNotify(e.Str("room")); break;
                     case "npc": stageTitle.text = Ui.Clean(e.Str("kind") != null && D.NPC_NAME.TryGetValue(e.Str("kind"), out var nn) ? nn : LocTitle()); ShowNpc(e.Str("kind")); break;
                     case "toast" when e.Str("kind") == "kim" && e.Str("app") == "kakao": break;   // 김사장 카톡은 카톡 알림창으로 (KakaoNotify)
-                    case "toast": Toast(e.Str("text"), e.Str("kind")); if (e.Str("app") == "gall") HoldFace("annoyed"); break;
+                    case "toast": Toast(e.Str("text"), e.Str("kind")); if (e.Str("app") == "gall") HoldFace("annoyed"); if (e.Str("room") == "flash") CoachCtx("news"); break;   // 첫 칸 시작 속보 → 속보 설명 카드
                     case "bubble": Toast("미래: " + e.Str("text"), "bubble"); SetFace(e.Str("face")); break;
                     case "tip": if (e.Str("bubble") != null) { Toast("미래: " + e.Str("bubble"), "bubble"); SetFace(e.Str("face")); } break;
                     case "casino": Toast($"{e.Str("txt")}  ({G.sgnWon(e.Num("net"))})", e.Num("net") > 0 ? "good" : "liq"); if (e.Num("net") > 0) HoldFace("smug"); yield return new WaitForSeconds(autoSkipDialog ? 0 : 0.35f); break;
@@ -145,13 +148,15 @@ namespace KwGame.View
                     case "addictEv": if (e.Str("k") == "secret") Toast($"몰래 카지노 {G.sgnWon(e.Num("amt"))}", "liq"); break;
                     case "faint": Toast("기절!", "liq"); HoldFace("dizzy", true); break;
                     case "morning": yield return Morning(e); break;
-                    case "opening": yield return PlayScene("opening"); break;
+                    case "opening": yield return Opening(); break;
+                    case "unlock": CoachCtx("unlock"); break;   // 첫 해금 → 해금 · 주말 설명 카드
                     case "story": yield return PlayScene(e.Str("key")); break;
                     case "aff": Toast($"미래 호감 {(e.Num("d") > 0 ? "+" : "")}{e.Num("d"):0} → {e.Num("v"):0}", e.Num("d") > 0 ? "good" : "liq"); break;
                     case "watch": if (!phoneOpen) TogglePhone(); break;
                     case "ending":
                         if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely")) yield return PlayScene("clear");
                         if (e.Str("kind") == "clear") JuiceConfetti(stage);   // 빚 다 갚음
+                        RecordMeta();   // 엔딩·도전과제 기록 (판마다 한 번, GameController.Screens.cs)
                         break;
                     case "liveLiq": JuiceLiq(stage, SizeOf(stage).x / 2, SizeOf(stage).y * 0.42f); break;   // 실시간 청산
                     case "error": Debug.LogWarning("[sim] " + e.Str("msg")); break;
@@ -165,8 +170,15 @@ namespace KwGame.View
             RenderAll();
         }
 
+        /// 장면 데이터의 규칙 자리표시자 → 이 판 값 (난이도별): {rate} 주 이자 % · {due} 이자 금액 · {cash} 시작 현금 · {debt} 시작 빚
+        string FillRules(string text)
+        {
+            if (text == null || text.IndexOf('{') < 0 || G == null) return text;
+            return text.Replace("{rate}", (G.rate() * 100).ToString("0.#")).Replace("{due}", G.won(G.interestDue())).Replace("{cash}", G.won(S.cash)).Replace("{debt}", G.won(G.debtStart()));
+        }
         IEnumerator Say(string who, string name, string text, string face)
         {
+            text = FillRules(text);
             dlg.style.display = DisplayStyle.Flex;
             dlgText.style.display = DisplayStyle.Flex; idleText.style.display = DisplayStyle.None; dlgHint.style.display = DisplayStyle.Flex;
             dlgName.text = Ui.Clean(who == "m" ? "미래" : who == "me" ? "나" : who == "kim" ? "김사장" : who == "npc" ? name : "");
@@ -175,6 +187,7 @@ namespace KwGame.View
             dlgText.ResumeAnimation();
             dlgText.Typewriter.ShowText(Ui.Clean(text));
             dlgText.Typewriter.StartShowingText(true);
+            if (textSpeed >= 3 || sceneInstant) dlgText.Typewriter.SkipTypewriter();   // 글자 속도 '즉시' · 읽은 장면 빨리 넘기기
             UpdateDialogueHint();
             if (face != null) SetFace(face);
             SpeakerArt(who, name, face);
@@ -198,7 +211,7 @@ namespace KwGame.View
         bool rtDirty, rtWasOpen;
         void RtUpdate()
         {
-            if (G == null || !S.rt || playing || waiting || rtSpeed == 0 || mg != null || modal.style.display == DisplayStyle.Flex || !PHONE_OK.Contains(S.pending?.t)) return;
+            if (G == null || !S.rt || playing || waiting || rtSpeed == 0 || settingsEl != null || mg != null || coach != null || modal.style.display == DisplayStyle.Flex || !PHONE_OK.Contains(S.pending?.t)) return;
             if (G.v4 && S.pending?.t != "watch") return;   // v4: 장 볼 때만 시간이 흐름
             // 타이머는 매 프레임 쌓음 (예전엔 시계가 1분 갈 때만 쌓여서 폰 글자가 8초에 한 번꼴로만 바뀜)
             float dt = Time.unscaledDeltaTime;
@@ -230,6 +243,7 @@ namespace KwGame.View
         void Update()
         {
             if (dlgText == null) return;
+            if (settingsEl != null) { if (Input.GetKeyDown(KeyCode.Escape)) CloseSettings(); return; }   // 설정 창 (GameController.Settings.cs)
             RtUpdate();
             if (CoachKeys()) return;
             if (!waiting && mg == null && G != null && S.pending?.t != "start")
@@ -296,11 +310,42 @@ namespace KwGame.View
             }
         }
 
+        /// 오프닝: 처음 한 번은 전부, 2회차부터는 미래 한 줄 + "오프닝 다시 보기" (kw.v4.opening)
+        const string OpeningPref = "kw.v4.opening";
+        IEnumerator Opening()
+        {
+            int seen = 0;
+            try { seen = PlayerPrefs.GetInt(OpeningPref, 0); } catch { }
+            bool full = seen == 0 || autoSkipDialog;
+            if (!full)
+            {
+                SetScene("room", "pout");
+                yield return Say("m", null, $"또 시작이네. 빚 {G.man(G.debtStart())}, 7일마다 이자 {G.rate() * 100:0.#}%, {D.RULES.V4_DAYS}일 만기. 알지? …알바 가자.", "pout");
+                HideDialogue();
+                int pick = -1;
+                modal.Clear(); modal.style.display = DisplayStyle.Flex;
+                var card = Card(760);
+                card.Add(Ui.Label("오프닝은 이미 봤어요", 32, Ui.Gold, true));
+                var b0 = Ui.Button("바로 시작 (Space)", () => pick = 0, null, false, Ui.Accent); b0.style.marginTop = 16; card.Add(b0);
+                card.Add(Ui.Button("오프닝 다시 보기", () => pick = 1));
+                modal.Add(card);
+                waiting = true; waitFrame = Time.frameCount;   // 고르는 동안 폰(P) 등 다른 입력 막음
+                do { yield return null; if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) pick = 0; } while (pick < 0);
+                waiting = false; clicked = false;
+                modal.style.display = DisplayStyle.None; modal.Clear();
+                full = pick == 1;
+            }
+            if (!full) yield break;
+            yield return PlayScene("opening");
+            try { PlayerPrefs.SetInt(OpeningPref, 1); PlayerPrefs.Save(); } catch { }
+        }
+
         IEnumerator PlayScene(string key)
         {
             var steps = D.J["SCENES"]?[key] as JArray;
             if (steps == null) yield break;
             sceneKey = key;
+            sceneInstant = skipSeen && SeenScene(key);
             foreach (JObject st in steps)
             {
                 if (st["say"] != null) yield return Say((string)st["say"], (string)st["name"], (string)st["text"], (string)st["face"]);
@@ -313,18 +358,20 @@ namespace KwGame.View
                     case "rules": if (!G.v4) yield return RulesCard(); if (key == "opening") ShowCg("opening_box"); break;   // 규칙 뒤 = 유품 상자 장면 (v4 는 규칙 카드 없이 첫 화면 튜토리얼로)
                     case "shake": Shake(stage, 18); break;
                     case "flash": Flashback((bool?)st["on"] == true); break;
-                    case "card": HideDialogue(); yield return StoryCard((string)st["h"], (string)st["t"], (string)st["sub"], (string)st["chart"]); break;
+                    case "card": HideDialogue(); yield return StoryCard((string)st["h"], FillRules((string)st["t"]), FillRules((string)st["sub"]), (string)st["chart"]); break;
                 }
             }
             Flashback(false);
             sceneKey = null;
+            sceneInstant = false;
+            MarkSceneSeen(key);
             HideDialogue();
         }
 
         /// 아침 카드가 지난번에 본 해금 상태 (바뀐 날만 줄을 띄우려고). null / −1 = 아직 모름
         bool? mLoanSeen, mShortSeen; int mLevSeen = -1;
         /// 만기 같이 엔딩 목표 (GameSim.V4.cs v4EndVariant: 만기 빚 ≤ 시작 빚 × V4_DUO_DEBT + 호감 ≥ V4_AFF_GOOD)
-        double DuoDebt() => G.debtStart() * D.RULES.V4_DUO_DEBT;
+        double DuoDebt() => G.debtStart() * G.duoDebt();   // 난이도별 문턱
         bool DuoOk() => S.debt <= DuoDebt() && S.aff >= D.RULES.V4_AFF_GOOD;
         string DuoGoal() => G.T("v4.goalDuo", "t", G.man(DuoDebt()), "a", D.RULES.V4_AFF_GOOD, "d", G.man(S.debt));
 
@@ -357,7 +404,8 @@ namespace KwGame.View
                 if (first || shortNear || mShortSeen == false && shortNow)
                     card.Add(Ui.Label(shortNow ? "숏: 열림" : $"숏: 매매로 {G.man(D.RULES.V4_SHORT_PROFIT)}원 벌면 열림 (지금 {G.sgnMan(S.realized)})", 22, Ui.Dim));
                 mLoanSeen = loanNow; mLevSeen = levNow; mShortSeen = shortNow;
-                if (G.promNow() is GameSim.Prom pm) card.Add(Ui.Label("미래 부탁: " + pm.hud, 22, Ui.Accent));
+                if (G.promNow() is GameSim.Prom pm) { card.Add(Ui.Label("미래 부탁: " + pm.hud, 22, Ui.Accent)); if (!first) CoachCtx("mirai"); }   // 둘째 날부터 첫 부탁 → 미래 설명 카드
+                if (wkd) CoachCtx("unlock");   // 첫 주말 아침 (첫 해금이 먼저면 그때)
                 if (!paid4 && dd4 <= 1) card.Add(Ui.Label($"이자일 {(dd4 <= 0 ? "D-DAY (오늘 밤)" : "D-1 (내일 밤)")} · 이자 {G.won(e.Num("due"))}", 26, Ui.Bad, true));
                 else if (first) card.Add(Ui.Label($"이자일까지 D-{dd4} · 이자 {G.won(e.Num("due"))}", 22, Ui.Dim));
                 var gl = Ui.Label(DuoGoal(), 22, DuoOk() ? Ui.Good : Ui.Gold); gl.style.whiteSpace = WhiteSpace.Normal; card.Add(gl);

@@ -124,6 +124,7 @@ namespace KwGame.Sim
                 rtStep(S.mk, P, Tnow(), S.slot, S.min, absDay());
                 S.min++; mins--;
                 rtLiq(liqs);
+                if (liqAlertCheck()) { S.owe += mins; mins = 0; break; }   // 알바 중 청산 경보: 남은 시간은 선택 뒤에 (spend 가 다시 흘림)
                 if (S.min % 60 == 0 && (!v4 || S.pending?.t == "watch")) readIgnored();   // v4: 행동으로 몇 시간 건너뛸 땐 읽씹 페널티 안 쌓음 (장 볼 때만)
             }
             if (liqs.Count > 0)
@@ -147,6 +148,7 @@ namespace KwGame.Sim
                 double back = Math.Max(0, rhu(c.margin * (1 - loss)));
                 if (has("insure") && !S.insUsed) { S.insUsed = true; back = Math.Max(back, rhu(c.margin * (S.rt ? R.RT_INSURE : 0.5))); }
                 S.cash += back; S.cps.Remove(c); S.st.liq++; S.st.iN++; S.realized += back - c.margin;
+                if (S.awayWork && S.pending?.t != "watch") S.liqWork++;   // 메타: 알바 나가 있는 동안 청산
                 S.today.Add(new Ledger { kind = "invest", amt = back - c.margin, label = T("lbl.liq", "n", D.TK[c.tk].name, "lev", c.lev, "b", T("lbl.liqBack", "p", rhu(loss * 100))) });
                 liqs.Add(new Liq { c = c, back = back, lost = c.margin + c.bonus - back });
             }
@@ -158,7 +160,7 @@ namespace KwGame.Sim
         void spend()
         {
             int o = S.owe; S.owe = 0;
-            if (!clockRun(o)) after("home");
+            if (!clockRun(o)) { if (S.pending?.t == "liqAlert") return; S.awayWork = false; after("home"); }   // 경보가 끼어들면 선택 뒤 spend 로 이어짐
         }
         bool tickCmd(SimCommand c)
         {

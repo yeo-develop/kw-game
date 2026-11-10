@@ -431,6 +431,7 @@ namespace KwGame.View
         void OrderPanel(VisualElement right, Ticker t, TkState mk, string where, double fee)
         {
             var R = D.RULES; bool isC = t.IsCoin, open = isC || G.stockTradeOk();   // v4: 국장은 장 보기 칸에서만
+            if (isC && phoneOpen) CoachCtx("coin");   // 첫 코인 주문 화면 → 롱/숏 설명 카드 (폰 위에 덮음)
             if (isC && stkLev > t.maxLev) stkLev = t.maxLev;
             if (isC && stkLev > G.levCap()) stkLev = G.levCap();   // v4 신용 단계: 배율·숏 상한
             if (isC && stkDir < 0 && !G.shortOk()) stkDir = 1;

@@ -293,10 +293,10 @@ namespace KwGame.View
 
         // ---------- 붙이는 곳에서 부르는 것 ----------
         int juiceSeed = 1;
-        VisualElement JuiceLiq(VisualElement parent, float x, float y, float s = 1) { var v = PlayJuice(parent, new LiqBurst(new Vector2(x, y), s, juiceSeed++)); v?.BringToFront(); return v; }
+        VisualElement JuiceLiq(VisualElement parent, float x, float y, float s = 1) { if (Ui.FxOff) return null; var v = PlayJuice(parent, new LiqBurst(new Vector2(x, y), s, juiceSeed++)); v?.BringToFront(); return v; }
         VisualElement JuiceCoins(VisualElement parent, Vector2 from, Vector2 to, int n = 9) => PlayJuice(parent, new CoinFly(from, to, 1, n, juiceSeed++));
         VisualElement JuiceHeart(VisualElement parent, float x, float y, float s = 1) => PlayJuice(parent, new HeartBreak(new Vector2(x, y), s));
-        VisualElement JuiceConfetti(VisualElement parent) { var v = PlayJuice(parent, new Confetti(SizeOf(parent).x, SizeOf(parent).y, juiceSeed++)); v?.BringToFront(); return v; }
+        VisualElement JuiceConfetti(VisualElement parent) { if (Ui.FxOff) return null; var v = PlayJuice(parent, new Confetti(SizeOf(parent).x, SizeOf(parent).y, juiceSeed++)); v?.BringToFront(); return v; }
         VisualElement JuiceIris(VisualElement parent) => PlayJuice(parent, new IrisOpen(SizeOf(parent).x, SizeOf(parent).y));
         static Vector2 SizeOf(VisualElement v) => v != null && v.layout.width > 10 ? new Vector2(v.layout.width, v.layout.height) : new Vector2(1920, 1080);
         VisualElement JuiceSweep(VisualElement parent, Vector2 c, Color col) => PlayJuice(parent, new SweepRing(c, col));

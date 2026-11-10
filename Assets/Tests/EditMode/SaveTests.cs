@@ -80,13 +80,19 @@ namespace KwGame.Tests
         public void FailedWritePreservesPreviousSave()
         {
             var s = Started().S; Save(s); byte[] previous = File.ReadAllBytes(store.SavePath);
-            using (var locked = new FileStream(store.SavePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            // FileShare.None 잠금은 macOS·Linux 에서 rename(File.Replace) 을 못 막는다 → 임시 파일 자리를 폴더로 막아서
+            // 어느 OS 에서나 쓰기 단계가 실패하게 한다.
+            string temporary = store.SavePath + ".tmp";
+            Directory.CreateDirectory(temporary);
+            try
             {
                 s.cash += 200;
-                Assert.That(store.TrySave(s, out _), Is.False);
+                Assert.That(store.TrySave(s, out var error), Is.False);
+                Assert.That(error, Does.StartWith("저장하지 못했습니다"));
             }
+            finally { Directory.Delete(temporary, true); }
             Assert.That(File.ReadAllBytes(store.SavePath), Is.EqualTo(previous));
-            Assert.That(File.Exists(store.SavePath + ".tmp"), Is.False);
+            Assert.That(File.Exists(temporary), Is.False);
         }
         [Test]
         public void InvalidStateDoesNotOverwriteSave()
