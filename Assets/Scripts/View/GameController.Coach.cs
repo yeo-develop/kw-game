@@ -114,6 +114,7 @@ namespace KwGame.View
             null => null,
             "hud" => hudBar,
             "mini" => DeskActive ? DeskPart("list") : null,
+            "act-phone" when DeskActive => DeskPart("order"),
             "act-row" => planCur != null && PlanHome ? planCur : null,
             "desk-order" => DeskActive ? DeskPart("order") : null,
             "desk-chart" => DeskActive ? DeskPart("chart") : null,

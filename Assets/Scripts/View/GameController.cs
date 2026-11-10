@@ -94,7 +94,7 @@ namespace KwGame.View
 
         public void Send(SimCommand c)
         {
-            if (playing) return;
+            if (playing) { onSent = null; return; }   // 재생 중 누른 주문은 버림 — 걸어 둔 결과 콜백이 남아 다음 명령에 "실패"로 뜨지 않게
             int coinsBefore = S.cps.Count;
             var evs = G.Apply(c);
             int closedCoins = c.t == "closeCoins" ? coinsBefore - S.cps.Count : 0;
@@ -244,7 +244,7 @@ namespace KwGame.View
             {
                 rtDirty = false; rtPhoneT = 0; rtWasOpen = G.stockOpen();
                 RenderHud(G.HudSnapOf());
-                if (DeskActive) RenderDesk(); else if (G.v4 && S.pending?.t == "watch") RenderPanel();   // 장 보기: 데스크 시세 · 장 열림
+                if (DeskActive) RenderDesk();   // 장 보기: 데스크 시세 · 장 열림
                 if (phoneOpen) RenderPhone();
                 RenderMini();
             }

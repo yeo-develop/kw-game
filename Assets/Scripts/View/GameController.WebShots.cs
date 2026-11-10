@@ -26,10 +26,11 @@ namespace KwGame.View
             var steps = new List<(string name, Func<IEnumerator> body, float limit)>
             {
                 ("opening", new Func<IEnumerator>(WsOpening), 45f),
-                ("first_day", new Func<IEnumerator>(WsFirstDay), 30f),
-                ("watch", new Func<IEnumerator>(WsWatch), 60f),
-                ("work", new Func<IEnumerator>(WsWork), 70f),
-                ("night", new Func<IEnumerator>(WsNight), 70f),
+                ("first_day", new Func<IEnumerator>(WsFirstDay), 35f),
+                ("desk", new Func<IEnumerator>(WsDesk), 90f),
+                ("work", new Func<IEnumerator>(WsWork), 75f),
+                ("night", new Func<IEnumerator>(WsNight), 80f),
+                ("day2", new Func<IEnumerator>(WsDay2), 25f),
                 ("payday", new Func<IEnumerator>(WsPayday), 50f),
                 ("week2", new Func<IEnumerator>(WsWeek2), 30f),
                 ("endings", new Func<IEnumerator>(WsEndings), 90f),
@@ -73,8 +74,8 @@ namespace KwGame.View
             if (waiting) clicked = true;
             if (settingsEl != null) { settingsEl.RemoveFromHierarchy(); settingsEl = null; }
             if (coach != null) CoachClose();
-            CloseHudTip();
             if (!playing && !waiting && modal != null) modal.style.display = DisplayStyle.None;
+            if (!playing && !waiting) SettleClose();
         }
 
         IEnumerator WIdle(float max = 15f)
@@ -106,14 +107,14 @@ namespace KwGame.View
         /// 지금 화면이 기대한 것인가: 아니면 "[shot] skip 이름: 이유" 를 남기고 false
         bool WWant(bool ok, string name, string why) { if (!ok) ShotMode.Skip(name, why); return ok; }
 
-        /// 모달 카드(아침 · 정산)를 클릭 대기 상태로 띄워 찍고 넘김
+        /// 클릭 대기 카드(아침 = 모달 · 정산 = 띠 아래 한 장)를 띄워 찍고 넘김
         IEnumerator WCard(IEnumerator card, string name)
         {
             yield return WIdle();
             autoSkipDialog = false;
             StartCoroutine(card);
             yield return WWait(() => waiting, 4f);
-            if (WWant(waiting && modal.style.display == DisplayStyle.Flex, name, "카드가 안 뜸")) yield return WShot(name, 0.2f);
+            if (WWant(waiting && (modal.style.display == DisplayStyle.Flex || settleEl != null), name, "카드가 안 뜸")) yield return WShot(name, 0.2f);
             autoSkipDialog = true;
             if (waiting) clicked = true;
             yield return null; yield return null;
@@ -159,16 +160,24 @@ namespace KwGame.View
         }
         IEnumerator WToHome() => WResolve("home", "ending");
 
-        /// 집 → 지도 → 장소 (길에서 말 거는 사람은 무시)
-        IEnumerator WGoTo(string loc)
+        /// 집 계획판 → 장소 (quick: 지도 없이 바로, k = 도착해서 바로 할 행동). 길에서 말 거는 사람은 무시
+        IEnumerator WGoTo(string loc, string k = null)
         {
             yield return WToHome();
             if (Pt != "home") yield break;
-            yield return WSend("map");
-            if (Pt != "map") yield break;
-            yield return WSend("goTo", "loc", loc);
+            if (k != null) yield return WSend("quick", "loc", loc, "k", k); else yield return WSend("quick", "loc", loc);
             if (Pt == "encounter") yield return WSend("encounter", "ask", false);
         }
+        /// 계획판 지금 칸의 알바 카드를 누름 (숫자 키와 같은 panelActs: 장 보기 · 미래랑 놀기 · 알바들 순서). 카드가 없거나 잠겼으면 같은 quick 명령
+        void WPlanWork(string k)
+        {
+            RenderAll();
+            var opts = G.Query(() => G.locOpts("work")).ToList();
+            int i = opts.FindIndex(o => o.k == k), idx = 2 + i;
+            if (Pt == "home" && i >= 0 && idx < panelActs.Count && panelActs[idx] != null) panelActs[idx]();
+            else Send("quick", "loc", "work", "k", k);
+        }
+        bool AtDesk(string name) => WWant(DeskActive, name, "데스크가 아님: " + Pt);
         bool AtLoc(string key) => Pt == "loc" && S.pending.key == key;
         bool MgHas(string text) => mg != null && mg.Query<Label>().ToList().Any(l => l.text == text);
         string OpenCoin() => G.tkOpen("BTK") ? "BTK" : D.TKList.Where(x => x.IsCoin && G.tkOpen(x.id)).Select(x => x.id).FirstOrDefault();
@@ -185,20 +194,30 @@ namespace KwGame.View
             },
         };
 
-        /// 저녁 정산 카드: 일당 · 매매 · 그 밖 · 현금 · 납부 줄이 다 보이게 (값이 0 인 줄은 화면에서 빠지므로 없으면 채움)
-        SimEvent WSettleEvent()
+        /// 저녁 정산 한 장 (cls = jackpot 이익 · loss 손실 · liq 청산): 칸 손익(S.slotNet 오전 · 오후)과 사건 값을 같이 넣어 한 장 안 덧셈이 맞게.
+        /// 칸 손익은 부른 쪽이 되돌림. 현금은 사건 값만 (실제 현금은 안 바꿈) — 이익 날은 납부를 다 모은 쪽, 나머지는 모자란 쪽
+        SimEvent WSettleEvent(string cls)
         {
-            double wage = S.lastPay > 0 ? S.lastPay : 180000, pnl = G.dayPnl();
-            if (Math.Abs(pnl) < 1) pnl = 230000;
-            double other = -100000, net = wage + pnl + other, cash0 = S.dayCash0 >= 0 ? S.dayCash0 : S.cash - net, due = G.gateDue();
+            double am, pm, other, unreal, move; int liq = 0, hit = 0, miss = 0;
+            switch (cls)
+            {
+                case "jackpot": am = 360000; pm = 240000; other = -100000; hit = 1; miss = 1; unreal = 184000; move = -200000; break;
+                case "loss": am = -420000; pm = 90000; other = -30000; miss = 1; unreal = -62000; move = 0; break;
+                default: am = -800000; pm = 90000; other = 0; liq = 1; unreal = 0; move = 0; break;
+            }
+            if (S.slotNet != null && S.slotNet.Length > 1) { S.slotNet[0] = am; S.slotNet[1] = pm; }
+            double wage = S.lastPay > 0 ? S.lastPay : 90000, net = am + pm + other, pnl = net - wage - other, due = G.gateDue();
+            double cash = due > 0 ? (cls == "jackpot" ? due + 260000 : cls == "loss" ? due * 0.55 : due * 0.3) : 2000000;
+            cash = Math.Round(Math.Max(cash, 300000) / 10000) * 10000;
+            double cash0 = cash - net - move;
             return new SimEvent
             {
                 t = "settle",
                 d = new Dictionary<string, object>
                 {
-                    ["cls"] = pnl > 0 ? "jackpot" : "loss", ["wage"] = wage, ["pnl"] = pnl, ["other"] = other, ["liq"] = 0, ["unreal"] = G.unreal(),
-                    ["hit"] = 1, ["miss"] = 1, ["net"] = net, ["cash0"] = cash0, ["cash"] = S.cash, ["move"] = S.cash - cash0 - net,
-                    ["due"] = due, ["gap"] = Math.Max(0, due - S.cash), ["dd"] = G.gateDays(),
+                    ["cls"] = cls, ["wage"] = wage, ["pnl"] = pnl, ["other"] = other, ["liq"] = liq, ["unreal"] = unreal,
+                    ["hit"] = hit, ["miss"] = miss, ["net"] = net, ["cash0"] = cash0, ["cash"] = cash, ["move"] = move,
+                    ["due"] = due, ["gap"] = Math.Max(0, due - cash), ["dd"] = (double)G.gateDays(),
                 },
             };
         }
@@ -237,121 +256,184 @@ namespace KwGame.View
             if (WWant(Pt == "relic", "relic_pick", "유물 고르기가 아님: " + Pt)) yield return WShot("relic_pick");
         }
 
-        /// 첫날: 아침 카드 · 집(낮) · 도움말 카드 · 유물 설명 카드 · 설정 창 · 대출(잠김)
+        /// 첫날: 아침 카드 · 계획판(오전, 아무것도 안 함) · 도움말 카드 · 상태 카드 · 설정 창 · 폰을 연 집 · 대출(잠김)
         IEnumerator WsFirstDay()
         {
             yield return WToHome();
             if (!WWant(Pt == "home", "morning_first", "집이 아님: " + Pt)) yield break;
             yield return WCard(Morning(WMorningEvent()), "morning_first");
             RenderAll();
-            yield return WShot("home_day", 0.3f);
+            if (WWant(Pt == "home" && S.slot == 0 && G.slotActOf(0) == null, "plan_morning", "첫날 오전 집이 아님: " + Pt + " (칸 " + S.slot + ")")) yield return WShot("plan_morning", 0.3f);
 
-            CoachStart();   // 퀵메뉴 "도움말" 과 같은 카드 (기록 안 씀)
+            CoachStart();   // 판 아래 "도움말" 과 같은 카드 (기록 안 씀)
             yield return new WaitForSecondsRealtime(0.15f);
-            if (coach != null && coachCards.Count > 1) { coachStep = 1; CoachDraw(); }   // 2장 = 상태 카드 짚기
+            if (coach != null && coachCards.Count > 1) { coachStep = 1; CoachDraw(); }   // 2장 = 상태 띠 짚기
             if (WWant(coach != null, "coach_card", "도움말 카드가 안 뜸")) yield return WShot("coach_card", 0.25f);
             CoachClose();
 
-            var tipSrc = hudBar.Query(className: TipSrcClass).ToList().LastOrDefault();   // 버프 칩 뒤에 유물 아이콘이 옴 → 마지막 = 유물
-            string rid = S.augs.Take(9).LastOrDefault(); var aug = D.AUGS.FirstOrDefault(a => a.id == rid);
-            if (WWant(tipSrc != null && aug != null, "hud_relic_tip", "HUD 에 유물 아이콘이 없음"))
+            // 상태 카드 (띠를 누른 것과 같음): 유물 · 버프가 보이게 호감만 버프 2단계까지 올려 두고 찍은 뒤 되돌림
             {
-                OpenHudTip(tipSrc, "relic:" + rid, aug.name, aug.d);
-                yield return WShot("hud_relic_tip");
-                CloseHudTip();
+                double aff0 = S.aff; var BA = D.RULES.V4_BUFF_AFF;
+                if (BA != null && BA.Length > 1 && S.aff < BA[1]) S.aff = BA[1];
+                RenderAll();
+                ToggleStatusCard();
+                if (WWant(statusCard != null && S.augs.Count > 0, "status_card", "상태 카드가 안 뜨거나 유물이 없음")) yield return WShot("status_card", 0.25f);
+                CloseStatusCard(); S.aff = aff0; RenderAll();
             }
 
             if (settingsEl == null) OpenSettings();
             if (WWant(settingsEl != null, "settings_game", "설정 창이 안 뜸")) yield return WShot("settings_game");
             if (settingsEl != null) { settingsEl.RemoveFromHierarchy(); settingsEl = null; }   // CloseSettings 는 PlayerPrefs.Save 를 불러서 직접 걷음
 
+            // 폰을 연 집 (판 아래 "P 폰"과 같음): 집에서 코인을 급히 볼 때의 증권 앱 시세
+            phoneTab = "stock"; stkTab = "mkt"; stkMsg = "";
+            if (!phoneOpen) TogglePhone();
+            if (WWant(phoneOpen && Pt == "home", "plan_phone", "폰이 안 열리거나 집이 아님: " + Pt)) yield return WShot("plan_phone", 0.3f);
+            if (phoneOpen) TogglePhone();
+
             yield return WSend("loanOpen");
             if (WWant(Pt == "loan", "loan_locked", "대출 창이 아님: " + Pt)) yield return WShot("loan_locked");
             yield return WToHome();
         }
 
-        /// 장 보기: 폰 닫힘 · 시세 · 리포트 칩 · 차트·주문(코인 접힘/펼침 · 주식) · 위험 주문 확인 · 내 계좌 · 카톡 · 주갤 · 뉴스 · 정보 수첩 · 배너 · 현금 ±
-        IEnumerator WsWatch()
+        /// 장 보기 데스크: 주식(온도 · 거래량) · 리포트 · 코인 주문 · 두 번 누르기 · 주문 실패 · 포지션 · 12h/48h · 작전주(끌어올림 → 전조 → 설거지 → 잠김) · 카톡 · 배너 · 청산 · 현금 ±
+        /// 그만 본 뒤 집에서 폰: 주갤 · 뉴스 · 정보 수첩
+        IEnumerator WsDesk()
         {
             yield return WToHome();
-            if (!WWant(Pt == "home" && !G.isEve(), "watch", "낮 집이 아님: " + Pt)) yield break;
+            if (!WWant(Pt == "home" && !G.isEve(), "desk_stock", "낮 집이 아님: " + Pt)) yield break;
             yield return WSend("watch");
-            if (!WWant(Pt == "watch", "watch", "장 보기가 아님: " + Pt)) yield break;
+            if (!WWant(DeskActive, "desk_stock", "데스크가 아님: " + Pt)) yield break;
             int open = D.RULES.RT_STOCK[0] + 30;   // 09:30 = 장 열림
             if (S.min < open) yield return WSend("tick", "m", Math.Min(120, open - S.min));
-            phoneOpen = false; RenderAll();
-            if (Pt == "watch") yield return WShot("watch");
-
-            string stk = D.TKList.Where(x => x.IsStock && !x.inv && G.tkOpen(x.id)).Select(x => x.id).FirstOrDefault();
+            phoneOpen = false;
+            var opTk = (IEnumerable<string>)D.RULES.V4_OP_TK ?? new string[0];
+            var stocks = D.TKList.Where(x => x.IsStock && !x.inv && G.tkOpen(x.id)).Select(x => x.id).ToList();
+            string stk = stocks.FirstOrDefault(k => !opTk.Contains(k)) ?? stocks.FirstOrDefault();
+            string ot = stocks.FirstOrDefault(k => k != stk && opTk.Contains(k)) ?? stocks.FirstOrDefault(k => k != stk) ?? stk;
             string coin = OpenCoin();
-            phoneOpen = true; phoneTab = "stock"; stkTab = "mkt"; stkMsg = ""; RenderAll();
-            yield return WShot("phone_market");
 
+            if (AtDesk("desk_stock") && WWant(stk != null && G.stockOpen(), "desk_stock", "열린 주식이 없거나 장중이 아님"))
+            {
+                DeskSelect(stk); RenderAll();
+                yield return WShot("desk_stock");
+            }
+
+            // 무료 리포트 → 그 종목을 골라 분석가 칸에 정보 줄
             yield return WIdle();
-            onSent = ReportMsg; Send("report", "paid", false);   // 무료 리포트
+            onSent = ReportMsg; Send("report", "paid", false);
             yield return WIdle();
-            stkTab = "mkt"; RenderAll();
             int today = G.Tnow() / D.RULES.SLOTS;
-            if (WWant(S.tips.Any(x => x.T0 / D.RULES.SLOTS == today), "phone_report", "오늘 받은 리포트가 없음")) yield return WShot("phone_report");
-
-            if (stk != null && Pt == "watch") yield return WSend("buy", "tk", stk, "amt", 300000, "where", "app");
-            if (coin != null && Pt == "watch") yield return WSend("open", "tk", coin, "dir", 1, "lev", 10, "amt", 200000, "sl", 0.5, "tp", 1.0);   // 예약 손절·익절 붙임
-
-            if (WWant(coin != null, "chart_coin", "열린 코인이 없음"))
+            var tip = S.tips.LastOrDefault(x => x.T0 / D.RULES.SLOTS == today);
+            if (AtDesk("desk_report") && WWant(tip != null, "desk_report", "오늘 받은 리포트가 없음"))
             {
-                phoneOpen = true; phoneTab = "stock"; stkTab = "detail"; stkSel = coin; stkMore = false; stkAmt = null; stkLev = 10; stkDir = 1; stkMsg = ""; RenderAll();
-                yield return WShot("chart_coin");
-                stkMore = true; RenderAll();
-                yield return WShot("chart_coin_more");
-                stkMore = false;
+                if (DeskPickable(tip.tk)) DeskSelect(tip.tk);
+                RenderAll();
+                yield return WShot("desk_report");
             }
-            if (WWant(stk != null, "chart_stock", "열린 주식이 없음"))
+
+            if (AtDesk("desk_coin_order") && WWant(coin != null, "desk_coin_order", "열린 코인이 없음"))
             {
-                phoneOpen = true; phoneTab = "stock"; stkTab = "detail"; stkSel = stk; stkAmt = null; RenderAll();
-                yield return WShot("chart_stock");
+                DeskSelect(coin); DeskOrderSet(300000, 10, 1);
+                yield return WShot("desk_coin_order");
             }
-            if (WWant(coin != null, "order_confirm", "열린 코인이 없음"))
+            if (AtDesk("desk_confirm") && WWant(coin != null, "desk_confirm", "열린 코인이 없음"))
             {   // 위험 주문(25배 이상) 첫 누름 = "한 번 더 누르면 진입" (OrderBar 의 확인 키와 같은 모양)
-                stkSel = coin; stkTab = "detail"; stkLev = Math.Min(50, D.TK[coin].maxLev); stkDir = 1; stkAmt = null; RenderAll();
+                DeskOrderSet(null, Math.Min(50, D.TK[coin].maxLev), 1);
                 ordArm = Time.realtimeSinceStartup; ordArmKey = $"open|{coin}|{stkDir}|{stkLev}|{stkAmt ?? 0}"; RenderAll();
-                yield return WShot("order_confirm", 0.1f);
-                stkLev = 10; stkAmt = null; ordArm = -10; ordArmKey = null;
+                yield return WShot("desk_confirm", 0.1f);
+                ordArm = -10; ordArmKey = null;
             }
-            phoneOpen = true; phoneTab = "stock"; stkTab = "acct"; RenderAll();
-            yield return WShot("account");
+            if (AtDesk("desk_fail") && WWant(coin != null, "desk_fail", "열린 코인이 없음"))
+            {   // 가진 돈 · 증거금 상한보다 큰 주문 → 결과 줄에 실패 이유 (주문 패널 버튼과 같은 Order 경로)
+                DeskOrderSet(300000, 10, 1);
+                yield return WIdle();
+                Order("진입", null, null, "open", "tk", coin, "dir", 1, "lev", 10.0, "amt", S.cash + 1e8);
+                yield return WIdle();
+                if (WWant(stkMsgBad && !string.IsNullOrEmpty(stkMsg), "desk_fail", "주문이 실패하지 않음")) yield return WShot("desk_fail", 0.1f);
+            }
 
-            phoneTab = "kakao"; kkRoom = "m";
-            yield return WSend("read", "what", "kakao", "room", "m");
-            RenderAll();
-            yield return WShot("kakao", 0.3f);
-            phoneTab = "gall"; gallTab = "all"; gallOpen = 0;
-            yield return WSend("read", "what", "gall");
-            RenderAll();
-            if (WWant(S.posts.Count > 0, "gall_list", "주갤 글이 없음")) yield return WShot("gall_list");
-            var post = S.posts.AsEnumerable().Reverse().Take(5).FirstOrDefault(p => !string.IsNullOrEmpty(p.body)) ?? S.posts.LastOrDefault();
-            if (WWant(post != null, "gall_post", "주갤 글이 없음"))
+            // 포지션: 주식 매수 + 코인 롱(예약 손절 · 익절)
+            if (stk != null && DeskActive && G.stockTradeOk()) yield return WSend("buy", "tk", stk, "amt", 300000, "where", "app");
+            if (coin != null && DeskActive) yield return WSend("open", "tk", coin, "dir", 1, "lev", 10, "amt", 200000, "sl", 0.5, "tp", 1.0);
+            if (AtDesk("desk_positions") && WWant(G.hasPos(), "desk_positions", "포지션이 안 생김"))
             {
-                gallOpen = post.id; RenderAll();
-                yield return WShot("gall_post");
-                gallOpen = 0;
+                if (stk != null) DeskSelect(stk);
+                stkMsg = ""; RenderAll();
+                yield return WShot("desk_positions");
             }
-            phoneTab = "news";
-            yield return WSend("read", "what", "news");
-            RenderAll();
-            yield return WShot("news");
-            phoneTab = "tips"; RenderAll();
-            yield return WShot("tips");
+            if (AtDesk("desk_range_12h")) { DeskRange(24); yield return WShot("desk_range_12h"); }
+            if (AtDesk("desk_range_48h")) { DeskRange(96); yield return WShot("desk_range_48h"); }
+            DeskRange(48);
 
-            // 배너 (화면 코드 그대로, 값만 넣어서): 발표 적중 · 보유 중 → 예약 익절 체결
-            phoneOpen = false; phoneTab = "stock"; stkTab = "mkt"; RenderAll();
-            var an = G.analysts().FirstOrDefault();
-            ReportBanner(new SimEvent { t = "planEv", d = new Dictionary<string, object> { ["k"] = "report", ["up"] = true, ["ok"] = true, ["hold"] = true, ["tk"] = stk ?? coin, ["who"] = an?.name ?? "" } });
-            yield return WShot("banner_report", 0.35f);
-            StopBanner(new SimEvent { t = "stopFill", d = new Dictionary<string, object> { ["tp"] = true, ["pnl"] = 184000.0, ["n"] = coin != null ? D.TK[coin].name : "" } });
-            yield return WShot("banner_stop", 0.35f);
+            // 작전 종목: 시드 첫 주엔 작전이 없어(V4_OP_WEEK) 끌어올리는 중인 작전을 넣고, 전조 · 설거지 사건은 데스크 처리(DeskEvent)에 값을 넣어 보냄. 끝나면 넣은 것을 걷음
+            if (AtDesk("desk_op_pump") && WWant(G.opOn && ot != null && G.stockTradeOk(), "desk_op_pump", "작전주가 꺼져 있거나 살 수 있는 주식이 없음"))
+            {
+                var ts = S.mk.tk[ot]; var last = ts.hist.Count > 0 ? ts.hist[ts.hist.Count - 1] : null;
+                double v0 = last?.v ?? 1, p0 = ts.p;
+                var op = G.opOf(ot); bool added = op == null; int ph0 = op?.ph ?? 0, ld0 = op?.lockDay ?? 0;
+                if (added) { op = new Op { tk = ot, key = S.part * 10 + S.month, ph = 2, heat = 72, heatPrev = 72, cap = 95, basePx = p0 }; S.ops.Add(op); }
+                if (last != null) last.v = Math.Max(v0, 4.6);
+                DeskSelect(ot); DeskOrderSet(Math.Floor(S.cash * 0.8 / 10000) * 10000);
+                yield return WShot("desk_op_pump");
 
-            // 현금 ± 숫자: 주식 절반 매도 → HUD 현금 옆에 떠오름 (0.8초짜리라 바로 찍음)
-            if (WWant(stk != null && S.hold.Has(stk) && G.stockTradeOk(), "cash_float", "팔 주식이 없거나 장이 아님"))
+                DeskEvent(new SimEvent { t = "opPre", d = new Dictionary<string, object> { ["tk"] = ot, ["n"] = D.TK[ot].name } });
+                yield return WShot("desk_op_pre", 0.3f);
+
+                DeskOrderSet(null);
+                yield return WSend("buy", "tk", ot, "amt", 300000, "where", "app");
+                double pB = ts.p, fl = (ts.ref0 > 0 ? ts.ref0 : pB) * (1 - D.RULES.RT_LIMIT);
+                op.ph = 4; op.lockDay = G.absDay() + 1; ts.p = fl;
+                if (DeskActive)
+                {
+                    DeskEvent(new SimEvent { t = "opDump", d = new Dictionary<string, object> { ["tk"] = ot, ["n"] = D.TK[ot].name, ["r"] = fl / pB - 1, ["hold"] = S.hold.Has(ot) } });
+                    RenderAll();
+                    yield return WShot("desk_op_dump", 0.3f);
+                }
+                else ShotMode.Skip("desk_op_dump", "데스크가 아님: " + Pt);
+                if (AtDesk("desk_op_locked") && WWant(G.sellLockWhy(ot) != null, "desk_op_locked", "잠김 이유가 없음"))
+                {
+                    bannerCol.Clear(); stkMsg = ""; RenderAll();
+                    yield return WShot("desk_op_locked");
+                }
+                if (added) S.ops.Remove(op); else { op.ph = ph0; op.lockDay = ld0; }
+                ts.p = pB; if (last != null) last.v = v0;
+                RenderAll();
+            }
+
+            if (AtDesk("desk_kakao"))
+            {   // 데스크 위 폰 = 카톡 · 주갤 · 뉴스 · 정보 수첩만
+                phoneOpen = true; phoneTab = "kakao"; kkRoom = "m";
+                yield return WSend("read", "what", "kakao", "room", "m");
+                RenderAll();
+                yield return WShot("desk_kakao", 0.3f);
+                phoneOpen = false; RenderAll();
+            }
+
+            // 배너 (화면 코드 그대로, 값만 넣어서): 발표 적중 · 보유 중 → 예약 익절 체결 → 청산
+            if (AtDesk("banner_report"))
+            {
+                var an = G.analysts().FirstOrDefault(); string btk = stk ?? coin;
+                var be = new SimEvent { t = "planEv", d = new Dictionary<string, object> { ["k"] = "report", ["up"] = true, ["ok"] = true, ["hold"] = true, ["tk"] = btk, ["n"] = btk != null ? D.TK[btk].name : "", ["who"] = an?.name ?? "" } };
+                DeskEvent(be); ReportBanner(be);
+                yield return WShot("banner_report", 0.35f);
+            }
+            if (AtDesk("banner_stop"))
+            {
+                var se = new SimEvent { t = "stopFill", d = new Dictionary<string, object> { ["tp"] = true, ["pnl"] = 184000.0, ["n"] = coin != null ? D.TK[coin].name : "" } };
+                DeskEvent(se); StopBanner(se);
+                yield return WShot("banner_stop", 0.35f);
+            }
+            if (AtDesk("desk_liq"))
+            {   // 실시간 청산 (Play 의 liveLiq 처리와 같은 연출)
+                DeskEvent(new SimEvent { t = "liveLiq", d = new Dictionary<string, object> { ["n"] = 1.0 } });
+                SetFace("panic");
+                JuiceLiq(stage, SizeOf(stage).x / 2, SizeOf(stage).y * 0.42f);
+                yield return WShot("desk_liq", 0.12f);
+            }
+
+            // 현금 ± 숫자: 주식 절반 매도 → 띠의 현금 옆에 떠오름 (0.8초짜리라 바로 찍음)
+            if (AtDesk("cash_float") && WWant(stk != null && S.hold.Has(stk) && G.stockTradeOk(), "cash_float", "팔 주식이 없거나 장이 아님"))
             {
                 yield return WIdle();
                 Send("sell", "tk", stk, "frac", 0.5, "where", "app");
@@ -360,32 +442,63 @@ namespace KwGame.View
             }
             if (Pt == "watch") yield return WSend("watchEnd");
             yield return WToHome();
+
+            // 집에서 폰: 주갤 · 뉴스 · 정보 수첩
+            bool home = Pt == "home";
+            phoneTab = "gall"; gallTab = "all"; gallOpen = 0; phoneOpen = home;
+            if (home) yield return WSend("read", "what", "gall");
+            RenderAll();
+            if (WWant(home && S.posts.Count > 0, "gall_list", "집이 아니거나 주갤 글이 없음: " + Pt)) yield return WShot("gall_list");
+            var post = S.posts.AsEnumerable().Reverse().Take(5).FirstOrDefault(p => !string.IsNullOrEmpty(p.body)) ?? S.posts.LastOrDefault();
+            if (WWant(home && post != null, "gall_post", "집이 아니거나 주갤 글이 없음: " + Pt))
+            {
+                gallOpen = post.id; RenderAll();
+                yield return WShot("gall_post");
+                gallOpen = 0;
+            }
+            phoneTab = "news";
+            if (home) yield return WSend("read", "what", "news");
+            RenderAll();
+            if (WWant(home, "news", "집이 아님: " + Pt)) yield return WShot("news");
+            phoneTab = "tips"; RenderAll();
+            if (WWant(home, "tips", "집이 아님: " + Pt)) yield return WShot("tips");
+            phoneOpen = false; phoneTab = "stock"; stkTab = "mkt"; RenderAll();
         }
 
-        /// 외출 · 알바: 지도 · 말 거는 사람 · 일하기 목록 · 알바 설명 · 미니게임 4종 · 구석 손익 · 몰래 폰 보기 · 알바 중 청산 · 그림 안내 · 결과 카드
+        /// 알바: 계획판(오후 — 오전 칸이 끝나 한 일 · 손익) · 계획판 알바 카드 → (말 거는 사람) → 알바 설명 카드 · 미니게임 4종 · 구석 손익 · 몰래 폰 보기(주식 줄) · 알바 중 청산 · 그림 안내 · 결과 카드
         IEnumerator WsWork()
         {
             yield return WToHome();
-            if (!WWant(Pt == "home", "map", "집이 아님: " + Pt)) yield break;
-            yield return WSend("map");
-            if (!WWant(Pt == "map", "map", "지도가 아님: " + Pt)) yield break;
-            yield return WShot("map");
+            if (!WWant(Pt == "home" && !G.isEve(), "plan_afternoon", "낮 집이 아님: " + Pt + " (칸 " + S.slot + ")")) yield break;
+            RenderAll();
+            yield return WShot("plan_afternoon", 0.3f);
 
-            // 말 거는 사람: 몇 번 나가 보고, 끝내 안 나오면 같은 모양으로 직접 띄움
-            bool enc = false;
-            for (int i = 0; i < 3; i++)
+            // 포지션을 든 채 알바 (구석 손익 · 몰래 폰 보기 · 알바 중 청산용). 코인은 집에서도 열림
+            string coin = OpenCoin();
+            if (coin != null)
             {
-                if (Pt != "map") break;
-                yield return WSend("goTo", "loc", "work");
-                if (Pt == "encounter") { enc = true; break; }
-                yield return WToHome();
-                if (Pt == "home") yield return WSend("map");
+                yield return WSend("open", "tk", coin, "dir", 1, "lev", 10, "amt", 150000);
+                yield return WSend("open", "tk", coin, "dir", 1, "lev", 25, "amt", 100000);
             }
-            if (!enc && Pt == "map")
+
+            // 계획판 알바 카드를 누름: 말 거는 사람이 나올 때까지 몇 번 (설명 카드에서 "다른 알바 고르기" = 집), 끝내 안 나오면 같은 모양으로 직접 띄움
+            bool enc = false;
+            for (int i = 0; i < 3 && !enc; i++)
             {
+                yield return WToHome();
+                if (Pt != "home") break;
+                yield return WIdle();
+                WPlanWork("l-cafe");
+                yield return WIdle();
+                enc = Pt == "encounter";
+            }
+            if (!enc)
+            {
+                yield return WToHome();
                 var src = D.SRCList.FirstOrDefault(x => x.tier == "walk" && !x.bar);
-                if (src != null)
+                if (src != null && Pt == "home")
                 {
+                    S.quick = "l-cafe"; S.quickFrom = true;   // 답한 뒤 계획판에서 누른 것처럼 바로 설명 카드로
                     S.pending = new Pending("encounter")
                     {
                         id = src.id, loc = "work", opts = new List<Opt> {
@@ -397,22 +510,11 @@ namespace KwGame.View
             }
             if (WWant(Pt == "encounter", "encounter", "말 거는 사람이 안 나옴: " + Pt)) yield return WShot("encounter");
             if (Pt == "encounter") yield return WSend("encounter", "ask", false);
-            if (Pt == "home") yield return WSend("map");
-            if (Pt == "map") yield return WSend("goTo", "loc", "work");
+            if (Pt == "home") { yield return WIdle(); WPlanWork("l-cafe"); yield return WIdle(); }
             if (Pt == "encounter") yield return WSend("encounter", "ask", false);
-            if (!WWant(AtLoc("work"), "work_list", "일하기 목록이 아님: " + Pt)) yield break;
-
-            // 포지션을 든 채 알바 (구석 손익 · 몰래 폰 보기 · 알바 중 청산용)
-            string coin = OpenCoin();
-            if (coin != null)
-            {
-                yield return WSend("open", "tk", coin, "dir", 1, "lev", 10, "amt", 150000);
-                yield return WSend("open", "tk", coin, "dir", 1, "lev", 25, "amt", 100000);
-            }
+            if (!WWant(Pt == "work" && S.pending.setup == null, "work_brief", "알바 설명 카드가 아님: " + Pt)) yield break;
             RenderAll();
-            yield return WShot("work_list");
-            yield return WSend("act", "k", "l-cafe");
-            if (WWant(Pt == "work" && S.pending.setup == null, "work_brief", "알바 설명 카드가 아님: " + Pt)) yield return WShot("work_brief");
+            yield return WShot("work_brief");
 
             // 미니게임 4종: 판을 그린 첫 순간 (자동 넘김이라 점수는 안 보냄 → 칸을 안 씀)
             foreach (var k in new[] { "cafe", "store", "ware", "mart" })
@@ -457,14 +559,19 @@ namespace KwGame.View
             yield return WToHome();
         }
 
-        /// 밤: 정산 카드 · 밤의 집 · 돌발 이벤트 · 멘헤라 · 돌발 풀매수 알림 · 유혹 · 빚 갚기 · 청산당한 밤 · 복권소 · 한강공원 · 카지노 한 판
+        /// 밤: 정산 한 장(이익 · 손실 · 청산 날) · 밤의 계획판 · 돌발 이벤트 · 멘헤라 · 돌발 풀매수 알림 · 유혹 · 빚 갚기 · 청산당한 밤 · 복권소 · 한강공원 · 카지노 한 판
         IEnumerator WsNight()
         {
             yield return WToHome();
-            if (!WWant(Pt == "home", "settle_card", "집이 아님: " + Pt)) yield break;
-            yield return WCard(SettleCard(WSettleEvent()), "settle_card");
+            if (!WWant(Pt == "home", "settle_profit", "집이 아님: " + Pt)) yield break;
+            foreach (var (name, cls) in new[] { ("settle_profit", "jackpot"), ("settle_loss", "loss"), ("settle_liq", "liq") })
+            {
+                var keep = S.slotNet != null ? (double[])S.slotNet.Clone() : null;   // 칸 손익은 화면용으로만 넣었다가 되돌림
+                yield return WCard(SettleCard(WSettleEvent(cls)), name);
+                if (keep != null) S.slotNet = keep;
+            }
             RenderAll();
-            if (WWant(G.isEve(), "home_night", "밤이 아님 (칸 " + S.slot + ")")) yield return WShot("home_night", 0.3f);
+            if (WWant(Pt == "home" && G.isEve(), "plan_night", "밤 집이 아님: " + Pt + " (칸 " + S.slot + ")")) yield return WShot("plan_night", 0.3f);
 
             yield return WSend("debug", "k", "event");
             if (WWant(Pt == "event", "event_choice", "돌발 이벤트가 안 뜸: " + Pt)) yield return WShot("event_choice");
@@ -527,7 +634,7 @@ namespace KwGame.View
                 yield return WToHome();
             }
 
-            yield return WGoTo("lotto");
+            yield return WGoTo("lotto", "l-lotto");
             if (AtLoc("lotto")) yield return WSend("act", "k", "l-lotto");
             if (WWant(Pt == "lotto", "lotto", "복권소가 아님: " + Pt)) yield return WShot("lotto");
             yield return WGoTo("park");
@@ -540,12 +647,41 @@ namespace KwGame.View
             // 카지노는 일어나지 않고 둠 → 다음 단계(이자일)에서 일어나며 밤이 끝남
         }
 
-        /// 7일째 밤 납부: 이자 · 원금 분납(모자람 → 낼 수 있음) · 통과 유물 → 다음 날 2장 시작 카드
+        /// 둘째 날 아침: 밤을 끝내고(카지노에서 일어나 나옴 · 아니면 자기) 계획판에 "어제" 줄 (첫날 칸마다 한 일 · 손익)
+        IEnumerator WsDay2()
+        {
+            int d0 = G.absDay();
+            if (Pt == "casino") yield return WSend("casinoLeave");
+            for (int i = 0; i < 3 && G.absDay() == d0; i++)
+            {
+                yield return WToHome();
+                if (G.absDay() != d0) break;
+                if (Pt == "home") yield return WSend("rest");   // 밤 칸 = 자기
+            }
+            yield return WToHome();
+            if (WWant(Pt == "home" && G.absDay() == d0 + 1 && G.slotYHas(), "plan_day2", "둘째 날 집이 아니거나 어제 기록이 없음: " + Pt + " · " + G.absDay() + "일째"))
+            {
+                RenderAll();
+                yield return WShot("plan_day2", 0.3f);
+            }
+        }
+
+        /// 주말 계획판 · 7일째 밤 납부: 이자 · 원금 분납(모자람 → 낼 수 있음) · 통과 유물 → 다음 날 2장 시작 카드
         IEnumerator WsPayday()
         {
             if (Pt != "casino") yield return WToHome();
+            // 주말: 시드대로 가려면 나흘을 더 넘겨야 해서 날짜만 토요일 아침으로 놓고 그린 뒤 되돌림
+            if (WWant(Pt == "home", "plan_weekend", "집이 아님: " + Pt))
+            {
+                int d0 = S.day, s0 = S.slot, m0 = S.min;
+                S.day = D.RULES.V4_WEEKDAYS + 1; S.slot = 0; S.min = G.slotStartMin(0);
+                RenderAll();
+                yield return WShot("plan_weekend", 0.3f);
+                S.day = d0; S.slot = s0; S.min = m0; RenderAll();
+            }
             if (!WWant(Pt == "casino" || Pt == "home", "payday_interest", "이자일로 갈 수 없음: " + Pt)) yield break;
             yield return WSend("debug", "k", "pay");   // 7일째 밤으로
+            S.min = Math.Max(S.min, G.slotStartMin(D.RULES.SLOTS - 1));   // 아침에서 바로 넘어온 경우 시계도 밤으로 (아침 시각이면 '자기'가 하루치 시계를 돌림)
             S.stress = Math.Min(S.stress, 30);          // 칸 끝 멘헤라가 이자일보다 먼저 끼지 않게
             S.cash = G.interestDue() + 600000;          // 이자는 낼 수 있고 원금 분납은 모자라게
             yield return WSend(Pt == "casino" ? "casinoLeave" : "rest");

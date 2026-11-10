@@ -13,7 +13,7 @@ namespace KwGame.View
     /// 독립 실행형 `-kwShots <폴더>` (GameController.Demo.cs) 와는 따로 — 그쪽은 예전대로 파일로 저장.
     public static class ShotMode
     {
-        public const float Hold = 0.8f, Limit = 360f;
+        public const float Hold = 0.8f, Limit = 540f;
         static int on = -1;
         static float deadline = -1;
         /// 다음 화면 순번 (타이틀 씬에서 시작해 게임 씬으로 이어짐)

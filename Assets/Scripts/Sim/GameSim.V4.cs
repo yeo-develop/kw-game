@@ -93,6 +93,10 @@ namespace KwGame.Sim
         Sub workPeek(int id, string tk = null, bool stk = false)
         {
             var P = S.pending; if (!peekOk()) return Sub.Err("peek");
+            // 닫을 코인도, 지금 팔 수 있는 주식(장중 · 안 잠김)도 없으면 거절 — 예전엔 아무것도 못 팔고 일당만 깎임
+            bool anyCoin = tk == null && S.cps.Any(x => id <= 0 || x.id == id);
+            bool anyStk = (tk != null || stk) && stockOpen() && STK().Any(k => S.hold.Has(k) && S.hold[k].q > 0 && (tk == null || k == tk) && !opLocked(k));
+            if (!anyCoin && !anyStk) return Sub.Err("peekNone");
             P.peeks++;
             bool was = P.caught;
             if (!P.caught && hashU(Tnow() * 31 + 7 + P.peeks * 97) < peekRisk(P.key)) P.caught = true;

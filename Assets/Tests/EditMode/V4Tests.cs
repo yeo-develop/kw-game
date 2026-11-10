@@ -849,6 +849,9 @@ namespace KwGame.Tests
                 Go(g, "workPeek", "id", 0);
                 Assert.That(S.cps.Count, Is.EqualTo(0), "몰래 폰 봄 = 정리");
                 Assert.That(S.pending.peeks, Is.EqualTo(1));
+                bool cg0 = S.pending.caught;
+                Assert.That(g.Apply(C("workPeek", "id", 0)).Any(e => e.t == "error"), "정리할 게 없으면 거절");
+                Assert.That(S.pending.peeks, Is.EqualTo(1), "거절된 폰 보기는 일당을 안 깎음"); Assert.That(S.pending.caught, Is.EqualTo(cg0), "들킬 판정도 안 함");
                 bool c = S.pending.caught;
                 Go(g, "mgResult", "score", 0.8);
                 double pay = S.today.Where(l => l.kind == "work").Sum(l => l.amt);
@@ -1107,7 +1110,7 @@ namespace KwGame.Tests
         public void BalanceBandsHold()
         {
             RtBots.Summary Sum(string st) => RtBots.Summarize(Data, st, 40, 1, 40);
-            var pro = Sum("pro"); var work = Sum("work"); var gamble = Sum("gamble"); var casual = Sum("casual"); var blind = Sum("proall"); var trader = Sum("trader");
+            var pro = Sum("pro"); var work = Sum("work"); var gamble = Sum("gamble"); var casual = Sum("casual"); var blind = RtBots.Summarize(Data, "proall", 120, 1, 40); var trader = Sum("trader");   // 전부 따라 타기는 판마다 편차가 커서 120판 (앞 40판만 보면 472만, 80판 299만 · 120판 307만 · 300판 278만)
             foreach (var x in new[] { pro, casual, blind, trader, work, gamble }) TestContext.WriteLine(x);
             Assert.That(pro.clear, Is.InRange(0.15, 0.7), "잘하는 사람은 꽤 깸");
             Assert.That(casual.clear, Is.LessThanOrEqualTo(0.35), "보통 사람은 가끔");
@@ -1117,9 +1120,8 @@ namespace KwGame.Tests
             foreach (var a in new[] { "watch", "work", "date" }) Assert.That(pro.acts.TryGetValue(a, out var v) ? v : 0, Is.GreaterThan(0.1), $"pro 가 {a} 를 씀 (죽은 선택지 없음)");
             // ⑥-10: 리포트를 전부 따라 타면 남는 게 없고 (답안지 아님), 전적을 읽으면 번다
             double tipPro = pro.pnl.TryGetValue("tip", out var tp) ? tp : 0, tipBlind = blind.pnl.TryGetValue("tip", out var tb) ? tb : 0;
-            // 40판 표본은 판당 평균이 ±100만쯤 흔들림 (300판 실측: 작전주 끔 228만 · 켬 278만, 읽는 쪽 1,485만) → 절대 띠는 넉넉히, 대신 읽는 쪽의 절반 미만이라는 비율을 같이 봄
-            Assert.That(tipBlind, Is.LessThan(6000000), "전부 따라 타기는 엔진이 못 됨");
-            Assert.That(tipBlind, Is.LessThan(tipPro * 0.5), "전부 따라 타면 읽는 쪽의 절반도 못 범");
+            Assert.That(tipBlind, Is.LessThan(4000000), "전부 따라 타기는 엔진이 못 됨");
+            Assert.That(tipBlind, Is.LessThan(tipPro * 0.35), "전부 따라 타면 읽는 쪽의 3분의 1 남짓도 못 범");
             Assert.That(tipPro, Is.GreaterThan(tipBlind + 3000000), "전적을 읽는 쪽이 뚜렷이 더 범");
             Assert.That(pro.clear, Is.GreaterThan(blind.clear), "읽는 사람이 더 자주 깸");
             Assert.That(pro.tipFade, Is.GreaterThan(0.1), "거꾸로 타는 것도 실력 (꼴찌 분석가)"); Assert.That(pro.tipSkip, Is.GreaterThan(0.05), "거를 줄도 앎");
@@ -1291,9 +1293,8 @@ namespace KwGame.Tests
             Assert.That(Data.S("aug.reasonStart"), Does.Contain("유물"));
         }
 
-        // ---------- 작전주 (docs/BLUEPRINT_V3.md ⑥-1~10). 화면이 붙기 전이라 데이터에선 꺼 둠(V4_OP 0) → 테스트에서만 켬 ----------
+        // ---------- 작전주 (docs/BLUEPRINT_V3.md ⑥-1~10). 데이터 값과 상관없이 이 테스트들 안에서는 켬 ----------
         static void OpOn(System.Action body) { double v0 = Data.RULES.V4_OP; Data.RULES.V4_OP = 1; try { body(); } finally { Data.RULES.V4_OP = v0; } }
-        /// 한 칸 쉬고 집으로 (시세는 그 칸만큼 흐름)
         /// 관문 급매: 하한가에 잠긴 주식은 못 파니 급매 손해도 안 매기고, 팔 게 그것뿐이면 선택지가 잠김 (예전엔 누를 때마다 현금만 깎이고 제자리 → 봇이 헛돎)
         [Test]
         public void GateFireSaleSkipsLockedStock() => OpOn(() =>
@@ -1338,6 +1339,7 @@ namespace KwGame.Tests
             var sell2 = S2.pending.opts.First(o => o.k == "sell");
             Assert.That(sell2.dis, "이자 단계: 잠긴 주식뿐이면 급매가 잠김"); Assert.That(sell2.sub, Is.EqualTo(g2.T("v4.op.lock")));
         });
+        /// 한 칸 쉬고 집으로 (시세는 그 칸만큼 흐름)
         static void RestSlot(GameSim g) { if (g.S.pending?.t == "home") Go(g, "rest"); if (g.S.pending != null && g.S.pending.t != "home" && g.S.pending.t != "ending") ToHome(g); }
         /// ⑥-1·2: 1주차엔 작전이 없고, 2주차부터 그 주에 상장된 후보 주식 하나에 매집 → 끌어올리기 → (설거지 | 식음)이 순서대로. 매집 구간은 거래량이 평소의 2배 이상
         [Test]

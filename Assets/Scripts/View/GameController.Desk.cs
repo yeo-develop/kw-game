@@ -8,12 +8,14 @@ using UnityEngine.UIElements;
 namespace KwGame.View
 {
     // 장 보기 — 트레이딩 데스크 (docs/UI_V2.md): 방 화면을 덮는 전용 화면. 맨 위 상태 띠(StripH) 아래 전부를 씀.
-    // 왼쪽 종목 목록 · 가운데 큰 차트(봉 + 거래량) · 오른쪽 분석가 → 주문 → 내 포지션 · 아래 왼쪽 소식 띠 · 아래 오른쪽 미래 작은 창.
+    // 왼쪽 종목 목록 · 가운데 큰 차트(봉 + 거래량) · 오른쪽(위에서 아래 끝까지) 분석가 → 주문 → 내 포지션 · 목록 아래 미래 작은 창 · 차트 아래 소식 띠.
     // 누를 곳은 오른쪽 한 곳 (목록은 고르기만). 주문 명령 · 실패 이유 · 두 번 누르기는 폰 증권 앱(GameController.Chart.cs)의 것을 그대로 씀.
     public partial class GameController
     {
         // 1920×1080 기준: 띠 아래 1000 = 위칸 796 + 아래칸 170 (+ 여백). 가운데 차트 칸 폭 = 1920 − 24 − 380 − 470 − 20 = 1026
+        // 오른쪽 칸은 아래칸까지 통으로 976 (분석가 ~150 + 주문 ~450 → 포지션 칸 ~350). 좁은 화면(4:3)에선 옆 칸을 화면 폭 비율로 줄여 차트 폭 50% 를 지킴
         const float DeskPad = 12, DeskGap = 10, DeskListW = 380, DeskRightW = 470, DeskBottomH = 170;
+        VisualElement deskRight;
         /// 큰 주문 (두 번 누르기) 문턱 — OrderBar 의 위험 주문 문턱(증거금 100만)과 같은 값
         const double DeskBig = 1e6;
         const float DeskSayHold = 5f, DeskBlinkSec = 8f;
@@ -43,12 +45,13 @@ namespace KwGame.View
             Ui.Abs(deskEl, 0, StripH, 0, 0);
             deskEl.style.backgroundColor = DeskBg;   // 불투명: 방 화면이 비치지 않게
             Ui.Pad(deskEl, DeskPad);
-            deskEl.style.flexDirection = FlexDirection.Column;
+            deskEl.style.flexDirection = FlexDirection.Row;
             deskEl.style.display = DisplayStyle.None;
             stage.Add(deskEl);
 
+            var left = new VisualElement(); left.style.flexDirection = FlexDirection.Column; left.style.flexGrow = 1; left.style.flexShrink = 1; left.style.minWidth = 0; left.style.marginRight = DeskGap; deskEl.Add(left);
             var top = new VisualElement(); top.style.flexDirection = FlexDirection.Row; top.style.alignItems = Align.Stretch;
-            top.style.flexGrow = 1; top.style.flexShrink = 1; top.style.minHeight = 0; deskEl.Add(top);
+            top.style.flexGrow = 1; top.style.flexShrink = 1; top.style.minHeight = 0; left.Add(top);
 
             // 왼쪽: 종목 목록
             deskList = DeskPanel(); deskList.style.width = DeskListW; deskList.style.flexShrink = 0; deskList.style.marginRight = DeskGap; top.Add(deskList);
@@ -56,33 +59,58 @@ namespace KwGame.View
             deskListSv = DeskScroll(); deskList.Add(deskListSv);
 
             // 가운데: 머리(이름 · 가격 · 범위) + 큰 차트
-            deskCenter = DeskPanel(); deskCenter.style.flexGrow = 1; deskCenter.style.flexShrink = 1; deskCenter.style.minWidth = 0; deskCenter.style.marginRight = DeskGap; top.Add(deskCenter);
+            deskCenter = DeskPanel(); deskCenter.style.flexGrow = 1; deskCenter.style.flexShrink = 1; deskCenter.style.minWidth = 0; top.Add(deskCenter);
             deskHead = new VisualElement(); deskHead.style.flexShrink = 0; deskCenter.Add(deskHead);
             deskChartHost = new VisualElement(); deskChartHost.style.flexGrow = 1; deskChartHost.style.flexShrink = 1; deskChartHost.style.minHeight = 0; deskChartHost.style.marginTop = 8; deskCenter.Add(deskChartHost);
 
-            // 오른쪽: 분석가 → 주문 → 내 포지션 (포지션이 많으면 스크롤)
-            var right = new VisualElement(); right.style.width = DeskRightW; right.style.flexShrink = 0; right.style.flexDirection = FlexDirection.Column; top.Add(right);
-            deskAn = DeskPanel(); deskAn.style.flexShrink = 0; deskAn.style.marginBottom = DeskGap; deskAn.style.paddingBottom = 8; right.Add(deskAn);
-            deskOrder = new VisualElement(); deskOrder.style.flexShrink = 0; deskOrder.style.marginBottom = DeskGap; Ui.Radius(deskOrder, 12); deskOrder.style.overflow = Overflow.Hidden; right.Add(deskOrder);
-            deskPos = DeskPanel(); deskPos.style.flexGrow = 1; deskPos.style.flexShrink = 1; deskPos.style.minHeight = 0; right.Add(deskPos);
+            // 아래: 미래 작은 창(목록 아래) + 소식 띠(차트 아래)
+            var bot = new VisualElement(); bot.style.flexDirection = FlexDirection.Row; bot.style.alignItems = Align.Stretch;
+            bot.style.height = DeskBottomH; bot.style.flexShrink = 0; bot.style.marginTop = DeskGap; left.Add(bot);
+            deskMirai = DeskPanel(); deskMirai.style.width = DeskListW; deskMirai.style.flexShrink = 0; deskMirai.style.marginRight = DeskGap; deskMirai.style.flexDirection = FlexDirection.Row; deskMirai.style.alignItems = Align.Center; deskMirai.style.overflow = Overflow.Hidden; bot.Add(deskMirai);
+            deskFeedBox = DeskPanel(); deskFeedBox.style.flexGrow = 1; deskFeedBox.style.flexShrink = 1; deskFeedBox.style.minWidth = 0; deskFeedBox.style.overflow = Overflow.Hidden; bot.Add(deskFeedBox);
+
+            // 오른쪽(띠 아래 끝까지): 분석가 → 주문 → 내 포지션 (포지션이 많으면 스크롤)
+            deskRight = new VisualElement(); deskRight.style.width = DeskRightW; deskRight.style.flexShrink = 0; deskRight.style.flexDirection = FlexDirection.Column; deskEl.Add(deskRight);
+            deskAn = DeskPanel(); deskAn.style.flexShrink = 0; deskAn.style.marginBottom = DeskGap; deskAn.style.paddingBottom = 8; deskRight.Add(deskAn);
+            deskOrder = new VisualElement(); deskOrder.style.flexShrink = 0; deskOrder.style.marginBottom = DeskGap; Ui.Radius(deskOrder, 12); deskOrder.style.overflow = Overflow.Hidden; deskRight.Add(deskOrder);
+            deskPos = DeskPanel(); deskPos.style.flexGrow = 1; deskPos.style.flexShrink = 1; deskPos.style.minHeight = 200; deskRight.Add(deskPos);
             deskPosHead = Ui.Row(); deskPosHead.style.flexShrink = 0; deskPosHead.style.marginBottom = 6; deskPos.Add(deskPosHead);
             deskPosSv = DeskScroll(); deskPos.Add(deskPosSv);
+            deskEl.RegisterCallback<GeometryChangedEvent>(_ => DeskFit());
 
-            // 아래: 소식 띠 + 미래 작은 창
-            var bot = new VisualElement(); bot.style.flexDirection = FlexDirection.Row; bot.style.alignItems = Align.Stretch;
-            bot.style.height = DeskBottomH; bot.style.flexShrink = 0; bot.style.marginTop = DeskGap; deskEl.Add(bot);
-            deskFeedBox = DeskPanel(); deskFeedBox.style.flexGrow = 1; deskFeedBox.style.flexShrink = 1; deskFeedBox.style.minWidth = 0; deskFeedBox.style.marginRight = DeskGap; deskFeedBox.style.overflow = Overflow.Hidden; bot.Add(deskFeedBox);
-            deskMirai = DeskPanel(); deskMirai.style.width = DeskRightW; deskMirai.style.flexShrink = 0; deskMirai.style.flexDirection = FlexDirection.Row; deskMirai.style.alignItems = Align.Center; deskMirai.style.overflow = Overflow.Hidden; bot.Add(deskMirai);
-            deskFace = new VisualElement(); deskFace.style.width = 150; deskFace.style.height = 146; deskFace.style.flexShrink = 0; Ui.Radius(deskFace, 10);
+            deskFace = new VisualElement(); deskFace.style.width = 120; deskFace.style.height = 146; deskFace.style.flexShrink = 0; Ui.Radius(deskFace, 10);
             deskFace.style.backgroundColor = new Color(1, 1, 1, 0.05f);
             deskFace.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
             deskFace.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Top);
             deskFace.pickingMode = PickingMode.Ignore; deskMirai.Add(deskFace);
-            deskBubble = Ui.Label("", 20, Ui.Ink); deskBubble.style.backgroundColor = Color.white; Ui.Radius(deskBubble, 14);
+            deskBubble = Ui.Label("", 20, Ui.Ink); deskBubble.style.whiteSpace = WhiteSpace.Normal; deskBubble.style.backgroundColor = Color.white; Ui.Radius(deskBubble, 14);
             deskBubble.style.paddingLeft = 14; deskBubble.style.paddingRight = 14; deskBubble.style.paddingTop = 10; deskBubble.style.paddingBottom = 10;
             deskBubble.style.marginLeft = 12; deskBubble.style.flexGrow = 1; deskBubble.style.flexShrink = 1; deskBubble.pickingMode = PickingMode.Ignore; deskMirai.Add(deskBubble);
 
             deskEl.schedule.Execute(DeskMiraiSync).Every(250);   // 표정이 평소로 돌아오고 말풍선이 끝나는 걸 다시 그리기 없이 반영
+            deskEl.schedule.Execute(DeskArmTick).Every(250);
+        }
+
+        /// 좁은 화면: 옆 칸 폭을 화면 폭에 맞춰 줄임 (16:9 에선 380 · 470 그대로)
+        void DeskFit()
+        {
+            float w = deskEl.layout.width; if (float.IsNaN(w) || w < 10) return;
+            float lw = Mathf.Clamp(w * DeskListW / 1920f, 300, DeskListW), rw = Mathf.Clamp(w * DeskRightW / 1920f, 400, DeskRightW);
+            deskList.style.width = lw; deskMirai.style.width = lw; deskRight.style.width = rw;
+        }
+        /// "한 번 더" 대기가 4초 지나 풀리면 글자를 되돌림 — 멈춤(Ⅱ) 중엔 주기 갱신이 없어서 글자가 남아 있었음
+        bool deskArmWas;
+        void DeskArmTick()
+        {
+            if (!DeskActive) { deskArmWas = false; return; }
+            float now = Time.realtimeSinceStartup;
+            bool armed = now - ordArm < 4 || now - rptArm < 4 || now - watchEndArm < 4;
+            if (deskArmWas && !armed)
+            {
+                if (playing || Input.GetMouseButton(0)) return;   // 누르는 중엔 다음 틱에
+                RenderHud(G.HudSnapOf()); RenderDesk();
+            }
+            deskArmWas = armed;
         }
 
         static VisualElement DeskPanel()
@@ -335,8 +363,8 @@ namespace KwGame.View
             string why = G.sellLockWhy(k) ?? (!G.stockTradeOk() ? (G.weekend() ? "주말 휴장 · 코인만" : "장 마감 · 국장 09:00~15:30") : null);
             var br = Ui.Row(); br.style.marginTop = 8; br.style.alignItems = Align.Stretch; box.Add(br);
             foreach (var (label, frac) in new[] { ("절반 팔기", 0.5), ("전부 팔기", 1.0) })
-            {   // 한 번에. 큰 건(100만 이상)만 두 번
-                double f = frac; bool danger = v * f >= DeskBig; string key = $"sell|{k}|{f}"; bool armed = danger && why == null && OrdArmed(key);
+            {   // 절반 = 한 번(100만 이상만 두 번) · 전부 = 늘 두 번 (주문 패널의 전량 매도와 같은 규칙)
+                double f = frac; bool danger = f >= 1 || v * f >= DeskBig; string key = $"sell|{k}|{f}"; bool armed = danger && why == null && OrdArmed(key);
                 var b = Ui.Button(armed ? "한 번 더 누르기" : label,
                     Confirm(key, danger, () => Order(f >= 1 ? "전량 매도" : "절반 매도", "익절은 과학이다", "손절도 과학이다 (눈물)", "sell", "tk", k, "frac", f, "where", "app")),
                     null, why != null, armed ? Ui.Bad : f >= 1 ? StkDn : Ui.Panel2, 22);
@@ -380,7 +408,8 @@ namespace KwGame.View
         /// 데스크를 처음 열 때: 오늘 쌓인 뉴스 몇 줄로 시작 (빈 띠 대신)
         void DeskFeedSeed()
         {
-            foreach (var f in S.feed.Where(f => f.kind == "news" || f.kind == "tip").Reverse().Take(3).Reverse())
+            var today = new HashSet<string>(D.SLOT_NAME.Select(sn => G.T("feedLab", "m", S.month, "d", S.day, "s", sn)));   // 며칠 전 뉴스가 '방금 소식'처럼 뜨지 않게
+            foreach (var f in S.feed.Where(f => (f.kind == "news" || f.kind == "tip") && today.Contains(f.lab)).Reverse().Take(3).Reverse())
                 deskFeed.Insert(0, new DeskLine { tag = f.kind == "tip" ? "발표" : "뉴스", c = f.kind == "tip" ? Ui.Gold : StkAxis, text = Ui.Clean(f.x), time = "" });
             deskFeedVer++;
         }
@@ -496,6 +525,7 @@ namespace KwGame.View
                         if (px.StartsWith("[") && pb > 1) { ptag = px.Substring(1, pb - 1); px = px.Substring(pb + 1).Trim(); }
                         DeskFeed(ptag, Ui.Bad, px);
                         string ptk = e.Str("tk"); if (ptk != null) deskBlink[ptk] = Time.realtimeSinceStartup + DeskBlinkSec;
+                        if (ptk != null && S.hold.Has(ptk)) Banner(px, Ui.Bad, "보유 중");   // 내가 든 종목이면 못 보고 지나가지 않게 배너도
                         return true;
                     }
                 case "opDump":
@@ -529,6 +559,7 @@ namespace KwGame.View
                 case "liveLiq":
                     {
                         DeskFeed("청산", Ui.Bad, $"청산 {e.Num("n"):0}건 — 증거금이 날아감");
+                        Banner($"청산 {e.Num("n"):0}건 — 증거금이 날아감", Ui.Bad, null);
                         return false;
                     }
             }

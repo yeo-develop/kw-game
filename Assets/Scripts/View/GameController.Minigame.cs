@@ -258,7 +258,8 @@ namespace KwGame.View
                 }
                 bool stkAll = stks.Any(k => MgStkWhy(k) == null);   // 팔 수 있는 주식이 있으면 "전부 정리"에 같이
                 var br = Ui.Row(); br.style.marginTop = 8; mgPeekBox.Add(br);
-                var all = Ui.Button("전부 정리", () => MgPeek(0, null, stkAll), null, false, Ui.Bad, 22); all.focusable = false; all.style.flexGrow = 1; all.style.flexBasis = 0; all.style.marginRight = 8; all.style.marginBottom = 0; all.style.alignItems = Align.Center; br.Add(all);
+                bool anyClose = S.cps.Count > 0 || stkAll;   // 닫을 코인도 팔 수 있는 주식도 없으면 끔 (눌러도 일당만 깎임)
+                var all = Ui.Button("전부 정리", () => MgPeek(0, null, stkAll), anyClose ? null : "지금 정리할 수 있는 게 없음", !anyClose, Ui.Bad, 22); all.focusable = false; all.style.flexGrow = 1; all.style.flexBasis = 0; all.style.marginRight = 8; all.style.marginBottom = 0; all.style.alignItems = Align.Center; br.Add(all);
                 var no = Ui.Button("그냥 닫기", MgPeekClose, null, false, Ui.Panel2, 22); no.focusable = false; no.style.flexGrow = 1; no.style.flexBasis = 0; no.style.marginBottom = 0; no.style.alignItems = Align.Center; br.Add(no);
             }
             foreach (var c in S.cps)
@@ -268,7 +269,7 @@ namespace KwGame.View
                 var h = S.hold.Get(kv.Key); if (h == null) continue;
                 double dr = G.dayR(kv.Key), pl = h.q * S.mk.tk[kv.Key].p - h.cost, vol = G.volNow(kv.Key);
                 kv.Value.text = $"오늘 {GameSim.pct(dr)} · 온도 {G.opTemp(kv.Key):0} · 거래량 ×{vol:0.0} · {G.sgnMan(pl)}";
-                kv.Value.style.color = vol >= 2 ? Ui.Gold : UpDn(pl);   // 거래량이 크면 금색 (사람이 몰림)
+                kv.Value.style.color = UpDn(pl);   // 손익 색 그대로 (거래량은 글로)
             }
         }
 

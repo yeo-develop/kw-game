@@ -40,10 +40,12 @@ namespace KwGame.View
             stage.Add(planBubble);
         }
 
-        /// 화면 높이에 맞춰 판 최대 높이 (넘치면 판 안에서 스크롤)
-        void PlanLayout(float H)
+        /// 화면 크기에 맞춰 판 폭 · 최대 높이 (넘치면 판 안에서 스크롤). 좁은 화면(4:3)에선 왼쪽 미래 · 말풍선(x ~780)과 안 겹치게 판을 줄임
+        void PlanLayout(float W, float H)
         {
             if (planEl == null) return;
+            float pw = Mathf.Clamp(W - PlanRight - (PlanBubbleX + PlanBubbleW + 20), 640, PlanW);
+            planEl.style.width = pw; planFoot.style.width = pw;
             float mx = Mathf.Max(300, H - (StripH + PlanTopGap) - (PlanFootBottom + PlanFootH + 16));
             planEl.style.maxHeight = mx; planSv.style.maxHeight = mx - 48;
         }
@@ -56,9 +58,10 @@ namespace KwGame.View
             bool mgFull = P?.t == "work" && P.setup != null;
             bool talking = dlgText.style.display == DisplayStyle.Flex;
             bool quiet = G != null && G.v4 && (P?.t == "home" || DeskActive);
-            dlg.style.display = talking || (!mgFull && !quiet) ? DisplayStyle.Flex : DisplayStyle.None;
+            bool settle = settleEl != null;   // 정산 한 장 동안은 판 · 대사창 · 말풍선 다 숨김 (GameController.Screens.cs SettleCard)
+            dlg.style.display = !settle && (talking || (!mgFull && !quiet)) ? DisplayStyle.Flex : DisplayStyle.None;
             if (planEl == null) return;
-            bool board = PlanHome && !mgFull && !talking;
+            bool board = PlanHome && !mgFull && !talking && !settle;
             planEl.style.display = board ? DisplayStyle.Flex : DisplayStyle.None;
             planFoot.style.display = board ? DisplayStyle.Flex : DisplayStyle.None;
             planBubble.style.display = board && !string.IsNullOrEmpty(planBubbleText.text) ? DisplayStyle.Flex : DisplayStyle.None;
@@ -123,6 +126,7 @@ namespace KwGame.View
                 row.Add(c);
             }
             PlanChips();
+            PlanYesterday();
             NoShrink(planBody);
             RenderPlanFoot();
             if (S.slot >= 1) CoachCtx("map");   // 판을 한 번 써 본 뒤 → 알바 · 외출 설명 카드
@@ -222,6 +226,28 @@ namespace KwGame.View
             }
             // 잠긴 대출도 누르면 김사장 창에서 이유를 자세히 (예전 퀵메뉴와 같음)
             C(G.loanOk() ? "대출" : $"대출 ({(G.gateOn ? "첫 납부 뒤" : "잠김")})", () => Send("loanOpen"), false, G.loanOk() ? (Color?)null : new Color(1, 1, 1, 0.03f));
+        }
+
+        /// 칩 줄 아래 "어제: 오전 카페 알바 +9만원 · 오후 장 보기 −12만원 · 밤 미래랑 놀기 · 합계 −3만원" (손익 0 은 숫자 생략). 어제 기록이 없으면 안 그림
+        void PlanYesterday()
+        {
+            if (!G.slotYHas()) return;
+            var parts = new List<(string t, Color c, bool b)>();
+            double sum = 0;
+            for (int s = 0; s < D.RULES.SLOTS; s++)
+            {
+                string act = G.slotActYOf(s); double net = G.slotNetYOf(s); sum += net;
+                if (act == null && Math.Abs(net) < 1) continue;
+                if (parts.Count > 0) parts.Add(("·", Ui.Dim, false));
+                parts.Add(($"{SlotName(s)} {SlotActName(act, s)}", Ui.Text, false));
+                if (Math.Abs(net) >= 1) parts.Add((G.sgnMan(net), UpDn(net), true));
+            }
+            if (parts.Count == 0) return;
+            if (Math.Abs(sum) >= 1) { parts.Add(("· 합계", Ui.Dim, false)); parts.Add((G.sgnMan(sum), UpDn(sum), true)); }
+            var yr = Ui.Row(); yr.style.flexWrap = Wrap.Wrap; yr.style.alignItems = Align.Center; yr.style.marginTop = 6; yr.name = "plan-yesterday"; yr.pickingMode = PickingMode.Ignore;
+            planBody.Add(yr);
+            var hl = Ui.Label("어제:", 20, Ui.Dim, true); hl.pickingMode = PickingMode.Ignore; yr.Add(hl);
+            foreach (var (t, c, b) in parts) { var l = Ui.Label(t, 20, c, b); l.style.whiteSpace = WhiteSpace.NoWrap; l.style.marginLeft = 8; l.pickingMode = PickingMode.Ignore; yr.Add(l); }
         }
 
         /// 판 아래 작은 줄: P 폰(안 읽은 카톡) · 유물(= 상태 카드) · 저장 상태 · 도움말 · 설정 · 저장 · 타이틀
