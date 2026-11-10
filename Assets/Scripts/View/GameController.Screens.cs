@@ -414,7 +414,8 @@ namespace KwGame.View
             // 폰이 열리면 아래로 내림 (대사 글줄은 가려도 됨: "위에서 골라 줘"뿐). 위쪽은 상태 띠 아래까지만. 스크롤 영역에 최대 높이를 직접 줘야 넘칠 때 스크롤 · "더 있음"이 됨
             bool low = !mgFull && phoneOpen;
             float H = stage.layout.height > 10 ? stage.layout.height : 1080;
-            float pb = low ? 190 : 330, pm = Mathf.Max(240, Mathf.Min(low ? 380 : 620, H - pb - StripH - 24));
+            // v4: 대사창은 대사가 나올 때만 뜨므로(DlgSync) 선택지 상자를 아래에 둠 → 인물 얼굴을 안 가림. 옛 칸 방식은 대사창(퀵메뉴) 위
+            float pb = v4 ? PanelLow : low ? 190 : 330, pm = Mathf.Max(240, Mathf.Min(v4 ? 720 : low ? 380 : 620, H - pb - StripH - 24));
             panel.style.bottom = pb; panel.style.maxHeight = pm;
             if (panelSv != null) panelSv.style.maxHeight = pm - 100;
             phone.style.display = Show(!mgFull && phoneOpen);
@@ -426,7 +427,7 @@ namespace KwGame.View
             PlaceAlerts();
         }
 
-        const float PhoneW = 880, HudW = 520;
+        const float PhoneW = 880, HudW = 520, PanelLow = 56;
         /// 맨 위 상태 띠 높이 (1080p 기준). 데스크 · 계획판 · 알림이 이 아래부터
         const float StripH = 80;
         VisualElement bannerCol, panelMore; ScrollView panelSv;
@@ -461,12 +462,15 @@ namespace KwGame.View
             {   // 데스크: 가운데 차트 칸 위쪽 (왼쪽 종목 목록 380 · 오른쪽 주문 패널 470 사이)
                 float lw = DeskPart("list") is VisualElement dl && dl.layout.width > 10 ? dl.layout.width : 380, rw = DeskPart("order") is VisualElement dord && dord.layout.width > 10 ? dord.layout.width : 470;
                 float x = 24 + lw + 16, w = Mathf.Max(320, W - x - rw - 24 - 16);
-                At(bannerCol, x, w);
-                At(toastCol, x, w); toastCol.style.top = top + bh;
+                // 차트 머리(종목 이름 · 현재가 · 범위 칩)를 가리지 않게 그 아래부터
+                float dtop = StripH + 24 + (deskHead != null && deskHead.layout.height > 1 ? deskHead.layout.height : 110) + 14;
+                At(bannerCol, x, w); bannerCol.style.top = dtop;
+                At(toastCol, x, w); toastCol.style.top = dtop + bh;
             }
             else
             {
-                At(toastCol, 24, HudW); toastCol.style.top = top;
+                // 집 · 정산: 미래 말풍선(x 340~)과 안 겹치게 좁게
+                At(toastCol, 24, home || settleEl != null ? PlanBubbleX - 24 - 16 : HudW); toastCol.style.top = top;
                 Center(bannerCol, 760);
             }
             if (bannerCol.parent != null && bannerCol.parent.IndexOf(bannerCol) < bannerCol.parent.childCount - 1) bannerCol.BringToFront();   // 폰보다 위
@@ -489,7 +493,7 @@ namespace KwGame.View
                     bool boxLow = !mgFull && phoneOpen && panel.resolvedStyle.display != DisplayStyle.None;
                     float ph = panel.layout.height > 1 ? panel.layout.height : 380;
                     kkPopCol.style.left = StyleKeyword.Auto;
-                    kkPopCol.style.bottom = boxLow ? 190 + ph + 12 : dh;
+                    kkPopCol.style.bottom = boxLow ? (G != null && G.v4 ? PanelLow : 190) + ph + 12 : dh;
                     kkPopCol.style.right = !mgFull && phoneOpen ? PhoneW + 20 + 16 : 24;
                 }
             }

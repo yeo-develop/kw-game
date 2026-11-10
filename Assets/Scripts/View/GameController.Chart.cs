@@ -219,10 +219,13 @@ namespace KwGame.View
             Fx(Tween(rest, p => { float q = (el + p * rest) / DUR; v.style.translate = new Translate(Mathf.Sin(q * 40) * 12 * (1 - q), 0); }));
         }
         /// 체결·실패 한 줄 (늘 자리 차지: 버튼이 밀리지 않게)
-        Label MsgLine()
+        /// wrap = 데스크 주문 패널: 칸이 좁아 실패 이유가 잘리므로 줄바꿈
+        Label MsgLine(bool wrap = false)
         {
             var m = Ui.Label(stkMsg == "" ? " " : stkMsg, 20, stkMsgBad ? Ui.Bad : Ui.Gold, true);
-            m.style.marginBottom = 6; m.style.whiteSpace = WhiteSpace.NoWrap; m.style.overflow = Overflow.Hidden; m.style.textOverflow = TextOverflow.Ellipsis;
+            m.style.marginBottom = 6;
+            if (wrap) m.style.whiteSpace = WhiteSpace.Normal;
+            else { m.style.whiteSpace = WhiteSpace.NoWrap; m.style.overflow = Overflow.Hidden; m.style.textOverflow = TextOverflow.Ellipsis; }
             return m;
         }
 
@@ -642,7 +645,7 @@ namespace KwGame.View
                 }
 
                 // 결과 줄 바로 아래: 롱 · 숏 · 진입 (한 줄)
-                bar.Add(MsgLine());
+                bar.Add(MsgLine(desk));
                 var act = Ui.Row(); act.style.alignItems = Align.Stretch; bar.Add(act);
                 var lb = Ui.Button("롱 ▲", () => { stkDir = 1; RenderAll(); }, null, false, stkDir > 0 ? StkUp : Ui.Panel2, 24); lb.style.flexGrow = 1; lb.style.flexBasis = 0; lb.style.marginRight = 8; lb.style.alignItems = Align.Center; lb.style.justifyContent = Justify.Center; act.Add(lb);
                 var sb = Ui.Button(G.shortOk() ? "숏 ▼" : "숏 ▼ 잠김", () => { stkDir = -1; RenderAll(); }, null, !G.shortOk(), stkDir < 0 ? StkDn : Ui.Panel2, 24); sb.style.flexGrow = 1; sb.style.flexBasis = 0; sb.style.marginRight = 8; sb.style.alignItems = Align.Center; sb.style.justifyContent = Justify.Center; act.Add(sb);
@@ -701,7 +704,7 @@ namespace KwGame.View
                 if (has && lockWhy != null) { var lw = Ui.Label(lockWhy, 18, Ui.Bad, true); lw.style.whiteSpace = WhiteSpace.Normal; lw.style.marginTop = 4; bar.Add(lw); }
 
                 // 결과 줄 바로 아래: 매수 · 매도 (한 줄)
-                bar.Add(MsgLine());
+                bar.Add(MsgLine(desk));
                 var act = Ui.Row(); act.style.alignItems = Align.Stretch; bar.Add(act);
                 bool invLk = t.inv && !G.shortOk();   // 곱버스 = 주식 숏 → 숏이랑 같이 잠김
                 var buy = Ui.Button("매수", () => Order("매수", "가즈아. 이건 우상향이다 (희망)", null, "buy", "tk", t.id, "amt", stkAmt ?? 0, "where", where),

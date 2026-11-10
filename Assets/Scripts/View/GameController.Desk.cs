@@ -12,9 +12,9 @@ namespace KwGame.View
     // 누를 곳은 오른쪽 한 곳 (목록은 고르기만). 주문 명령 · 실패 이유 · 두 번 누르기는 폰 증권 앱(GameController.Chart.cs)의 것을 그대로 씀.
     public partial class GameController
     {
-        // 1920×1080 기준: 띠 아래 1000 = 위칸 796 + 아래칸 170 (+ 여백). 가운데 차트 칸 폭 = 1920 − 24 − 380 − 470 − 20 = 1026
+        // 1920×1080 기준: 띠 아래 1000 = 위칸 796 + 아래칸 170 (+ 여백). 가운데 차트 칸 폭 = 1920 − 24 − 380 − 500 − 20 = 996 (52%)
         // 오른쪽 칸은 아래칸까지 통으로 976 (분석가 ~150 + 주문 ~450 → 포지션 칸 ~350). 좁은 화면(4:3)에선 옆 칸을 화면 폭 비율로 줄여 차트 폭 50% 를 지킴
-        const float DeskPad = 12, DeskGap = 10, DeskListW = 380, DeskRightW = 470, DeskBottomH = 170;
+        const float DeskPad = 12, DeskGap = 10, DeskListW = 380, DeskRightW = 500, DeskBottomH = 170;
         VisualElement deskRight;
         /// 큰 주문 (두 번 누르기) 문턱 — OrderBar 의 위험 주문 문턱(증거금 100만)과 같은 값
         const double DeskBig = 1e6;
@@ -95,7 +95,7 @@ namespace KwGame.View
         void DeskFit()
         {
             float w = deskEl.layout.width; if (float.IsNaN(w) || w < 10) return;
-            float lw = Mathf.Clamp(w * DeskListW / 1920f, 300, DeskListW), rw = Mathf.Clamp(w * DeskRightW / 1920f, 400, DeskRightW);
+            float lw = Mathf.Clamp(w * DeskListW / 1920f, 300, DeskListW), rw = Mathf.Clamp(w * DeskRightW / 1920f, 410, DeskRightW);
             deskList.style.width = lw; deskMirai.style.width = lw; deskRight.style.width = rw;
         }
         /// "한 번 더" 대기가 4초 지나 풀리면 글자를 되돌림 — 멈춤(Ⅱ) 중엔 주기 갱신이 없어서 글자가 남아 있었음
@@ -198,29 +198,30 @@ namespace KwGame.View
             string id = x.id; var mk = S.mk.tk[id]; double r = Rr(id);
             bool sel = id == stkSel, stock = x.IsStock, shut = stock && !sOpen, locked = stock && G.opLocked(id);
             Color line = sel ? Ui.Accent : StkLine; float lw = sel ? 2 : 1;
-            var it = Ui.Box(sel ? Color.Lerp(StkCard, Ui.Accent, 0.22f) : StkBg, 10, 10); it.style.marginBottom = 6; Ui.Border(it, line, lw);
+            var it = Ui.Box(sel ? Color.Lerp(StkCard, Ui.Accent, 0.22f) : StkBg, 10, 10); it.style.marginBottom = 6; it.style.flexShrink = 0; Ui.Border(it, line, lw);
             var top = Ui.Row(); it.Add(top);
-            var nm = Ui.Label(x.name, 22, Ui.Text, true); nm.style.flexShrink = 1; nm.style.minWidth = 0; nm.style.whiteSpace = WhiteSpace.NoWrap; nm.style.overflow = Overflow.Hidden; nm.style.textOverflow = TextOverflow.Ellipsis; top.Add(nm);
-            if (PosPnl(id).HasValue) top.Add(Badge("보유", Ui.Gold));
-            if (locked) top.Add(Badge("하한가 잠김", Ui.Bad));
-            else if (shut) top.Add(Badge("휴장", StkAxis));
-            else if (G.limitUp(id)) top.Add(Badge("상한가", StkUp));
-            else if (G.limitDn(id)) top.Add(Badge("하한가", StkDn));
-            var sp = new VisualElement(); sp.style.flexGrow = 1; top.Add(sp);
+            var nm = Ui.Label(x.name, 22, Ui.Text, true); nm.style.flexGrow = 1; nm.style.flexShrink = 1; nm.style.minWidth = 0; nm.style.whiteSpace = WhiteSpace.NoWrap; nm.style.overflow = Overflow.Hidden; nm.style.textOverflow = TextOverflow.Ellipsis; top.Add(nm);
             var rl = Ui.Label(GameSim.pct(r), 22, UpDn(r), true); rl.style.whiteSpace = WhiteSpace.NoWrap; rl.style.flexShrink = 0; rl.style.marginLeft = 8; top.Add(rl);
+            // 2줄: 배지(보유 · 잠김 · 휴장 · 상하한가) + 주식은 온도 막대와 거래량
+            var tr = Ui.Row(); tr.style.marginTop = 6; it.Add(tr);
+            void Tag(string text, Color c) { var b = Badge(text, c); b.style.marginLeft = 0; b.style.marginRight = 8; b.style.flexShrink = 0; b.style.whiteSpace = WhiteSpace.NoWrap; tr.Add(b); }
+            if (PosPnl(id).HasValue) Tag("보유", Ui.Gold);
+            if (locked) Tag("하한가 잠김", Ui.Bad);
+            else if (shut) Tag("휴장", StkAxis);
+            else if (G.limitUp(id)) Tag("상한가", StkUp);
+            else if (G.limitDn(id)) Tag("하한가", StkDn);
             if (stock)
             {   // 주갤 온도 막대 (0~100) + 거래량 배수 (2배 이상이면 금색 굵게)
                 double temp = G.opTemp(id), vol = G.volNow(id);
-                var tr = Ui.Row(); tr.style.marginTop = 6; it.Add(tr);
-                var track = Ui.Box(new Color(1, 1, 1, 0.08f), 0, 4); track.style.height = 8; track.style.flexGrow = 1; track.style.marginRight = 10; tr.Add(track);
+                var track = Ui.Box(new Color(1, 1, 1, 0.08f), 0, 4); track.style.height = 8; track.style.flexGrow = 1; track.style.flexShrink = 1; track.style.minWidth = 30; track.style.marginRight = 10; tr.Add(track);
                 var fill = Ui.Box(Color.Lerp(Ui.Gold, StkUp, Mathf.Clamp01((float)temp / 100f)), 0, 4); fill.style.height = Length.Percent(100);
                 fill.style.width = Length.Percent(Mathf.Clamp((float)temp, 0, 100)); track.Add(fill);
-                tr.Add(Ui.Label($"{G.fmtP(mk.p)} · 온도 {temp:0} · ", 18, StkAxis));
-                var vl = Ui.Label($"×{vol:0.0}", 18, vol >= 2 ? Ui.Gold : StkAxis, vol >= 2); vl.style.whiteSpace = WhiteSpace.NoWrap; tr.Add(vl);
+                var pl0 = Ui.Label($"{G.fmtP(mk.p)} · 온도 {temp:0} · ", 18, StkAxis); pl0.style.whiteSpace = WhiteSpace.NoWrap; pl0.style.flexShrink = 0; tr.Add(pl0);
+                var vl = Ui.Label($"×{vol:0.0}", 18, vol >= 2 ? Ui.Gold : StkAxis, vol >= 2); vl.style.whiteSpace = WhiteSpace.NoWrap; vl.style.flexShrink = 0; tr.Add(vl);
             }
             else
             {
-                var sub = Ui.Label($"{G.fmtP(mk.p)} · 24시간 · 최대 {x.maxLev:0}배", 18, StkAxis); sub.style.marginTop = 2; it.Add(sub);
+                var sub = Ui.Label($"{G.fmtP(mk.p)} · 24시간 · 최대 {x.maxLev:0}배", 18, StkAxis); sub.style.whiteSpace = WhiteSpace.NoWrap; sub.style.flexShrink = 1; sub.style.overflow = Overflow.Hidden; tr.Add(sub);
             }
             if (shut) it.style.opacity = 0.45f;
             if (deskBlink.TryGetValue(id, out var until) && until > now)
@@ -286,7 +287,7 @@ namespace KwGame.View
             bool dis = rs.paid >= R.RSCH_PAID_MAX || S.cash < rf;
             var hd = Ui.Label($"리포트 — 누구 말을 들을까 · 유료 {G.man(rf)}원 ({rs.paid}/{R.RSCH_PAID_MAX})", 18, StkAxis); hd.style.marginBottom = 6; deskAn.Add(hd);
             var row = Ui.Row(); row.style.flexWrap = Wrap.Wrap; deskAn.Add(row);
-            Button Small(Button b) { b.style.paddingTop = 5; b.style.paddingBottom = 5; b.style.marginBottom = 6; return b; }
+            Button Small(Button b) { b.style.paddingTop = 4; b.style.paddingBottom = 4; b.style.paddingLeft = 10; b.style.paddingRight = 10; b.style.marginBottom = 6; b.Q<Label>().style.fontSize = 18; b.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap; return b; }   // 한 줄에 둘씩 (포지션 칸 자리를 남김)
             row.Add(Small(Ui.Chip(ans.Count > 0 ? G.T("v4.an.free", "a", rs.free, "b", G.freeMax()) : $"무료 리포트 {rs.free}/{G.freeMax()}",
                 () => { onSent = ReportMsg; Send("report", "paid", false); }, rs.free >= G.freeMax())));
             if (ans.Count > 0)
@@ -353,7 +354,7 @@ namespace KwGame.View
         VisualElement DeskStockRow(string k)
         {
             var x = S.hold[k]; double v = x.q * S.mk.tk[k].p, pl = v - x.cost;
-            var box = Ui.Box(StkBg, 10, 10); box.style.marginBottom = 8; box.style.borderLeftWidth = 4; box.style.borderLeftColor = UpDn(pl);
+            var box = Ui.Box(StkBg, 10, 10); box.style.marginBottom = 8; box.style.flexShrink = 0; box.style.borderLeftWidth = 4; box.style.borderLeftColor = UpDn(pl);
             var row = Ui.Row(); box.Add(row);
             var info = DeskPosInfo(row, k);
             info.Add(Ui.Label($"{D.TK[k].name} · 주식", 22, Ui.Text, true));
@@ -379,7 +380,7 @@ namespace KwGame.View
         VisualElement DeskCoinRow(CoinPos c)
         {
             double pl = G.cpnl(c) + c.bonus; int id = c.id; bool lk = !S.rt && c.t0 == G.Tnow();
-            var box = Ui.Box(StkBg, 10, 10); box.style.marginBottom = 8; box.style.borderLeftWidth = 4; box.style.borderLeftColor = c.dir > 0 ? StkUp : StkDn;
+            var box = Ui.Box(StkBg, 10, 10); box.style.marginBottom = 8; box.style.flexShrink = 0; box.style.borderLeftWidth = 4; box.style.borderLeftColor = c.dir > 0 ? StkUp : StkDn;
             var row = Ui.Row(); box.Add(row);
             var info = DeskPosInfo(row, c.tk);
             info.Add(Ui.Label($"{(c.mirai ? "미래 " : "")}{D.TK[c.tk].name} {c.lev:0}x {(c.dir > 0 ? "롱" : "숏")}", 22, c.dir > 0 ? StkUp : StkDn, true));

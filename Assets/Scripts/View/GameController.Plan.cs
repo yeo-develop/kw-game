@@ -50,14 +50,14 @@ namespace KwGame.View
             planEl.style.maxHeight = mx; planSv.style.maxHeight = mx - 48;
         }
 
-        /// 대사창 · 계획판 · 말풍선 보이기. v4 집 · 데스크에선 대사가 실제로 나오는 동안만 대사창, 집에선 그 동안 판 · 말풍선을 숨김
+        /// 대사창 · 계획판 · 말풍선 보이기. v4 에선 대사가 실제로 나오는 동안만 대사창, 집에선 그 동안 판 · 말풍선을 숨김
         void DlgSync()
         {
             if (dlg == null || dlgText == null) return;
             var P = G != null ? S.pending : null;
             bool mgFull = P?.t == "work" && P.setup != null;
             bool talking = dlgText.style.display == DisplayStyle.Flex;
-            bool quiet = G != null && G.v4 && (P?.t == "home" || DeskActive);
+            bool quiet = G != null && G.v4;   // v4: 대사창은 대사가 실제로 나올 때만 ("위에서 골라 줘"만 있는 빈 상자가 선택지 · 인물을 밀어내지 않게)
             bool settle = settleEl != null;   // 정산 한 장 동안은 판 · 대사창 · 말풍선 다 숨김 (GameController.Screens.cs SettleCard)
             dlg.style.display = !settle && (talking || (!mgFull && !quiet)) ? DisplayStyle.Flex : DisplayStyle.None;
             if (planEl == null) return;
