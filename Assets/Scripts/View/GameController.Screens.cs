@@ -367,7 +367,10 @@ namespace KwGame.View
             if (kkPopCol != null)
             {
                 float dh = dlg.resolvedStyle.display != DisplayStyle.None && dlg.layout.height > 1 ? dlg.layout.height + 24 + 12 : 24;
-                kkPopCol.style.bottom = dh;
+                // 폰이 열리면 선택지 상자가 아래로 내려와 있음 → 그 위로 올려서 "그만 보기" 같은 버튼을 안 가리게
+                bool boxLow = !mgFull && phoneOpen && panel.resolvedStyle.display != DisplayStyle.None;
+                float ph = panel.layout.height > 1 ? panel.layout.height : 380;
+                kkPopCol.style.bottom = boxLow ? 190 + ph + 12 : dh;
                 kkPopCol.style.right = !mgFull && phoneOpen ? PhoneW + 20 + 16 : 24;
             }
         }
