@@ -620,6 +620,8 @@ namespace KwGame.Tests
             var R = Data.RULES; var g = New(); var S = g.S;
             Assert.That(g.hpOff);
             Assert.That(g.restHint(), Does.Not.Contain("체력"));
+            Assert.That(Data.AUGS.Where(x => x.d != null && x.d.Contains("체력")).Select(x => x.id), Is.Empty, "유품 설명도 v4 규칙으로 (체력 얘기 없음)");
+            Assert.That(Data.AUGS.First(x => x.id == "loanbro").d, Does.Contain("주 이자"));
             var opts = g.Query(() => g.locOpts("work"));
             Assert.That(opts.All(o => !o.sub.Contains("체력")), "알바 설명에 체력이 없음");
             Assert.That(opts.All(o => o.sub.Contains("스트레스")));

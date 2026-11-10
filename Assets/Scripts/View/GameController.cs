@@ -148,6 +148,8 @@ namespace KwGame.View
                     case "addictEv": if (e.Str("k") == "secret") Toast($"몰래 카지노 {G.sgnWon(e.Num("amt"))}", "liq"); break;
                     case "faint": Toast("기절!", "liq"); HoldFace("dizzy", true); break;
                     case "morning": yield return Morning(e); break;
+                    case "settle": yield return SettleCard(e); break;   // v4 저녁 정산 카드 (GameController.Screens.cs)
+                    case "night": { string nf = e.Str("cls") == "jackpot" ? "love" : e.Str("cls") == "loss" ? "pout" : e.Str("cls") == "liq" ? "panic" : null; if (nf != null) SetFace(nf); break; }   // 대사는 sim 이 집 대사로 이미 걸어 둠
                     case "opening": yield return Opening(); break;
                     case "unlock": CoachCtx("unlock"); break;   // 첫 해금 → 해금 · 주말 설명 카드
                     case "story": yield return PlayScene(e.Str("key")); break;
@@ -370,6 +372,7 @@ namespace KwGame.View
 
         /// 아침 카드가 지난번에 본 해금 상태 (바뀐 날만 줄을 띄우려고). null / −1 = 아직 모름
         bool? mLoanSeen, mShortSeen;
+        int mBuffSeen = -1;
         /// 만기 같이 엔딩 목표 (GameSim.V4.cs v4EndVariant: 만기 빚 ≤ 시작 빚 × V4_DUO_DEBT + 호감 ≥ V4_AFF_GOOD)
         double DuoDebt() => G.debtStart() * G.duoDebt();   // 난이도별 문턱
         bool DuoOk() => S.debt <= DuoDebt() && S.aff >= D.RULES.V4_AFF_GOOD;
@@ -416,6 +419,11 @@ namespace KwGame.View
                     if (mShortSeen == false && shortNow) card.Add(Ui.Label("숏: 열림", 22, Ui.Dim));
                 }
                 mLoanSeen = loanNow; mShortSeen = shortNow;
+                // 호감 버프: 켜진 것 + 구간 설명 (첫날 · 단계가 바뀐 날만)
+                var bfs = G.buffs(); int bt = G.buffTier();
+                if (bfs.Count > 0) card.Add(Ui.Label("호감 버프: " + string.Join(" · ", bfs), 22, new Color(1f, 0.6f, 0.75f), true));
+                if (first || bt != mBuffSeen) { var bh = Ui.Label(G.T("v4.buff.help"), 18, Ui.Dim); bh.style.whiteSpace = WhiteSpace.Normal; card.Add(bh); }
+                mBuffSeen = bt;
                 if (G.promNow() is GameSim.Prom pm) { card.Add(Ui.Label("미래 부탁: " + pm.hud, 22, Ui.Accent)); if (!first) CoachCtx("mirai"); }   // 둘째 날부터 첫 부탁 → 미래 설명 카드
                 if (wkd) CoachCtx("unlock");   // 첫 주말 아침 (첫 해금이 먼저면 그때)
                 if (G.gateOn) { }   // 납부 줄은 위에서

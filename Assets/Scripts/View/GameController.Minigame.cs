@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using KwGame.Sim;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -79,6 +80,7 @@ namespace KwGame.View
 
         void MinigameClose()
         {
+            MgLiveStop();
             if (mgCo != null) { StopCoroutine(mgCo); mgCo = null; }
             mg?.RemoveFromHierarchy();
             mg = null; mgFor = null;
@@ -95,10 +97,129 @@ namespace KwGame.View
             KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.MinigameStart);
             yield return HowTo(key);
             yield return Countdown();
+            // v4: 알바 중에도 시세가 흐름. 남은 칸 시간을 게임 제한 시간(각 Mg* 의 SEC)에 고르게 나눠 흘림 — 일찍 끝나면 나머지는 mgResult 가 몰아서
+            if (G.v4 && !su.practice) { MgLiveOpen(); mgLiveCo = StartCoroutine(MgLiveRun(su, key == "cafe" ? 12f / (float)su.H : key == "store" ? 10f / (float)su.H : key == "ware" ? (S.rt ? 7f : 6f) : 9f)); }
             yield return game;
+            MgLiveStop();
             yield return ResultCard(key, su, score);
             mgCo = null;
             Send("mgResult", "score", score);
+        }
+
+        // ---------- v4 알바 중 실시간: 시계 · 포지션 시세판 · 몰래 폰 보기 ----------
+        // 조용히 = Send/Play 를 거치지 않음 (그쪽은 선택지 상자를 걷고 MinigameSync 를 부름). 토스트·소리·HUD·경보만 처리
+        Coroutine mgLiveCo;
+        VisualElement mgLive, mgLiveRows;
+        Label mgPeekState;
+        static readonly Color MgLiveRowC = new Color(1, 1, 1, 0.06f);
+
+        IEnumerator MgLiveRun(WorkSetup su, float sec)
+        {
+            int total = G.slotEndMin(S.slot) - 1 - S.min;
+            if (total <= 0) yield break;
+            double per = total * 0.5 / Math.Max(1f, sec), acc = 0;
+            while (true)
+            {
+                yield return new WaitForSecondsRealtime(0.5f);
+                var P = S.pending;
+                if (mg == null || P == null || P.t != "work" || P.setup != su) { mgLiveCo = null; yield break; }
+                acc += per; int m = (int)acc;
+                if (m >= 1) { acc -= m; MgLiveEvents(G.Apply(new SimCommand("workTick", "m", m)), 0); }
+                MgLiveRender();
+            }
+        }
+
+        void MgLiveStop()
+        {
+            if (mgLiveCo != null) { StopCoroutine(mgLiveCo); mgLiveCo = null; }
+            mgLive?.RemoveFromHierarchy(); mgLive = null; mgLiveRows = null; mgPeekState = null;
+        }
+
+        /// 오른쪽 아래 구석: 포지션 한 줄씩 (손익 % = 증거금 대비) + 몰래 폰 보기 버튼
+        void MgLiveOpen()
+        {
+            if (mg == null) return;
+            mgLive = new VisualElement(); Ui.Abs(mgLive, null, null, 24, 24); mgLive.style.width = 340; mgLive.pickingMode = PickingMode.Ignore;
+            mgLiveRows = Ui.Box(new Color(0, 0, 0, 0.62f), 10, 12); mgLiveRows.pickingMode = PickingMode.Ignore; mgLive.Add(mgLiveRows);
+            double risk = G.peekRisk(S.pending?.key);
+            if (risk >= 1)
+            {
+                var no = Ui.Label(G.T("v4.peek.no"), 17, Ui.Dim); no.pickingMode = PickingMode.Ignore; no.name = "peekArea";
+                no.style.backgroundColor = new Color(0, 0, 0, 0.62f); Ui.Radius(no, 10); Ui.Pad(no, 10); no.style.marginTop = 8; mgLive.Add(no);
+            }
+            else
+            {
+                var b = Ui.Button(G.T("v4.peek.btn"), MgPeek, G.T("v4.peek.sub", "p", MathK.RoundHalfUp(D.RULES.V4_PEEK_PAY * 100), "c", MathK.RoundHalfUp(risk * 100)), false, new Color32(0x3a, 0x2a, 0x4a, 0xf0), 20);
+                b.focusable = false;   // 포커스 받으면 Space/Enter 가 미니게임 키와 같이 이 버튼도 누름
+                b.name = "peekArea"; b.style.marginTop = 8; b.style.marginBottom = 0; mgLive.Add(b);
+            }
+            mgPeekState = Ui.Label("", 18, Ui.Gold, true); mgPeekState.pickingMode = PickingMode.Ignore; mgPeekState.style.marginTop = 6; mgPeekState.style.unityTextOutlineColor = Color.black; mgPeekState.style.unityTextOutlineWidth = 1.5f; mgLive.Add(mgPeekState);
+            mg.Add(mgLive);
+            MgLiveRender();
+        }
+
+        void MgLiveRender()
+        {
+            if (mgLive == null) return;
+            var P = S.pending;
+            int peeks = P?.peeks ?? 0; bool caught = P?.caught == true;
+            mgLiveRows.Clear();
+            foreach (var c in S.cps)
+            {
+                var r = Ui.Row(); r.name = "pos" + c.id; r.style.alignItems = Align.Center; r.style.backgroundColor = MgLiveRowC; Ui.Radius(r, 6); r.style.paddingLeft = 6; r.style.paddingRight = 6; r.style.marginTop = 2; r.style.marginBottom = 2; r.pickingMode = PickingMode.Ignore;
+                string nm = D.TK.TryGetValue(c.tk, out var tk) ? tk.name : c.tk;
+                var l = Ui.Label($"{(c.mirai ? "미래 " : "")}{nm} {c.lev:0.#}x {(c.dir > 0 ? "롱" : "숏")}", 18, Ui.Text, true); l.style.flexGrow = 1; l.style.flexShrink = 1; l.pickingMode = PickingMode.Ignore; r.Add(l);
+                double pnl = -G.posLoss(c) * 100;
+                var v = Ui.Label($"{(pnl > 0 ? "+" : pnl < 0 ? "−" : "")}{Math.Abs(pnl):0.#}%", 18, pnl >= 0 ? Ui.Good : Ui.Bad, true); v.pickingMode = PickingMode.Ignore; r.Add(v);
+                mgLiveRows.Add(r);
+            }
+            bool any = S.cps.Count > 0;
+            mgLiveRows.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
+            var area = mgLive.Q("peekArea"); if (area != null) area.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
+            mgPeekState.text = caught ? "들킴 — 이번 일당 0" : peeks > 0 ? $"일당 −{G.peekCut(P) * 100:0}%" : "";
+            mgPeekState.style.color = caught ? Ui.Bad : Ui.Gold;
+            mgPeekState.style.display = peeks > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            mgLive.style.display = any || peeks > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        void MgPeek()
+        {
+            if (mgLive == null || !G.peekOk()) return;
+            int before = S.cps.Count;
+            var evs = G.Apply(new SimCommand("workPeek", "id", 0));
+            MgLiveEvents(evs, before - S.cps.Count);
+            MgLiveRender();
+        }
+
+        /// 조용한 틱·폰 보기의 이벤트: 토스트 · 소리 · HUD · 경보만 (대사·장면·표정은 미니게임 중엔 무시)
+        void MgLiveEvents(List<SimEvent> evs, int closedCoins)
+        {
+            foreach (var e in evs)
+            {
+                KwGame.Audio.SoundEventAdapter.Play(e, closedCoins);
+                if (e.h != null) RenderHud(e.h);
+                switch (e.t)
+                {
+                    case "toast": Toast(e.Str("text"), e.Str("kind")); break;
+                    case "workAlert": MgAlert(e, evs); break;
+                    case "peek": if (e["caught"] is bool ct && ct && mgFlash != null) { Flash(Ui.Bad); if (mgLive != null) Shake(mgLive, 10); } break;
+                    case "error": Debug.LogWarning("[sim] " + e.Str("msg")); break;
+                }
+            }
+        }
+
+        /// 레버리지 포지션이 크게 물림: 카톡 진동 + 그 줄이 1초 빨갛게 (sim 이 토스트를 안 보냈으면 직접)
+        void MgAlert(SimEvent e, List<SimEvent> evs)
+        {
+            KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.Kakao);
+            string tk = e.Str("tk"); string nm = tk != null && D.TK.TryGetValue(tk, out var t) ? t.name : tk ?? "?";
+            string msg = G.T("v4.alert.toast", "n", nm, "p", MathK.RoundHalfUp(e.Num("loss") * 100));
+            if (!evs.Any(x => x.t == "toast" && x.Str("text") == msg)) Toast(msg, "liq");
+            MgLiveRender();
+            string id = "pos" + (int)e.Num("id");
+            Color red = new Color(0.75f, 0.12f, 0.15f, 0.9f);
+            Fx(Tween(1f, p => { var r = mgLiveRows?.Q(id); if (r != null) r.style.backgroundColor = Color.Lerp(red, MgLiveRowC, p < 0.5f ? 0 : (p - 0.5f) * 2); }));
+            if (mgLive != null) Shake(mgLive, 10);
         }
 
         // ---------- 공통 연출 ----------

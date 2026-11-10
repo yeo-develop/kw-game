@@ -207,6 +207,58 @@ namespace KwGame.View
             }
         }
 
+        /// v4 저녁 정산 카드 (settle 이벤트): 일당 · 매매 · 청산 · 리포트 · 들고 있는 포지션 → 오늘 합계 + 결과 도장. 줄이 하나씩 (클릭하면 바로 다)
+        IEnumerator SettleCard(SimEvent e)
+        {
+            modal.Clear(); modal.style.display = DisplayStyle.Flex;
+            var card = Card(760);
+            string cls = e.Str("cls");
+            var head = Ui.Row(); head.style.alignItems = Align.Center; card.Add(head);
+            var ttl = Ui.Label(G.T("v4.settle.title"), 40, Ui.Gold, true); ttl.style.flexGrow = 1; head.Add(ttl);
+            Color sc = cls == "jackpot" ? Ui.Gold : cls == "loss" ? new Color(0.55f, 0.62f, 0.75f) : cls == "liq" ? Ui.Bad : Ui.Dim;
+            var stamp = Ui.Label(G.T(cls == "jackpot" ? "v4.settle.jackpot" : cls == "loss" ? "v4.settle.loss" : cls == "liq" ? "v4.settle.liqC" : "v4.settle.normal"), 34, sc, true);
+            Ui.Border(stamp, sc, 4); Ui.Radius(stamp, 10); stamp.style.paddingLeft = 14; stamp.style.paddingRight = 14; stamp.style.paddingTop = 2; stamp.style.paddingBottom = 2;
+            stamp.style.rotate = new Rotate(new Angle(-8)); stamp.style.opacity = 0; head.Add(stamp);
+            var rows = new List<VisualElement>();
+            void Row(string k, string v, Color kc, Color vc, float size = 26)
+            {
+                var r = Ui.Row(); r.style.justifyContent = Justify.SpaceBetween; r.style.alignItems = Align.Center; r.style.marginTop = 10; r.style.opacity = 0;
+                r.Add(Ui.Label(k, size, kc, size > 26)); if (!string.IsNullOrEmpty(v)) r.Add(Ui.Label(v, size, vc, true));
+                card.Add(r); rows.Add(r);
+            }
+            double wage = e.Num("wage"), pnl = e.Num("pnl"), unreal = e.Num("unreal"), net = e.Num("net");
+            int liq = (int)e.Num("liq"), hit = (int)e.Num("hit"), miss = (int)e.Num("miss");
+            if (wage != 0) Row(G.T("v4.settle.wage"), G.sgnWon(wage), Ui.Text, Ui.Good);
+            if (pnl != 0) Row(G.T("v4.settle.pnl"), G.sgnWon(pnl), Ui.Text, pnl > 0 ? Ui.Good : Ui.Bad);
+            if (liq > 0) Row(G.T("v4.settle.liq", "n", liq), null, Ui.Bad, Ui.Bad);
+            if (hit + miss > 0) Row(G.T("v4.settle.rep", "h", hit, "m", miss), null, Ui.Text, Ui.Text);
+            if (unreal != 0) Row(G.T("v4.settle.unreal", "a", G.sgnWon(unreal)), null, Ui.Dim, Ui.Dim, 22);
+            var line = Ui.Box(new Color(1, 1, 1, 0.18f)); line.style.height = 2; line.style.marginTop = 16; line.style.marginBottom = 4; card.Add(line);
+            Row(G.T("v4.settle.net"), G.sgnWon(net), Ui.Text, net > 0 ? Ui.Good : net < 0 ? Ui.Bad : Ui.Text, 40);
+            var hint = Ui.Label("(클릭해서 계속)", 20, Ui.Dim); hint.style.marginTop = 12; card.Add(hint);
+            modal.Add(card);
+            if (!autoSkipDialog)
+            {
+                float step = Mathf.Min(0.18f, 1.1f / Mathf.Max(1, rows.Count)); bool skip = false;
+                foreach (var r in rows)
+                {
+                    for (float t = 0; t < step && !skip; t += Time.unscaledDeltaTime)
+                    {
+                        float p = t / step; r.style.opacity = p; r.style.translate = new Translate(14 * (1 - p), 0);
+                        if (AnyPress()) skip = true;
+                        yield return null;
+                    }
+                    r.style.opacity = 1; r.style.translate = new Translate(0, 0);
+                }
+                if (!skip) yield return Tween(0.22f, p => { stamp.style.opacity = p; stamp.style.scale = new Scale(Vector3.one * Mathf.Lerp(1.8f, 1f, EaseOut(p))); });
+            }
+            foreach (var r in rows) r.style.opacity = 1;
+            stamp.style.opacity = 1; stamp.style.scale = new Scale(Vector3.one);
+            if (cls == "jackpot" || cls == "liq") Shake(stamp, 8);
+            yield return WaitClick();
+            modal.style.display = DisplayStyle.None;
+        }
+
         /// 캐릭터 그림을 장면 높이에 맞춤 (그림은 739×1080)
         void FitFigures()
         {
@@ -417,6 +469,16 @@ namespace KwGame.View
             Bar("스트레스", h.stress, h.stress >= G.menLine() ? Ui.Bad : h.stress >= 40 ? Ui.Gold : Ui.Dim, men);
             if (G.v4) Bar("호감", S.aff, S.aff >= D.RULES.V4_AFF_GOOD ? new Color(1f, 0.45f, 0.65f) : S.aff < 30 ? Ui.Bad : Ui.Gold, "", D.RULES.V4_AFF_GOOD);
             Bar("중독", h.addict, h.addict >= 60 ? Ui.Bad : h.addict >= 30 ? Ui.Gold : Ui.Dim, "");
+            // v4 호감 버프 칩 (도시락 · 미래의 감 · 응원)
+            if (G.v4 && G.buffs() is List<string> bfs && bfs.Count > 0)
+            {
+                var br = Ui.Row(); br.style.marginTop = 6; br.style.flexWrap = Wrap.Wrap; br.tooltip = G.T("v4.buff.help"); hudBar.Add(br);
+                foreach (var b in bfs)
+                {
+                    var c = L(b, 15, new Color(1f, 0.75f, 0.85f), true); c.style.backgroundColor = new Color(1f, 0.45f, 0.65f, 0.18f); Ui.Radius(c, 8);
+                    c.style.paddingLeft = 8; c.style.paddingRight = 8; c.style.paddingTop = 2; c.style.paddingBottom = 2; c.style.marginRight = 6; c.style.marginTop = 2; br.Add(c);
+                }
+            }
             // 몸 상태 줄: 병·숙취·내일 아플 확률 (막대 글자에 붙이면 옆 막대를 가려서 따로 뺌). v4 는 병 없음
             if (S.rt && !G.v4)
             {
@@ -652,7 +714,6 @@ namespace KwGame.View
                     foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("payday", "k", k), o.sub, o.dis, k == "gatePay" ? Ui.Accent : (Color?)null); }
                     break;
                 case "ending": RenderEnding(P); break;
-                case "liqAlert": RenderLiqAlert(P); break;
                 default: Title(P.t); Info("(이 화면은 아직 없음)"); break;
             }
             NoShrink(panelBody);   // 스크롤 상자 안 버튼이 눌려 글자 겹치지 않게
@@ -665,22 +726,6 @@ namespace KwGame.View
             ["ware"] = "연타로 박스 올리기. 무거운 박스는 3번 쳐야 올라감(+2). 중간에 깨지기 쉬움 박스가 오면 1초 동안 손 떼기 (치면 −3, 콤보 끊김). 허리는 소모품.\nSpace / 클릭 연타 · 6초",
             ["mart"] = "떨어지는 박스와 돌진하는 진상 카트 피하기. 위에 뜨는 경고 보고 미리 피하기, 아슬하게 피하면 콤보. 박카스 먹으면 목숨 +1. 9초 버티기, 맞을 때마다 일당 깎임.\n← → / A D / 화면 드래그 · 목숨 4개 · 뒤로 갈수록 빨라짐",
         };
-
-        /// 알바 중 청산 경보: 몰래 폰 보고 다 정리할지, 참을지
-        Pending liqAlertSeen;
-        void RenderLiqAlert(Pending P)
-        {
-            if (liqAlertSeen != P) { liqAlertSeen = P; KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.Kakao); SetFace("panic"); }
-            string name = P.tk != null && D.TK.TryGetValue(P.tk, out var t) ? t.name : P.tk ?? "?";
-            string job = P.key != null && D.JOBS.TryGetValue(P.key, out var j) ? j.name : "알바";
-            Title("📉 알바 중… 폰이 울린다");
-            Info($"{job} 하는 중. 주머니에서 폰이 계속 진동한다.", 20, Ui.Dim);
-            Info($"{name} 포지션이 증거금의 {P.n0 * 100:0}% 를 잃었어요 (−{G.won(P.total)})", 24, Ui.Bad);
-            double now = S.mk.tk.Get(P.tk)?.p ?? 0;
-            Info($"청산가 {G.won(P.due)} · 지금 {G.won(now)}", 22, Ui.Text);
-            Btn("몰래 폰 본다 — 전부 정리", () => Send("alertPeek"), $"일당 −{G.won(P.took)} · {P.half * 100:0}% 확률로 사장한테 들킴 (일당 0)", false, Ui.Accent);
-            Btn("참는다 — 일단 일 계속", () => Send("alertHold"), "청산되면 넣은 돈은 거의 증발…", false, Ui.Panel);
-        }
 
         void RenderWork(Pending P)
         {

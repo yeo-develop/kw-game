@@ -291,6 +291,8 @@ namespace KwGame.Sim
                 foreach (var p in vl.Properties()) if (locs[p.Name] is JObject L0 && p.Value is JObject L1) foreach (var f in L1.Properties()) L0[f.Name] = f.Value.DeepClone();
             if (j["V4_AN"] is JArray an && j["SRC"] is JObject src0)   // 분석가 = 리포트 출처 (tier rep). 신뢰 별은 다 같게 (적중률은 전적으로만)
                 foreach (var a in an.OfType<JObject>()) { var o = (JObject)a.DeepClone(); string id = (string)o["id"]; o.Remove("id"); o["tier"] = "rep"; o["an"] = true; o["trust"] = 3; o["acc"] = 0.5; if (o["lag"] == null) o["lag"] = new JArray(1, 2); src0[id] = o; }
+            if (j["V4_AUG_D"] is JObject ad && j["AUGS"] is JArray augs)   // 유품 설명: v4 규칙에서 뜻이 달라진 것만 덮음 (주 이자 · 체력 삭제 · 분석가 리포트 · 숨긴 장소)
+                foreach (var a in augs.OfType<JObject>()) if (ad[(string)a["id"]] is JToken nd) a["d"] = nd.DeepClone();
             if (j["V4_EVENTS"] is JArray ev) { if (!(j["EVENTS"] is JArray e0)) j["EVENTS"] = e0 = new JArray(); foreach (var x in ev) e0.Add(x.DeepClone()); }
         }
 
