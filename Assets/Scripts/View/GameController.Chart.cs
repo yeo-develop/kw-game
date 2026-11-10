@@ -648,7 +648,7 @@ namespace KwGame.View
                 bar.Add(MsgLine(desk));
                 var act = Ui.Row(); act.style.alignItems = Align.Stretch; bar.Add(act);
                 var lb = Ui.Button("롱 ▲", () => { stkDir = 1; RenderAll(); }, null, false, stkDir > 0 ? StkUp : Ui.Panel2, 24); lb.style.flexGrow = 1; lb.style.flexBasis = 0; lb.style.marginRight = 8; lb.style.alignItems = Align.Center; lb.style.justifyContent = Justify.Center; act.Add(lb);
-                var sb = Ui.Button(G.shortOk() ? "숏 ▼" : "숏 ▼ 잠김", () => { stkDir = -1; RenderAll(); }, null, !G.shortOk(), stkDir < 0 ? StkDn : Ui.Panel2, 24); sb.style.flexGrow = 1; sb.style.flexBasis = 0; sb.style.marginRight = 8; sb.style.alignItems = Align.Center; sb.style.justifyContent = Justify.Center; act.Add(sb);
+                var sb = Ui.Button(G.shortOk() ? "숏 ▼" : "숏 잠김", () => { stkDir = -1; RenderAll(); }, null, !G.shortOk(), stkDir < 0 ? StkDn : Ui.Panel2, 24); sb.style.flexGrow = 1; sb.style.flexBasis = 0; sb.style.marginRight = 8; sb.style.alignItems = Align.Center; sb.style.justifyContent = Justify.Center; act.Add(sb);
                 if (!G.shortOk() && G.shortLockWhy() is string why) sb.tooltip = why;
                 // 위험한 주문(25배 이상 · 증거금 100만 이상 · 이번 칸 청산 확률 30% 이상)만 한 번 더 눌러야 나감. 기본 10배 소액은 한 번 (매번 확인시키면 정작 위험할 때 안 읽음)
                 bool danger = stkLev >= 25 || amt >= 1e6 || odds >= 0.3; string key = $"open|{t.id}|{stkDir}|{stkLev}|{amt}"; bool armed = danger && OrdArmed(key);

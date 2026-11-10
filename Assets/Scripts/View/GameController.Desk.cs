@@ -201,8 +201,9 @@ namespace KwGame.View
             var it = Ui.Box(sel ? Color.Lerp(StkCard, Ui.Accent, 0.22f) : StkBg, 10, 10); it.style.marginBottom = 6; it.style.flexShrink = 0; Ui.Border(it, line, lw);
             var top = Ui.Row(); it.Add(top);
             var nm = Ui.Label(x.name, 22, Ui.Text, true); nm.style.flexGrow = 1; nm.style.flexShrink = 1; nm.style.minWidth = 0; nm.style.whiteSpace = WhiteSpace.NoWrap; nm.style.overflow = Overflow.Hidden; nm.style.textOverflow = TextOverflow.Ellipsis; top.Add(nm);
+            var pr = Ui.Label(G.fmtP(mk.p), 18, StkAxis); pr.style.whiteSpace = WhiteSpace.NoWrap; pr.style.flexShrink = 0; pr.style.marginLeft = 8; pr.style.alignSelf = Align.Center; top.Add(pr);
             var rl = Ui.Label(GameSim.pct(r), 22, UpDn(r), true); rl.style.whiteSpace = WhiteSpace.NoWrap; rl.style.flexShrink = 0; rl.style.marginLeft = 8; top.Add(rl);
-            // 2줄: 배지(보유 · 잠김 · 휴장 · 상하한가) + 주식은 온도 막대와 거래량
+            // 2줄: 배지(보유 · 잠김 · 휴장 · 상하한가) + 주식은 온도 막대와 거래량 (현재가는 1줄 — 배지가 둘이면 2줄이 넘쳐서)
             var tr = Ui.Row(); tr.style.marginTop = 6; it.Add(tr);
             void Tag(string text, Color c) { var b = Badge(text, c); b.style.marginLeft = 0; b.style.marginRight = 8; b.style.flexShrink = 0; b.style.whiteSpace = WhiteSpace.NoWrap; tr.Add(b); }
             if (PosPnl(id).HasValue) Tag("보유", Ui.Gold);
@@ -216,12 +217,12 @@ namespace KwGame.View
                 var track = Ui.Box(new Color(1, 1, 1, 0.08f), 0, 4); track.style.height = 8; track.style.flexGrow = 1; track.style.flexShrink = 1; track.style.minWidth = 30; track.style.marginRight = 10; tr.Add(track);
                 var fill = Ui.Box(Color.Lerp(Ui.Gold, StkUp, Mathf.Clamp01((float)temp / 100f)), 0, 4); fill.style.height = Length.Percent(100);
                 fill.style.width = Length.Percent(Mathf.Clamp((float)temp, 0, 100)); track.Add(fill);
-                var pl0 = Ui.Label($"{G.fmtP(mk.p)} · 온도 {temp:0} · ", 18, StkAxis); pl0.style.whiteSpace = WhiteSpace.NoWrap; pl0.style.flexShrink = 0; tr.Add(pl0);
+                var pl0 = Ui.Label($"온도 {temp:0} · ", 18, StkAxis); pl0.style.whiteSpace = WhiteSpace.NoWrap; pl0.style.flexShrink = 0; tr.Add(pl0);
                 var vl = Ui.Label($"×{vol:0.0}", 18, vol >= 2 ? Ui.Gold : StkAxis, vol >= 2); vl.style.whiteSpace = WhiteSpace.NoWrap; vl.style.flexShrink = 0; tr.Add(vl);
             }
             else
             {
-                var sub = Ui.Label($"{G.fmtP(mk.p)} · 24시간 · 최대 {x.maxLev:0}배", 18, StkAxis); sub.style.whiteSpace = WhiteSpace.NoWrap; sub.style.flexShrink = 1; sub.style.overflow = Overflow.Hidden; tr.Add(sub);
+                var sub = Ui.Label($"24시간 · 최대 {x.maxLev:0}배", 18, StkAxis); sub.style.whiteSpace = WhiteSpace.NoWrap; sub.style.flexShrink = 1; sub.style.overflow = Overflow.Hidden; tr.Add(sub);
             }
             if (shut) it.style.opacity = 0.45f;
             if (deskBlink.TryGetValue(id, out var until) && until > now)
