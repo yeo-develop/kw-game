@@ -108,7 +108,7 @@ namespace KwGame.Tests
         {
             var v = Sum("smart", relic: "vip"); var g = Sum("smart", relic: "grind");
             Assert.That(v.p50, Is.GreaterThanOrEqualTo(18), "VIP(무료 리포트 2개) 강제여도 3주는 걸려야 함");
-            Assert.That(v.p50, Is.GreaterThanOrEqualTo(g.p50 * 0.65), "VIP 가 다른 유품보다 압도적으로 빠르면 안 됨");
+            Assert.That(v.p50, Is.GreaterThanOrEqualTo(g.p50 * 0.65), "VIP 가 다른 유물보다 압도적으로 빠르면 안 됨");
         }
 
         [Test]

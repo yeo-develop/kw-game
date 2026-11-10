@@ -120,7 +120,7 @@ namespace KwGame.View
                 bub.style.maxWidth = 420;
                 bub.style.borderTopWidth = bub.style.borderBottomWidth = bub.style.borderLeftWidth = bub.style.borderRightWidth = 2;
                 bub.style.borderTopColor = bub.style.borderBottomColor = bub.style.borderLeftColor = bub.style.borderRightColor = MenRed;
-                var who = Ui.Label("미래 ♥", 16, MenRed, true); who.pickingMode = PickingMode.Ignore;
+                var who = Ui.Label("미래 ♥", 18, MenRed, true); who.pickingMode = PickingMode.Ignore;
                 var txt = Ui.Label(msgs[i], 26, new Color(1f, 0.9f, 0.9f), true); txt.pickingMode = PickingMode.Ignore;
                 bub.Add(who); bub.Add(txt);
                 var one = Ui.Label("1", 18, new Color32(0xFE, 0xE5, 0x00, 0xFF), true); one.pickingMode = PickingMode.Ignore; one.style.marginLeft = 6;   // 안 읽음 1
@@ -150,8 +150,8 @@ namespace KwGame.View
             card.Add(Ui.Label("체결 알림 · 개미증권", 22, new Color(1f, 0.75f, 0.75f), true));
             var h = Ui.Label("미래가 몰래 풀매수함", 54, MenRed, true); h.style.marginTop = 6; card.Add(h);
             var n = Ui.Label($"{nm} {(e["coin"] is bool c && c ? "1x 롱" : "매수")}", 40, Ui.Text, true); n.style.marginTop = 10; card.Add(n);
-            var a = Ui.Label($"−{G.won(e.Num("amt"))}", 64, MenRed, true); a.style.marginTop = 4; card.Add(a);
-            card.Add(Ui.Label($"현금 {G.won(e.Num("cash0"))} → {G.won(e.Num("cash1"))}", 26, Ui.Gold, true));
+            var a = Ui.Label($"−{G.man(e.Num("amt"))}원", 64, MenRed, true); a.style.marginTop = 4; card.Add(a);
+            card.Add(Ui.Label($"현금 {G.man(e.Num("cash0"))}원 → {G.man(e.Num("cash1"))}원", 26, Ui.Gold, true));
             var hint = Ui.Label("내 계좌에서 확인 · 클릭 / Space", 18, Ui.Dim); hint.style.marginTop = 16; card.Add(hint);
             dim.Add(card); stage.Add(dim);
             HoldFace("mental", true);

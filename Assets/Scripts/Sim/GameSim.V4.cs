@@ -101,12 +101,13 @@ namespace KwGame.Sim
             Emit("trade", "op", "closeCoins", "ok", true, "pnl", s);
             Emit("peek", "n", P.peeks, "caught", P.caught, "pnl", s, "closed", n, "cut", peekCut(P));
             if (P.caught && !was) { stress(8); toast(T("v4.peek.caught"), "liq"); }
-            else toast(was ? T("v4.peek.again", "pnl", sgnWon(s)) : T("v4.peek.ok", "pnl", sgnWon(s), "p", rhu(peekCut(P) * 100)), "info");
+            else toast(was ? T("v4.peek.again", "pnl", sgnMan(s)) : T("v4.peek.ok", "pnl", sgnMan(s), "p", rhu(peekCut(P) * 100)), "info");
             return Sub.Go();
         }
 
         // ---------- 하루 결과: 정산 카드 · 밤의 미래 · 호감 버프 (docs/BLUEPRINT.md ① ⑥-5·6) ----------
-        void dayBaseSet() { S.dayReal0 = S.realized; S.dayLiq0 = S.st.liq; S.dayRes = null; S.dayBase = absDay() * 10 + S.part; }
+        static readonly string[] SETTLE_SKIP = { "work", "invest", "debt", "loan", "repay", "interest" };
+        void dayBaseSet() { S.dayReal0 = S.realized; S.dayLiq0 = S.st.liq; S.dayCash0 = S.cash; S.dayLed0 = S.today.Count; S.dayRes = null; S.dayBase = absDay() * 10 + S.part; }
         /// 오늘(아침 이후) 매매 실현손익 · 청산 횟수
         public double dayPnl() => S.realized - S.dayReal0;
         public int dayLiq() => (int)Math.Round(S.st.liq - S.dayLiq0);
@@ -122,8 +123,13 @@ namespace KwGame.Sim
             double pnl = dayPnl(); int liq = dayLiq(), day = Tnow() / R.SLOTS;
             var reps = S.tips.Where(t => !string.IsNullOrEmpty(t.res) && srcOf(t).an && t.Tr / R.SLOTS == day).ToList();
             S.dayRes = dayClass();
-            if (wage != 0 || pnl != 0 || liq > 0 || reps.Count > 0)
-                Emit("settle", "cls", S.dayRes, "wage", wage, "pnl", pnl, "liq", liq, "unreal", unreal(), "hit", reps.Count(t => t.res == "hit"), "miss", reps.Count(t => t.res != "hit"), "net", wage + pnl);
+            // 그 밖 = 일당·매매 말고 오늘 벌거나 쓴 돈 (유료 리포트 · 사건 · 도박 · 배당 · 놀거리 · 상점). 대출 · 상환 · 이자는 번 것도 쓴 것도 아니라 '옮긴 돈'으로.
+            // 아침 기준점(dayBaseSet) 전에 들어온 아침 사건·배당은 아침 현금에 이미 들어 있으므로 세지 않음 (두 번 셈 방지)
+            double other = 0; for (int i = Math.Min(S.dayLed0, S.today.Count); i < S.today.Count; i++) { var x = S.today[i]; if (!SETTLE_SKIP.Contains(x.kind)) other += x.amt; }
+            double net = wage + pnl + other, due = gateOn ? gateDue() : 0; bool hasBase = S.dayCash0 >= 0;
+            if (wage != 0 || pnl != 0 || other != 0 || liq > 0 || reps.Count > 0)
+                Emit("settle", "cls", S.dayRes, "wage", wage, "pnl", pnl, "other", other, "liq", liq, "unreal", unreal(), "hit", reps.Count(t => t.res == "hit"), "miss", reps.Count(t => t.res != "hit"), "net", net,
+                    "cash0", hasBase ? S.dayCash0 : -1, "cash", S.cash, "move", hasBase ? S.cash - S.dayCash0 - net : 0, "due", due, "gap", Math.Max(0, due - S.cash), "dd", gateDays());
             if (S.dayRes == "jackpot") greedD(R.V4_NIGHT_GREED);
             if (S.day == R.MONTH_DAYS && S.paidMonth != S.month && S.debt > 0) return;   // 이자일 저녁 집 대사는 김사장 얘기
             var L = TA("v4.night." + S.dayRes); if (L.Count == 0) return;
@@ -256,6 +262,10 @@ namespace KwGame.Sim
         bool gateLast() => S.month >= R.V4_GATE_CAP.Length;
         /// 이번 주 납부 총액 = 이자(아직 안 냈으면) + 원금 분납
         public double gateDue() => (S.paidMonth == S.month ? 0 : interestDue()) + gatePrincipal();
+        /// 이번 주 납부일까지 남은 날 (납부일 당일 = 0)
+        public int gateDays() => Math.Max(0, R.MONTH_DAYS - S.day);
+        /// 순자산(화면용): 현금 + 들고 있는 주식·포지션 평가액. 빚은 뺀 값이 아님 (빚은 옆에 따로 보임)
+        public double equity() => S.cash + holdVal();
         /// 코인 증거금 합계 상한 = 주차별 (마지막 값이 끝까지, 2부는 빚 비율만큼)
         public double marginCap(int week = 0)
         {
@@ -300,7 +310,7 @@ namespace KwGame.Sim
             if (ck == "gateSkip") { gateMiss(need); return true; }
             return false;
         }
-        /// 통과: 미납 기록 지움 · 단계 +1 (증거금 상한 · 숏 · 대출) · 유품 하나 고르기
+        /// 통과: 미납 기록 지움 · 단계 +1 (증거금 상한 · 숏 · 대출) · 유물 하나 고르기
         void gatePass()
         {
             S.missN = 0; S.pending = null;

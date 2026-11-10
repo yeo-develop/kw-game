@@ -56,7 +56,7 @@
                         </ui:Button>
                         <ui:Button name="diffHardButton" class="diff-button">
                             <ui:Label text="매운맛" picking-mode="Ignore" class="diff-label"/>
-                            <ui:Label text="이자 4% · 시작 현금 적음 · 같이 원양어선 문턱 높음" picking-mode="Ignore" class="diff-detail"/>
+                            <ui:Label text="이자 4% · 시작 현금 적음 · 못 갚았을 때 미래가 따라와 주는 조건이 빡빡함" picking-mode="Ignore" class="diff-detail"/>
                         </ui:Button>
                     </ui:VisualElement>
                     <ui:Label text="판 코드" class="settings-heading seed-heading"/>

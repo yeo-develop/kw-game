@@ -35,7 +35,7 @@ namespace KwGame.Sim
         {
             int n = S.kun["m"]; if (n < R.RT_IGNORE_N) return;
             stress(R.RT_IGNORE_ST);
-            if (S.min % 180 == 0) { pushK("m", fpick(TA("ignore.m"))); toast(T("ignore.toast", "n", S.kun["m"]), "liq", "kakao", "m"); }
+            if (S.min % 180 == 0) { pushK("m", fpick(TA("ignore.m"))); toast(T(v4 ? "v4.ignore.toast" : "ignore.toast", "n", S.kun["m"]), "liq", "kakao", "m"); }
         }
 
         // ---------- 아침: 숙취 · 병 진행 · 새로 앓기 ----------

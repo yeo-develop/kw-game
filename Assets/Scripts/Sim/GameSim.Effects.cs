@@ -106,7 +106,7 @@ namespace KwGame.Sim
                 fame(1);
                 fx("crack", "amt", net); galReact("bigloss", gctx, 3); pushK("m", T("bigloss.k1")); pushK("m", T("bigloss.k2"));
                 stress(22 * lm);
-                if (lm > 1) augFx("addict", T("aug.addictLoss"));
+                if (lm > 1) augFx("addict", T(v4 ? "v4.aug.addictLoss" : "aug.addictLoss"));
                 var a = fpick(D.ML["bigloss"]); M(a + tail(), "cry");
             }
             else if (net < 0)

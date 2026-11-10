@@ -72,7 +72,9 @@ namespace KwGame.Sim
         public string man(double n)
         {
             double a = Math.Abs(n);
-            string s = a >= 1e8 ? Regex.Replace(JsFmt.ToFixed(a / 1e8, 2), @"\.?0+$", "") + D.U("eok") : a >= 1e4 ? loc(rhu(a / 1e4)) + D.U("man") : loc(rhu(a));
+            string s = a >= 1e8 ? Regex.Replace(JsFmt.ToFixed(a / 1e8, 2), @"\.?0+$", "") + D.U("eok")
+                : a >= 1e4 ? (v4 && a < 1e6 && rhu(a / 1e3) % 10 != 0 ? JsFmt.ToFixed(a / 1e4, 1) : loc(rhu(a / 1e4))) + D.U("man")   // v4: 100만 미만은 소수 한 자리까지 (1.5만이 2만으로 보이지 않게)
+                : loc(rhu(a));
             return (n < 0 ? "−" : "") + s;
         }
         public string sgnMan(double n) => (n > 0 ? "+" : n < 0 ? "" : "±") + man(n) + D.U("won");

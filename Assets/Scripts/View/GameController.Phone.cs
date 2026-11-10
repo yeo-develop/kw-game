@@ -34,7 +34,7 @@ namespace KwGame.View
             bar.Add(Ui.Label(G.clockNow(), 20, Ui.Text, true));
             if (!can) { var lk = Ui.Label("  지금은 폰 못 봄", 18, Ui.Bad); bar.Add(lk); }
             var sp = new VisualElement(); sp.style.flexGrow = 1; bar.Add(sp);
-            bar.Add(Ui.Label("LTE  ▮▮▮  " + Math.Max(5, 100 - (int)(S.rt ? (S.min - D.RULES.RT_DAY0) / 11 : S.slot * 30)) + "%", 18, Ui.Dim));
+            bar.Add(Ui.Label("LTE  ●●●  " + Math.Max(5, 100 - (int)(S.rt ? (S.min - D.RULES.RT_DAY0) / 11 : S.slot * 30)) + "%", 18, Ui.Dim));
             var cl = Ui.Chip("닫기 (P)", TogglePhone, false, new Color(1, 1, 1, 0.08f)); cl.style.marginLeft = 14; cl.style.marginBottom = 0; cl.style.paddingTop = 4; cl.style.paddingBottom = 4; bar.Add(cl);
 
             // 앱 화면
@@ -42,7 +42,8 @@ namespace KwGame.View
             screen.style.backgroundColor = phoneTab == "kakao" ? KkBg : phoneTab == "gall" ? Color.white : phoneTab == "news" ? NewsBg : phoneTab == "tips" ? Paper : StkBg;
             phone.Add(screen);
             var head = AppHeader(screen);
-            var sv = new ScrollView(); sv.style.flexGrow = 1; sv.contentViewport.style.overflow = Overflow.Hidden; screen.Add(sv);   // 테마 USS 가 없어서 직접 잘라야 함
+            var sv = new ScrollView(); sv.style.flexGrow = 1; sv.style.flexShrink = 1; sv.style.minHeight = 0; sv.contentViewport.style.overflow = Overflow.Hidden; screen.Add(sv);   // 테마 USS 가 없어서 직접 잘라야 함
+            MoreHint(sv);
             string scrollKey = phoneTab + "/" + stkTab + "/" + kkRoom + "/" + gallTab;   // 주문 버튼 눌러 다시 그려도 보던 자리 유지
             if (phoneSv != null && phoneSvKey == scrollKey) { var keep = phoneSv.scrollOffset; sv.schedule.Execute(() => sv.scrollOffset = keep); }
             else if (phoneTab == "kakao") sv.schedule.Execute(() => sv.scrollOffset = new Vector2(0, 1e6f));   // 카톡은 새 방 열면 맨 아래(최신)부터
@@ -52,13 +53,14 @@ namespace KwGame.View
             string where = S.pending?.t == "brokerTrade" ? "broker" : "app";
             switch (phoneTab)
             {
-                case "stock": StockApp(body, where); break;
+                case "stock": StockApp(body, where, screen); break;   // 차트·주문 탭이면 주문 바를 스크롤 밖 아래(screen)에 고정
                 case "kakao": KakaoApp(head, body); break;
                 case "gall": GallApp(head, body); break;
                 case "news": NewsApp(body); break;
                 case "tips": TipsApp(body); break;
             }
             NoShrink(body);
+            for (int i = 0; i < screen.childCount; i++) if (screen[i] != sv && screen[i] != head) screen[i].SetEnabled(can);   // 고정 주문 바도 스크롤처럼 잠김
 
             // 앱 바
             var nav = Ui.Row(); nav.style.flexShrink = 0; nav.style.height = 70; nav.style.marginTop = 8; nav.style.justifyContent = Justify.SpaceAround; phone.Add(nav);
@@ -74,11 +76,11 @@ namespace KwGame.View
                 var il = Ui.Label(n.Substring(0, 1), 20, k == "kakao" ? Ink : Color.white, true); il.pickingMode = PickingMode.Ignore; ic.Add(il);
                 if (badge > 0)
                 {
-                    var bd = Ui.Label(badge.ToString(), 14, Color.white, true); Ui.Abs(bd, null, -6, -10); bd.style.backgroundColor = DcRed; Ui.Radius(bd, 9);
+                    var bd = Ui.Label(badge.ToString(), 18, Color.white, true); Ui.Abs(bd, null, -6, -10); bd.style.backgroundColor = DcRed; Ui.Radius(bd, 9);
                     bd.style.paddingLeft = 6; bd.style.paddingRight = 6; bd.pickingMode = PickingMode.Ignore; ic.Add(bd);
                 }
                 b.Add(ic);
-                var nl = Ui.Label(n, 16, on ? Ui.Text : Ui.Dim, on); nl.style.marginTop = 3; b.Add(nl);
+                var nl = Ui.Label(n, 18, on ? Ui.Text : Ui.Dim, on); nl.style.marginTop = 3; b.Add(nl);
                 foreach (var ch in b.Children()) ch.pickingMode = PickingMode.Ignore;
                 b.RegisterCallback<ClickEvent>(_ => OpenApp(kk));
                 nav.Add(b);
@@ -110,11 +112,11 @@ namespace KwGame.View
                 case "gall": h.style.backgroundColor = DcBlue; break;
                 case "news":
                     h.style.backgroundColor = Color.white; h.style.borderBottomWidth = 1; h.style.borderBottomColor = DcLine;
-                    h.Add(Ui.Label("개미뉴스", 26, NewsGreen, true)); h.Add(Ui.Label("  증권 · 코인 · 속보", 16, Ink2));
+                    h.Add(Ui.Label("개미뉴스", 26, NewsGreen, true)); h.Add(Ui.Label("  증권 · 코인 · 속보", 18, Ink2));
                     break;
                 case "tips":
                     h.style.backgroundColor = NoteBrown;
-                    h.Add(Ui.Label("정보 수첩", 26, Paper, true)); h.Add(Ui.Label($"  진행 중 {G.activeTips().Count}개", 16, new Color(1, 1, 1, 0.7f)));
+                    h.Add(Ui.Label("정보 수첩", 26, Paper, true)); h.Add(Ui.Label($"  진행 중 {G.activeTips().Count}개", 18, new Color(1, 1, 1, 0.7f)));
                     break;
             }
             return h;
@@ -127,7 +129,7 @@ namespace KwGame.View
             string s = Ui.Clean(name ?? "?"); var l = Ui.Label(s.Length > 0 ? s.Substring(0, 1) : "?", size * 0.45f, Color.white, true); l.pickingMode = PickingMode.Ignore; a.Add(l);
             return a;
         }
-        static Label Tag(string text, Color fg, Color bg, float size = 15)
+        static Label Tag(string text, Color fg, Color bg, float size = 18)
         {
             var b = Ui.Label(text, size, fg, true); b.style.backgroundColor = bg; Ui.Radius(b, 5);
             b.style.paddingLeft = 6; b.style.paddingRight = 6; b.style.paddingTop = 1; b.style.paddingBottom = 1; b.style.marginRight = 6;
@@ -164,6 +166,7 @@ namespace KwGame.View
                 kkPopCol = new VisualElement(); Ui.Abs(kkPopCol, null, null, 24, 24); kkPopCol.style.width = 460;
                 kkPopCol.style.flexDirection = FlexDirection.ColumnReverse; kkPopCol.pickingMode = PickingMode.Ignore;
                 stage.Add(kkPopCol);
+                PlaceAlerts();   // 화면 모드별 알림 자리 (GameController.Screens.cs)
             }
             kkPopCol.BringToFront();
             var r = ROOMS.First(x => x.k == room);
@@ -177,7 +180,7 @@ namespace KwGame.View
             card.Add(pic);
             var col = new VisualElement(); col.style.marginLeft = 14; col.style.flexShrink = 1; col.style.flexGrow = 1;
             var top = Ui.Row(); top.style.justifyContent = Justify.SpaceBetween;
-            top.Add(Ui.Label(r.n, 20, Ink, true)); top.Add(Ui.Label("카카오톡", 15, Ink2));
+            top.Add(Ui.Label(r.n, 20, Ink, true)); top.Add(Ui.Label("카카오톡", 18, Ink2));
             col.Add(top);
             var body = Ui.Label(text.Length > 60 ? text.Substring(0, 60) + "…" : text, 20, Ink); body.style.whiteSpace = WhiteSpace.Normal; body.style.marginTop = 4; col.Add(body);
             card.Add(col);
@@ -214,7 +217,7 @@ namespace KwGame.View
                 if (m.d != lastDay)
                 {
                     lastDay = m.d;
-                    var dl = Ui.Label(G.v4 ? $"{m.d}일째" : $"{(m.d - 1) / D.RULES.MONTH_DAYS + 1}개월 {(m.d - 1) % D.RULES.MONTH_DAYS + 1}일", 15, Color.white); dl.style.alignSelf = Align.Center; dl.style.backgroundColor = new Color(0, 0, 0, 0.18f);
+                    var dl = Ui.Label(G.v4 ? $"{m.d}일째" : $"{(m.d - 1) / D.RULES.MONTH_DAYS + 1}개월 {(m.d - 1) % D.RULES.MONTH_DAYS + 1}일", 18, Color.white); dl.style.alignSelf = Align.Center; dl.style.backgroundColor = new Color(0, 0, 0, 0.18f);
                     Ui.Radius(dl, 10); dl.style.paddingLeft = 10; dl.style.paddingRight = 10; dl.style.marginTop = 6; dl.style.marginBottom = 8; body.Add(dl);
                 }
                 KkBubble(body, m.w, m.x, m.t, room);
@@ -236,19 +239,19 @@ namespace KwGame.View
         {
             if (w == "sys")
             {
-                var s = Ui.Label(x, 16, Ink2); s.style.alignSelf = Align.Center; s.style.unityTextAlign = TextAnchor.MiddleCenter; s.style.marginBottom = 8; s.style.maxWidth = 600; body.Add(s);
+                var s = Ui.Label(x, 18, Ink2); s.style.alignSelf = Align.Center; s.style.unityTextAlign = TextAnchor.MiddleCenter; s.style.marginBottom = 8; s.style.maxWidth = 600; body.Add(s);
                 return;
             }
             bool me = w == "me";
             var row = Ui.Row(); row.style.alignItems = Align.FlexStart; row.style.marginBottom = 10; row.style.justifyContent = me ? Justify.FlexEnd : Justify.FlexStart; body.Add(row);
             if (!me) { var av = Avatar(room.n, room.c, 46); av.style.marginRight = 10; row.Add(av); }
             var col = new VisualElement(); col.style.maxWidth = 560; col.style.flexShrink = 1;
-            if (!me) { var nm = Ui.Label(w == "m" ? "미래" : w == "kim" ? "김사장" : "형나믿지", 16, Ink); nm.style.marginBottom = 3; col.Add(nm); }
+            if (!me) { var nm = Ui.Label(w == "m" ? "미래" : w == "kim" ? "김사장" : "형나믿지", 18, Ink); nm.style.marginBottom = 3; col.Add(nm); }
             var line = Ui.Row(); line.style.alignItems = Align.FlexEnd; line.style.flexDirection = me ? FlexDirection.RowReverse : FlexDirection.Row; col.Add(line);
             var bub = Ui.Label(x, 20, Ink); bub.style.backgroundColor = me ? KkMe : Color.white; Ui.Radius(bub, 14);
             bub.style.paddingLeft = 14; bub.style.paddingRight = 14; bub.style.paddingTop = 9; bub.style.paddingBottom = 9; bub.style.flexShrink = 1;
             line.Add(bub);
-            var tl = Ui.Label(t ?? "", 13, Ink2); tl.style.marginLeft = 6; tl.style.marginRight = 6; tl.style.flexShrink = 0; line.Add(tl);
+            var tl = Ui.Label(t ?? "", 18, Ink2); tl.style.marginLeft = 6; tl.style.marginRight = 6; tl.style.flexShrink = 0; line.Add(tl);
             row.Add(col);
         }
 
@@ -257,7 +260,7 @@ namespace KwGame.View
         {
             var tc = new VisualElement(); tc.style.paddingTop = 8; tc.style.paddingBottom = 8; head.Add(tc);
             tc.Add(Ui.Label("주식 갤러리", 26, Color.white, true));
-            tc.Add(Ui.Label($"내 명성 {S.galFame} · {G.rankOf(S.galFame).name} · 오늘 쓴 글 {G.wroteToday()}/{D.RULES.WRITE_MAX}", 15, new Color(1, 1, 1, 0.75f)));
+            tc.Add(Ui.Label($"내 명성 {S.galFame} · {G.rankOf(S.galFame).name}" + (G.v4 ? "" : $" · 오늘 쓴 글 {G.wroteToday()}/{D.RULES.WRITE_MAX}"), 18, new Color(1, 1, 1, 0.75f)));   // v4: 글쓰기 숨김 → 글 수도 숨김
             var sp = new VisualElement(); sp.style.flexGrow = 1; head.Add(sp);
             foreach (var (k, n) in new[] { ("all", "전체글"), ("best", "개념글"), ("tip", "찌라시") })
             {
@@ -267,7 +270,7 @@ namespace KwGame.View
 
             // 글쓰기 (말머리 버튼)
             var wr = Ui.Row(); wr.style.flexWrap = Wrap.Wrap; wr.style.marginBottom = 8; if (!G.v4) body.Add(wr);   // v4: 주갤은 찌라시 보는 곳 (글쓰기 숨김)
-            var wl = Ui.Label("글쓰기", 16, Ink2, true); wl.style.marginRight = 8; wr.Add(wl);
+            var wl = Ui.Label("글쓰기", 18, Ink2, true); wl.style.marginRight = 8; wr.Add(wl);
             foreach (var gw in (D.J["GW"] as JArray) ?? new JArray())
             {
                 string k = (string)gw["k"]; var dr = G.Query(() => G.draft(k)); bool full = G.wroteToday() >= D.RULES.WRITE_MAX;
@@ -281,7 +284,7 @@ namespace KwGame.View
             if (gallTab == "best") list = list.Where(p => p.best);
             if (gallTab == "tip")
             {
-                body.Add(Ui.Label("진행 중인 찌라시는 위로, 쓴 사람 적중률 높은 순. 결과는 시간 지나면 댓글로 박제됨.", 16, Ink2));
+                body.Add(Ui.Label("진행 중인 찌라시는 위로, 쓴 사람 적중률 높은 순. 결과는 시간 지나면 댓글로 박제됨.", 18, Ink2));
                 list = list.Where(p => TipOf(p) != null).OrderBy(p => string.IsNullOrEmpty(TipOf(p).res) ? 0 : 1).ThenByDescending(p => HitRate(p.au)).ThenByDescending(p => p.id);
             }
             else if (gallTab == "all")
@@ -297,7 +300,7 @@ namespace KwGame.View
                 foreach (var ap in aiPosts.AsEnumerable().Reverse().Take(3))   // LLM 글 (화면 전용)
                 {
                     var r = GallRow(body, "실시간", ap.title, ap.cm.Count, ANON_AU, ap.lab, 0, false, null, false);
-                    r.Add(Ui.Label(ap.body, 18, Ink)); foreach (var c in ap.cm) r.Add(Ui.Label($"ㄴ {c.au}: {c.x}", 16, Ink2));
+                    r.Add(Ui.Label(ap.body, 18, Ink)); foreach (var c in ap.cm) r.Add(Ui.Label($"ㄴ {c.au}: {c.x}", 18, Ink2));
                 }
             }
             int n0 = 0;
@@ -309,12 +312,12 @@ namespace KwGame.View
                 if (!open) continue;
                 var bx = Ui.Box(BodyGray, 12, 6); bx.style.marginTop = 6; r.Add(bx);
                 if (!string.IsNullOrEmpty(p.body)) bx.Add(Ui.Label(p.body, 19, Ink));
-                var ud = Ui.Label($"추천 {p.up:0} · 비추 {p.dn:0}", 16, Ink2); ud.style.marginTop = 6; bx.Add(ud);
+                var ud = Ui.Label($"추천 {p.up:0} · 비추 {p.dn:0}", 18, Ink2); ud.style.marginTop = 6; bx.Add(ud);
                 foreach (var c in p.cm)
                 {
                     var cr = Ui.Row(); cr.style.alignItems = Align.FlexStart; cr.style.marginTop = 6; bx.Add(cr);
-                    var ca = Ui.Label(c.au, 16, c.res != 0 ? DcRed : Ink, true); ca.style.width = 110; ca.style.flexShrink = 0; cr.Add(ca);
-                    var cx = Ui.Label(c.x, 17, Ink); cx.style.flexShrink = 1; cr.Add(cx);
+                    var ca = Ui.Label(c.au, 18, c.res != 0 ? DcRed : Ink, true); ca.style.width = 110; ca.style.flexShrink = 0; cr.Add(ca);
+                    var cx = Ui.Label(c.x, 18, Ink); cx.style.flexShrink = 1; cr.Add(cx);
                 }
                 if (t != null && string.IsNullOrEmpty(t.res) && G.tkOpen(t.tk))
                 {
@@ -333,20 +336,20 @@ namespace KwGame.View
             if (mine) r.style.backgroundColor = MinePink;
             var l1 = Ui.Row(); l1.pickingMode = PickingMode.Ignore; r.Add(l1);
             if (best) l1.Add(Tag("개념", Color.white, DcRed));
-            l1.Add(Ui.Label($"[{Ui.Clean(tag)}]", 17, Ink2));
+            l1.Add(Ui.Label($"[{Ui.Clean(tag)}]", 18, Ink2));
             var tl = Ui.Label(" " + title, 20, Ink, true); tl.style.flexShrink = 1; tl.style.whiteSpace = WhiteSpace.NoWrap; tl.style.overflow = Overflow.Hidden; tl.style.textOverflow = TextOverflow.Ellipsis; l1.Add(tl);
-            if (cm > 0) { var cl = Ui.Label($" [{cm}]", 17, DcRed, true); cl.style.flexShrink = 0; l1.Add(cl); }
+            if (cm > 0) { var cl = Ui.Label($" [{cm}]", 18, DcRed, true); cl.style.flexShrink = 0; l1.Add(cl); }
             var l2 = Ui.Row(); l2.style.marginTop = 4; l2.pickingMode = PickingMode.Ignore; r.Add(l2);
-            l2.Add(Ui.Label((mine ? "나 · " : "") + au, 15, au == ANON_AU ? Ink2 : DcBlue, au != ANON_AU));
+            l2.Add(Ui.Label((mine ? "나 · " : "") + au, 18, au == ANON_AU ? Ink2 : DcBlue, au != ANON_AU));
             if (t != null)
             {
-                l2.Add(Ui.Label($"  적중 {G.srcRec(au)}", 15, Ink2));
+                l2.Add(Ui.Label($"  적중 {G.srcRec(au)}", 18, Ink2));
                 var res = t.res;
                 string rl = string.IsNullOrEmpty(res) ? $"{D.TK[t.tk].name} {(t.dir > 0 ? "▲" : "▼")} · {G.tipWhen(t)}" : res == "hit" ? "적중" : res == "pd" ? "작전이었음" : res == "void" ? "흐지부지" : "빗나감";
                 var tg = Tag(rl, Color.white, string.IsNullOrEmpty(res) ? (t.dir > 0 ? StkUp : StkDn) : res == "hit" ? OkGreen : Ink2); tg.style.marginLeft = 8; l2.Add(tg);
             }
             var sp = new VisualElement(); sp.style.flexGrow = 1; l2.Add(sp);
-            l2.Add(Ui.Label($"{lab} · 추천 {up:0}", 15, Ink2));
+            l2.Add(Ui.Label($"{lab} · 추천 {up:0}", 18, Ink2));
             foreach (var ch in l1.Children().Concat(l2.Children())) ch.pickingMode = PickingMode.Ignore;
             return r;
         }
@@ -357,7 +360,7 @@ namespace KwGame.View
         {
             body.style.paddingLeft = 0; body.style.paddingRight = 0;
             var news = S.feed.Where(f => f.kind == "news").Reverse().Take(14).ToList();
-            if (news.Count == 0) { var e = Ui.Label(S.rt ? "아직 뉴스 없음. 뉴스는 시간대가 끝날 때 시세랑 같이 뜸." : "아직 뉴스 없음. 뉴스는 시간대가 끝날 때 시세 결과와 같이 뜸.", 20, Ink2); e.style.marginTop = 30; e.style.alignSelf = Align.Center; body.Add(e); return; }
+            if (news.Count == 0) { var e = Ui.Label("아직 뉴스 없음. 칸이 시작할 때 속보가 떠요.", 20, Ink2); e.style.marginTop = 30; e.style.alignSelf = Align.Center; body.Add(e); return; }
             bool first = true;
             foreach (var f in news)
             {
@@ -365,15 +368,15 @@ namespace KwGame.View
                 var card = Ui.Box(Color.white, 18, 0); card.style.marginBottom = 8; body.Add(card);
                 var top = Ui.Row(); card.Add(top);
                 string press = PRESS[Math.Abs((f.x ?? "").GetHashCode()) % PRESS.Length];
-                top.Add(Avatar(press, NewsGreen, 26)); var pl = Ui.Label(" " + press, 16, Ink, true); top.Add(pl);
-                top.Add(Ui.Label(" · " + f.lab, 15, Ink2));
+                top.Add(Avatar(press, NewsGreen, 26)); var pl = Ui.Label(" " + press, 18, Ink, true); top.Add(pl);
+                top.Add(Ui.Label(" · " + f.lab, 18, Ink2));
                 string x = f.x ?? ""; int arrow = x.LastIndexOf(" → ");
                 var hl = Ui.Row(); hl.style.marginTop = 8; hl.style.flexWrap = Wrap.Wrap; card.Add(hl);
-                if (hot) hl.Add(Tag("속보", Color.white, DcRed, 16));
-                else if (first) hl.Add(Tag("단독", Color.white, NewsGreen, 16));
+                if (hot) hl.Add(Tag("속보", Color.white, DcRed, 18));
+                else if (first) hl.Add(Tag("단독", Color.white, NewsGreen, 18));
                 var h = Ui.Label(arrow > 0 ? x.Substring(0, arrow) : x, first ? 26 : 22, Ink, true); h.style.flexShrink = 1; hl.Add(h);
-                if (arrow > 0) { var tk = Ui.Label("관련 종목 · " + x.Substring(arrow + 3), 16, NewsGreen, true); tk.style.marginTop = 6; card.Add(tk); }
-                if (f.rows != null) foreach (var r0 in f.rows) { var rl = Ui.Label(r0, 17, Ink2); rl.style.marginTop = 6; card.Add(rl); }
+                if (arrow > 0) { var tk = Ui.Label("관련 종목 · " + x.Substring(arrow + 3), 18, NewsGreen, true); tk.style.marginTop = 6; card.Add(tk); }
+                if (f.rows != null) foreach (var r0 in f.rows) { var rl = Ui.Label(r0, 18, Ink2); rl.style.marginTop = 6; card.Add(rl); }
                 first = false;
             }
         }
@@ -385,9 +388,9 @@ namespace KwGame.View
             void H(string t, string sub)
             {
                 var hr = Ui.Row(); hr.style.marginTop = 14; hr.style.marginBottom = 8; hr.style.borderBottomWidth = 2; hr.style.borderBottomColor = PaperLine; hr.style.paddingBottom = 4; body.Add(hr);
-                hr.Add(Ui.Label(t, 22, Ink, true)); if (sub != null) hr.Add(Ui.Label("  " + sub, 15, Ink2));
+                hr.Add(Ui.Label(t, 22, Ink, true)); if (sub != null) hr.Add(Ui.Label("  " + sub, 18, Ink2));
             }
-            var intro = Ui.Label("누구 말을 믿고 걸지 정하는 곳. 출처마다 적중률이 쌓임 — 말 잘 맞히는 사람을 찾으면 그게 무기.", 17, Ink2); body.Add(intro);
+            var intro = Ui.Label("누구 말을 믿고 걸지 정하는 곳. 출처마다 적중률이 쌓임 — 말 잘 맞히는 사람을 찾으면 그게 무기.", 18, Ink2); body.Add(intro);
 
             H("진행 중인 정보", tips.Count > 0 ? $"{tips.Count}개 · 마감 빠른 순" : null);
             if (tips.Count == 0) body.Add(Ui.Label("받은 정보 없음. 개미증권 리포트 · 주갤 찌라시 · 길거리 아저씨한테서 모으기.", 18, Ink2));
@@ -399,12 +402,12 @@ namespace KwGame.View
                 var r1 = Ui.Row(); card.Add(r1);
                 r1.Add(Avatar(s0.name, TierColor(s0.tier), 40));
                 var who = new VisualElement(); who.style.marginLeft = 10; who.style.flexGrow = 1; r1.Add(who);
-                var wn = Ui.Row(); who.Add(wn); wn.Add(Ui.Label(s0.name, 19, Ink, true)); var tg = Tag(TierName(s0.tier), Color.white, TierColor(s0.tier), 13); tg.style.marginLeft = 8; wn.Add(tg);
-                who.Add(Ui.Label(s0.an ? $"전적 {G.srcRec(t.who)}" : $"신뢰 {GameSim.stars(s0.trust)} · 내 기록 {G.srcRec(t.who)}", 15, Ink2));   // 분석가는 별이 다 같음 → 전적만
-                var dd = Ui.Label(G.tipWhen(t), 16, Ink, true); dd.style.backgroundColor = DueBg; Ui.Radius(dd, 6); dd.style.paddingLeft = 8; dd.style.paddingRight = 8; r1.Add(dd);
+                var wn = Ui.Row(); who.Add(wn); wn.Add(Ui.Label(s0.name, 19, Ink, true)); var tg = Tag(TierName(s0.tier), Color.white, TierColor(s0.tier), 18); tg.style.marginLeft = 8; wn.Add(tg);
+                who.Add(Ui.Label(s0.an ? $"전적 {G.srcRec(t.who)}" : $"신뢰 {GameSim.stars(s0.trust)} · 내 기록 {G.srcRec(t.who)}", 18, Ink2));   // 분석가는 별이 다 같음 → 전적만
+                var dd = Ui.Label(G.tipWhen(t), 18, Ink, true); dd.style.backgroundColor = DueBg; Ui.Radius(dd, 6); dd.style.paddingLeft = 8; dd.style.paddingRight = 8; r1.Add(dd);
                 var r2 = Ui.Row(); r2.style.marginTop = 8; r2.style.flexWrap = Wrap.Wrap; card.Add(r2);
                 r2.Add(Ui.Label($"{D.TK[t.tk].name} {(t.dir > 0 ? "▲ 오른다" : "▼ 내린다")}", 24, t.dir > 0 ? StkUp : StkDn, true));
-                var sl = Ui.Label($"   받은 뒤 {GameSim.pct(since)}", 17, UpDn(since)); r2.Add(sl);
+                var sl = Ui.Label($"   받은 뒤 {GameSim.pct(since)}", 18, UpDn(since)); r2.Add(sl);
                 var r3 = Ui.Row(); r3.style.marginTop = 8; r3.style.flexWrap = Wrap.Wrap; card.Add(r3);
                 if (clash) r3.Add(Tag("의견 갈림", Color.white, Purple));
                 if (S.hold.Has(t.tk) || S.cps.Any(c => c.tk == t.tk)) r3.Add(Tag("보유 중", Ink, Ui.Gold));
@@ -417,7 +420,7 @@ namespace KwGame.View
             // 출처 성적표
             var known = S.srcStat.Where(kv => kv.Value[1] > 0 && D.SRC.ContainsKey(kv.Key)).OrderByDescending(kv => (double)kv.Value[0] / kv.Value[1]).ThenByDescending(kv => kv.Value[1]).ToList();
             H("출처 성적표", "내가 겪어 본 결과");
-            if (known.Count == 0) body.Add(Ui.Label("아직 결과 난 정보 없음. 정보가 맞았는지는 마감 시간이 지나면 기록됨.", 17, Ink2));
+            if (known.Count == 0) body.Add(Ui.Label("아직 결과 난 정보 없음. 정보가 맞았는지는 마감 시간이 지나면 기록됨.", 18, Ink2));
             foreach (var kv in known)
             {
                 var s0 = D.SRC[kv.Key]; double rate = (double)kv.Value[0] / kv.Value[1];
@@ -426,7 +429,7 @@ namespace KwGame.View
                 var nm = Ui.Label(" " + s0.name, 18, Ink, true); nm.style.width = 200; row.Add(nm);
                 var track = Ui.Box(PaperLine, 0, 6); track.style.flexGrow = 1; track.style.height = 14; row.Add(track);
                 var fill = Ui.Box(rate >= 0.6 ? OkGreen : rate >= 0.4 ? Amber : DcRed, 0, 6); fill.style.height = Length.Percent(100); fill.style.width = Length.Percent((float)rate * 100); track.Add(fill);
-                var rl = Ui.Label($" {kv.Value[0]}/{kv.Value[1]} ({rate * 100:0}%)", 17, Ink); rl.style.width = 150; rl.style.unityTextAlign = TextAnchor.MiddleRight; row.Add(rl);
+                var rl = Ui.Label($" {kv.Value[0]}/{kv.Value[1]} ({rate * 100:0}%)", 18, Ink); rl.style.width = 150; rl.style.unityTextAlign = TextAnchor.MiddleRight; row.Add(rl);
             }
 
             // 지난 정보
@@ -440,12 +443,28 @@ namespace KwGame.View
                     string rl = t.res == "hit" ? "적중" : t.res == "pd" ? "작전" : "빗나감";
                     row.Add(Tag(rl, Color.white, t.res == "hit" ? OkGreen : t.res == "pd" ? Purple : Ink2));
                     var tl = Ui.Label($"{G.srcOf(t).name} · {D.TK[t.tk].name} {(t.dir > 0 ? "▲" : "▼")}", 18, Ink); tl.style.flexGrow = 1; row.Add(tl);
-                    row.Add(Ui.Label($"실제 {GameSim.pct(t.rr)}", 17, UpDn(t.rr)));
+                    row.Add(Ui.Label($"실제 {GameSim.pct(t.rr)}", 18, UpDn(t.rr)));
                 }
             }
         }
         static string TierName(string tier) => tier == "rep" ? "증권사" : tier == "walk" ? "길거리" : "찌라시";
         static Color TierColor(string tier) => tier == "rep" ? TierRep : tier == "walk" ? TierWalk : TierJji;
+
+        /// 스크롤 영역이 아래로 더 남았으면 오른쪽 아래에 "▼ 더 있음" (테마 USS 가 없어 스크롤바가 안 보임)
+        static void MoreHint(ScrollView sv)
+        {
+            var more = Ui.Label("▼ 더 있음", 18, Color.white, true); more.pickingMode = PickingMode.Ignore;
+            Ui.Abs(more, null, null, 14, 8); more.style.backgroundColor = new Color(0.05f, 0.06f, 0.1f, 0.82f); Ui.Radius(more, 10);
+            more.style.paddingLeft = 10; more.style.paddingRight = 10; more.style.paddingTop = 3; more.style.paddingBottom = 3;
+            more.style.display = DisplayStyle.None;
+            sv.hierarchy.Add(more);
+            more.schedule.Execute(() =>
+            {
+                float content = sv.contentContainer.layout.height, view = sv.contentViewport.layout.height;
+                bool left = !float.IsNaN(content) && !float.IsNaN(view) && content - view - sv.scrollOffset.y > 12;
+                more.style.display = left ? DisplayStyle.Flex : DisplayStyle.None;
+            }).Every(150);
+        }
 
         /// 실시간 차트·주문: 이 종목에 걸린 정보 한 줄씩 (차트 아래, 주문창 위)
         void TipStrip(VisualElement left, string tk)
@@ -456,10 +475,10 @@ namespace KwGame.View
             foreach (var t in tips.Take(3))
             {
                 var s0 = G.srcOf(t); var r = Ui.Row(); r.style.marginBottom = 2; box.Add(r);
-                r.Add(Tag(TierName(s0.tier), Color.white, TierColor(s0.tier), 13));
-                var l = Ui.Label($"{s0.name} {(t.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.tipWhen(t)} · {(s0.an ? "전적" : "기록")} {G.srcRec(t.who)}", 17, t.dir > 0 ? StkUp : StkDn, true); l.style.flexShrink = 1; r.Add(l);
+                r.Add(Tag(TierName(s0.tier), Color.white, TierColor(s0.tier), 18));
+                var l = Ui.Label($"{s0.name} {(t.dir > 0 ? "▲ 오른다" : "▼ 내린다")} · {G.tipWhen(t)} · {(s0.an ? "전적" : "기록")} {G.srcRec(t.who)}", 18, t.dir > 0 ? StkUp : StkDn, true); l.style.flexShrink = 1; r.Add(l);
             }
-            if (tips.Select(t => t.dir).Distinct().Count() > 1) box.Add(Ui.Label("의견 갈림 — 누구 말 믿을지는 정보 수첩 성적표 참고", 15, Ui.Gold));
+            if (tips.Select(t => t.dir).Distinct().Count() > 1) box.Add(Ui.Label("의견 갈림 — 누구 말 믿을지는 정보 수첩 성적표 참고", 18, Ui.Gold));
         }
     }
 }

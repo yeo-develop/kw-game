@@ -168,7 +168,11 @@ namespace KwGame.Sim
                     pushF("📊", x, "tip"); toast(x, "news", "news", "report");
                 }
                 else { string x = T(e.ok ? "v4.follow.ok" : "v4.follow.no", "n", nm); pushF("📰", x, "news"); toast(x, e.ok ? "good" : "liq", "news", "follow"); }
-                Emit("planEv", "k", e.k, "tk", e.tk, "ok", e.ok, "id", e.id);
+                {   // 화면 배너용: 종목 이름 · 누가 썼나 · 실제로 간 방향 · 내가 들고 있나
+                    var tp2 = e.k == "report" ? S.tips.FirstOrDefault(q => q.id == e.id) : null;
+                    bool hold = S.hold.Has(e.tk) || S.cps.Any(c => c.tk == e.tk);
+                    Emit("planEv", "k", e.k, "tk", e.tk, "ok", e.ok, "id", e.id, "n", nm, "who", tp2 != null ? srcOf(tp2).name : "", "up", tp2 != null && (e.ok ? tp2.dir : -tp2.dir) > 0, "hold", hold);
+                }
             }
         }
         /// 예약 손절·익절 (코인 포지션): 증거금 대비 손익이 걸어 둔 선에 닿으면 정리. 청산(−90%)보다 먼저 봄
@@ -182,8 +186,9 @@ namespace KwGame.Sim
                 if (!tp && !sl) continue;
                 if (g <= -0.9) continue;   // 갭이 청산선까지 넘었으면 손절이 아니라 청산 (rtLiq) — 손절을 걸었다고 더 잃으면 안 됨
                 double pnl = closeCoin(c, true) ?? 0;
-                toast(T(tp ? "v4.stop.tp" : "v4.stop.sl", "n", D.TK[c.tk].name, "pnl", sgnWon(pnl)), tp ? "good" : "liq", "coin");
+                toast(T(tp ? "v4.stop.tp" : "v4.stop.sl", "n", D.TK[c.tk].name, "pnl", sgnMan(pnl)), tp ? "good" : "liq", "coin", "stop");   // room=stop: 화면은 배너(stopFill)로 띄우고 이 토스트는 거름
                 Emit("stop", "id", c.id, "k", tp ? "tp" : "sl", "pnl", pnl, "tk", c.tk);
+                Emit("stopFill", "tk", c.tk, "n", D.TK[c.tk].name, "tp", tp, "pnl", pnl);
             }
         }
         /// 예약은 장 보기 칸에서만 걸 수 있음 (집에서 급히 잡은 포지션은 예약 없이 감)

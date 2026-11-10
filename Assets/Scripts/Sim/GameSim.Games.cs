@@ -22,9 +22,19 @@ namespace KwGame.Sim
         {
             var J = D.JOBS[key];
             S.lastJob = key;
+            uint rng0 = S.rng;
             scene(J.bg, "face", "tired", "mode", "loc");
             M(pick(J.lines), "angry"); hideDlg();
-            S.pending = new Pending("work") { key = key, loc = loc, setup = null };
+            S.pending = new Pending("work") { key = key, loc = loc, setup = null, rng0 = rng0 };
+        }
+        /// 알바 설명 카드에서 다른 알바 고르러 돌아감. 아직 시작 전이라 칸도 난수도 안 씀
+        void workBack()
+        {
+            string key = S.pending.loc ?? S.visit?.key ?? "work";
+            if (S.pending.rng0.HasValue) S.rng = S.pending.rng0.Value;   // 들어올 때 쓴 난수(인사말 고르기)를 되돌림
+            if (D.LOCS.TryGetValue(key, out var L)) { scene(L.bg, "face", "neutral", "mode", "loc"); npc(L.npc); }
+            hideDlg();
+            S.pending = new Pending("loc") { key = key, first = false };
         }
         WorkSetup workSetup(bool practice)
         {

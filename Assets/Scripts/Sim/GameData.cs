@@ -28,7 +28,7 @@ namespace KwGame.Sim
         public double RT_HP_SLEEP = 35, RT_HP_REST = 20, RT_HP_REST_EVE = 10, RT_REST_ST = -8, RT_WORK_ST = 12, RT_WORK_ST_STREAK = 4, RT_DUE_ST = 2, RT_ANX_PAY = 0.9, RT_MEN_PAY = 0.7;
 
         // 실시간 모드 스트레스 관리·병 (GameSim.Health.cs): 놀거리는 같은 날 반복할수록 효과 ×RELAX_DIM, 병 확률 = (기본 + 스트레스·체력·숙취) × 운동
-        // 실시간 모드 밸런스 (피드백: OP 유품·유료 리포트)
+        // 실시간 모드 밸런스 (피드백: OP 유물·유료 리포트)
         public double RT_DIVI = 0.003, RT_WHALE_HIT = 0.6, RT_WHALE_VOL = 1.5, RT_MEME_UP = 0.42, RT_INSURE = 0.3, RT_INVERSE = 0.1, RT_RSCH_FEE = 100000, RT_REP_ACC = -0.12, RT_IGNORE_N = 3, RT_IGNORE_ST = 3;
         // 알바·하이로우 (피드백: 알바비 7만~14만 · 컨디션 따라 일당 안 바뀜 · 하이로우 너무 쉬움 → 같은 숫자면 딜러 승 + 배당 ×0.9)
         public double RT_JOB_PAY0 = 70000, RT_JOB_PAYV = 70000, RT_HL_EDGE = 0.9, RT_VIP_ACC = 0.07, RT_CASH0 = 300000;
@@ -84,7 +84,7 @@ namespace KwGame.Sim
         /// 알바 중 청산 경보: 레버리지 포지션 손실이 증거금의 V4_ALERT_LOSS 를 넘으면 한 칸에 한 번 끼어듦 (0 = 끔). 몰래 폰 보면 일당 ×V4_ALERT_PAY, V4_ALERT_CAUGHT 확률로 들켜 일당 0
         public double V4_ALERT_LOSS = 0, V4_ALERT_PAY = 0.7, V4_ALERT_CAUGHT = 0.35;
         /// 주간 납부 관문 (docs/BLUEPRINT.md ②③): 주 w 이자일 뒤 빚이 V4_GATE_CAP[w-1] 이하여야 함 (원금 분납). null = 끔 (이자만)
-        /// 못 낸 원금엔 V4_LATE_FEE 연체료, V4_MISS_MAX 주 연속 미납이면 만기 전에 끌려감. 통과할 때마다 유품 1개 + 증거금 상한 한 단계
+        /// 못 낸 원금엔 V4_LATE_FEE 연체료, V4_MISS_MAX 주 연속 미납이면 만기 전에 끌려감. 통과할 때마다 유물 1개 + 증거금 상한 한 단계
         public double[] V4_GATE_CAP; public double V4_LATE_FEE = 0.1; public int V4_MISS_MAX = 2, V4_SHORT_WEEK = 2, V4_LOAN_GATE = 1;   // 숏은 2주차부터 · 대출은 첫 납부 통과 뒤
         /// 관문 규칙: 한 주에 새로 빌릴 수 있는 돈 (그 주 원금 분납에선 빼 줌 = 다음 주로 미루는 다리). 0 = 제한 없음
         public double V4_LOAN_WEEK;
@@ -293,7 +293,7 @@ namespace KwGame.Sim
                 foreach (var p in vl.Properties()) if (locs[p.Name] is JObject L0 && p.Value is JObject L1) foreach (var f in L1.Properties()) L0[f.Name] = f.Value.DeepClone();
             if (j["V4_AN"] is JArray an && j["SRC"] is JObject src0)   // 분석가 = 리포트 출처 (tier rep). 신뢰 별은 다 같게 (적중률은 전적으로만)
                 foreach (var a in an.OfType<JObject>()) { var o = (JObject)a.DeepClone(); string id = (string)o["id"]; o.Remove("id"); o["tier"] = "rep"; o["an"] = true; o["trust"] = 3; o["acc"] = 0.5; if (o["lag"] == null) o["lag"] = new JArray(1, 2); src0[id] = o; }
-            if (j["V4_AUG_D"] is JObject ad && j["AUGS"] is JArray augs)   // 유품 설명: v4 규칙에서 뜻이 달라진 것만 덮음 (주 이자 · 체력 삭제 · 분석가 리포트 · 숨긴 장소)
+            if (j["V4_AUG_D"] is JObject ad && j["AUGS"] is JArray augs)   // 유물 설명: v4 규칙에서 뜻이 달라진 것만 덮음 (주 이자 · 체력 삭제 · 분석가 리포트 · 숨긴 장소)
                 foreach (var a in augs.OfType<JObject>()) if (ad[(string)a["id"]] is JToken nd) a["d"] = nd.DeepClone();
             if (j["V4_EVENTS"] is JArray ev) { if (!(j["EVENTS"] is JArray e0)) j["EVENTS"] = e0 = new JArray(); foreach (var x in ev) e0.Add(x.DeepClone()); }
         }

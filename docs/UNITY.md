@@ -25,7 +25,7 @@ Assets/
       LlmFixture.cs         LLM 녹화 응답 픽스처 재생·비교 (web/tests/llm/common.mjs 대응, 테스트·simtest 공용)
     View/                   KwGame.View (UI Toolkit, 코드로 화면 생성)
       Ui.cs                 스타일 도우미 · 이모지 제거(표시용) · 점수 막대(테마 없는 슬라이더)
-      ArtCatalog.cs         그림 키 → 스프라이트 표 (장면 bg·표정·NPC·CG·유품/꽝 아이콘, Resources.Load + 캐시)
+      ArtCatalog.cs         그림 키 → 스프라이트 표 (장면 bg·표정·NPC·CG·유물/꽝 아이콘, Resources.Load + 캐시)
       GameController.Art.cs 무대 그림: 배경·CG·미래 스탠딩 표정·NPC/김사장 초상 고르기 (§9)
       GameController.cs     메인 루프 + 이벤트 재생기(say 클릭 대기, 아침 결산, 장면 스크립트 opening/clear)
       GameController.Screens.cs  HUD · pending 별 행동 패널 · 폰(증권/카톡/주갤/정보) · 엔딩+스코어보드
@@ -79,8 +79,8 @@ GOLDEN_ROOT=<폴더> ./unity simtest   # 다른 data/vectors 폴더로 (예: 작
 ./unity simtest balance 150 smart,work         # 일부만
 BAL_RULES='{"RT_CASH0":3000000}' ./unity simtest balance 150   # rules.json 안 바꾸고 실험
 MG=0.2,0.4 ./unity simtest balance 100 work    # 미니게임 실력
-BAL_RELIC=1 ./unity simtest balance 400 smart  # 시작 유품별
-BAL_FORCE=vip ./unity simtest balance 150 smart # 유품 고정
+BAL_RELIC=1 ./unity simtest balance 400 smart  # 시작 유물별
+BAL_FORCE=vip ./unity simtest balance 150 smart # 유물 고정
 BAL_TRACE=4 ./unity simtest balance 1 smart    # 시드 하나 하루씩 + 매수·매도 로그
 ./unity test edit BalanceTests                 # 밴드 검증 (고정 시드 40판, 약 1분)
 ```
@@ -99,7 +99,7 @@ BAL_TRACE=4 ./unity simtest balance 1 smart    # 시드 하나 하루씩 + 매�
 `RT_MEN_END_BAD` 는 카톡 안 읽고 막 답장하는 random 봇 기준으로 맞춤 (150판 bad4: 6 → 86% · 7 → 65% · 8 → 49% · 9 → 39% · 10 → 28%).
 300판 (10): work·smart·smart0·gamble 은 전과 같음 (bad3·bad4 0%) · random 배드 51% (bad4 27.3% · bad1 23.3%, 평균 50일), 생존 49% (전: bad1 35%, 생존 65%). 봇은 기절을 안 해서 bad3 0%.
 
-조정: `RT_CASH0` 30만 → 200만 (실시간 시작 현금, 인트로 카드 '남은 돈'도 같이 — 처음 하는 사람이 첫 주 이자에 밑천을 다 뺏겨 70일 안에 29%만 빠져나오던 것) · 이자율 `RT_RATE` · VIP 적중 보너스 `RT_VIP_ACC` 키 분리 (값은 그대로 0.05 · 0.07 — VIP 보너스를 0.03 으로 낮춰도 300판 중앙 26 → 27일이라 의미 없어서 되돌림. VIP 강제 시 중앙 26~27일, 다른 유품 28~35일: 무료 리포트 2개라 2티어 중 제일 셈).
+조정: `RT_CASH0` 30만 → 200만 (실시간 시작 현금, 인트로 카드 '남은 돈'도 같이 — 처음 하는 사람이 첫 주 이자에 밑천을 다 뺏겨 70일 안에 29%만 빠져나오던 것) · 이자율 `RT_RATE` · VIP 적중 보너스 `RT_VIP_ACC` 키 분리 (값은 그대로 0.05 · 0.07 — VIP 보너스를 0.03 으로 낮춰도 300판 중앙 26 → 27일이라 의미 없어서 되돌림. VIP 강제 시 중앙 26~27일, 다른 유물 28~35일: 무료 리포트 2개라 2티어 중 제일 셈).
 거의 안 움직인 손잡이: `RT_VOL` 1.4~2 (중앙 40~43일), 이자 4~5% (중앙 41~43일). 정석 속도는 하루에 받는 좋은 정보 수가 정한다 (무료 리포트 2개인 VIP 만 튐). 카지노 기대값: 홀짝 .985 · 슬롯 .967 · 사다리 .928 · 하이로우 .792 · 즉석 .81.
 
 ## 4. 빌드 · 실행 · 스크린샷
@@ -108,7 +108,7 @@ BAL_TRACE=4 ./unity simtest balance 1 smart    # 시드 하나 하루씩 + 매�
 ./unity init               # Main 씬 생성 + 빌드 설정 (재실행 안전)
 ./unity build mac          # Builds/Mac/롱잡고알바감.app (≈73MB)
 ./unity run                # 실행
-# 스크린샷 데모: 화면 22장(오프닝 CG·집 낮/밤·장소 NPC·유품 상점/뽑기·표정·엔딩 3종 포함) + 봇 3판을 화면 경로로 재생하며 pending 화면별 1장 → 끝나면 종료
+# 스크린샷 데모: 화면 22장(오프닝 CG·집 낮/밤·장소 NPC·유물 상점/뽑기·표정·엔딩 3종 포함) + 봇 3판을 화면 경로로 재생하며 pending 화면별 1장 → 끝나면 종료
 Builds/Mac/롱잡고알바감.app/Contents/MacOS/롱잡고알바감 -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -kwShots <폴더>
 ```
 
@@ -117,7 +117,7 @@ Builds/Mac/롱잡고알바감.app/Contents/MacOS/롱잡고알바감 -screen-widt
 ## 5. 이식 현황
 
 ### 끝난 것 (웹과 비트 단위 일치 확인)
-- sim 전부: 난수 v2, 시세·뉴스·청산 경로, 정보(팁)·출처 기록, 주갤(글·댓글·찌라시·내 글 정산)·카톡 질문·형나믿지 DM, 주식·코인(펀딩비·청산·유품 효과), 알바 판 굴리기(4종 setup), 카지노 4종·경마·즉석 복권·빚또, 은행·상점·유품(상자·뽑기·진열장)·사채·길거리 정보, 하루 흐름(아침·칸 시작/끝·이자일·멘헤라·돌발 매수·도박 유혹·몰래 카지노·금단·기절·엔딩 3종·스코어보드·계속하기), 디버그 명령, query(난수 되돌림).
+- sim 전부: 난수 v2, 시세·뉴스·청산 경로, 정보(팁)·출처 기록, 주갤(글·댓글·찌라시·내 글 정산)·카톡 질문·형나믿지 DM, 주식·코인(펀딩비·청산·유물 효과), 알바 판 굴리기(4종 setup), 카지노 4종·경마·즉석 복권·빚또, 은행·상점·유물(상자·뽑기·진열장)·사채·길거리 정보, 하루 흐름(아침·칸 시작/끝·이자일·멘헤라·돌발 매수·도박 유혹·몰래 카지노·금단·기절·엔딩 3종·스코어보드·계속하기), 디버그 명령, query(난수 되돌림).
 - 골든 벡터 24/24 (hash·이벤트 수·digest 전체), 봇 5전략이 벡터 명령열 24개를 그대로 재생성.
 - 화면 경로 검증: 봇 3판(2,321 명령)을 GameController.Send → 이벤트 재생 → 렌더 로 돌려도 해시가 골든과 같고 예외 0.
 
@@ -168,9 +168,9 @@ Builds/Mac/롱잡고알바감.app/Contents/MacOS/롱잡고알바감 -screen-widt
 | 김사장 | 이자일(S.phase=payday) | `kim_menace` |
 | 김사장 | 클리어 장면(scenes.clear) | `kim_farewell` |
 | CG | 오프닝 김사장 등장 ~ 퇴장 | `opening_visit` |
-| CG | 오프닝 규칙 카드 뒤 ~ 첫 유품 고르기 | `opening_box` |
+| CG | 오프닝 규칙 카드 뒤 ~ 첫 유물 고르기 | `opening_box` |
 | CG | 엔딩 화면(스코어보드 왼쪽 무대 전체) | `ending_<kind>_<variant>` 그림이 있으면 그것(`ending_clear_gamble`·`ending_clear_rich`·`ending_bad1_gall`·`ending_bad2_loop` …, 경고 없이 확인), 없으면 `ending_<kind>` (clear·bad1·bad2·bad3·bad4) |
-| 유품 | HUD 유품 슬롯(7개 + 나머지 수, 툴팁=이름) · 유품 고르기 · 유품 상점 진열 · 방금 뽑기 결과 · 획득 토스트 | `Icons/Relics/<id>` |
+| 유물 | HUD 유물 슬롯(7개 + 나머지 수, 툴팁=이름) · 유물 고르기 · 유물 상점 진열 · 방금 뽑기 결과 · 획득 토스트 | `Icons/Relics/<id>` |
 | 꽝 | 뽑기 꽝 토스트 · 방금 뽑기 결과 | `Icons/Junk/<RELIC_JUNK 순서>` |
 
 **미래 표정 규칙** (GameController.Art.cs, web `moodFace` + 이벤트 face 키를 스프라이트 11종으로)
@@ -183,5 +183,5 @@ Builds/Mac/롱잡고알바감.app/Contents/MacOS/롱잡고알바감 -screen-widt
    sim 쪽: 멘헤라 시작은 stress ≥ 90 이면 yami, 나쁜 답장은 항상 yami · 작은 손실·유혹 거절·알바 5연속 → pout · 큰 수익 300만↑(LOVE_AMT)·잭팟·빚또 1등 → love.
    재생이 끝난 뒤 3초 유지하고 1)로 돌아감.
 3. 강한 연출 (그 재생 묶음 동안 2)의 face 키에 안 덮임): 큰 수익 `fx flex` → flex (300만↑ love, 그림 없으면 excited) · 큰 손실 `fx crack` → shocked · 청산 `fx ash` → crying_comic · 기절 → dizzy.
-4. 그 밖: 김사장 대사(face 지정 없음) → annoyed · 주갤 반응 토스트(app=gall, 내 글 정산) → annoyed · 카지노/경마 이김·즉석 복권 당첨·유품 획득 → smug · 쇼핑(bought) → excited · 멘헤라 폭탄 → mental · 아침 결산(밤잠 뒤) → pajama.
+4. 그 밖: 김사장 대사(face 지정 없음) → annoyed · 주갤 반응 토스트(app=gall, 내 글 정산) → annoyed · 카지노/경마 이김·즉석 복권 당첨·유물 획득 → smug · 쇼핑(bought) → excited · 멘헤라 폭탄 → mental · 아침 결산(밤잠 뒤) → pajama.
 5. 지도 화면엔 미래를 안 띄움(web 과 같음). 지도에서 미래가 말하면 다시 나타남.

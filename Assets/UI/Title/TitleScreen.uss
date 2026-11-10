@@ -483,7 +483,7 @@
 }
 
 .diff-detail {
-    font-size: 16px;
+    font-size: 20px;
     margin: 4px 0 0 0;
     padding: 0;
     white-space: normal;
@@ -584,7 +584,7 @@
 }
 
 .records-detail {
-    font-size: 17px;
+    font-size: 18px;
     color: rgb(174, 176, 188);
     flex-shrink: 1;
     white-space: normal;

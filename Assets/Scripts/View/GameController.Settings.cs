@@ -99,7 +99,7 @@ namespace KwGame.View
 
             var close = Ui.Button("닫기", CloseSettings, null, false, Ui.Accent); close.style.marginTop = 18; close.style.alignSelf = Align.FlexEnd; close.style.marginBottom = 0;
             card.Add(close);
-            card.Add(Ui.Label("Esc 로 닫기", 16, Ui.Dim));
+            card.Add(Ui.Label("Esc 로 닫기", 18, Ui.Dim));
         }
 
         VisualElement SettingRow(string name)
@@ -114,7 +114,7 @@ namespace KwGame.View
             var r = SettingRow(name);
             r.Add(Ui.Chip("켜짐", () => { set(true); RenderSettings(); }, false, on ? Ui.Accent : new Color(1, 1, 1, 0.06f)));
             r.Add(Ui.Chip("꺼짐", () => { set(false); RenderSettings(); }, false, !on ? Ui.Accent : new Color(1, 1, 1, 0.06f)));
-            var h = Ui.Label(hint, 16, Ui.Dim); h.style.flexShrink = 1; h.style.marginLeft = 6; r.Add(h);
+            var h = Ui.Label(hint, 18, Ui.Dim); h.style.flexShrink = 1; h.style.marginLeft = 6; r.Add(h);
             return r;
         }
 

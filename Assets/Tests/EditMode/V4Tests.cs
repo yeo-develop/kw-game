@@ -22,7 +22,7 @@ namespace KwGame.Tests
             Assert.That(e.FirstOrDefault(x => x.t == "error"), Is.Null, $"{t} @ {g.S.pending?.t}");
             return e;
         }
-        /// 집이 나올 때까지 무난하게 넘김 (유품 첫째 · 이벤트 첫 선택지 · 멘헤라 착한 답장 · 이자 냄)
+        /// 집이 나올 때까지 무난하게 넘김 (유물 첫째 · 이벤트 첫 선택지 · 멘헤라 착한 답장 · 이자 냄)
         static void ToHome(GameSim g)
         {
             for (int i = 0; i < 40 && g.S.pending != null && g.S.pending.t != "home" && g.S.pending.t != "ending"; i++)
@@ -383,7 +383,7 @@ namespace KwGame.Tests
             Assert.That(g.Apply(C("borrow", "amt", 1000000.0)).Any(e => e.t == "error"), "대출은 첫 납부 통과 뒤");
         }
 
-        /// ⑥-7·8: 7일째 밤 이자 다음에 원금 분납. 통과하면 유품 하나 + 대출이 열리고, 증거금 상한·숏은 주차로 열림. 다음 주 요구액은 더 큼
+        /// ⑥-7·8: 7일째 밤 이자 다음에 원금 분납. 통과하면 유물 하나 + 대출이 열리고, 증거금 상한·숏은 주차로 열림. 다음 주 요구액은 더 큼
         [Test]
         public void WeeklyGateGrowsAndPassingRewardsRelic()
         {
@@ -396,7 +396,7 @@ namespace KwGame.Tests
             Assert.That(need1, Is.EqualTo(debt0 - R.V4_GATE_CAP[0]), "1주차 원금 분납 = 빚 − 상한");
             Go(g, "payday", "k", "gatePay");
             Assert.That(S.debt, Is.EqualTo(R.V4_GATE_CAP[0]));
-            Assert.That(S.pending?.t, Is.EqualTo("relic"), "통과 보상: 유품 고르기");
+            Assert.That(S.pending?.t, Is.EqualTo("relic"), "통과 보상: 유물 고르기");
             Assert.That(S.pending.offer.Count, Is.GreaterThan(0));
             Go(g, "pickRelic", "i", 0);
             Assert.That(S.augs.Count, Is.EqualTo(relics0 + 1));
@@ -448,7 +448,7 @@ namespace KwGame.Tests
             Assert.That(S.gateTier, Is.EqualTo(1));
         }
 
-        /// 가진 만큼만 내면 못 낸 원금에만 연체료 · 유품 없음 · 대출은 안 열림. 그래도 증거금 상한은 주차로 오름 (첫 미납이 끝이 아니게). 다음 주에 다 내면 미납 기록이 지워짐
+        /// 가진 만큼만 내면 못 낸 원금에만 연체료 · 유물 없음 · 대출은 안 열림. 그래도 증거금 상한은 주차로 오름 (첫 미납이 끝이 아니게). 다음 주에 다 내면 미납 기록이 지워짐
         [Test]
         public void PartialGatePaymentChargesLateFeeOnShortfall()
         {
@@ -463,7 +463,7 @@ namespace KwGame.Tests
             Assert.That(S.missN, Is.EqualTo(1)); Assert.That(S.gateTier, Is.EqualTo(0));
             ToHome(g);
             Assert.That(S.month, Is.EqualTo(2)); Assert.That(S.ending, Is.Null);
-            Assert.That(S.augs.Count, Is.EqualTo(relics0), "미납이면 유품 없음");
+            Assert.That(S.augs.Count, Is.EqualTo(relics0), "미납이면 유물 없음");
             Assert.That(g.loanOk(), Is.False, "통과한 적이 없으면 대출은 잠김");
             Assert.That(g.marginCap(), Is.EqualTo(R.V4_MARGIN_CAP[1]), "증거금 상한은 미납과 상관없이 주차로");
             S.cash = 20000000;
@@ -620,7 +620,7 @@ namespace KwGame.Tests
             var R = Data.RULES; var g = New(); var S = g.S;
             Assert.That(g.hpOff);
             Assert.That(g.restHint(), Does.Not.Contain("체력"));
-            Assert.That(Data.AUGS.Where(x => x.d != null && x.d.Contains("체력")).Select(x => x.id), Is.Empty, "유품 설명도 v4 규칙으로 (체력 얘기 없음)");
+            Assert.That(Data.AUGS.Where(x => x.d != null && x.d.Contains("체력")).Select(x => x.id), Is.Empty, "유물 설명도 v4 규칙으로 (체력 얘기 없음)");
             Assert.That(Data.AUGS.First(x => x.id == "loanbro").d, Does.Contain("주 이자"));
             var opts = g.Query(() => g.locOpts("work"));
             Assert.That(opts.All(o => !o.sub.Contains("체력")), "알바 설명에 체력이 없음");
@@ -927,7 +927,7 @@ namespace KwGame.Tests
             // 알바한 날: 일당이 정산에 잡힘
             var w = ToWork(7, "cafe", 0, out _); Go(w, "mgResult", "score", 0.8); ToHome(w);
             var ew = ToEvening(w); var sw = ew.Single(e => e.t == "settle");
-            Assert.That(sw.Num("wage"), Is.GreaterThan(0)); Assert.That(sw.Str("cls"), Is.EqualTo("normal")); Assert.That(sw.Num("net"), Is.EqualTo(sw.Num("wage") + sw.Num("pnl")));
+            Assert.That(sw.Num("wage"), Is.GreaterThan(0)); Assert.That(sw.Str("cls"), Is.EqualTo("normal")); Assert.That(sw.Num("net"), Is.EqualTo(sw.Num("wage") + sw.Num("pnl") + sw.Num("other")));
         }
         /// 기둥 연결: 호감 40 도시락(아침 스트레스 −) · 60 미래의 감(그날 첫 가짜 속보를 알아챔) · 80 응원(일당 +)
         [Test]
@@ -1127,6 +1127,166 @@ namespace KwGame.Tests
             Assert.That(pro.workHeld, Is.GreaterThanOrEqualTo(5)); Assert.That(casual.workHeld, Is.GreaterThanOrEqualTo(3));
             // ⑥-13·15: 대출 없이도 깸 · 원금이 첫 주부터 줄어듦
             Assert.That(pro.noLoanClear, Is.GreaterThanOrEqualTo(0.3)); Assert.That(pro.firstRepay, Is.LessThanOrEqualTo(7));
+        }
+
+        // ---------- 화면 계약 (docs/UIUX.md) ----------
+        /// UIUX #13: 정산 카드의 숫자가 실제 현금 변화와 맞아떨어짐 — 그 밖 = 일당·매매 말고 오늘 벌거나 쓴 돈만 (이자·대출·상환은 '옮긴 돈'), 아침 기준점 전의 돈은 두 번 세지 않음
+        [Test]
+        public void SettleCardAddsUpToTheCashChange()
+        {
+            double fee = Data.RULES.RT_RSCH_FEE;
+            // (1) 실제 경로로: 낮에 유료 리포트를 사고(쓴 돈) 은행에서 이자를 미리 냄(옮긴 돈)
+            var g = New(7); var S = g.S; double c0 = S.cash;
+            Assert.That(S.dayCash0, Is.EqualTo(c0), "아침 현금 기준점"); Assert.That(S.dayLed0, Is.EqualTo(S.today.Count));
+            Go(g, "watch"); Go(g, "report", "paid", true, "who", g.analysts().Last().id); Go(g, "watchEnd"); ToHome(g);
+            double intr = g.interestDue();
+            Go(g, "map"); Go(g, "goTo", "loc", "bank");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            var ev = Go(g, "act", "k", "l-payint"); if (S.pending.t != "home") ToHome(g);
+            Assert.That(S.paidMonth, Is.EqualTo(S.month), "이자를 미리 냄");
+            ev.AddRange(ToEvening(g));
+            var st = ev.Single(e => e.t == "settle");
+            Assert.That(st.Num("other"), Is.EqualTo(-fee), "유료 리포트만 '그 밖' (이자는 아님)");
+            Assert.That(st.Num("net"), Is.EqualTo(st.Num("wage") + st.Num("pnl") - fee));
+            Assert.That(st.Num("cash0"), Is.EqualTo(c0)); Assert.That(st.Num("cash"), Is.EqualTo(S.cash));
+            Assert.That(st.Num("move"), Is.EqualTo(-intr).Within(1e-6), "이자는 번 것도 쓴 것도 아니라 옮긴 돈");
+            Assert.That(st.Num("due"), Is.EqualTo(g.gateDue())); Assert.That(st.Num("gap"), Is.EqualTo(System.Math.Max(0, g.gateDue() - S.cash)));
+            Assert.That(st.Num("dd"), Is.EqualTo(g.gateDays())); Assert.That(g.gateDays(), Is.EqualTo(Data.RULES.MONTH_DAYS - S.day));
+            Assert.That(g.equity(), Is.EqualTo(S.cash + g.holdVal()));
+
+            // (2) 아침 사건으로 들어온 돈은 아침 현금에 이미 들어 있음 → '그 밖'에 또 세지 않음
+            bool sawMorning = false;
+            for (int sd = 1; sd <= 40 && !sawMorning; sd++)
+            {
+                var h = New(sd); var H = h.S;
+                ToEvening(h); Go(h, "rest"); if (H.pending.t != "home") ToHome(h);   // 다음 날 아침
+                if (h.absDay() != 2 || H.dayLed0 == 0) continue;   // 아침 기준점 전에 장부가 있는 날 (아침 사건 · 배당 · 선물)
+                double early = H.today.Take(H.dayLed0).Sum(x => x.amt); if (early == 0) continue;
+                sawMorning = true;
+                Go(h, "watch"); Go(h, "report", "paid", true, "who", h.analysts().Last().id); Go(h, "watchEnd"); ToHome(h);
+                var s2 = ToEvening(h).Single(e => e.t == "settle");
+                string[] skip = { "work", "invest", "debt", "loan", "repay", "interest" };
+                double after = H.today.Skip(H.dayLed0).Where(x => !skip.Contains(x.kind)).Sum(x => x.amt);
+                Assert.That(s2.Num("other"), Is.EqualTo(after).Within(1e-6), $"씨앗 {sd}: 아침 기준점 뒤의 장부만 셈");
+                Assert.That(s2.Num("move"), Is.EqualTo(0).Within(1e-6), $"씨앗 {sd}: 아침 사건 돈({early})을 두 번 세면 여기가 어긋남");
+            }
+            Assert.That(sawMorning, "아침에 돈이 들어온 날을 한 번은 봄");
+
+            // (3) 옛 저장(아침 현금 기준점 없음): 아침 현금을 모른다고 알려 줌
+            var o = New(7); o.S.dayCash0 = -1; o.S.cash -= fee; o.S.today.Add(new Ledger { kind = "ev", amt = -fee, label = "유료 리포트" });
+            var s3 = ToEvening(o).Single(e => e.t == "settle");
+            Assert.That(s3.Num("cash0"), Is.EqualTo(-1)); Assert.That(s3.Num("move"), Is.EqualTo(0));
+        }
+        /// UIUX #24: 알바 설명 카드에서 다른 알바를 고르러 돌아갈 수 있고 (칸을 안 씀), 시작한 뒤에는 못 돌아감
+        [Test]
+        public void WorkCanBeCancelledBeforeItStarts()
+        {
+            var g = New(5); var S = g.S; int t0 = g.Tnow(), m0 = S.min;
+            Go(g, "map"); Go(g, "goTo", "loc", "work");
+            if (S.pending.t == "encounter") Go(g, "encounter", "ask", false);
+            uint rng0 = S.rng;
+            Go(g, "act", "k", "l-ware");
+            Assert.That(S.pending.t, Is.EqualTo("work")); Assert.That(S.pending.setup, Is.Null);
+            Go(g, "workBack");
+            Assert.That(S.pending.t, Is.EqualTo("loc")); Assert.That(S.pending.key, Is.EqualTo("work"));
+            Assert.That(g.Tnow(), Is.EqualTo(t0), "칸을 안 씀"); Assert.That(S.min, Is.EqualTo(m0));
+            Assert.That(S.rng, Is.EqualTo(rng0), "들락거려도 난수가 안 밀림");
+            Go(g, "act", "k", "l-cafe"); Assert.That(S.pending.key, Is.EqualTo("cafe"), "다른 알바를 고름");
+            Go(g, "mgSetup");
+            Assert.That(g.Apply(C("workBack")).Any(e => e.t == "error"), "시작한 알바는 취소 못 함");
+        }
+        /// UIUX #16: 발표·예약 체결을 배너로 띄울 수 있게 사건에 종목 이름 · 분석가 · 방향 · 보유 여부가 실려 옴
+        [Test]
+        public void AnnouncementAndStopEventsCarryBannerFields()
+        {
+            bool sawReport = false;
+            for (int sd = 1; sd <= 12 && !sawReport; sd++)
+            {
+                var g = New(sd); var S = g.S; S.cash = 5000000;
+                Go(g, "watch"); Go(g, "report", "paid", false);
+                var t = S.tips.Last(); if (!Data.TK[t.tk].IsCoin) continue;
+                Go(g, "open", "tk", t.tk, "dir", t.dir, "lev", 1, "amt", 100000);
+                Go(g, "watchEnd"); ToHome(g);
+                for (int guard = 0; guard < 8 && !sawReport && string.IsNullOrEmpty(t.res); guard++)
+                {
+                    if (g.Tnow() < t.Tr) { Go(g, "rest"); ToHome(g); continue; }
+                    Go(g, "watch");
+                    while (S.pending?.t == "watch" && !sawReport)
+                    {
+                        bool held = S.cps.Any(c => c.tk == t.tk); double p0 = S.mk.tk[t.tk].p;
+                        var e = g.Apply(C("tick", "m", 1)).FirstOrDefault(x => x.t == "planEv" && x.Str("k") == "report" && x.Str("tk") == t.tk);
+                        if (e == null) continue;
+                        sawReport = true;
+                        Assert.That(e.Str("n"), Is.EqualTo(Data.TK[t.tk].name)); Assert.That(e.Str("who"), Is.EqualTo(Data.SRC[t.who].name));
+                        Assert.That((bool)e["up"], Is.EqualTo(S.mk.tk[t.tk].p > p0), "실제로 간 방향");
+                        Assert.That((bool)e["hold"], Is.EqualTo(held));
+                    }
+                    if (S.pending?.t == "watch") Go(g, "watchEnd");
+                    ToHome(g);
+                }
+            }
+            Assert.That(sawReport, "발표 사건을 한 번은 봄");
+
+            var h = New(5); var H = h.S; H.cash = 3000000;
+            var coin = Data.TKList.First(x => x.IsCoin && h.tkOpen(x.id) && x.maxLev >= 5 && !x.meme);
+            Go(h, "watch"); Go(h, "open", "tk", coin.id, "dir", 1, "lev", 5, "amt", 500000, "sl", 0.3);
+            H.mk.tk[coin.id].p = H.cps[0].entry * 0.92;
+            var sf = g_tick(h).FirstOrDefault(x => x.t == "stopFill");
+            Assert.That(sf, Is.Not.Null, "예약 체결 사건"); Assert.That(sf.Str("n"), Is.EqualTo(coin.name)); Assert.That((bool)sf["tp"], Is.False); Assert.That(sf.Num("pnl"), Is.LessThan(0));
+        }
+        static List<SimEvent> g_tick(GameSim g) => g.Apply(C("tick", "m", 1));
+        /// UIUX #27 · #8 · #7: 1부 첫날엔 돌발 이벤트가 없고(둘째 날부터는 뜸), v4 화면 문구에 체력이 안 나오며, 수치 이름은 스트레스 하나
+        [Test]
+        public void DayOneHasNoRandomEventAndTextUsesV4Terms()
+        {
+            int later = 0;
+            for (int sd = 1; sd <= 30; sd++)
+            {
+                var g = GameSim.Create(Data, sd, new GameSim.Opts { rt = true }); var S = g.S;
+                Go(g, "start");
+                for (int i = 0; i < 60 && g.absDay() <= 3 && S.pending != null && S.pending.t != "ending"; i++)
+                {
+                    var P = S.pending;
+                    switch (P.t)
+                    {
+                        case "event":
+                            if (g.absDay() <= 1) Assert.That(P.evId, Does.StartWith("v4_"), $"씨앗 {sd}: 첫날 돌발 이벤트 {P.evId}");
+                            else if (!P.evId.StartsWith("v4_")) later++;
+                            Go(g, "evPick", "k", P.opts.First(o => !o.dis).k); break;
+                        case "relic": Go(g, "pickRelic", "i", 0); break;
+                        case "home": Go(g, "rest"); break;
+                        case "menhera": case "impulse": Go(g, "reply", "i", P.opts.FindIndex(o => o.ok)); break;
+                        case "tempt": Go(g, "tempt", "k", "no"); break;
+                        default: Assert.Fail($"씨앗 {sd}: 모르는 대기 상태 {P.t}"); break;
+                    }
+                }
+                Assert.That(g.absDay(), Is.GreaterThan(1), $"씨앗 {sd}: 첫날을 끝까지 지남");
+            }
+            Assert.That(later, Is.GreaterThan(0), "둘째·셋째 날엔 돌발 이벤트가 뜸 (검사가 실제로 이벤트를 볼 수 있다는 대조군)");
+            // 2부 첫날은 예외가 아님 · 턴 모드도 그대로 (규칙 분기 확인)
+            var q = New(3);
+            foreach (var o in q.Query(() => q.locOpts("park"))) { Assert.That(o.sub ?? "", Does.Not.Contain("체력")); Assert.That(o.sub ?? "", Does.Not.Contain("멘탈")); }
+            Assert.That(Data.S("v4.res.hit"), Does.Contain("적중")); Assert.That(Data.S("v4.res.miss"), Does.Contain("빗나감"));
+            Assert.That(q.noHpText("체력 -4 · 멘탈 회복"), Is.EqualTo("스트레스 ↓"));
+            Assert.That(q.noHpText("멘탈 크게 회복"), Is.EqualTo("스트레스 크게 ↓")); Assert.That(q.noHpText("멘탈 완전 회복"), Is.EqualTo("스트레스 크게 ↓"));
+            Assert.That(q.noHpText("1.5만 원 · 체력 -5"), Is.EqualTo("1.5만 원")); Assert.That(q.noHpText(null), Is.Null);
+            var turn = GameSim.Create(Data, 3, new GameSim.Opts { rt = false });
+            Assert.That(turn.noHpText("체력 -4 · 멘탈 회복"), Is.EqualTo("체력 -4 · 멘탈 회복"), "턴 모드 문구는 그대로");
+            // UIUX #3: 만 단위 표기 — v4 는 100만 미만이면 소수 한 자리까지 (1.5만이 2만으로 보이지 않게), 턴 모드는 그대로
+            Assert.That(q.man(15000), Is.EqualTo("1.5만")); Assert.That(q.man(180000), Is.EqualTo("18만")); Assert.That(q.man(187000), Is.EqualTo("18.7만"));
+            Assert.That(q.man(2345000), Is.EqualTo("235만")); Assert.That(q.man(6000), Is.EqualTo("6,000")); Assert.That(turn.man(15000), Is.EqualTo("2만"));
+        }
+        /// 사용자 결정(11-11): 패시브 아이템은 '유물'. '유품'·'부모님 유품'은 미래가 가족을 다 잃은 것처럼 읽혀서 안 씀 (BLUEPRINT_V3 ⑥-19-4)
+        [Test]
+        public void RelicsAreNeverCalledKeepsakes()
+        {
+            string dir = System.IO.Path.Combine(UnityEngine.Application.dataPath, "Resources", "Data");
+            var files = System.IO.Directory.GetFiles(dir, "*.json");
+            Assert.That(files.Length, Is.GreaterThan(10));
+            foreach (var f in files) Assert.That(System.IO.File.ReadAllText(f), Does.Not.Contain("유" + "품"), System.IO.Path.GetFileName(f));
+            foreach (var f in System.IO.Directory.GetFiles(System.IO.Path.Combine(UnityEngine.Application.dataPath, "Scripts"), "*.cs", System.IO.SearchOption.AllDirectories))
+                Assert.That(System.IO.File.ReadAllText(f), Does.Not.Contain("유" + "품"), System.IO.Path.GetFileName(f));
+            Assert.That(Data.S("aug.reasonStart"), Does.Contain("유물"));
         }
     }
 }

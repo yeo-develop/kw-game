@@ -21,8 +21,8 @@ web/
       gall.js      주갤 글·댓글·찌라시·내 글 반응, 미래 카톡 질문, 형나믿지 DM
       talk.js      대사·연출 이벤트 헬퍼 + react(도박·투자 결과 반응)
       trade.js     주식·코인 매매         games.js  알바(미니게임 판)·카지노·경마·즉석 복권·빚또
-      places.js    장소 메뉴 · 게임방 · 은행 · 상점(꾸미기·유품 뽑기/구매) · 증권사 리포트 · 사채 · 길거리 정보
-      flow.js      하루 흐름 단계(step) · 아침 · 칸 시작/끝 · 이자일 · 유품 고르기 · 멘헤라·돌발 매수 · 중독 사건·유혹 · 기절 · 엔딩·스코어보드·계속하기
+      places.js    장소 메뉴 · 게임방 · 은행 · 상점(꾸미기·유물 뽑기/구매) · 증권사 리포트 · 사채 · 길거리 정보
+      flow.js      하루 흐름 단계(step) · 아침 · 칸 시작/끝 · 이자일 · 유물 고르기 · 멘헤라·돌발 매수 · 중독 사건·유혹 · 기절 · 엔딩·스코어보드·계속하기
       api.js       createGame · apply (명령 처리)        query.js  view 용 읽기 전용 계산
       digest.js    골든용 상태 요약·해시                  ids.js    한글 ID(데이터 키) 모음 — sim 의 유일한 한글 리터럴
       news.js      LLM 뉴스 디렉터: newsReq(요청) · newsFact(검증) · LLM 모드 genNews (docs/LLM.md)
@@ -36,7 +36,7 @@ web/
       phone.js/phone2.js  폰(카톡·주갤·개미증권·뉴스) — 상태 변경은 명령으로
       tut.js       튜토리얼 코치마크·도움말·미니게임 설명 카드
       minigames.js 알바 미니게임 4종 (카페·편의점·상하차·마트 피하기 — 입력·연출 → 0~1 점수)
-      panels.js/panels2.js  카지노·경마·복권·빚또·상환·상점·사채·유품(고르기·뽑기 상점)·아침 결산 화면
+      panels.js/panels2.js  카지노·경마·복권·빚또·상환·상점·사채·유물(고르기·뽑기 상점)·아침 결산 화면
       main.js      메인 루프(pending → 화면 → 명령) · 엔딩 · 타이틀 · 키 입력 · window.__G(테스트 창구)
   tools/
     load-data.mjs  data/*.json 합치기 (Node)      bots.mjs   헤드리스 봇 전략 5종 (steady·work·invest·gamble·random)
@@ -55,14 +55,14 @@ web/
 - 하루 = 3칸 (`RULES.SLOTS` = 3: 0 아침 · 1 점심 · 2 저녁). 주식은 `RULES.STOCK_SLOTS` [0,1] 칸에만, 코인은 언제나. 시세는 칸마다 1번 움직인다.
 
 ```
-loopTop:  [needMorning → (중독도 100 + 빈털터리면 배드2) → morning] [디버그 유품] → loopTop2
+loopTop:  [needMorning → (중독도 100 + 빈털터리면 배드2) → morning] [디버그 유물] → loopTop2
 loopTop2: phase=home · slotStart(시세 계획·고래·찌라시 구독·카톡 질문 만료/생성·형나믿지·갤 찌라시·내 글 정산·중독 사건) · save → home
 home:     [기절 중이면 입력 없이 AFTER_SLOT] [중독도 80↑ 30% → pending tempt] 집 대사(칸마다 1번, 게임 난수) → pending home
 (칸을 쓴 행동 뒤 = AFTER_SLOT) endCheck → faintCheck → menCheck → endSlot → endCheck → menCheck → loopTop
 endSlot:  [도박 안 한 칸이면 중독도 −ADD_SLOT_DECAY] → [저녁: 빚또 추첨 → (7일째 + 빚 > 0) 이자일 pending] → market → advance
 market:   펀딩비 → 시세 적용 → 청산(증거금 70~90% 손실) → 정보 결과 → 뉴스·알림 → 갤 시황 글 → 큰 손익 반응 → 최대 자산 기록 → 다음 뉴스
 advance:  칸+1, 하루 넘김(밤잠 체력 +HP_SLEEP · 도박 안 한 날 중독도 −ADD_DECAY, 60↑면 금단 멘탈↓) · 달 넘김, needMorning
-이자일:   choose(현금/정리/대출/김사장 홀짝) → [repay 선택] → 빚 0 이면 정식 엔딩 → paydayMsg  (3개월 강제 정산 없음 · 유품 보상 없음)
+이자일:   choose(현금/정리/대출/김사장 홀짝) → [repay 선택] → 빚 0 이면 정식 엔딩 → paydayMsg  (3개월 강제 정산 없음 · 유물 보상 없음)
 menCheck: 멘헤라(스트레스 ≥ 70, posi 90)면 IMPULSE_P 확률로 돌발 매수(pending impulse), 아니면 카톡 탄막(pending menhera)
 faintCheck: 체력 0 → 기절(S.faint = 다음 날 마지막 칸 T) · 응급실비 · 그때까지 home 은 입력 없이 지나감
 endCheck: 빚 ≤ 0 (그리고 아직 안 깸) → clear · 빚 > DEBT_CAP → bad1/bad2(중독도 ≥ 60)
@@ -76,8 +76,8 @@ pending 종류: `start · relic · home · map · loc · encounter · loan · wo
 
 | 명령 | 필드 | 받는 pending | 설명 |
 |---|---|---|---|
-| `start` | | start | 오프닝(이벤트 `opening`) → 부모님 유품 고르기 |
-| `pickRelic` / `relicReroll` | `i` | relic | 유품 고르기(0~2) / 상자 더 뒤지기 1회 |
+| `start` | | start | 오프닝(이벤트 `opening`) → 집안 유물 고르기 |
+| `pickRelic` / `relicReroll` | `i` | relic | 유물 고르기(0~2) / 상자 더 뒤지기 1회 |
 | `rest` · `map` · `loanOpen` | | home | 쉬기(칸 소모, 체력 +HP_REST · 저녁이면 +HP_REST_EVE) · 지도 · 사채 창 |
 | `borrow` / `loanDone` | `amt`(50만·100만·300만) | loan | 사채(선이자) / 닫기 |
 | `goTo` | `loc` (`home`·broker·bank·casino·work·pc·shop·lotto·race) | map | 장소 이동 (25% 길거리 정보 → encounter) |
@@ -90,7 +90,7 @@ pending 종류: `start · relic · home · map · loc · encounter · loan · wo
 | `lottoBuy` / `lottoDone` | `k` | lotto | 자동 k장 / 됐어 |
 | `repay` | `amt` (0 = 취소) | repay | 원금 상환 |
 | `shopBuy` / `shopDone` | `id` | shop | 꾸미기 사기·갈아입기 / 다 샀다 |
-| `gachaRelic` · `buyRelic` / `relicDone` | · `id` | relicShop | 수상한 물건 뽑기(GACHA_PRICE, 꽝 있음) · 진열장 유품 사기(RELIC_PRICE[등급]) / 끝 (뭐라도 샀으면 칸 소모) |
+| `gachaRelic` · `buyRelic` / `relicDone` | · `id` | relicShop | 수상한 물건 뽑기(GACHA_PRICE, 꽝 있음) · 진열장 유물 사기(RELIC_PRICE[등급]) / 끝 (뭐라도 샀으면 칸 소모) |
 | `brokerClose` | | brokerTrade | 창구 거래 끝 (그 사이 매매했으면 칸 소모) |
 | `reply` | `i` | menhera · impulse | 멘헤라 받아치기 / 돌발 매수 막기 |
 | `tempt` | `k` (go·no) | tempt | 도박 유혹: 딱 한 판(현금 반 홀짝, 칸 소모) / 참기 |
@@ -106,15 +106,15 @@ pending 종류: `start · relic · home · map · loc · encounter · loan · wo
 
 ## 4. 이벤트 (sim → view)
 
-모든 이벤트는 `{t, …}`. view 설정 `SIM.configure({hud:true})` 면 이벤트마다 그 시점 HUD 스냅샷 `h`(phase·날짜·현금·빚·체력·스트레스·중독도·평가액·유품·기절) 가 붙는다 — view 는 재생 중 HUD 를 이 값으로 그려 "돈이 결과 나올 때 바뀌는" 연출을 유지한다.
+모든 이벤트는 `{t, …}`. view 설정 `SIM.configure({hud:true})` 면 이벤트마다 그 시점 HUD 스냅샷 `h`(phase·날짜·현금·빚·체력·스트레스·중독도·평가액·유물·기절) 가 붙는다 — view 는 재생 중 HUD 를 이 값으로 그려 "돈이 결과 나올 때 바뀌는" 연출을 유지한다.
 
 | 이벤트 | 필드 | view 처리 |
 |---|---|---|
 | `say` | `who`(m·me·kim·nar·npc), `name`, `text`, `face` | 대사창 (클릭까지 대기) |
 | `hideDlg` · `bubble` · `face` · `scene` · `npc` · `kim` · `hideUi` | | 장면 조작 |
 | `fx` | `k`(ash·flex·crack·big), `amt`, `text`… | 청산 재·FLEX·화면 깨짐·큰 글씨 |
-| `hp` · `addict` · `ment` · `cash` · `debt` · `repaid` · `augfx` | `d, why` / `d, v` / `m` / `d` / `a` / `id,text` | 떠오르는 숫자·체력바 핑·중독 문턱(30/60/80) 큰 글씨·유품 칩 |
-| `relic` | `id, how`(pick·gacha·buy) | 유품 칩 핑 |
+| `hp` · `addict` · `ment` · `cash` · `debt` · `repaid` · `augfx` | `d, why` / `d, v` / `m` / `d` / `a` / `id,text` | 떠오르는 숫자·체력바 핑·중독 문턱(30/60/80) 큰 글씨·유물 칩 |
+| `relic` | `id, how`(pick·gacha·buy) | 유물 칩 핑 |
 | `gacha` | `id` 또는 `junk, text` | 뽑기 캡슐 연출 (상점 패널) |
 | `addictEv` | `k`(secret·tempt), `amt` | 몰래 카지노 손익 연출 |
 | `impulse` | `tk, amt` | 돌발 풀매수 폰 화면 연출 |
@@ -151,7 +151,7 @@ pending 종류: `start · relic · home · map · loc · encounter · loan · wo
 | `tips` · `srcStat` · `rsch` · `whale` · `repT` | 정보 · 출처별 [맞음,전체] · 오늘 리포트 횟수 · 고래 힌트 · 박대리 받은 칸 |
 | `posts` · `gid` · `wrote` · `gNew` · `gReact` | 주갤 글(최대 70) · id 카운터(글·팁 공용) · 오늘 쓴 글 수 · 안 읽음 |
 | `kk` · `kun` · `kq` · `feed` · `fUnread` | 카톡 방 3개 · 안 읽음 · 미래 질문 · 뉴스 알림 |
-| `augs` · `relicOffer` · `outfit` · `owned` · `props` | 보유 유품 id (필드 이름은 구 '증강' 그대로) · 오늘 진열장 `{d, ids[3]}` · 옷 · 산 옷 · 방 소품 |
+| `augs` · `relicOffer` · `outfit` · `owned` · `props` | 보유 유물 id (필드 이름은 구 '증강' 그대로) · 오늘 진열장 `{d, ids[3]}` · 옷 · 산 옷 · 방 소품 |
 | `faint` · `gday` · `gT` · `temptT` | 기절 끝나는 칸 T(−1 = 아님) · 마지막으로 도박한 날·칸 · 유혹 뜬 칸 |
 | `cleared` · `resume` · `endSeen` | 정식 엔딩 봄(자유 모드) · 엔딩 직전 flow (continue 로 이어감) · 이번 판 본 엔딩 |
 | `today` · `yday` · `eqh` · `realized` · `invIn` | 오늘/어제 기록 · 투자 손익 곡선 |
@@ -217,9 +217,9 @@ UI 전용 계산(`liqOdds` 청산 확률 표시)은 Math.exp·hypot 를 써도 �
 
 | 파일 | 테이블 | 쓰는 곳 |
 |---|---|---|
-| rules.json | RULES(빚·이자·한도·수수료·펀딩비·청산 손실 LIQ_LOSS·복권 값·체력 HP_*·중독 ADD_*·돌발 매수 IMPULSE_*·유품 가격 GACHA_*/RELIC_*…), SLOT_NAME/IC/CLOCK(3칸), CAS_TITLE, SCRATCH_SYM | sim 전반 |
+| rules.json | RULES(빚·이자·한도·수수료·펀딩비·청산 손실 LIQ_LOSS·복권 값·체력 HP_*·중독 ADD_*·돌발 매수 IMPULSE_*·유물 가격 GACHA_*/RELIC_*…), SLOT_NAME/IC/CLOCK(3칸), CAS_TITLE, SCRATCH_SYM | sim 전반 |
 | tickers.json | TK(종목 7), NEWS | market |
-| augments.json | AUGS(유품 17: 구 증강 16 리스킨 + 산삼주), TIER(수상함·골동품·가보), RELIC_JUNK(뽑기 꽝) | flow·places·view |
+| augments.json | AUGS(유물 17: 구 증강 16 리스킨 + 산삼주), TIER(수상함·골동품·가보), RELIC_JUNK(뽑기 꽝) | flow·places·view |
 | jobs.json · items.json | JOBS(알바 4: base·var·hp) · ITEMS(꾸미기 9), DECOR_END | games·places·엔딩 |
 | locations.json · npcs.json | LOCS(장소 8, 지도 좌표·영업 칸), GREET · NPCS(외형) | places·view |
 | sources.json | SRC(정보 출처 15: 적중률·크기·시차), TIER_NM, TIP_REACT | tips |
@@ -285,7 +285,7 @@ view 템플릿(패널 버튼 이름 같은 UI 크롬)의 한글은 view 에 남�
 3. `GameState` + `Calc`(state.js) + `Market`(시세만) → 시드 고정 시세 비교 (createGame 직후 digest).
 4. `Effects`·`Tips`·`Gall`·`Talk`·`Trade`·`Games`·`Places`·`Flow`·`Apply` → 골든 `random_7_first20` → `first60` → `first150` → `first300` → 전체 16개 순서로 통과.
 5. view: 이벤트 재생기 + 집/지도/장소 메뉴 → 대사·HUD → 패널·미니게임 → 폰 → 튜토리얼.
-6. (완료) 2단계(하루 3칸·체력·유품·엔딩 3종 등, `concept_v33.md` §2) — §13.
+6. (완료) 2단계(하루 3칸·체력·유물·엔딩 3종 등, `concept_v33.md` §2) — §13.
 
 ## 12. v3.2 → v3.3(1단계)에서 달라진 것
 
@@ -304,7 +304,7 @@ view 템플릿(패널 버튼 이름 같은 UI 크롬)의 한글은 view 에 남�
 | 하루 3칸 | `SLOTS` 3, `STOCK_SLOTS` [0,1], `isEve()`, 시세 칸당 1번 (vol ×1.155·drift ×4/3·시장 노이즈 0.0058/0.0092·펀딩 0.0027 → 하루 변동 유지) | rules·tickers·locations(영업 칸) | HUD 점 3개, 문구 '칸' |
 | 체력 | `S.hp`, `effects.hp`, 알바 `JOBS.hp`·행동 `HP_COST`, 저녁 잠 +50 · 쉬기 +30(저녁 +45), 30↓ 점수×(0.4~1.0), 0 → `faintCheck` 기절(오늘 남은 칸 + 다음 날, 응급실 10만) | rules HP_* | 체력바 `#hHp`, 기절 연출, 집 메뉴 '일찍 자기' |
 | 호감도 삭제 | `aff`·캔들·`block` 엔딩 삭제, 표정·아침 줄·엔딩 대사는 스트레스·체력 기준 | strings·items·lines(aff 제거) | 호감도 캔들 → 체력바 |
-| 유품 | pending `relic`(시작 상자) · `relicShop`(뽑기/진열장), 이자 보상 증강 삭제, 새 유품 `ginseng`(체력 소모 −30%) | augments(이름·설명 리스킨, TIER, RELIC_JUNK) | 유품 상자·상점(캡슐 연출) |
+| 유물 | pending `relic`(시작 상자) · `relicShop`(뽑기/진열장), 이자 보상 증강 삭제, 새 유물 `ginseng`(체력 소모 −30%) | augments(이름·설명 리스킨, TIER, RELIC_JUNK) | 유물 상자·상점(캡슐 연출) |
 | 엔딩 3종 | `clear`(컷신 → `continue` 자유 모드) · `bad1`(끌려감, 변형 gall) · `bad2`(도박 중독, 변형 loop·회상), 3개월 정산 삭제, `scoreboard()` | endings·strings·scenes.clear | 엔딩 화면 + 스코어보드, 기록 localStorage |
 | 도박 중독도 | `S.addict`: 판돈 비율² 가중 + 대박·대손실 보너스, 코인 25배↑, 김사장 홀짝 · 도박 안 한 칸 −3, 안 한 날 −3 · 30 조름 / 60 몰래 카지노·금단 / 80 유혹(pending `tempt`) | rules ADD_* · strings add.* | HUD 중독 배지, 문턱 큰 글씨 |
 | 베팅 상한 폐지 | casino·race `stake ≤ cash` (`limitOf`·`LIMIT0` 삭제), 사채 한도 단계 유지 | casino | 판돈 UI '상한 없음' |

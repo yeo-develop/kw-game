@@ -13,10 +13,15 @@ namespace KwGame.View
         public static readonly Color Panel2 = new Color32(0x2a, 0x2a, 0x3a, 0xff);
         public static readonly Color Accent = new Color32(0xff, 0x6b, 0x9d, 0xff);
         public static readonly Color Good = new Color32(0x5c, 0xd6, 0x8a, 0xff);
-        public static readonly Color Bad = new Color32(0xff, 0x5c, 0x5c, 0xff);
+        /// 경고 · 빚 (주황). 상승 빨강(StkUp #ff4d5e)과 헷갈리지 않게. 어두운 패널 위 명암비 약 7
+        public static readonly Color Bad = new Color32(0xff, 0x8c, 0x42, 0xff);
         public static readonly Color Text = new Color32(0xee, 0xee, 0xf4, 0xff);
         public static readonly Color Dim = new Color32(0x9a, 0x9a, 0xb0, 0xff);
         public static readonly Color Gold = new Color32(0xff, 0xd1, 0x66, 0xff);
+        /// 밝은 배경(분홍 Accent · 초록 · 금색) 위 글자: 본문 · 부제 (분홍 위 명암비 6.9 · 5.8)
+        public static readonly Color Ink = new Color32(0x1a, 0x10, 0x20, 0xff);
+        public static readonly Color InkSub = new Color32(0x3a, 0x1a, 0x28, 0xff);
+        public static bool IsLight(Color c) => c.a > 0.5f && c.grayscale > 0.58f;   // 분홍(0.62) · 주황 · 금색은 밝음, 상승 빨강(0.52) · 하락 파랑(0.53)은 흰 글자 그대로
         /// 화면 효과 끔 (설정 · PlayerPrefs "kw.fx" = 0): 흔들림 · 폭죽 · 청산 터짐 · 멘헤라 탄막 생략
         public static bool FxOff;
 
@@ -84,7 +89,9 @@ namespace KwGame.View
         static Button Button(string text, Action onClick, string sub, bool disabled, Color? bg, float size, KwGame.Audio.SoundCue click)
         {
             // 잠긴 버튼도 누르면 '띡' (왜 안 되지? 를 소리로)
-            var b = new Button(() => { KwGame.Audio.GameAudioManager.Play(disabled ? KwGame.Audio.SoundCue.UiDenied : click); if (!disabled) onClick?.Invoke(); }) { text = "" };
+            Button b = null;
+            b = new Button(() => { KwGame.Audio.GameAudioManager.Play(disabled ? KwGame.Audio.SoundCue.UiDenied : click); b.Blur(); if (!disabled) onClick?.Invoke(); }) { text = "" };   // Blur: 누른 버튼이 포커스를 쥐고 있으면 Space(대사 넘기기 · 일시정지)에 또 눌림. Tab 이동은 그대로 됨
+            bool light = !disabled && IsLight(bg ?? Panel2);
             b.style.flexDirection = FlexDirection.Column;
             b.style.alignItems = Align.FlexStart;
             b.style.backgroundColor = disabled ? new Color(0.18f, 0.18f, 0.22f, 1) : (bg ?? Panel2);
@@ -92,12 +99,12 @@ namespace KwGame.View
             Radius(b, 10);
             b.style.paddingLeft = 18; b.style.paddingRight = 18; b.style.paddingTop = 12; b.style.paddingBottom = 12;
             b.style.marginBottom = 10; b.style.marginLeft = 0; b.style.marginRight = 0;
-            var l = Label(text, size, disabled ? Dim : Text, true);
+            var l = Label(text, size, disabled ? Dim : light ? Ink : Text, true);
             l.pickingMode = PickingMode.Ignore;
             b.Add(l);
             if (!string.IsNullOrEmpty(sub))
             {
-                var s = Label(sub, size * 0.72f, Dim);
+                var s = Label(sub, Mathf.Max(18, size * 0.85f), disabled ? Dim : light ? InkSub : Dim);
                 s.pickingMode = PickingMode.Ignore;
                 s.style.marginTop = 4;
                 b.Add(s);

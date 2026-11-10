@@ -43,7 +43,7 @@ namespace KwGame.Sim
                 case "advance": advance(); break;
                 case "spend": spend(); break;
                 case "paydayMsg": M(T("pd.next", "m", S.month + 1), "smug"); hideDlg(); break;
-                case "paydayEnd": paydayEnd(); break;   // 관문 통과 → 유품 고른 뒤 이어서
+                case "paydayEnd": paydayEnd(); break;   // 관문 통과 → 유물 고른 뒤 이어서
                 case "tutInit": if (S.optTut) S.tg = "home"; break;
                 case "v4Start": v4Morning(); break;
                 default: throw new Exception("unknown step " + k);
@@ -113,7 +113,7 @@ namespace KwGame.Sim
             {
                 opts = new List<Opt> {
                     new Opt { k = "go", l = T("add.temptGo"), sub = T("add.temptGoSub", "a", won(temptStake())), dis = S.cash < 10000 },
-                    new Opt { k = "no", l = T("add.temptNo"), sub = T("add.temptNoSub") } }
+                    new Opt { k = "no", l = T("add.temptNo"), sub = T(v4 ? "v4.add.temptNoSub" : "add.temptNoSub") } }
             };
         }
         bool temptCmd(string k)
@@ -145,7 +145,7 @@ namespace KwGame.Sim
             if (fainted()) { evT = T("morning.faint"); hasEv = true; }
             else if (rnd() < 0.4)
             {
-                var e = pick(D.MORNING_EV); evT = e.t; hasEv = true;
+                var e = pick(D.MORNING_EV); evT = hpOff ? System.Text.RegularExpressions.Regex.Replace(e.t, @"\s*\(체력 [^)]*\)", "") : e.t; hasEv = true;   // v4: 체력이 없으니 "(체력 -5)" 꼬리표를 뺌
                 if (e.cash != 0) { S.cash += e.cash; S.today.Add(new Ledger { kind = "ev", amt = e.cash, label = T("lbl.morningEv") }); }
                 if (e.st != 0) S.stress = clamp(S.stress + e.st, 0, 100);
                 if (e.fame != 0) fame(e.fame);
@@ -368,7 +368,7 @@ namespace KwGame.Sim
             after("paydayMsg");
         }
 
-        // ---------- 유품 고르기 ----------
+        // ---------- 유물 고르기 ----------
         List<string> relicOfferStart()
         {
             double r = rnd(); bool first = S.augs.Count == 0;

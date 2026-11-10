@@ -17,7 +17,7 @@ namespace KwGame.Tests
         static GameData Data => _data ??= GameData.Load(Directory.GetFiles(Path.Combine(Application.dataPath, "Resources/Data"), "*.json")
             .Select(f => new KeyValuePair<string, string>(Path.GetFileName(f), File.ReadAllText(f))));
 
-        /// 예전 규칙 흔적. "5%" 는 앞이 숫자·점이 아닐 때만 (0.05% · 25% 같은 수수료·유품 수치는 통과)
+        /// 예전 규칙 흔적. "5%" 는 앞이 숫자·점이 아닐 때만 (0.05% · 25% 같은 수수료·유물 수치는 통과)
         static readonly Regex Stale = new Regex(@"(?<![\d.])5%|시간 제한 없음|개월차|이번 달|다음 달");
 
         static IEnumerable<(string path, string text)> Strings(JToken t, string path)
@@ -31,7 +31,7 @@ namespace KwGame.Tests
         public void MergedStringsHaveNoOldMonthlyRules()
         {
             Assert.That(Data.RULES.V4, Is.GreaterThan(0), "unity_v4.json 이 켜져 있어야 함");
-            // 유품 설명(aug.*)은 제 수치(선이자 5% 등)라 제외
+            // 유물 설명(aug.*)은 제 수치(선이자 5% 등)라 제외
             var bad = Data.STR.Properties().Where(p => !p.Name.StartsWith("aug."))
                 .SelectMany(p => Strings(p.Value, "STR." + p.Name)).Where(x => Stale.IsMatch(x.text)).Select(x => $"{x.path}: {x.text}").ToList();
             Assert.That(bad, Is.Empty, string.Join("\n", bad));

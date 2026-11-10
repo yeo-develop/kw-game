@@ -24,6 +24,7 @@ namespace KwGame.Sim
         bool evCheck()
         {
             if (D.EVENTS.Count == 0 || fainted() || S.ending != null || S.optTut && absDay() <= 1) return false;
+            if (v4 && S.part <= 1 && absDay() <= 1) return false;   // 1부 첫날은 배우는 날: 돌발 이벤트가 안내 카드보다 먼저 뜨지 않게 (2부 첫날은 그대로)
             if (S.evT == Tnow() || (S.evCool.HasValue && S.evCool.Value > Tnow())) return false;
             if (S.day == R.MONTH_DAYS && isEve()) return false;   // 이자일 저녁은 김사장 몫
             var h = evStream();
@@ -39,10 +40,13 @@ namespace KwGame.Sim
         }
 
         /// 체력을 없앤 규칙(v4)에선 "· 체력 −5" 같은 조각을 문구에서 뺌 (데이터는 턴 모드와 같이 써서 여기서 거름)
-        string noHpText(string s)
+        public string noHpText(string s)
         {
-            if (s == null || !hpOff || !s.Contains("체력")) return s;
-            return string.Join(" · ", s.Split(new[] { " · " }, StringSplitOptions.None).Where(x => !x.Contains("체력")));
+            if (s == null || !hpOff) return s;
+            if (s.Contains("체력")) s = string.Join(" · ", s.Split(new[] { " · " }, StringSplitOptions.None).Where(x => !x.Contains("체력")));
+            // 화면 용어 통일: 수치 이름은 '스트레스' (대사 속 '멘탈'은 그대로 둠 — 여기는 선택지 부제만 지나감)
+            s = System.Text.RegularExpressions.Regex.Replace(s, "멘탈 (대폭|크게|완전) 회복", "스트레스 크게 ↓");
+            return s.Replace("멘탈 조금 깎임", "스트레스 조금 ↑").Replace("멘탈 회복", "스트레스 ↓").Replace("멘탈 깎임", "스트레스 ↑").Replace("멘탈 −", "스트레스 −").Replace("멘탈↓", "스트레스↑").Replace("멘탈↑", "스트레스↓");
         }
         void evStart(EvDef ev)
         {
@@ -88,8 +92,8 @@ namespace KwGame.Sim
                 S.today.Add(new Ledger { kind = "ev", amt = r.cash, label = ev.title });
                 bits.Add("현금 " + (r.cash > 0 ? "+" : "-") + won(Math.Abs(r.cash)));
             }
-            if (r.st != 0) { stress(r.st); bits.Add(r.st < 0 ? "멘탈 회복" : "멘탈 깎임"); }
-            if (r.hp != 0) { hp(r.hp); bits.Add("체력 " + (r.hp > 0 ? "+" : "") + JsFmt.Num(r.hp)); }
+            if (r.st != 0) { stress(r.st); bits.Add(v4 ? (r.st < 0 ? "스트레스 ↓" : "스트레스 ↑") : r.st < 0 ? "멘탈 회복" : "멘탈 깎임"); }   // v4: 화면 용어는 스트레스 하나로
+            if (r.hp != 0) { hp(r.hp); if (!hpOff) bits.Add("체력 " + (r.hp > 0 ? "+" : "") + JsFmt.Num(r.hp)); }
             if (r.fame != 0) fame(r.fame);
             if (r.addict != 0) { addict(r.addict); if (r.addict > 0) bits.Add("도박 중독도 +" + JsFmt.Num(r.addict)); }
             if (r.aff != 0) { affD(r.aff); bits.Add(r.aff > 0 ? "미래 호감 +" + JsFmt.Num(r.aff) : "미래 호감 " + JsFmt.Num(r.aff)); }

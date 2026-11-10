@@ -13,7 +13,7 @@ namespace KwGame.View
     //     새 표정 shy·flex·yami·pout·love 는 전용 그림이 없으면 예전 그림으로 (ArtCatalog.FaceSprite)
     //  3) 강한 연출(재생 묶음이 끝날 때까지 다른 face 키에 안 덮임): 큰 수익 fx flex→flex(선글라스, LOVE_AMT↑ 면 love) · 큰 손실 fx crack→shocked
     //     · 청산 fx ash→crying_comic · 기절→dizzy
-    //  4) 그 밖: 김사장 대사(얼굴 지정 없음)·주갤 반응 토스트→annoyed · 소소한 수익(카지노/경마/복권 당첨)·유품 획득→smug
+    //  4) 그 밖: 김사장 대사(얼굴 지정 없음)·주갤 반응 토스트→annoyed · 소소한 수익(카지노/경마/복권 당첨)·유물 획득→smug
     //     · 아침 결산(밤잠 뒤)→pajama
     public partial class GameController
     {

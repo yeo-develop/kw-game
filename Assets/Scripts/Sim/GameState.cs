@@ -78,6 +78,7 @@ namespace KwGame.Sim
         public bool first, jackpot, rerolled, betUsed, cont;
         public double n0, total, staked, before, spent, got, mx, due, took, half;
         public int A, As, rounds, race, n, bought, pulls, si; public string evId;
+        public uint? rng0;   // 알바 설명 카드: 들어오기 전 난수 상태 (돌아가면 되돌림 — 들락거려 난수를 고르는 수 방지)
         /// 알바 중 몰래 폰 본 횟수 · 들켰나 (그 칸 일당 0)
         public int peeks; public bool caught;
         public WorkSetup setup; public List<Horse> H; public ScratchCard card; public GachaLast last;
@@ -158,7 +159,8 @@ namespace KwGame.Sim
         /// 알바 중 청산 경보: 마지막 일당 · 경보를 띄운 칸 (한 칸 1회)
         public double lastPay; public int alertT = -1;
         /// 하루 결과 (정산 카드 · 밤의 미래): 아침 기준 실현손익·청산 수 · 그날 결과 종류 · 정산/청산 밤 장면/미래의 감을 쓴 날
-        public double dayReal0, dayLiq0; public string dayRes; public int settleD, nightEvD, senseD;
+        /// dayCash0 < 0 = 아침 현금 기준점 없음(옛 저장) → 화면은 '아침 → 지금' 대신 지금 현금만. dayLed0 = 기준점을 잡을 때 장부 길이 (그 앞은 아침 현금에 이미 들어 있음)
+        public double dayReal0, dayLiq0, dayCash0 = -1; public int dayLed0; public string dayRes; public int settleD, nightEvD, senseD;
         /// 하루 기준점(dayReal0·dayLiq0)을 잡은 날 (옛 저장·2부 시작처럼 기준점이 없으면 그날은 정산을 건너뜀)
         public int dayBase;
         /// 주간 납부 관문: 통과한 횟수(증거금 상한·숏·대출 해금 단계) · 연속 미납 횟수

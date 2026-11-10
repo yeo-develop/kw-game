@@ -85,6 +85,11 @@ namespace KwGame.Title
             effectsVolumeSlider = root.Q<Slider>("effectsVolumeSlider");
             fullscreenToggle = root.Q<Toggle>("fullscreenToggle");
 
+            // LLM API 키 버튼·설명은 개발 빌드(에디터 포함)에서만
+            apiButton.style.display = Debug.isDebugBuild ? DisplayStyle.Flex : DisplayStyle.None;
+            var apiInfo = root.Q(className: "api-information");
+            if (apiInfo != null) apiInfo.style.display = Debug.isDebugBuild ? DisplayStyle.Flex : DisplayStyle.None;
+
             RefreshSaveStatus();
             RefreshMetaLabel();
             try { RefreshDiffLabels(); } catch (System.Exception) { }   // 데이터가 깨져도 타이틀은 열리게 (uxml 기본 문구 유지)
@@ -203,8 +208,8 @@ namespace KwGame.Title
                 {
                     double rate = m.TryGetValue("rate", out var r) ? r : rules.RT_RATE, cash = m.TryGetValue("cash", out var c) ? c : 1, duo = m.TryGetValue("duo", out var d) ? d : rules.V4_DUO_DEBT;
                     string extra = id == "normal" ? "기본" : cash > 1 ? "시작 현금 넉넉" : cash < 1 ? "시작 현금 적음" : "";
-                    if (id != "normal" && duo < rules.V4_DUO_DEBT) extra += " · 같이 원양어선 문턱 높음";
-                    if (id != "normal" && duo > rules.V4_DUO_DEBT) extra += " · 같이 원양어선 문턱 낮음";
+                    if (id != "normal" && duo < rules.V4_DUO_DEBT) extra += " · 못 갚았을 때 미래가 따라와 주는 조건이 빡빡함";
+                    if (id != "normal" && duo > rules.V4_DUO_DEBT) extra += " · 못 갚았을 때 미래가 따라와 주는 조건이 느슨함";
                     b.Q<Label>(className: "diff-detail").text = $"이자 {rate * 100:0.#}% · {extra}";
                 }
             }

@@ -164,7 +164,7 @@ namespace KwGame.Tests
             g.Apply(C("buy", "tk", "BAT", "amt", 100000, "where", "app")); Assert.That(S.hold.Has("BAT"), Is.False, "아직 상장 전 종목은 못 삼");
             S.month = 2; S.day = 1; Assert.That(Open(), Does.Contain("BAT").And.Contain("GLD").And.Contain("TOK").And.Not.Contain("TAL"), "2주차");
             S.month = 3; Assert.That(Open(), Does.Contain("TAL").And.Contain("INV").And.Not.Contain("JHS"), "3주차");
-            S.month = 4; Assert.That(Open(), Does.Contain("JHS").And.Contain("GAE").And.Not.Contain("MMC"), "4주차 (멍멍은 유품)");
+            S.month = 4; Assert.That(Open(), Does.Contain("JHS").And.Contain("GAE").And.Not.Contain("MMC"), "4주차 (멍멍은 유물)");
             S.month = 1; S.hold.Set("JHS", new Holding { q = 1, cost = 470 });
             Assert.That(g.tkOpen("JHS"), "들고 있는 종목은 팔 수 있게 열림");
         }

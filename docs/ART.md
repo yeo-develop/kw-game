@@ -11,8 +11,8 @@
 | 미래 스탠딩 16 | Characters/Mirai | 높이 1080 PNG | base, excited, mental(멘헤라·지뢰계, 10-22 다시 그림), yami(최상위 멘헤라·스트레스 90+), crying, crying_comic(오열), annoyed, pout(삐짐), shy, flex(선글라스), love(하트눈·큰 수익), shocked, smug, tired, pajama, dizzy(기절) — `mirai_` 접두 |
 | 김사장·NPC 18 | Characters/NPC | 높이 1080 PNG | kim_base, kim_menace, kim_farewell + data/npcs.json 키(broker, dealer, race, lotto, pc, bank, shop, work, taxi, cousin, pckid, hench, suit, imo(포차 이모), pharm(약사)) |
 | 배경 19 | Backgrounds | 1216×832 JPG | room_day, room_night + 장소 키(broker, bank, casino, work, pc, shop, lotto, race, park, bar, hosp) + 알바(cafe, store, ware, mart) + 엔딩(sea, gall) |
-| CG 12 | CG | 1216×832 JPG | opening_visit(김사장 방문), opening_box(유품 상자), ending_clear, ending_bad1(끌려감), ending_bad2(도박), ending_bad3(과로·병원), ending_bad4(멘헤라) + 변형 ending_clear_gamble, ending_clear_rich, ending_bad1_gall, ending_bad2_loop, ending_bad4_run(가출) |
-| 유품 17 | Icons/Relics | 256 PNG | data/augments.json AUGS id와 같은 이름 |
+| CG 12 | CG | 1216×832 JPG | opening_visit(김사장 방문), opening_box(유물 상자), ending_clear, ending_bad1(끌려감), ending_bad2(도박), ending_bad3(과로·병원), ending_bad4(멘헤라) + 변형 ending_clear_gamble, ending_clear_rich, ending_bad1_gall, ending_bad2_loop, ending_bad4_run(가출) |
+| 유물 17 | Icons/Relics | 256 PNG | data/augments.json AUGS id와 같은 이름 |
 | 꽝 8 | Icons/Junk | 256 PNG | key, pen, lotto_slip, pouch, sock, whitepaper, calculator, toad (RELIC_JUNK 순서) |
 | 미니게임 12 | Icons/Minigame | 256 PNG | box, box_fragile(상하차) · cart(진상), bacchus(마트) · drink_ice/latte/vanilla/greentea/strawberry(카페) · item_ramen/chips/soju(편의점) — GameController.Minigame.cs `Icon(key…)`, 원본 `art/minigame/` |
 

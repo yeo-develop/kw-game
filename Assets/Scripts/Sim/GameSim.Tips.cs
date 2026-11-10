@@ -124,9 +124,9 @@ namespace KwGame.Sim
         }
         public string whenLabel(int Tr)
         {
-            int n = R.SLOTS, k = Tr - Tnow(); if (k <= 0) return T("when.now");
+            int n = R.SLOTS, k = Tr - Tnow(); if (k <= 0) return T(v4 ? "v4.when.now" : "when.now");
             int d = (int)Math.Floor((double)Tr / n) - (int)Math.Floor((double)Tnow() / n); string s = D.SLOT_NAME[((Tr % n) + n) % n];
-            return d == 0 ? T("when.today", "s", s) : d == 1 ? T("when.tomorrow", "s", s) : T("when.k", "k", k);
+            return d == 0 ? T("when.today", "s", s) : d == 1 ? T("when.tomorrow", "s", s) : T(v4 ? "v4.when.k" : "when.k", "k", k);
         }
         void tipAnnounce(Tip t, string via)
         {

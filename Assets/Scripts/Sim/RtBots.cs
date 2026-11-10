@@ -94,7 +94,7 @@ namespace KwGame.Sim
         }
         /// 하루마다 한 줄 (하네스 BAL_TRACE)
         public static Action<string> Trace;
-        /// 시작 유품 고정 (하네스 BAL_FORCE · 테스트) — 첫 상자에서 이걸 집음
+        /// 시작 유물 고정 (하네스 BAL_FORCE · 테스트) — 첫 상자에서 이걸 집음
         public static string ForceRelic;
         /// v4 2부(빚 1억)부터 시작 (하네스 BAL_PART2)
         public static bool Part2;
@@ -190,7 +190,7 @@ namespace KwGame.Sim
                 if (c == null) { res.lastErr = "no cmd @" + S.pending.t; res.errs++; break; }
                 Go(c);
                 if (!string.IsNullOrEmpty(S.sick) && G.Tnow() / R.SLOTS != lastSickT) { lastSickT = G.Tnow() / R.SLOTS; res.sickDays++; }
-                if (Trace != null && G.absDay() != traceDay) { traceDay = G.absDay(); Trace($"d{traceDay} 빚 {S.debt / 1e4:F0} 현금 {S.cash / 1e4:F0} 주식 {G.stockVal() / 1e4:F0} 코인 {G.coinVal() / 1e4:F0}({S.cps.Count}개 증거금 {G.marginUsed() / 1e4:F0}) 납부 {(G.gateOn ? G.gateDue() : 0) / 1e4:F0} 단계 {S.gateTier} 미납 {S.missN} 알바누계 {S.st.earned / 1e4:F0} 실현 {S.realized / 1e4:F0} 호감 {S.aff:F0} st {S.stress:F0} 유품 {string.Join(",", S.augs)}"); }
+                if (Trace != null && G.absDay() != traceDay) { traceDay = G.absDay(); Trace($"d{traceDay} 빚 {S.debt / 1e4:F0} 현금 {S.cash / 1e4:F0} 주식 {G.stockVal() / 1e4:F0} 코인 {G.coinVal() / 1e4:F0}({S.cps.Count}개 증거금 {G.marginUsed() / 1e4:F0}) 납부 {(G.gateOn ? G.gateDue() : 0) / 1e4:F0} 단계 {S.gateTier} 미납 {S.missN} 알바누계 {S.st.earned / 1e4:F0} 실현 {S.realized / 1e4:F0} 호감 {S.aff:F0} st {S.stress:F0} 유물 {string.Join(",", S.augs)}"); }
             }
             if (S.pending != null && S.pending.t != "ending" && G.absDay() <= maxDays) { res.errs++; res.lastErr = "step cap @" + S.pending.t; }   // 6만 수 안에 70일을 못 채움 = 봇이 헛돎
             if (S.ending != null) { res.end = S.ending; res.variant = S.endInfo?.variant ?? ""; }

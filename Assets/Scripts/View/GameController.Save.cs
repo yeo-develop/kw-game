@@ -23,7 +23,8 @@ namespace KwGame.View
                 var b = Ui.Chip(text, a, dis, bg ?? new Color(1, 1, 1, 0.06f)); b.style.flexShrink = 0; b.Q<Label>().style.whiteSpace = WhiteSpace.NoWrap;
                 saveControls.Add(b); return b;
             }
-            // 집 행동은 큰 타일 (피드백: 외출·쉬기·빚 갚기·대출이 잘 안 보임) — 색 동그라미 기호 + 이름 + 한 줄 설명
+            // 집 행동은 큰 타일 (피드백: 외출·쉬기·빚 갚기·대출이 잘 안 보임) — 왼쪽 색 띠 + 이름 + 한 줄 설명.
+            // 동그라미 글자는 진짜 단축키(P)에만 (예전 장·미·→·Z 동그라미는 키처럼 보였지만 눌러도 안 됐음)
             bool compact = phoneOpen;   // 폰 열리면 대사창이 좁아져서 작게
             Button A(string glyph, Color c, string text, string hint, System.Action a, bool dis = false, Color? bg = null)
             {
@@ -31,11 +32,16 @@ namespace KwGame.View
                 b.Clear(); b.style.flexDirection = FlexDirection.Row; b.style.alignItems = Align.Center; b.style.flexShrink = 0;
                 b.style.marginRight = compact ? 6 : 10; b.style.marginBottom = 0; b.style.paddingTop = 8; b.style.paddingBottom = 8; b.style.paddingLeft = 10; b.style.paddingRight = 16;
                 if (!dis) Ui.Border(b, new Color(c.r, c.g, c.b, 0.7f), 2);
-                var badge = Ui.Box(dis ? new Color(1, 1, 1, 0.1f) : c, 0, 22); badge.style.width = badge.style.height = compact ? 34 : 44; badge.style.alignItems = Align.Center; badge.style.justifyContent = Justify.Center; badge.style.marginRight = 10; badge.pickingMode = PickingMode.Ignore;
-                var g = Ui.Label(glyph, compact ? 19 : 24, Color.white, true); g.pickingMode = PickingMode.Ignore; g.style.unityTextAlign = TextAnchor.MiddleCenter; badge.Add(g); b.Add(badge);
+                bool light = !dis && bg.HasValue && Ui.IsLight(bg.Value);   // 분홍 배경(폰 열림)이면 글자를 어둡게
+                if (glyph != null)
+                {   // 진짜 키: 동그라미 안에 키 글자
+                    var badge = Ui.Box(dis ? new Color(1, 1, 1, 0.1f) : c, 0, 22); badge.style.width = badge.style.height = compact ? 34 : 44; badge.style.alignItems = Align.Center; badge.style.justifyContent = Justify.Center; badge.style.marginRight = 10; badge.pickingMode = PickingMode.Ignore;
+                    var g = Ui.Label(glyph, compact ? 19 : 24, dis ? Ui.Dim : Ui.IsLight(c) ? Ui.Ink : Color.white, true); g.pickingMode = PickingMode.Ignore; g.style.unityTextAlign = TextAnchor.MiddleCenter; badge.Add(g); b.Add(badge);
+                }
+                else { b.style.borderLeftWidth = 8; b.style.borderLeftColor = dis ? new Color(1, 1, 1, 0.15f) : c; b.style.paddingLeft = 14; }
                 var col = new VisualElement(); col.pickingMode = PickingMode.Ignore; b.Add(col);
-                var t = Ui.Label(text, compact ? 20 : 24, dis ? Ui.Dim : Ui.Text, true); t.pickingMode = PickingMode.Ignore; t.style.whiteSpace = WhiteSpace.NoWrap; col.Add(t);
-                if (!compact && !string.IsNullOrEmpty(hint)) { var h = Ui.Label(hint, 15, Ui.Dim); h.pickingMode = PickingMode.Ignore; h.style.whiteSpace = WhiteSpace.NoWrap; col.Add(h); }
+                var t = Ui.Label(text, compact ? 20 : 24, dis ? Ui.Dim : light ? Ui.Ink : Ui.Text, true); t.pickingMode = PickingMode.Ignore; t.style.whiteSpace = WhiteSpace.NoWrap; col.Add(t);
+                if (!compact && !string.IsNullOrEmpty(hint)) { var h = Ui.Label(hint, 18, light ? Ui.InkSub : Ui.Dim); h.pickingMode = PickingMode.Ignore; h.style.whiteSpace = WhiteSpace.NoWrap; col.Add(h); }
                 saveControls.Add(b); return b;
             }
             bool eve = G.isEve();
@@ -43,13 +49,13 @@ namespace KwGame.View
             {
                 // v4: 행동 하나 = 칸 하나 (오전·오후·밤). 빚 갚기·대출은 시간 안 쓰니 작은 칩으로
                 string wh = G.weekend() ? "주말 휴장 · 코인만" : eve ? "밤 · 코인만" : "시세 보며 실시간 매매";
-                A("장", new Color(0.9f, 0.3f, 0.35f), "장 보기", wh, () => Send("watch"), !home).name = "act-watch";
+                A(null, new Color(0.9f, 0.3f, 0.35f), "장 보기", wh, () => Send("watch"), !home).name = "act-watch";
                 // 시간대 비중: 낮 = 장·알바, 저녁 = 미래·생활 (부제에 배수 표시)
                 double dm = G.dateMult(), da = (S.dateN == 0 ? D.RULES.V4_DATE_AFF : 2) * dm;
                 string dmT = dm > 1 ? " · 밤 보너스" : dm < 1 ? " · 낮엔 반만" : "";
-                A("미", new Color(0.95f, 0.4f, 0.6f), "미래랑 놀기", (S.dateN == 0 ? $"호감 +{da:0.#} · 스트레스 풀림" : $"오늘 또? 호감 +{da:0.#}") + dmT, () => Send("date"), !home).name = "act-date";
-                A("→", new Color(0.25f, 0.5f, 0.95f), "외출", eve && !G.weekend() && D.RULES.V4_WORK_EVE < 1 ? $"야간 알바는 일당 ×{D.RULES.V4_WORK_EVE:0.##}" : "알바·카지노·한강…", () => Send("map"), !home).name = "act-map";
-                A("Z", new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", G.restHint() ?? (G.hpOff ? "스트레스 풀기" : eve ? $"체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"체력 +{D.RULES.RT_HP_REST}"), () => Send("rest"), !home);
+                A(null, new Color(0.95f, 0.4f, 0.6f), "미래랑 놀기", (S.dateN == 0 ? $"호감 +{da:0.#} · 스트레스 풀림" : $"오늘 또? 호감 +{da:0.#}") + dmT, () => Send("date"), !home).name = "act-date";
+                A(null, new Color(0.25f, 0.5f, 0.95f), "외출", eve && !G.weekend() && D.RULES.V4_WORK_EVE < 1 ? $"야간 알바는 일당 ×{D.RULES.V4_WORK_EVE:0.##}" : "알바·카지노·한강…", () => Send("map"), !home).name = "act-map";
+                A(null, new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", G.restHint() ?? (G.hpOff ? "스트레스 풀기" : eve ? $"체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"체력 +{D.RULES.RT_HP_REST}"), () => Send("rest"), !home);
                 bool canPay4 = home && S.cash >= 10000 && S.debt > 0;
                 Q($"빚 갚기 ({G.man(S.debt)})", () => Send("repayOpen"), !canPay4, canPay4 ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null);
                 Q(G.loanOk() ? "대출" : "대출 (잠김)", () => Send("loanOpen"), !home);
@@ -62,16 +68,16 @@ namespace KwGame.View
                 var title4 = Q("타이틀", ReturnToTitle, playing); title4.name = "returnToTitleButton";
                 return;
             }
-            A("→", new Color(0.25f, 0.5f, 0.95f), "외출", "알바·증권사·카지노…", () => Send("map"), !home);
-            A("Z", new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", S.rt ? (eve ? $"내일 아침까지 · 체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"{D.RULES.RT_REST / 60}시간 · 체력 +{D.RULES.RT_HP_REST}") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)}", () => Send("rest"), !home).tooltip = (S.rt ? (eve ? "자정까지 잠 · " : $"{D.RULES.RT_REST / 60}시간 · ") : "") + (S.rt ? $"체력 +{(eve ? D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP : D.RULES.RT_HP_REST)} · 멘탈 {D.RULES.RT_REST_ST:0}" + (G.sickName() != null ? $" · {G.sickName()} 반쯤 확률로 하루 빨리 나음" : "") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22");
+            A(null, new Color(0.25f, 0.5f, 0.95f), "외출", "알바·증권사·카지노…", () => Send("map"), !home);
+            A(null, new Color(0.5f, 0.38f, 0.85f), eve ? "자기" : "쉬기", S.rt ? (eve ? $"내일 아침까지 · 체력 +{D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP}" : $"{D.RULES.RT_REST / 60}시간 · 체력 +{D.RULES.RT_HP_REST}") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)}", () => Send("rest"), !home).tooltip = (S.rt ? (eve ? "자정까지 잠 · " : $"{D.RULES.RT_REST / 60}시간 · ") : "") + (S.rt ? $"체력 +{(eve ? D.RULES.RT_HP_REST_EVE + D.RULES.RT_HP_SLEEP : D.RULES.RT_HP_REST)} · 스트레스 {D.RULES.RT_REST_ST:0}" + (G.sickName() != null ? $" · {G.sickName()} 반쯤 확률로 하루 빨리 나음" : "") : $"체력 +{(eve ? D.RULES.HP_REST_EVE : D.RULES.HP_REST)} · 스트레스 −22");
             bool canPay = home && S.cash >= 10000 && S.debt > 0;
-            A("₩", new Color(0.2f, 0.62f, 0.38f), "빚 갚기", $"남은 빚 {G.man(S.debt)}", () => Send("repayOpen"), !canPay, canPay ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null).tooltip = $"남은 빚 {G.won(S.debt)} · 김사장 계좌로 바로 이체 (시간 안 씀)";
-            A("金", new Color(0.85f, 0.25f, 0.25f), "김사장 대출", $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}", () => Send("loanOpen"), !home).tooltip = $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}";
+            A(null, new Color(0.2f, 0.62f, 0.38f), "빚 갚기", $"남은 빚 {G.man(S.debt)}", () => Send("repayOpen"), !canPay, canPay ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null).tooltip = $"남은 빚 {G.won(S.debt)} · 김사장 계좌로 바로 이체 (시간 안 씀)";
+            A(null, new Color(0.85f, 0.25f, 0.25f), "김사장 대출", $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}", () => Send("loanOpen"), !home).tooltip = $"선이자 {G.loanFee() * 100:0}% · 한도 {G.man(G.loanCap())}";
             int unread = G.kUnread();
             A("P", new Color(0.95f, 0.4f, 0.6f), phoneOpen ? "폰 닫기" : "폰", phoneOpen ? "P 키" : unread > 0 ? $"안 읽은 카톡 {unread}" : "주식·코인·카톡·주갤", TogglePhone, false, phoneOpen ? Ui.Accent : (Color?)null);
             Q("설정", OpenSettings, playing).name = "settingsButton";
             var sp = new VisualElement(); sp.style.flexGrow = 1; saveControls.Add(sp);
-            var status = Ui.Label(saveMessage, 16, Ui.Dim); status.name = "saveStatus"; status.style.marginRight = 10; status.style.whiteSpace = WhiteSpace.NoWrap; if (!compact) saveControls.Add(status);
+            var status = Ui.Label(saveMessage, 18, Ui.Dim); status.name = "saveStatus"; status.style.marginRight = 10; status.style.whiteSpace = WhiteSpace.NoWrap; if (!compact) saveControls.Add(status);
             var save = Q("저장", () => SaveCheckpoint(true), !CanSave); save.name = "saveGameButton";
             var title = Q("타이틀", ReturnToTitle, playing); title.name = "returnToTitleButton";
         }

@@ -252,6 +252,7 @@ namespace KwGame.Sim
                     break;
                 case "work":
                     if (t == "mgSetup") { workSetup(c.Truthy("practice")); return; }
+                    if (t == "workBack") { if (P.setup != null) { err("workBack"); return; } workBack(); return; }   // 설명 카드에서 다른 알바 고르러 돌아감 (시작 전이라 칸은 안 씀)
                     if (t == "workTick") { sub(workTick((int)clamp(c.Int("m", 1), 1, 600))); return; }   // 미니게임이 도는 동안 시계 (v4)
                     if (t == "workPeek") { sub(workPeek(c.Int("id", 0))); return; }                       // 몰래 폰 보기: 포지션 정리
                     if (t == "mgResult") { if (P.setup == null || P.setup.practice) { err("mg"); return; } sub(workResult(c.Num("score"))); return; }

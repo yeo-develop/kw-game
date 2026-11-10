@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace KwGame.Sim
 {
-    // places.js — 장소 메뉴(locOpts) + 한 번에 끝나는 행동: 게임방 · 은행 · 상점 · 증권사 리포트 · 사채 · 길거리 정보 · 유품 상점
+    // places.js — 장소 메뉴(locOpts) + 한 번에 끝나는 행동: 게임방 · 은행 · 상점 · 증권사 리포트 · 사채 · 길거리 정보 · 유물 상점
     public partial class GameSim
     {
         public class LocOpt { public string k, ic, l, sub; public bool dis; }
@@ -67,7 +67,7 @@ namespace KwGame.Sim
         LocOpt relaxOpt(string k, string ic)
         {
             var d = R.RELAX[k]; int n = relaxCount(k);
-            string sub = T("lo.relaxSub", "s", rhu(-d.st * Math.Pow(R.RELAX_DIM, n)), "h", (d.hp >= 0 ? "+" : "") + JsFmt.Num(d.hp))
+            string sub = T(hpOff ? "v4.lo.relaxSub" : "lo.relaxSub", "s", rhu(-d.st * Math.Pow(R.RELAX_DIM, n)), "h", (d.hp >= 0 ? "+" : "") + JsFmt.Num(d.hp))
                 + (d.fit ? T("lo.fit") : "") + (d.hang > 0 ? T("lo.hang", "p", rhu(d.hang * 100)) : "") + (d.tip > 0 ? T("lo.tipChance", "p", rhu(d.tip * 100)) : "")
                 + (n > 0 ? T("lo.dim", "n", n) : "");
             return new LocOpt { k = "l-" + k, ic = ic, l = T("lo." + k) + (d.cost > 0 ? " (" + won(d.cost) + ")" : T("lo.free")), sub = sub, dis = S.cash < d.cost };
@@ -237,7 +237,7 @@ namespace KwGame.Sim
             return true;
         }
 
-        // ---------- 유품 상점 ----------
+        // ---------- 유물 상점 ----------
         List<Aug> notOwned() => D.AUGS.Where(a => !has(a.id)).ToList();
         Aug tierPick(List<Aug> list)
         {

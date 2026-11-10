@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace KwGame.View
 {
-    /// 그림 키 → 스프라이트 (Assets/Resources/Art, docs/ART.md). sim 이 쓰는 키(장면 bg·표정·NPC·유품 id)를 파일 이름으로 바꾸는 얇은 표.
+    /// 그림 키 → 스프라이트 (Assets/Resources/Art, docs/ART.md). sim 이 쓰는 키(장면 bg·표정·NPC·유물 id)를 파일 이름으로 바꾸는 얇은 표.
     /// Resources 를 쓰는 이유: 데이터(JSON)·폰트도 이미 Resources 로드라 같은 방식이고, 67장(≈수십 MB)이라 Addressables 를 들일 규모가 아님.
     public static class ArtCatalog
     {

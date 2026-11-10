@@ -120,7 +120,7 @@ namespace KwGame.View
             if (S.pending.t == "encounter") { yield return Shot(dir, "05c_encounter"); Send("encounter", "ask", false); yield return UntilIdle(); }
             if (S.pending.t == "loc") yield return Shot(dir, "06b_loc_casino");
             yield return ToHome();
-            // 유품 상점: 뽑기 결과 아이콘
+            // 유물 상점: 뽑기 결과 아이콘
             Send("debug", "k", "cash"); yield return UntilIdle();
             Send("map"); yield return UntilIdle();
             Send("goTo", "loc", "shop"); yield return UntilIdle();
