@@ -113,6 +113,8 @@ namespace KwGame.View
             dlg.Add(quickBar);
             saveControls = quickBar;
             stage.Add(dlg);
+            panel.PlaceInFront(dlg);   // 폰이 열려 선택지 상자가 아래로 내려오면 대사창 글줄과 겹침 → 상자가 위에 그려지게 (퀵메뉴 줄까진 안 내려옴)
+            panel.schedule.Execute(PanelMoreSync).Every(300);   // 배치가 끝난 뒤에도 "더 있음"이 맞게
 
             // 폰 (오른쪽에서 밀려 나옴)
             phone = Ui.Box(new Color(0.04f, 0.04f, 0.06f, 0.99f), 12, 40);   // 폰 테두리(베젤) — 안쪽 앱 화면은 RenderPhone
@@ -374,8 +376,10 @@ namespace KwGame.View
         void PanelMoreSync()
         {
             if (panelSv == null || panelMore == null) return;
-            float hidden = panelSv.contentContainer.layout.height - panelSv.contentViewport.layout.height - panelSv.scrollOffset.y;
-            panelMore.style.display = !float.IsNaN(hidden) && hidden > 6 ? DisplayStyle.Flex : DisplayStyle.None;
+            // 마지막 선택지의 아래 끝이 스크롤 영역 밖이면 더 있음 (스크롤 뷰 내부 높이 값에 기대지 않고 화면 좌표로 봄)
+            var last = panelBody != null && panelBody.childCount > 0 ? panelBody[panelBody.childCount - 1] : null;
+            bool more = last != null && !float.IsNaN(last.worldBound.yMax) && !float.IsNaN(panelSv.worldBound.yMax) && last.worldBound.yMax > panelSv.worldBound.yMax + 6;
+            panelMore.style.display = more ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         // ---------- 공통 ----------
