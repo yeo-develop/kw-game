@@ -17,6 +17,7 @@ namespace KwGame.Tests
         public readonly GameObject go; public readonly GameController c; public readonly PanelSettings ps; public readonly VisualElement root;
         public GameSim G;
         public const float W = 1920, H = 1080;
+        public readonly string ThemeWas;
 
         public ViewRig(bool sim = false, int seed = 3)
         {
@@ -27,6 +28,9 @@ namespace KwGame.Tests
             var doc = (UIDocument)Get("doc"); ps = doc.panelSettings; root = doc.rootVisualElement;
             // 창이 없으면 화면 크기가 제멋대로(4:3)라 기준 해상도로 고정: 1920×1080, 배율 1
             ps.scaleMode = PanelScaleMode.ConstantPixelSize; ps.scale = 1;
+            // 에디터는 테마가 없으면 기본 테마를 끼워 넣는다(글 상자마다 위아래 여백이 붙음). 배포본엔 테마가 없으므로 똑같이 뺀다
+            ThemeWas = ps.themeStyleSheet != null ? ps.themeStyleSheet.name : "(없음)";
+            ps.themeStyleSheet = null;
             root.style.width = W; root.style.height = H; root.style.flexGrow = 0; root.style.flexShrink = 0;
             if (!sim) return;
             G = GameSim.Create(D, seed, new GameSim.Opts { rt = true }); G.Hud = true;

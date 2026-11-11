@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -38,14 +40,14 @@ namespace KwGame.View
             {
                 int maxEnd = 0;
                 foreach (var g in glyphs) { var r = g.textRange; if (r.start + r.length > maxEnd) maxEnd = r.start + r.length; }
-                typeUnit = maxEnd > text.Length ? 2 : 1; typeUnitText = text;
-                if (typeUnit == 2) typeByteToChar = ByteToChar(text);
+                typeUnit = TypePaint.Unit(maxEnd, text.Length); typeUnitText = text;
+                if (typeUnit == 2) typeByteToChar = TypePaint.ByteToChar(text);
             }
             int k = 0;   // 표준 생성기: 보이는 글자만 원문 순서대로 나옴
             foreach (var g in glyphs)
             {
                 int ci;
-                if (ranged) { int st = g.textRange.start; ci = typeUnit == 2 ? (st < typeByteToChar.Length ? typeByteToChar[st] : text.Length) : st; }
+                if (ranged) ci = TypePaint.CharAt(g.textRange.start, typeUnit, typeByteToChar, text.Length);
                 else { while (k < text.Length && (char.IsWhiteSpace(text[k]) || text[k] == Ui.WJ)) k++; ci = k++; }
                 byte a = dlgType.Alpha(ci);
                 if (a == 255) continue;
@@ -54,43 +56,38 @@ namespace KwGame.View
             }
         }
 
-        /// UTF-8 바이트 위치 → 글자 위치 (엔진이 바이트 단위로 줄 때만 씀)
-        static int[] ByteToChar(string s)
-        {
-            var m = new int[System.Text.Encoding.UTF8.GetByteCount(s) + 1];
-            int b = 0;
-            for (int i = 0; i < s.Length; i++)
-            {
-                int n = s[i] < 0x80 ? 1 : s[i] < 0x800 ? 2 : char.IsHighSurrogate(s[i]) ? 4 : 3;
-                for (int j = 0; j < n && b < m.Length; j++) m[b++] = i;
-                if (n == 4) i++;
-            }
-            for (; b < m.Length; b++) m[b] = s.Length;
-            return m;
-        }
-
         // ---------- 넘기기 누름 보호 ----------
         // 대사 · 카드는 "아무 데나 눌러 넘기기"를 Update 에서 받는데, 버튼 클릭 판정(UI Toolkit)은 그 프레임의 Update · 코루틴이 다 돈 뒤에 처리된다.
         // 그래서 마지막 대사를 넘긴 바로 그 누름이, 같은 프레임에 그 자리에 생긴 선택지 · 계획판 버튼까지 눌렀다 (유물이 저절로 골라짐 · 선택지가 바로 눌림).
-        // 넘기기로 쓴 누름 뒤 GuardSec 동안은 화면 버튼이 누름을 받지 않고, 그 사이 연타는 보호 시간을 다시 늘린다 = 손을 한 번 멈춘 뒤 누른 것만 선택.
-        const float GuardSec = 0.35f;
-        float uiGuardUntil;
-        bool uiSwallow;
+        // 넘기기로 쓴 누름 뒤 GuardSec 동안은 화면 버튼이 누름을 받지 않는다. 그 사이 연타는 보호를 조금 늘리지만 넘긴 순간부터 GuardMax 까지만
+        // (상한이 없으면 연타로 하는 미니게임 버튼이 영영 안 눌림).
+        const float GuardSec = 0.35f, GuardMax = 0.7f;
+        float uiGuardUntil, uiGuardFrom;
+        /// 보호 중에 시작된 누름들 (포인터별): 그 누름의 뗌 · 클릭까지 같이 삼킴. 보호 전에 시작한 끌기는 건드리지 않음
+        readonly HashSet<int> uiSwallowed = new HashSet<int>();
+        /// 시계 (테스트에서 바꿔 끼움)
+        Func<float> guardNow = () => Time.unscaledTime;
 
-        void GuardUi() => uiGuardUntil = Mathf.Max(uiGuardUntil, Time.unscaledTime + GuardSec);
-        bool GuardOn => Time.unscaledTime < uiGuardUntil;
+        /// 넘기기로 쓴 누름: 지금부터 GuardSec
+        void GuardUi() { float t = guardNow(); uiGuardFrom = t; uiGuardUntil = t + GuardSec; }
+        bool GuardOn => guardNow() < uiGuardUntil;
+        void GuardExtend() { float t = guardNow(); uiGuardUntil = Mathf.Min(Mathf.Max(uiGuardUntil, t + GuardSec), uiGuardFrom + GuardMax); }
 
         void BuildGuard()
         {
             // 뿌리에서 내려가는 단계에 걸어 둠 → 어떤 버튼보다 먼저 봄
-            root.RegisterCallback<PointerDownEvent>(e => { uiSwallow = GuardOn; if (uiSwallow) { GuardUi(); e.StopImmediatePropagation(); } }, TrickleDown.TrickleDown);
-            root.RegisterCallback<PointerUpEvent>(e => { if (uiSwallow) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
-            root.RegisterCallback<MouseDownEvent>(e => { if (uiSwallow) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
-            root.RegisterCallback<MouseUpEvent>(e => { if (uiSwallow) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
-            root.RegisterCallback<ClickEvent>(e => { if (uiSwallow) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
+            root.RegisterCallback<PointerDownEvent>(e =>
+            {
+                if (GuardOn) { uiSwallowed.Add(e.pointerId); GuardExtend(); e.StopImmediatePropagation(); }
+                else uiSwallowed.Remove(e.pointerId);
+            }, TrickleDown.TrickleDown);
+            root.RegisterCallback<PointerUpEvent>(e => { if (uiSwallowed.Contains(e.pointerId)) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
+            root.RegisterCallback<ClickEvent>(e => { if (uiSwallowed.Contains(e.pointerId)) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
+            root.RegisterCallback<MouseDownEvent>(e => { if (uiSwallowed.Contains(PointerId.mousePointerId)) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
+            root.RegisterCallback<MouseUpEvent>(e => { if (uiSwallowed.Contains(PointerId.mousePointerId)) e.StopImmediatePropagation(); }, TrickleDown.TrickleDown);
         }
 
-        /// "아무 데나 누르면 닫힘" 카드(청산 경보 · 알바 설명 · 알바 결과)용: 눌렀으면 그 누름이 뒤 화면 버튼에 닿지 않게 보호까지
+        /// "아무 데나 누르면 닫힘" 카드(청산 경보 · 병 카드 · 알바 결과)용: 눌렀으면 그 누름이 뒤 화면 버튼에 닿지 않게 보호까지
         bool AnyPressGuard()
         {
             if (!AnyPress()) return false;

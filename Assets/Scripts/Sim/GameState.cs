@@ -175,6 +175,8 @@ namespace KwGame.Sim
         public int dayBase;
         /// 주간 납부 관문: 통과한 횟수(증거금 상한·숏·대출 해금 단계) · 연속 미납 횟수
         public int gateTier, missN;
+        /// 주별 납부 결과 (화면용 — 아침 납부 일정의 지난 칸): w 번째 글자가 w+1 주. 'P' 냄 · 'M' 미납 · '?' 모름(이 기록이 없던 저장). 옛 저장은 null
+        public string gateLog;
         /// 이번 주에 김사장한테 빌린 돈 (이번 주 원금 분납에선 빼 줌 = 다음 주로 미루는 다리)
         public double loanWeek;   // promKept·promBroke = 누적 (오늘 어김 bool promBad 와 다름)
         /// 스토리 "미래의 미래" (GameSim.Story.cs, 다이제스트 밖): 복학 통장 잔액 · 통장이 열렸나 · 복학 등록(0 미정 · 1 등록함 · 2 못 함/안 함) · 통장에 손댄 횟수

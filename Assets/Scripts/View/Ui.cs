@@ -42,7 +42,7 @@ namespace KwGame.View
 
         /// 낱말 이음표 (U+2060): 폭 0 · 안 보임 · 그 앞뒤에서는 줄이 안 끊김
         public const char WJ = '⁠';
-        /// 이 글자 수까지의 낱말만 묶음. 더 긴 덩어리(ㅋㅋㅋㅋ… · 주소)는 좁은 칸에서 넘치지 않게 그대로 둠
+        /// 글자(숫자 · 기호 제외)가 이 수까지인 낱말만 묶음. 더 긴 덩어리(ㅋㅋㅋㅋ…)는 좁은 칸에서 넘치지 않게 그대로 둠
         public const int KeepMax = 10;
 
         /// 한글 낱말이 글자 중간에서 줄바꿈되지 않게 ("무서워 ㅠ / ㅠ" · "미 / 래가") 낱말 안 글자 사이에 이음표를 넣는다.
@@ -58,8 +58,9 @@ namespace KwGame.View
             while (a < s.Length)
             {
                 if (char.IsWhiteSpace(s[a])) { sb.Append(s[a++]); continue; }
-                int b = a; while (b < s.Length && !char.IsWhiteSpace(s[b])) b++;
-                bool join = b - a <= KeepMax;
+                int b = a, letters = 0;
+                for (; b < s.Length && !char.IsWhiteSpace(s[b]); b++) if (!(s[b] < 0x80 && (char.IsDigit(s[b]) || char.IsPunctuation(s[b]) || char.IsSymbol(s[b])))) letters++;
+                bool join = letters <= KeepMax;   // 숫자 · 쉼표 · 기호는 안 셈: "30,000,000원," 도 한 덩어리
                 for (int i = a; i < b; i++) { if (join && i > a) sb.Append(WJ); sb.Append(s[i]); }
                 a = b;
             }
@@ -67,7 +68,7 @@ namespace KwGame.View
         }
         /// 이음표를 뺀 원래 글 (글자 비교 · 길이 계산용)
         public static string Plain(string s) => s == null ? null : s.IndexOf(WJ) < 0 ? s : s.Replace(WJ.ToString(), "");
-        /// 화면에 올릴 글: 이모지 정리 + 낱말 단위 줄바꿈
+        /// 화면에 올릴 글: 이모지 정리 + 낱말 단위 줄바꿈. 보통 굵기 글에만 쓴다 (굵은 글은 Clean — Ui.Label 주석)
         public static string Show(string s) => KeepAll(Clean(s));
 
         public static VisualElement Box(Color? bg = null, float pad = 0, float radius = 0)
@@ -105,7 +106,8 @@ namespace KwGame.View
 
         public static Label Label(string text, float size = 24, Color? color = null, bool bold = false)
         {
-            var l = new Label(Show(text));
+            // 굵은 글씨엔 이음표를 넣지 않음: 굵게(가짜 굵기)는 글자마다 간격을 더하는데 이음표에도 붙어서 자간이 5~9% 벌어짐. 굵은 글은 제목 · 숫자라 대부분 한 줄
+            var l = new Label(bold ? Clean(text) : Show(text));
             l.style.fontSize = size;
             l.style.color = color ?? Text;
             l.style.whiteSpace = WhiteSpace.Normal;

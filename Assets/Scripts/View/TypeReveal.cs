@@ -57,6 +57,7 @@ namespace KwGame.View
         public static float Delay(char c, char next)
         {
             if (char.IsPunctuation(c) && char.IsPunctuation(next)) return Normal;
+            if ((c == '.' || c == ',' || c == ':') && char.IsDigit(next)) return Normal;   // "1.5배" · "3,000만" · "09:00" 은 문장 부호가 아님
             switch (c)
             {
                 case ';': case ':': case ')': case '-': case ',': return Middle;
@@ -72,6 +73,36 @@ namespace KwGame.View
             if (!Typing) return 255;
             int back = shownOrd - 1 - ord[i];   // 가장 최근에 나온 글자 = 0 (공백 · 이음표는 세지 않음)
             return back >= Tail ? (byte)255 : (byte)(255 * (back + 1) / (Tail + 1));
+        }
+    }
+
+    /// 글리프가 알려 주는 원문 위치 → 글자 위치 (화면 쪽 DlgGlyphs 가 씀. 엔진 없이 계산만 — 테스트 가능)
+    public static class TypePaint
+    {
+        /// 위치 단위: 1 = 글자(UTF-16) · 2 = 바이트(UTF-8). 글리프 범위의 끝이 글 길이를 넘으면 바이트 단위다 (한글은 글자당 3바이트)
+        public static int Unit(int maxEnd, int textLen) => maxEnd > textLen ? 2 : 1;
+
+        public static int CharAt(int start, int unit, int[] byteToChar, int textLen)
+        {
+            if (start < 0) return 0;
+            if (unit != 2) return start;
+            return byteToChar != null && start < byteToChar.Length ? byteToChar[start] : textLen;
+        }
+
+        /// UTF-8 바이트 위치 → 글자 위치
+        public static int[] ByteToChar(string s)
+        {
+            var m = new int[System.Text.Encoding.UTF8.GetByteCount(s) + 1];
+            int b = 0;
+            for (int i = 0; i < s.Length; i++)
+            {
+                bool pair = char.IsHighSurrogate(s[i]) && i + 1 < s.Length;
+                int n = s[i] < 0x80 ? 1 : s[i] < 0x800 ? 2 : pair ? 4 : 3;
+                for (int j = 0; j < n && b < m.Length; j++) m[b++] = i;
+                if (pair) i++;
+            }
+            for (; b < m.Length; b++) m[b] = s.Length;
+            return m;
         }
     }
 }

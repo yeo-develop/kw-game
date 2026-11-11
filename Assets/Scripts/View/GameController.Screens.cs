@@ -236,6 +236,7 @@ namespace KwGame.View
         IEnumerator SettleCard(SimEvent e)
         {
             SettleClose();
+            if (phoneOpen) phoneOpen = false;   // 폰이 열린 채면 카드와 겹침
             string cls = e.Str("cls");
             double wage = e.Num("wage"), pnl = e.Num("pnl"), other = e.Num("other"), unreal = e.Num("unreal"), net = e.Num("net");
             int liq = (int)e.Num("liq"), hit = (int)e.Num("hit"), miss = (int)e.Num("miss");
@@ -371,7 +372,7 @@ namespace KwGame.View
             foreach (var r in rows) { r.style.opacity = 1; r.style.translate = new Translate(0, 0); }
             stamp.style.opacity = 1; stamp.style.scale = new Scale(Vector3.one);
             if (cls == "jackpot" || cls == "liq") Shake(stamp, 8);
-            yield return WaitClick();
+            yield return WaitClick(false, true);   // "밤으로" 버튼 · Space · Enter 로만
             SettleClose();
         }
         void SettleClose()
@@ -965,7 +966,7 @@ namespace KwGame.View
         }
 
         // ---------- 행동 패널 (pending 마다) ----------
-        void Title(string t) => panelTitle.text = Ui.Show(t);
+        void Title(string t) => panelTitle.text = Ui.Clean(t);   // 굵은 글 → 이음표 없이
         void Btn(string text, Action a, string sub = null, bool dis = false, Color? bg = null) { var b = Ui.Button(text, a, sub, dis, bg); KeyBadge(b, a, dis, bg); panelBody.Add(b); }
         /// 선택지 숫자 키 (1~9): 넣은 순서대로 번호. 버튼 오른쪽 위에 작게 표시
         void KeyBadge(Button b, Action a, bool dis, Color? bg = null)
@@ -1337,7 +1338,7 @@ namespace KwGame.View
             });
             copy.style.marginRight = 0; copy.style.marginBottom = 0; copy.style.flexShrink = 0;
             head.Add(copy);
-            var body = Ui.Label(text, 20, Ui.Text); body.selection.isSelectable = true; box.Add(body);
+            var body = Ui.Label("", 20, Ui.Text); body.text = Ui.Clean(text); body.selection.isSelectable = true; box.Add(body);   // 끌어서 복사하는 글: 안 보이는 이음표가 같이 복사되지 않게
             panelBody.Add(box);
         }
 

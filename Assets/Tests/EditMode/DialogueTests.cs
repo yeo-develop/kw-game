@@ -84,7 +84,7 @@ namespace KwGame.Tests
         public void ModalWaitStillAdvancesWithOneInput()
         {
             type.Start("이전 대사");
-            var wait = (IEnumerator)Call("WaitClick", false);
+            var wait = (IEnumerator)Call("WaitClick", false, false);
             Assert.That(wait.MoveNext(), Is.True);
             Set("waitFrame", Time.frameCount - 1);
             Call("RequestAdvance");

@@ -44,6 +44,8 @@ namespace KwGame.Tests
             Assert.That(TypeReveal.Delay(',', '가'), Is.EqualTo(TypeReveal.Middle));
             Assert.That(TypeReveal.Delay('?', '!'), Is.EqualTo(TypeReveal.Normal), "문장 부호가 이어지면 한 번만 쉼");
             Assert.That(TypeReveal.Delay('가', '나'), Is.EqualTo(TypeReveal.Normal));
+            Assert.That(TypeReveal.Delay('.', '5'), Is.EqualTo(TypeReveal.Normal), "\"1.5배\" 의 점에서는 안 쉼");
+            Assert.That(TypeReveal.Delay(',', '0'), Is.EqualTo(TypeReveal.Normal), "\"3,000만\" 의 쉼표에서는 안 쉼");
             var slow = new TypeReveal { Speed = 2 }; slow.Start("가나다라마바사아자차"); slow.Tick(0.1f);
             var fast = new TypeReveal { Speed = 0.45f }; fast.Start("가나다라마바사아자차"); fast.Tick(0.1f);
             Assert.That(fast.Shown, Is.GreaterThan(slow.Shown), "빠름이 느림보다 많이 나옴");
@@ -51,6 +53,29 @@ namespace KwGame.Tests
             Assert.That(now.Typing, Is.False, "즉시 = 처음부터 전부");
             var sp = new TypeReveal(); sp.Start("가 나");
             Assert.That(sp.Shown, Is.EqualTo(2), "공백은 앞 글자와 함께 넘어감 (공백에서 한 박자 쉬지 않음)");
+        }
+
+        /// 화면 쪽은 글리프마다 "원문 몇 번째에서 시작하나"만 받는다. 그 위치가 글자 단위든 바이트 단위든 같은 글자를 가리켜야 한다
+        [Test]
+        public void GlyphPositionsMapToTheSameCharactersInEitherUnit()
+        {
+            string text = Ui.Show(Broken);
+            var utf8 = System.Text.Encoding.UTF8;
+            var map = TypePaint.ByteToChar(text);
+            Assert.That(TypePaint.Unit(text.Length, text.Length), Is.EqualTo(1), "범위의 끝 = 글 길이 → 글자 단위");
+            Assert.That(TypePaint.Unit(utf8.GetByteCount(text), text.Length), Is.EqualTo(2), "한글은 바이트가 더 많음 → 바이트 단위로 판별");
+            var t = new TypeReveal(); t.Start(text);
+            for (int n = 0; n < 12; n++) t.Tick(0.05f);
+            Assert.That(t.Typing, Is.True, "반쯤 나온 상태에서 비교");
+            for (int i = 0; i < text.Length; i++)
+            {
+                int byteStart = utf8.GetByteCount(text.Substring(0, i));
+                Assert.That(TypePaint.CharAt(i, 1, null, text.Length), Is.EqualTo(i));
+                Assert.That(TypePaint.CharAt(byteStart, 2, map, text.Length), Is.EqualTo(i), $"{i}번째 글자 '{text[i]}' (바이트 {byteStart})");
+                Assert.That(t.Alpha(TypePaint.CharAt(byteStart, 2, map, text.Length)), Is.EqualTo(t.Alpha(i)), "어느 단위로 받아도 같은 불투명도");
+            }
+            Assert.That(TypePaint.CharAt(99999, 2, map, text.Length), Is.EqualTo(text.Length), "범위를 벗어난 위치 = 아직 안 나온 글자 취급 (안 보임)");
+            Assert.That(t.Alpha(text.Length), Is.EqualTo(0));
         }
 
         // ---------- 낱말 단위 줄바꿈 ----------
@@ -66,6 +91,7 @@ namespace KwGame.Tests
             string longTok = new string('ㅋ', Ui.KeepMax + 1);
             Assert.That(Ui.KeepAll("와 " + longTok), Is.EqualTo("와 " + longTok), "아주 긴 덩어리는 안 묶음 (좁은 칸에서 넘치지 않게)");
             Assert.That(Ui.KeepAll(null), Is.EqualTo(""));
+            Assert.That(Ui.KeepAll("빚 30,000,000원, 끝"), Does.Contain("0" + Ui.WJ + "원"), "긴 금액도 숫자와 '원' 사이에서 안 끊김 (숫자 · 쉼표는 길이에 안 셈)");
         }
 
         [Test]
@@ -95,7 +121,17 @@ namespace KwGame.Tests
             Assert.That(Lines(raw), Is.EqualTo(2), "대조: 이음표가 없으면 낱말 중간에서 끊겨 2줄 — 이 테스트가 줄바꿈을 실제로 재고 있다는 증거");
             Assert.That(Lines(b), Is.EqualTo(2));
             Assert.That(Lines(c), Is.EqualTo(4), "못 갚았을 때 / 미래가 따라와 / 주는 조건이 / 느슨함");
-            Assert.That(Ui.Label("자기 어디야? 무서워 ㅠㅠ").text, Is.EqualTo(Ui.Show("자기 어디야? 무서워 ㅠㅠ")), "화면 글 상자(Ui.Label)는 늘 낱말 단위 줄바꿈");
+            Assert.That(Ui.Label("자기 어디야? 무서워 ㅠㅠ").text, Is.EqualTo(Ui.Show("자기 어디야? 무서워 ㅠㅠ")), "화면 글 상자(Ui.Label)는 낱말 단위 줄바꿈");
+            // 굵은 글씨: 이음표가 자간을 벌림(가짜 굵기는 글자마다 간격을 더함) → 굵은 글 상자엔 안 넣음
+            string hud = "이번 주 납부 240만원";
+            var bPlain = L(hud, null); bPlain.style.unityFontStyleAndWeight = FontStyle.Bold;
+            var bJoin = L(Ui.KeepAll(hud), null); bJoin.style.unityFontStyleAndWeight = FontStyle.Bold;
+            var iPlain = L(hud, null); iPlain.style.unityFontStyleAndWeight = FontStyle.Italic;
+            var iJoin = L(Ui.KeepAll(hud), null); iJoin.style.unityFontStyleAndWeight = FontStyle.Italic;
+            rig.Layout();
+            Assert.That(bJoin.layout.width, Is.GreaterThan(bPlain.layout.width + 3), "대조: 굵은 글에 이음표를 넣으면 실제로 넓어짐 (그래서 안 넣는 것)");
+            Assert.That(Ui.Label(hud, 24, null, true).text, Is.EqualTo(hud), "굵은 글 상자(Ui.Label bold)는 이음표 없이 그대로");
+            Assert.That(iJoin.layout.width, Is.EqualTo(iPlain.layout.width).Within(0.6f), "기울임(나레이션 대사)은 이음표를 넣어도 폭이 같음");
         }
 
         // ---------- 카톡 말풍선 ----------
@@ -163,14 +199,27 @@ namespace KwGame.Tests
             Vector2 pb = b.worldBound.center, pc = card.worldBound.center;
             Press(rig, pb); Press(rig, pc);
             if (n != 1 || cards != 1) Assert.Inconclusive($"창 없는 실행에선 가짜 누름이 버튼에 안 닿음 (버튼 {n} · 카드 {cards}) — 배포본에서 실제 클릭으로 확인");
-            // 대사를 넘긴 누름 직후: 버튼이 그 자리에 있어도 안 눌림
+            // 대사를 넘긴 누름 직후: 버튼이 그 자리에 있어도 안 눌림 (시계를 넣어 시간까지 확인)
+            float now = 100f; rig.Set("guardNow", (System.Func<float>)(() => now));
             rig.Call("GuardUi");
-            Press(rig, pb); Press(rig, pc);
+            now = 100.2f; Press(rig, pb); Press(rig, pc);
             Assert.That(n, Is.EqualTo(1), "보호 중엔 버튼이 안 눌림"); Assert.That(cards, Is.EqualTo(1), "보호 중엔 카드(ClickEvent)도 안 눌림");
-            Assert.That((bool)rig.Prop("GuardOn"), Is.True, "연타는 보호 시간을 다시 늘림");
-            rig.Set("uiGuardUntil", 0f);   // 손을 멈췄다 (시간이 지남)
+            now = 100.5f; Assert.That((bool)rig.Prop("GuardOn"), Is.True, "0.35초가 지났어도 그 사이 연타가 보호를 늘림");
+            Press(rig, pb);
+            now = 100.69f; Press(rig, pb);
+            Assert.That(n, Is.EqualTo(1), "연타하는 동안은 계속 안 눌림");
+            now = 100.71f; Assert.That((bool)rig.Prop("GuardOn"), Is.False, "넘긴 순간부터 0.7초가 상한 — 연타로 영영 막히지 않음");
             Press(rig, pb); Press(rig, pc);
-            Assert.That(n, Is.EqualTo(2), "보호가 끝나면 다시 눌림"); Assert.That(cards, Is.EqualTo(2));
+            Assert.That(n, Is.EqualTo(2), "상한 뒤엔 눌림"); Assert.That(cards, Is.EqualTo(2));
+            // 손을 멈춘 경우: 0.35초 뒤엔 바로 눌림
+            rig.Call("GuardUi"); now += 0.36f;
+            Press(rig, pb);
+            Assert.That(n, Is.EqualTo(3), "손을 멈췄다 누르면 0.35초 뒤부터 눌림");
+            // 보호 전에 시작한 누름(끌기)은 보호 중에 떼도 삼키지 않음
+            using (var e = PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, mousePosition = pb, button = 0, clickCount = 1 })) rig.root.panel.visualTree.SendEvent(e);
+            rig.Call("GuardUi");
+            using (var e = PointerUpEvent.GetPooled(new Event { type = EventType.MouseUp, mousePosition = pb, button = 0, clickCount = 1 })) rig.root.panel.visualTree.SendEvent(e);
+            Assert.That(n, Is.EqualTo(4), "보호가 켜지기 전에 누른 것은 끝까지 감");
         }
 
         [Test]
@@ -179,7 +228,7 @@ namespace KwGame.Tests
             using var rig = new ViewRig();
             rig.Get<TypeReveal>("dlgType").Speed = 1;
             // "아무 데나 눌러 넘기기" 기다림: 넘기는 순간 보호가 켜짐
-            var wait = (IEnumerator)rig.Call("WaitClick", false);
+            var wait = (IEnumerator)rig.Call("WaitClick", false, false);
             Assert.That(wait.MoveNext(), Is.True);
             rig.Set("waitFrame", Time.frameCount - 1);
             rig.Call("RequestAdvance");
@@ -234,10 +283,56 @@ namespace KwGame.Tests
             Assert.That(rig.Get<VisualElement>("modal").resolvedStyle.display, Is.EqualTo(DisplayStyle.None), "가운데 덮개 카드가 아님");
             Assert.That(card.worldBound.yMax, Is.LessThanOrEqualTo(ViewRig.H - 8), "카드가 화면 안에 들어옴");
             Assert.That(card.worldBound.xMax, Is.LessThanOrEqualTo(ViewRig.W));
-            Assert.That(card.Query<Label>().ToList().Count(l => l.text.Contains("클릭해서 계속")), Is.EqualTo(0));
+            Assert.That(card.Query<Label>().ToList().Count(l => Ui.Plain(l.text).Contains("클릭해서 계속")), Is.EqualTo(0));
             Assert.That(rig.Lint(sheet), Is.Empty);
             while (it.MoveNext()) { }
             Assert.That(rig.Get<VisualElement>("settleEl"), Is.Null, "넘기면 걷힘");
+        }
+
+        /// 아침 한 장은 버튼(과 Space · Enter)으로만 넘어간다 — 카드 안이나 스크롤 막대를 눌러도 닫히지 않음
+        [Test]
+        public void MorningAdvancesOnlyByItsButtonOrKeys()
+        {
+            using var rig = new ViewRig(sim: true);
+            var m = NextMorning(rig.G); Assert.That(m, Is.Not.Null);
+            rig.Call("RenderAll"); rig.Call("CoachClose");
+            rig.c.autoSkipDialog = false;
+            var it = (IEnumerator)rig.Call("Morning", m);
+            IEnumerator wait = null;
+            for (int i = 0; i < 6 && it.MoveNext(); i++) if (it.Current is IEnumerator sub && sub.GetType().Name.Contains("WaitClick")) { wait = sub; break; }
+            Assert.That(wait, Is.Not.Null, "카드가 뜨고 넘기기를 기다림");
+            Assert.That(wait.MoveNext(), Is.True);
+            Assert.That((bool)rig.Get("waiting"), Is.True);
+            Assert.That((bool)rig.Get("waitKeys"), Is.True, "마우스로 아무 데나 누르는 건 넘기기가 아님 (Update 가 버튼 · 키만 받음)");
+            rig.Set("waitFrame", Time.frameCount - 1);
+            rig.Call("RequestAdvance");   // "오늘 시작" 버튼이 부르는 것
+            Assert.That(wait.MoveNext(), Is.False);
+            while (it.MoveNext()) { }
+            Assert.That(rig.Get<VisualElement>("settleEl"), Is.Null);
+            Assert.That((bool)rig.Get("waitKeys"), Is.False, "넘긴 뒤엔 다시 평소 기다림");
+        }
+
+        /// 지난 주 칸은 기록대로: 못 낸 주가 "냄"으로 보이면 안 됨
+        [Test]
+        public void MorningLadderShowsMissedWeeksAsMissed()
+        {
+            using var rig = new ViewRig(sim: true);
+            rig.c.autoSkipDialog = true;
+            var m = NextMorning(rig.G); Assert.That(m, Is.Not.Null);
+            var S = rig.G.S;
+            S.month = 3; S.gateLog = "MP"; m.d["month"] = 3;
+            rig.Call("RenderAll"); rig.Call("CoachClose");
+            var it = (IEnumerator)rig.Call("Morning", m); it.MoveNext(); rig.Layout();
+            var lad = rig.Get<VisualElement>("settleEl").Q("morning-ladder");
+            string Tile(int i) => string.Join(" | ", lad[i].Query<Label>().ToList().Select(l => Ui.Plain(l.text)));
+            Assert.That(Tile(0), Does.Contain("미납").And.Not.Contain("냄"), "1주: 미납");
+            Assert.That(Tile(1), Does.Contain("냄").And.Not.Contain("미납"), "2주: 냄");
+            while (it.MoveNext()) { }
+            S.gateLog = null;   // 이 기록이 없던 저장
+            it = (IEnumerator)rig.Call("Morning", m); it.MoveNext();
+            lad = rig.Get<VisualElement>("settleEl").Q("morning-ladder");
+            Assert.That(Tile(0), Does.Contain("지남").And.Not.Contain("냄"), "기록이 없으면 냈다고 하지 않음");
+            while (it.MoveNext()) { }
         }
 
         /// 줄이 가장 많은 아침 (주 첫날 + 주말 표시 + 사건 + 부탁 + 새로 열림 + 버프 + 어제 5건): 그래도 시작 버튼이 카드 안에 온전히 보임
@@ -282,6 +377,7 @@ namespace KwGame.Tests
             {
                 using (var rig = new ViewRig(sim: true))
                 {
+                    sb.AppendLine($"에디터가 끼워 넣은 테마: {rig.ThemeWas} → 뺀 뒤: {(rig.ps.themeStyleSheet == null ? "(없음)" : rig.ps.themeStyleSheet.name)}");
                     Section("집 (계획판)", rig);
                     foreach (var tab in new[] { "stock", "kakao", "gall", "news", "notes" })
                     {
@@ -296,7 +392,12 @@ namespace KwGame.Tests
                     }
                     rig.Set("phoneOpen", false); rig.Render();
                     try { rig.Call("OpenStatusCard"); Section("상태 카드", rig, rig.Get<VisualElement>("statusCard")); rig.Call("CloseStatusCard"); } catch (System.Exception e) { sb.AppendLine("## 상태 카드: 예외 " + e.Message.Split('\n')[0]); }
-                    try { rig.G.Apply(new SimCommand("watch")); rig.Render(); Section("장 보기 (데스크)", rig); rig.G.Apply(new SimCommand("leave")); } catch (System.Exception e) { sb.AppendLine("## 데스크: 예외 " + e.Message.Split('\n')[0]); }
+                    try
+                    {
+                        rig.G.Apply(new SimCommand("watch")); rig.Render(); Section("장 보기 (데스크)", rig);
+                        foreach (var k in new[] { "deskRight", "deskAn", "deskOrder", "deskPos" }) { var v = rig.Get<VisualElement>(k); sb.AppendLine($"   {k}: y={v.layout.y:0} h={v.layout.height:0} w={v.layout.width:0}"); }
+                        foreach (var l in rig.Get<VisualElement>("deskOrder").Query<Label>().ToList().Take(40)) sb.AppendLine($"     · {l.layout.height:0}px 「{Ui.Plain(l.text)}」");
+                    } catch (System.Exception e) { sb.AppendLine("## 데스크: 예외 " + e.Message.Split('\n')[0]); }
                 }
                 foreach (var ev in new[] { "v4_fund", "v4_reg_no", "mom_call" })
                     using (var rig = new ViewRig(sim: true))

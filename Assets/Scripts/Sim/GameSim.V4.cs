@@ -271,14 +271,19 @@ namespace KwGame.Sim
         public double gateDue() => (S.paidMonth == S.month ? 0 : interestDue()) + gatePrincipal();
         /// 이번 주 납부일까지 남은 날 (납부일 당일 = 0)
         public int gateDays() => Math.Max(0, R.MONTH_DAYS - S.day);
-        /// 납부 사다리 한 칸 (화면용): 주마다 얼마를 내야 하고, 지금 가진 돈으로 어디까지 닿는가
+        /// 납부 일정 한 칸 (화면용): 주마다 얼마를 내야 하고, 지금 가진 돈으로 어디까지 닿는가
         public class GateStep
         {
             public int week;                     // 1~
             public int state;                    // 0 지난 주 · 1 이번 주 · 2 앞으로
+            public char res;                     // 지난 주: 'P' 냄 · 'M' 미납 · '?' 모름. 이번 주: 다 냈으면 'P', 아니면 ' '
             public bool paid;                    // 이번 주인데 이미 다 냄
             public double interest, principal, due;   // 이번 주는 실제 값, 앞으로는 "매주 제때 내면" 기준 예상
-            public double gap;                   // 모자란 돈. 이번 주 = 납부액 − 현금 (상태 띠와 같은 규칙) · 앞으로 = 그 주까지 낼 돈 합계 − (현금 + 보유분 평가)
+            /// 모자란 돈. 이번 주 = 납부액 − 현금 (상태 띠와 같은 규칙: 납부는 현금으로 냄).
+            /// 앞으로 = 지금부터 그 주까지 낼 돈을 다 더한 것 − 재산(현금 + 보유분 평가) — 그 주 하나가 아니라 누적
+            public double gap;
+            /// 이번 주: 현금은 모자라지만 보유분을 팔면 낼 수 있음
+            public bool sellOk;
         }
         /// 이번 판의 납부 일정 전체. 마지막 칸까지 다 내면 빚 0 (원금 합계 = 지금 빚). 관문 규칙이 아니면 빈 목록
         public List<GateStep> gateLadder()
@@ -287,17 +292,21 @@ namespace KwGame.Sim
             if (!gateOn) return L;
             int n = R.V4_GATE_CAP.Length, now = (int)clamp(S.month, 1, n);
             double d = S.debt, cum = 0, have = equity();
+            string log = S.gateLog ?? "";
             for (int w = 1; w <= n; w++)
             {
-                var st = new GateStep { week = w, state = w < now ? 0 : w == now ? 1 : 2 };
-                if (w == now) { st.interest = S.paidMonth == S.month ? 0 : interestDue(); st.principal = gatePrincipal(); }
-                else if (w > now) { st.interest = round1k(d * rate()); st.principal = Math.Max(0, d - gateCap(w)); }
+                var st = new GateStep { week = w, state = w < now ? 0 : w == now ? 1 : 2, res = ' ' };
+                if (w < now) st.res = w - 1 < log.Length ? log[w - 1] : '?';
+                else if (w == now) { st.interest = S.paidMonth == S.month ? 0 : interestDue(); st.principal = gatePrincipal(); }
+                else { st.interest = round1k(d * rate()); st.principal = Math.Max(0, d - gateCap(w)); }
                 st.due = st.interest + st.principal;
                 if (w >= now)
                 {
                     d -= st.principal; cum += st.due;
                     st.paid = w == now && st.due <= 0;
+                    if (st.paid) st.res = 'P';
                     st.gap = Math.Max(0, w == now ? st.due - S.cash : cum - have);
+                    st.sellOk = w == now && st.gap > 0 && st.due <= have;
                 }
                 L.Add(st);
             }
@@ -352,9 +361,17 @@ namespace KwGame.Sim
             if (ck == "gateSkip") { gateMiss(need); return true; }
             return false;
         }
+        /// 이번 주 납부 결과를 적어 둠 (옛 저장처럼 앞 주 기록이 없으면 '?' 로 채움)
+        void gateMark(char r)
+        {
+            int w = Math.Max(1, S.month);
+            string a = (S.gateLog ?? "").PadRight(w - 1, '?');
+            S.gateLog = a.Substring(0, w - 1) + r;
+        }
         /// 통과: 미납 기록 지움 · 단계 +1 (증거금 상한 · 숏 · 대출) · 유물 하나 고르기
         void gatePass()
         {
+            gateMark('P');
             S.missN = 0; S.pending = null;
             bool last = absDay() >= R.V4_DAYS;
             if (last || S.debt <= 0) { S.loanWeek = 0; paydayEnd(); return; }
@@ -371,6 +388,7 @@ namespace KwGame.Sim
         /// 미납: 못 낸 원금에 연체료. 연속 V4_MISS_MAX 번이면 만기 전에 끌려감 (만기 주는 결산으로)
         void gateMiss(double shortA)
         {
+            gateMark('M');
             S.missN++; S.pending = null; S.loanWeek = 0;
             double fee = round1k(shortA * R.V4_LATE_FEE);
             bool last = absDay() >= R.V4_DAYS;
@@ -620,7 +638,7 @@ namespace KwGame.Sim
             anSeed();   // 2부: 분석가 폼이 바뀜 (적중률을 다시 섞고 전적도 새로)
             S.ops.Clear(); S.opKey = 0; S.opFakeTk = null;   // 작전도 처음부터
             S.settleD = S.nightEvD = S.senseD = S.dayBase = 0; S.alertT = -1; S.dayRes = null;   // 날짜가 1일부터 다시 → 날짜 기준 표식도 처음으로
-            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.missN = 0; S.loanWeek = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
+            S.month = 1; S.day = 1; S.slot = 0; S.min = R.RT_DAY0; S.owe = 0; S.paidMonth = 0; S.missN = 0; S.gateLog = ""; S.loanWeek = 0; S.sleepD = 0; S.earlyM = 0; S.chSeen = 0; S.prom = null; S.promBad = S.promDone = false; S.dateN = 0; S.wkGap.Clear(); S.heist = 0; S.heistGo = false;
             S.debt = R.V4_PART2_DEBT; S.st.maxDebt = Math.Max(S.st.maxDebt, S.debt); S.st.minDebt = S.debt;
             S.today = new List<Ledger>(); S.resume = null;
             p2Seed();

@@ -367,6 +367,20 @@ namespace KwGame.Tests
             Assert.That(L2[1].due, Is.EqualTo(g.gateDue()));
             Assert.That(L2[1].due, Is.EqualTo(w2).Within(1), "지난주에 본 '다음 주 예상' = 실제 이번 주 납부액 (제때 냈을 때)");
             Assert.That(L2[0].due, Is.EqualTo(0), "지난 칸엔 금액 없음");
+            Assert.That(L2[0].res, Is.EqualTo('P'), "낸 주는 '냄'");
+            Assert.That(S.gateLog, Is.EqualTo("P"));
+            // 못 낸 주는 '미납'으로 남는다 (지난 칸이 늘 '냄'으로 보이면 미납 경고와 모순)
+            var m = New();
+            ToGate(m); Go(m, "payday", "k", "gateSkip"); ToHome(m);
+            Assert.That(m.S.month, Is.EqualTo(2)); Assert.That(m.S.gateLog, Is.EqualTo("M"));
+            Assert.That(m.gateLadder()[0].res, Is.EqualTo('M'));
+            // 이 기록이 없던 저장: 모름
+            m.S.gateLog = null;
+            Assert.That(m.gateLadder()[0].res, Is.EqualTo('?'));
+            // 이번 주: 현금은 모자라도 보유분을 팔면 되는 경우를 구분
+            var h = New(); double due = h.gateDue();
+            h.S.cash = due - 500000;
+            Assert.That(h.gateLadder()[0].gap, Is.EqualTo(500000)); Assert.That(h.gateLadder()[0].sellOk, Is.EqualTo(h.equity() >= due));
         }
 
         static void ToGate(GameSim g)

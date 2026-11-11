@@ -55,7 +55,7 @@ namespace KwGame.Title
             document.visualTreeAsset = layout;
             root = document.rootVisualElement.Q("titleRoot");
             // 화면에 박아 둔 글도 낱말 단위로 줄바꿈 ("미 / 래가" 처럼 글자 중간에서 끊기지 않게). 입력 칸은 제외
-            foreach (var t in root.Query<TextElement>().ToList()) if (!(t.parent is TextField) && !(t is TextField)) t.text = Ui.KeepAll(t.text);
+            foreach (var t in root.Query<TextElement>().ToList()) if (t.GetFirstAncestorOfType<TextField>() == null) t.text = Ui.KeepAll(t.text);
             content = root.Q("titleContent");
             overlay = root.Q("dialogOverlay");
             dialog = root.Q("dialogPanel");

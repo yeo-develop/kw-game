@@ -26,6 +26,8 @@ namespace KwGame.View
         bool waitingForDialogue;
         /// 지금 기다림이 "아무 데나 눌러 넘기기"(WaitClick)인가. 버튼을 고르는 기다림(오프닝 다시 보기 카드)은 false — 그 누름은 버튼 것
         bool waitAny;
+        /// 버튼과 Space · Enter 로만 넘기는 기다림 (아침 · 정산 한 장): 카드 아무 데나(스크롤 막대 포함) 눌러도 안 넘어감 — 누를 곳은 버튼 한 곳
+        bool waitKeys;
         int advanceFrame = -1;
         bool phoneOpen; string phoneTab = "stock";
         double stakeFrac = 0.1;
@@ -207,7 +209,7 @@ namespace KwGame.View
             SpeakerArt(who, name, face);
             yield return WaitClick(true);
         }
-        IEnumerator WaitClick(bool dialogue = false)
+        IEnumerator WaitClick(bool dialogue = false, bool keysOnly = false)
         {
             if (autoSkipDialog)
             {
@@ -215,9 +217,9 @@ namespace KwGame.View
                 yield return null; yield break;
             }
             waitingForDialogue = dialogue;
-            waiting = true; waitAny = true; clicked = false; waitFrame = Time.frameCount;
+            waiting = true; waitAny = true; waitKeys = keysOnly; clicked = false; waitFrame = Time.frameCount;
             while (!clicked) yield return null;
-            waiting = false; waitAny = false; waitingForDialogue = false;
+            waiting = false; waitAny = false; waitKeys = false; waitingForDialogue = false;
         }
         // ---------- 실시간 (GameSim.Realtime.cs) ----------
         int rtSpeed = 1; float rtAcc, rtPhoneT, rtSaveT;
@@ -274,7 +276,8 @@ namespace KwGame.View
                 UpdateDialogueHint();
             }
             if (!waiting) return;
-            if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) RequestAdvance();
+            bool key = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return);
+            if (key || (Input.GetMouseButtonDown(0) && !waitKeys)) RequestAdvance();
         }
 
         void RequestAdvance()
@@ -369,7 +372,7 @@ namespace KwGame.View
 
         /// 아침 카드가 지난번에 본 해금 상태 (바뀐 날만 줄을 띄우려고). null / −1 = 아직 모름
         bool? mLoanSeen, mShortSeen;
-        int mBuffSeen = -1;
+        int mBuffSeen = -1, mWeekSeen = -1;
         /// 만기 같이 엔딩 목표 (GameSim.V4.cs v4EndVariant: 만기 빚 ≤ 시작 빚 × V4_DUO_DEBT + 호감 ≥ V4_AFF_GOOD)
         double DuoDebt() => G.debtStart() * G.duoDebt();   // 난이도별 문턱
         bool DuoOk() => S.debt <= DuoDebt() && S.aff >= D.RULES.V4_AFF_GOOD;

@@ -15,7 +15,7 @@ namespace KwGame.View
         // 1920×1080 기준: 띠 아래 1000 = 위칸 796 + 아래칸 170 (+ 여백). 가운데 차트 칸 폭 = 1920 − 24 − 380 − 500 − 20 = 996 (52%)
         // 오른쪽 칸은 아래칸까지 통으로 976 (분석가 ~150 + 주문 ~450 → 포지션 칸 ~350). 좁은 화면(4:3)에선 옆 칸을 화면 폭 비율로 줄여 차트 폭 50% 를 지킴
         const float DeskPad = 12, DeskGap = 10, DeskListW = 380, DeskRightW = 500, DeskBottomH = 170;
-        VisualElement deskRight;
+        VisualElement deskRight; string deskBubbleRaw;
         /// 큰 주문 (두 번 누르기) 문턱 — OrderBar 의 위험 주문 문턱(증거금 100만)과 같은 값
         const double DeskBig = 1e6;
         const float DeskSayHold = 5f, DeskBlinkSec = 8f;
@@ -475,8 +475,8 @@ namespace KwGame.View
                 deskFaceShown = faceNow; var s = ArtCatalog.Mirai(faceNow);
                 deskFace.style.backgroundImage = s != null ? new StyleBackground(s) : new StyleBackground(StyleKeyword.None);
             }
-            string txt = Ui.Show(Time.realtimeSinceStartup < deskSayUntil && !string.IsNullOrEmpty(deskSay) ? deskSay : DeskIdleLine());
-            if (deskBubble.text != txt) deskBubble.text = txt;
+            string raw = Time.realtimeSinceStartup < deskSayUntil && !string.IsNullOrEmpty(deskSay) ? deskSay : DeskIdleLine();
+            if (raw != deskBubbleRaw) { deskBubbleRaw = raw; deskBubble.text = Ui.Show(raw); }   // 매 프레임 불림 → 원문이 바뀔 때만 글을 새로 만듦
         }
         /// 할 말이 없을 때 한마디 (포지션 상태만 봄. 전조 · 숨은 값에는 반응하지 않음 — "말이 없으면 안전" 누수 방지)
         string DeskIdleLine()

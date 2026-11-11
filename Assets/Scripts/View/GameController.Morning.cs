@@ -19,8 +19,11 @@ namespace KwGame.View
             SettleClose();
             int ch = (int)e.Num("ch"), wday = (int)e.Num("day");
             int day = (int)((e.Num("month") - 1) * D.RULES.MONTH_DAYS + wday);
-            bool first = day <= 1, wkd = e["wk"] is bool wk && wk, weekStart = wday == 1;
+            bool first = day <= 1, wkd = e["wk"] is bool wk && wk;
+            // 이번 주에 처음 보는 아침 (첫날 아침은 게임이 안 보내므로 1주차는 2일째가 처음): 이번 주 한도 · 잠긴 것 · 차선 목표는 이날만
+            int weekKey = S.part * 100 + S.month; bool weekFirst = mWeekSeen != weekKey; mWeekSeen = weekKey;
             double dd = e.Num("dd");
+            if (phoneOpen) phoneOpen = false;   // 폰이 열린 채면 카드와 겹침 (예전 아침은 화면 전체를 덮는 창이었음)
 
             // 띠 아래 전부를 쓰는 층. 계획판 · 대사창 · 선택지 상자는 이 동안 숨음 (정산 한 장과 같은 규칙: settleEl)
             settleEl = new VisualElement { name = "morning" }; Ui.Abs(settleEl, 0, StripH, 0, 0);
@@ -69,20 +72,22 @@ namespace KwGame.View
             var L = G.gateLadder();
             if (L.Count > 0)
             {
-                var cap = Ui.Label("납부 일정 — 마지막 칸까지 내면 빚 0원", 20, Ui.Dim); cap.style.marginTop = 14; cap.style.flexShrink = 0; body.Add(cap);
+                var cap = Ui.Label("납부 일정 — 마지막 칸까지 내면 빚 0원 · 뒤 칸의 '더'는 그 주까지 다 합친 돈", 20, Ui.Dim); cap.style.marginTop = 14; cap.style.flexShrink = 0; body.Add(cap);
                 var lad = Ui.Row(); lad.name = "morning-ladder"; lad.style.marginTop = 8; lad.style.alignItems = Align.Stretch; lad.style.flexShrink = 0; body.Add(lad);
                 for (int i = 0; i < L.Count; i++)
                 {
                     var st = L[i]; bool now = st.state == 1, past = st.state == 0 || st.paid, last = i == L.Count - 1;
+                    // 지난 칸은 기록대로: 냄(초록) · 미납(경고) · 기록 없는 옛 저장은 "지남"
+                    string pastT = st.res == 'P' ? "냄" : st.res == 'M' ? "미납" : "지남"; Color pastC = st.res == 'P' ? Ui.Good : st.res == 'M' ? Ui.Bad : Ui.Dim;
                     var tile = Ui.Box(now && !past ? new Color(1f, 0.82f, 0.4f, 0.10f) : new Color(1, 1, 1, 0.05f), 14, 12);
                     tile.style.flexGrow = 1; tile.style.flexBasis = 0; tile.style.marginRight = last ? 0 : 10;
                     Ui.Border(tile, now ? Ui.Gold : new Color(1, 1, 1, 0.12f), now ? 2 : 1);
                     var wl = Ui.Label(last ? $"{st.week}주 · 만기" : $"{st.week}주", 20, now ? Ui.Gold : Ui.Dim, true); wl.style.whiteSpace = WhiteSpace.NoWrap; tile.Add(wl);
-                    var al = Ui.Label(past ? "냄" : G.man(st.due), 32, past ? Ui.Good : now ? Ui.Text : new Color(0.8f, 0.8f, 0.86f), true); al.style.whiteSpace = WhiteSpace.NoWrap; al.style.marginTop = 2; tile.Add(al);
+                    var al = Ui.Label(past ? pastT : G.man(st.due), 32, past ? pastC : now ? Ui.Text : new Color(0.8f, 0.8f, 0.86f), true); al.style.whiteSpace = WhiteSpace.NoWrap; al.style.marginTop = 2; tile.Add(al);
                     string sub; Color sc;
-                    if (past) { sub = now ? "이번 주 납부 끝" : ""; sc = Ui.Good; }
-                    else if (now) { sub = (dd <= 0 ? "오늘 밤" : $"D-{dd:0}") + " · " + (st.gap <= 0 ? "다 모음" : $"{G.man(st.gap)} 모자람"); sc = st.gap <= 0 ? Ui.Good : dd <= 1 ? Ui.Bad : Ui.Gold; }
-                    else { sub = st.gap <= 0 ? "지금 돈으로 가능" : $"{G.man(st.gap)} 더 벌어야"; sc = st.gap <= 0 ? Ui.Good : Ui.Dim; }
+                    if (past) { sub = now ? "이번 주 납부 끝" : st.res == 'M' ? "연체료가 빚에 붙음" : ""; sc = pastC; }
+                    else if (now) { sub = (dd <= 0 ? "오늘 밤" : $"D-{dd:0}") + " · " + (st.gap <= 0 ? "다 모음" : st.sellOk ? $"현금 {G.man(st.gap)} 모자람 (팔면 됨)" : $"{G.man(st.gap)} 모자람"); sc = st.gap <= 0 ? Ui.Good : dd <= 1 ? Ui.Bad : Ui.Gold; }
+                    else { sub = st.gap <= 0 ? "지금 재산으로 가능" : $"여기까지 {G.man(st.gap)} 더"; sc = st.gap <= 0 ? Ui.Good : Ui.Dim; }
                     if (sub != "") { var sl = Ui.Label(sub, 18, sc, now); sl.style.marginTop = 2; tile.Add(sl); }
                     lad.Add(tile);
                 }
@@ -92,7 +97,7 @@ namespace KwGame.View
                     var br = Ui.Label($"이번 주 {G.man(cur.due)} = 이자 {G.man(cur.interest)} + 원금 {G.man(cur.principal)}", 20, Ui.Dim); br.style.marginTop = 10; br.style.flexShrink = 0; body.Add(br);
                 }
                 if (S.missN > 0) { var ml = Ui.Label($"미납 {S.missN}/{D.RULES.V4_MISS_MAX} — 이번 주도 못 내면 원양어선", 22, Ui.Bad, true); ml.style.marginTop = 6; ml.style.flexShrink = 0; body.Add(ml); }
-                if (first || DuoOk()) { var gl = Ui.Label(DuoGoal(), 18, DuoOk() ? Ui.Good : Ui.Dim); gl.style.marginTop = 6; gl.style.flexShrink = 0; body.Add(gl); }
+                if (weekFirst || DuoOk()) { var gl = Ui.Label(DuoGoal(), 18, DuoOk() ? Ui.Good : Ui.Dim); gl.style.marginTop = 6; gl.style.flexShrink = 0; body.Add(gl); }
             }
             else
             {   // 관문 규칙이 아닌 판: 이자일만
@@ -133,8 +138,8 @@ namespace KwGame.View
                 if (mLoanSeen == false && loanNow) op.Add("대출");
                 if (op.Count > 0) rows.Add(("열림", Ui.Good, string.Join(" · ", op) + " — 오늘부터 쓸 수 있어요."));
             }
-            if (first || weekStart)
-            {   // 주 첫날에만: 이번 주 한도 · 아직 잠긴 것 (한 줄)
+            if (weekFirst)
+            {   // 이번 주 첫 아침에만: 이번 주 한도 · 아직 잠긴 것 (한 줄)
                 var wk1 = new List<string>();
                 if (G.marginNext() is string mn) wk1.Add("코인 " + mn);
                 if (!shortNow && G.shortLockWhy() is string sw) wk1.Add("숏: " + sw);
@@ -142,7 +147,13 @@ namespace KwGame.View
                 if (wk1.Count > 0) rows.Add(("이번 주", Ui.Dim, string.Join(" · ", wk1)));
             }
             var bfs = G.buffs(); int bt = G.buffTier();
-            if (bt != mBuffSeen && (bfs.Count > 0 || first)) rows.Add(("호감", new Color(1f, 0.6f, 0.75f), bfs.Count > 0 ? "켜진 버프: " + string.Join(" · ", bfs) : G.T("v4.buff.help")));
+            if (bt != mBuffSeen)
+            {   // 버프 단계가 바뀐 날만: 켜진 것 · 다 꺼졌으면 그것도 · 처음엔 구간 설명
+                Color pc = new Color(1f, 0.6f, 0.75f);
+                if (bfs.Count > 0) rows.Add(("호감", pc, "켜진 버프: " + string.Join(" · ", bfs)));
+                else if (mBuffSeen > 0) rows.Add(("호감", Ui.Bad, "호감이 내려가 버프가 꺼졌어요."));
+                else rows.Add(("호감", Ui.Dim, G.T("v4.buff.help")));
+            }
             mLoanSeen = loanNow; mShortSeen = shortNow; mBuffSeen = bt;
             if (rows.Count > 0)
             {
@@ -165,7 +176,7 @@ namespace KwGame.View
                 yield return Tween(0.16f, p => { card.style.translate = new Translate(40 * (1 - EaseOut(p)), 0); card.style.opacity = p; });
             }
             card.style.translate = new Translate(0, 0); card.style.opacity = 1;
-            yield return WaitClick();
+            yield return WaitClick(false, true);   // 버튼 · Space · Enter 로만 (카드 안을 눌러도 · 스크롤 막대를 끌어도 안 넘어감)
             SettleClose();
         }
 
