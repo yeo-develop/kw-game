@@ -415,7 +415,9 @@ namespace KwGame.View
             bool low = !mgFull && phoneOpen;
             float H = stage.layout.height > 10 ? stage.layout.height : 1080;
             // v4: 대사창은 대사가 나올 때만 뜨므로(DlgSync) 선택지 상자를 아래에 둠 → 인물 얼굴을 안 가림. 옛 칸 방식은 대사창(퀵메뉴) 위
-            float pb = v4 ? PanelLow : low ? 190 : 330, pm = Mathf.Max(240, Mathf.Min(v4 ? 720 : low ? 380 : 620, H - pb - StripH - 24));
+            float pb = v4 ? (GateTight ? PanelGateLow : PanelLow) : low ? 190 : 330, pm = Mathf.Max(240, Mathf.Min(v4 ? 720 : low ? 380 : 620, H - pb - StripH - 24));
+            // 원금 분납에 선택지 5개(복학 통장 깨기 포함): 상자 윗변이 미래 턱선(그림 위에서 0.34) 아래에 머물게 → 넘치는 만큼은 상자 안 스크롤 + "▼ 더 있음"
+            if (GateTight) pm = Mathf.Max(240, Mathf.Min(pm, Mathf.Min(900, H * 0.86f) * (1 - FaceChin) - pb));
             panel.style.bottom = pb; panel.style.maxHeight = pm;
             if (panelSv != null) panelSv.style.maxHeight = pm - 100;
             phone.style.display = Show(!mgFull && phoneOpen);
@@ -427,7 +429,9 @@ namespace KwGame.View
             PlaceAlerts();
         }
 
-        const float PhoneW = 880, HudW = 520, PanelLow = 56;
+        const float PhoneW = 880, HudW = 520, PanelLow = 56, PanelGateLow = 24, FaceChin = 0.34f;
+        /// 원금 분납 선택지가 5개 이상 (복학 통장 깨기가 들어옴) → 버튼을 촘촘히 · 상자를 미래 턱선 아래로 (FitFigures 와 같은 미래 높이)
+        bool GateTight => G != null && G.v4 && S.pending?.t == "payday" && S.pending.stage == "gate" && S.pending.opts != null && S.pending.opts.Count >= 5;
         /// 맨 위 상태 띠 높이 (1080p 기준). 데스크 · 계획판 · 알림이 이 아래부터
         const float StripH = 80;
         VisualElement bannerCol, panelMore; ScrollView panelSv;
@@ -758,6 +762,8 @@ namespace KwGame.View
                 if (S.missN > 0) T($"미납 {S.missN}/{D.RULES.V4_MISS_MAX} — 이번 주도 못 내면 원양어선", 20, Ui.Bad, true);
             }
             else T(h.paidMonth == h.month ? (G.v4 ? "이번 주 이자 냄" : "이번 달 이자 냄") : $"이자 {(MD - h.day == 0 ? "D-DAY" : $"D-{MD - h.day}")} · {Man(MathK.Round1k(h.debt * G.rate()))}", 22, h.paidMonth == h.month ? Ui.Good : Ui.Gold, true);
+            string fh = G.v4 ? G.fundHud() : null;   // 복학 통장 (1부 · 통장이 드러났을 때만)
+            if (fh != null) T(fh, 22, FundCol(), true).name = "status-fund";
             // 막대
             Head("몸 · 마음");
             var bars = Ui.Row(); bars.style.marginTop = 8; bars.style.flexWrap = Wrap.Wrap; body.Add(bars);
@@ -1170,7 +1176,16 @@ namespace KwGame.View
                 case "payday":
                     Title(P.stage == "gate" ? "원금 분납" : P.stage == "repay" ? "이자 냄 — 원금도 갚을까?" : P.stage == "side" ? "김사장 홀짝" : $"이자일 — {G.won(P.due)}");
                     if (P.stage == "gate") Info($"이번 주 원금 {G.won(P.due)} · 내고 나면 빚 {G.won(G.gateCap())}" + (S.missN > 0 ? $" · 지금 미납 {S.missN}/{D.RULES.V4_MISS_MAX}" : ""), 22, Ui.Text);
-                    foreach (var o in P.opts) { var k = o.k; Btn(o.l, () => Send("payday", "k", k), o.sub, o.dis, k == "gatePay" ? Ui.Accent : (Color?)null); }
+                    bool tight = GateTight;
+                    if (tight && panelBody.childCount > 0) panelBody[panelBody.childCount - 1].style.marginBottom = 8;
+                    foreach (var o in P.opts)
+                    {
+                        var k = o.k; Action a = () => Send("payday", "k", k); Color? bg = k == "gatePay" ? Ui.Accent : (Color?)null;
+                        if (!tight) { Btn(o.l, a, o.sub, o.dis, bg); continue; }
+                        // 5개: 글자 22 · 부제 18.7 · 위아래 여백 7 · 간격 5 (LayoutForMode 의 GateTight 높이 계산과 짝)
+                        var b = Ui.Button(o.l, a, o.sub, o.dis, bg, 22); b.style.paddingTop = 7; b.style.paddingBottom = 7; b.style.marginBottom = 5;
+                        KeyBadge(b, a, o.dis, bg); panelBody.Add(b);
+                    }
                     break;
                 case "ending": RenderEnding(P); break;
                 default: Title(P.t); Info("(이 화면은 아직 없음)"); break;
@@ -1244,9 +1259,8 @@ namespace KwGame.View
         void RenderEnding(Pending P)
         {
             var E = S.endInfo;
-            // v4 만기 결산(이자는 냄)은 "이자 미납" 태그 대신 만기 태그
-            bool matured = G.v4 && E != null && E.kind == "bad1" && E.days >= D.RULES.V4_DAYS && S.paidMonth == S.month;
-            Title(matured ? G.T(E.variant == "duo" ? "v4.tag.duo" : "v4.tag.sea") : E?.tag ?? "엔딩");
+            // v4 만기 결산(이자는 냄)은 "이자 미납" 태그 대신 만기 태그 (규칙은 GameSim.endTag 한 곳)
+            string tag0 = G.endTag(); Title(string.IsNullOrEmpty(tag0) ? "엔딩" : tag0);
             if (E == null) return;
             Info($"판 코드 {GameSim.SeedCode(S.seed)} · {G.DiffName()}", 20, Ui.Dim);
             Info(E.h, 32, E.ok ? Ui.Good : Ui.Bad);

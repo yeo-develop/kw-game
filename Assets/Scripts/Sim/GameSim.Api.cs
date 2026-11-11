@@ -228,6 +228,7 @@ namespace KwGame.Sim
                     if (t == "map") { S.pending = new Pending("map"); return; }
                     if (v4 && t == "watch") { watchStart(); return; }
                     if (v4 && t == "date") { S.pending = null; dateHome(); return; }
+                    if (v4 && t == "fund") { if (!fundCmd(c.Str("k"), c.Num("amt"))) err("fund"); return; }   // 복학 통장 도로 채우기 (칸 안 씀)
                     if (t == "loanOpen") { S.pending = new Pending("loan") { took = 0 }; return; }
                     if (t == "repayOpen") { repayStart("home"); return; }   // 집에서 바로 원금 상환 (김사장 계좌로 이체, 시간 안 씀)
                     break;
@@ -317,6 +318,9 @@ namespace KwGame.Sim
             if (k == "menhera" && S.pending?.t == "home") { S.stress = 95; Emit("debug", "k", k); menheraStart(); return; }
             if (k == "impulse" && S.pending?.t == "home" && S.cash >= 50000) { S.stress = 95; Emit("debug", "k", k); impulseStart(); return; }
             if (k == "event" && D.EVENTS.Count > 0 && S.pending?.t == "home") { Emit("debug", "k", k); evStart(D.EVENTS[0]); return; }
+            // 캡처용: ev:<id> = 그 장면을 날짜 · 조건 없이 바로 (선택지까지) · gate = 이번 주 원금 분납 선택지를 지금 상태로 (원금이 남았을 때만)
+            if (k != null && k.StartsWith("ev:") && S.pending?.t == "home") { var ev = D.EVENTS.FirstOrDefault(e => e.id == k.Substring(3)); if (ev != null) { Emit("debug", "k", k); evStart(ev); return; } }
+            if (k == "gate" && v4 && S.pending?.t == "home" && gatePrincipal() > 0) { double need = gatePrincipal(); Emit("debug", "k", k); S.pending = new Pending("payday") { stage = "gate", due = need, opts = gateOpts(need) }; return; }
             // 엔딩 바로 보기 (데모 스크린샷·확인용): end_<kind> · end_rich = 빚 0 + 총자산 RT_RICH 로 클리어
             if (k != null && k.StartsWith("end_"))
             {

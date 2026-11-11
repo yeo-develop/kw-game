@@ -47,6 +47,8 @@ namespace KwGame.Sim
     public class Holding { public double q, cost; public int t0, bday; }
     public class CoinPos { public int id; public string tk; public int dir; public double lev, margin, entry, mult; public int t0; public double bonus; public bool mirai; public double sl, tp; }   // mirai = 미래 돌발 매수 (v4: '코인 금지' 부탁 어김으로 안 침)
     public class Ledger { public string kind; public double amt; public string label; }
+    /// 복학 통장을 판돈으로 같이 태움 (GameSim.Story.cs): 종목 · 그때 가격 · 판돈(통장 잔액) · 탄 칸. 그 칸이 끝날 때 정산
+    public class FundBet { public string tk; public double p0, amt; public int T; }
     public class KMsg { public string w, x, t; public int d; }
     public class Cm { public string au, x; public double up; public int res, tipc; }
     public class Post
@@ -112,7 +114,7 @@ namespace KwGame.Sim
     }
     public class EndInfo
     {
-        public string kind, variant, tag, h, bg, face, lead, rank; public bool ok, noChar, night, cont; public int days; public Scoreboard sb;
+        public string kind, variant, tag, h, bg, face, lead, rank; public bool ok, noChar, night, cont; /** 졸업식을 보는 엔딩 (2부 진엔딩 + 복학 등록 · 만기 grad) — 화면이 졸업식 그림을 고름 */ public bool grad; public int days; public Scoreboard sb;
     }
 
     public class GameState
@@ -175,5 +177,10 @@ namespace KwGame.Sim
         public int gateTier, missN;
         /// 이번 주에 김사장한테 빌린 돈 (이번 주 원금 분납에선 빼 줌 = 다음 주로 미루는 다리)
         public double loanWeek;   // promKept·promBroke = 누적 (오늘 어김 bool promBad 와 다름)
+        /// 스토리 "미래의 미래" (GameSim.Story.cs, 다이제스트 밖): 복학 통장 잔액 · 통장이 열렸나 · 복학 등록(0 미정 · 1 등록함 · 2 못 함/안 함) · 통장에 손댄 횟수
+        /// 새 필드는 전부 0 · false · null 이 '아직 없음'이어야 한다 — 옛 저장을 불러오면 초깃값 식이 안 돌고 0 으로 읽힘
+        public double fund; public bool fundOpened; public int enroll, fundBrokeN;
+        /// 엄마가 빚을 앎 · 미래를 말린 횟수 · 같이 탄 횟수 · "등록금으로 딱 한 번만"이 마지막으로 뜬 주(부×10+주차) · 같이 태운 판돈(그 칸 끝에 정산)
+        public bool momKnows; public int calmN, rideN, fundAskW; public FundBet fundBet;
     }
 }

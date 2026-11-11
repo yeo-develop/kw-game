@@ -33,7 +33,8 @@ namespace KwGame.View
                 ("day2", new Func<IEnumerator>(WsDay2), 25f),
                 ("payday", new Func<IEnumerator>(WsPayday), 50f),
                 ("week2", new Func<IEnumerator>(WsWeek2), 30f),
-                ("endings", new Func<IEnumerator>(WsEndings), 90f),
+                ("story", new Func<IEnumerator>(WsStory), 60f),
+                ("endings", new Func<IEnumerator>(WsEndings), 120f),
                 ("faces", new Func<IEnumerator>(WsFaces), 15f),
             };
             foreach (var st in steps)
@@ -735,6 +736,57 @@ namespace KwGame.View
             yield return WToHome();
         }
 
+        /// 스토리 "미래의 미래": 4일 엄마 전화 장면(선택지 → 통장이 실제로 열림) · 통장 줄 + 채우기 칩 계획판 · 상태 카드 통장 줄 · 통장 깨기가 켜진 원금 분납 · 20일 등록 장면 · 데스크 판돈 배지.
+        /// 날짜 장면은 debug ev:<id> 로 바로 띄우고, 통장 잔액 · 현금 · 판돈은 화면용으로 넣었다가 끝에 되돌림
+        IEnumerator WsStory()
+        {
+            yield return WToHome();
+            if (!WWant(Pt == "home" && S.part <= 1, "story_fund", "1부 집이 아님: " + Pt)) yield break;
+            double fund0 = S.fund, cash0 = S.cash; bool open0 = S.fundOpened; int enroll0 = S.enroll; var bet0 = S.fundBet;
+
+            yield return WSend("debug", "k", "ev:v4_fund");
+            if (WWant(Pt == "event" && S.pending.evId == "v4_fund", "story_fund", "엄마 전화 장면이 안 뜸: " + Pt)) yield return WShot("story_fund");
+            if (Pt == "event") yield return WSend("evPick", "k", "ev0");   // "그 통장은 없는 돈으로 치자" → 통장 400만이 열림
+            yield return WToHome();
+
+            // 통장을 조금 깬 상태 + 채울 현금 → 계획판 머리줄 오른쪽 통장 줄 · 칩 줄 "복학 통장 채우기"
+            S.fundOpened = true; S.enroll = 0; S.fundBet = null;
+            S.fund = Math.Max(0, D.RULES.V4_FUND - 1500000); S.cash = Math.Max(S.cash, 2000000);
+            RenderAll();
+            if (WWant(Pt == "home" && G.fundHud() != null && G.fundRefillAmt() > 0, "plan_fund", "통장 줄 · 채우기 칩 조건이 안 맞음: " + Pt + " · " + G.absDay() + "일째"))
+                yield return WShot("plan_fund", 0.3f);
+            ToggleStatusCard();
+            if (WWant(statusCard != null && G.fundHud() != null, "status_fund", "상태 카드가 안 뜨거나 통장 줄이 없음")) yield return WShot("status_fund", 0.25f);
+            CloseStatusCard();
+
+            // 원금 분납: 현금이 모자라 통장 깨기가 켜진 상태 (선택지 5개)
+            S.cash = 300000; RenderAll();
+            if (Pt == "home") yield return WSend("debug", "k", "gate");
+            if (WWant(Pt == "payday" && S.pending.stage == "gate" && S.pending.opts.Any(o => o.k == "gateFund"), "gate_fund", "통장 깨기가 든 원금 분납이 아님: " + Pt + "/" + S.pending?.stage))
+                yield return WShot("gate_fund");
+            S.pending = new Pending("home"); S.cash = Math.Max(cash0, 2000000); RenderAll();
+
+            // 20일 등록 장면 (통장이 다 찬 쪽: 학교 정문 배경 — 그림이 없으면 공원)
+            S.fund = D.RULES.V4_FUND; RenderAll();
+            yield return WSend("debug", "k", "ev:v4_reg_ok");
+            if (WWant(Pt == "event" && S.pending.evId == "v4_reg_ok", "story_reg", "등록 장면이 안 뜸: " + Pt)) yield return WShot("story_reg");
+            S.pending = new Pending("home"); RenderAll();
+
+            // 데스크: 미래가 통장으로 탄 종목에 "미래 판돈" 배지 (열린 주식, 없으면 코인)
+            yield return WSend("watch");
+            string btk = D.TKList.Where(x => x.IsStock && !x.inv && G.tkOpen(x.id)).Select(x => x.id).FirstOrDefault() ?? OpenCoin();
+            if (AtDesk("desk_fundbet") && WWant(btk != null, "desk_fundbet", "열린 종목이 없음"))
+            {
+                S.fundBet = new FundBet { tk = btk, p0 = S.mk.tk[btk].p, amt = S.fund, T = G.Tnow() };
+                DeskSelect(btk); RenderAll();
+                yield return WShot("desk_fundbet");
+                S.fundBet = null; RenderAll();
+            }
+            if (Pt == "watch") yield return WSend("watchEnd");
+            yield return WToHome();
+            S.fund = fund0; S.fundOpened = open0; S.enroll = enroll0; S.fundBet = bet0; S.cash = cash0; RenderAll();
+        }
+
         /// 엔딩: 판마다 새로 시작해 상태만 맞춘 뒤 debug end_* (진엔딩 뒤엔 점수판 · 2부 시작 장면)
         IEnumerator WsEndings()
         {
@@ -756,6 +808,9 @@ namespace KwGame.View
                 ("end_bad3", "bad3", null),
                 ("end_bad4_run", "bad4", null),
                 ("end_bad4_sell", "bad4", () => { var c = OpenCoin(); if (c != null) G.Apply(new SimCommand("open", "tk", c, "dir", 1, "lev", 10, "amt", 100000)); }),
+                // 스토리 "미래의 미래": 통장이 드러났는데 등록 못 함 → clear:hollow (그림 없이 방 + 미래 tired · 장면 끝 미래 한 줄) · 등록함 + 만기 같이 → bad1:grad
+                ("ending_clear_hollow", "clear", () => { S.aff = 80; S.fundOpened = true; S.fund = 0; S.enroll = 2; }),
+                ("ending_bad1_grad", "bad1", () => { matured(); S.aff = 80; S.fundOpened = true; S.fund = 0; S.enroll = 1; }),
             };
             foreach (var e in list)
             {

@@ -164,7 +164,13 @@ namespace KwGame.View
                     case "aff": Toast($"미래 호감 {(e.Num("d") > 0 ? "+" : "")}{e.Num("d"):0} → {e.Num("v"):0}", e.Num("d") > 0 ? "good" : "liq"); break;
                     case "watch": if (!G.v4 && !phoneOpen) TogglePhone(); break;   // v4 는 폰 대신 데스크가 뜸
                     case "ending":
-                        if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely")) yield return PlayScene("clear");
+                        if (e.Str("kind") == "clear" && !(G.v4 && e.Str("variant") == "lonely"))
+                        {
+                            yield return PlayScene("clear");
+                            // 1부 · 복학 통장이 드러난 판: "우리 해냈다" 끝에 미래 한 줄 (등록함 = true · 못 함 = hollow)
+                            string fv = e.Str("variant");
+                            if (S.part <= 1 && G.fundOn && (fv == "true" || fv == "hollow")) yield return Say("m", null, G.T(fv == "true" ? "v4.clear.reg" : "v4.clear.noreg"), fv == "hollow" ? "tired" : null);
+                        }
                         if (e.Str("kind") == "clear") JuiceConfetti(stage);   // 빚 다 갚음
                         RecordMeta();   // 엔딩·도전과제 기록 (판마다 한 번, GameController.Screens.cs)
                         break;
@@ -334,7 +340,7 @@ namespace KwGame.View
             if (!full)
             {
                 SetScene("room", "pout");
-                yield return Say("m", null, $"또 시작이네. 빚 {G.man(G.debtStart())}, 7일마다 이자 {G.rate() * 100:0.#}%, {D.RULES.V4_DAYS}일 만기. 알지? …알바 가자.", "pout");
+                yield return Say("m", null, $"또 시작이네. 빚 {G.man(G.debtStart())}, 7일마다 이자 {G.rate() * 100:0.#}%, {D.RULES.V4_DAYS}일 만기. 알지? …알바는 자기가 가는 거고.", "pout");
                 HideDialogue();
                 int pick = -1;
                 modal.Clear(); modal.style.display = DisplayStyle.Flex;

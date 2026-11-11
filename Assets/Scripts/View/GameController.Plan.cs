@@ -72,6 +72,9 @@ namespace KwGame.View
         string SlotName(int s) => SLOT3[Math.Max(0, Math.Min(s, SLOT3.Length - 1))];
         string SlotRange(int s) => $"{Hm(G.slotStartMin(s))} ~ {Hm(G.slotEndMin(s))}";
 
+        /// 복학 통장 줄 색: 등록 끝 = 완료(초록) · 모자람 · 마감 지남 · 못 함 = 경고 · 그 밖 = 보통 글자
+        Color FundCol() => S.enroll == 1 ? Ui.Good : S.enroll == 2 || G.regDaysLeft() < 0 || G.fundBal < G.fundGoal() ? Ui.Bad : Ui.Text;
+
         /// 끝난 칸에 한 일 (G.slotActOf: "watch" · "date" · "rest" · "work:cafe" · "out:park" · null)
         string SlotActName(string act, int s)
         {
@@ -115,6 +118,15 @@ namespace KwGame.View
             var head = Ui.Row(); head.style.alignItems = Align.FlexEnd; planBody.Add(head);
             head.Add(Ui.Label("오늘", 30, Ui.Gold, true));
             var hs = Ui.Label("행동 하나 = 한 칸 · " + (wkd ? "주말엔 국장 휴장" : $"장은 {Hm(R.RT_STOCK[0])}~{Hm(R.RT_STOCK[1])}"), 20, Ui.Dim); hs.style.marginLeft = 20; head.Add(hs);
+            // 복학 통장 한 줄 (맨 위 띠는 꽉 차서 여기 오른쪽에). 좁으면 줄임표
+            string fh = G.fundHud();
+            if (fh != null)
+            {
+                var fsp = new VisualElement(); fsp.style.flexGrow = 1; head.Add(fsp);
+                var fl = Ui.Label(fh, 18, FundCol(), true); fl.name = "plan-fund";
+                fl.style.marginLeft = 16; fl.style.flexShrink = 1; fl.style.minWidth = 0; fl.style.whiteSpace = WhiteSpace.NoWrap; fl.style.overflow = Overflow.Hidden; fl.style.textOverflow = TextOverflow.Ellipsis;
+                head.Add(fl);
+            }
             // 칸을 시간 순서로: 지금 칸은 크게, 나머지는 작은 카드 줄
             VisualElement row = null;
             for (int s = 0; s < R.SLOTS; s++)
@@ -219,6 +231,15 @@ namespace KwGame.View
             C((eve ? "자기" : "쉬기") + (string.IsNullOrEmpty(rh) ? "" : " · " + rh), () => Send("rest"));
             bool canPay = S.cash >= 10000 && S.debt > 0;
             C($"빚 갚기 ({G.man(S.debt)})", () => Send("repayOpen"), !canPay, canPay ? new Color(0.16f, 0.36f, 0.24f, 1f) : (Color?)null);
+            // 복학 통장 채우기: 현금이 바로 빠지는 행동이라 두 번 누르기 (Chart 의 Confirm · 4초 무장). 채울 수 있을 때만
+            double fa = G.fundRefillAmt();
+            if (fa > 0)
+            {
+                string fk = "fundRefill|" + fa; bool armed = OrdArmed(fk);
+                var fb = C(armed ? G.T("v4.fund.refillArm", "a", G.man(fa)) : G.T("v4.fund.refillBtn", "a", G.man(fa)), Confirm(fk, true, () => Send("fund", "k", "refill")), false, armed ? Ui.Bad : new Color(0.16f, 0.36f, 0.24f, 1f));
+                fb.name = "act-fund"; fb.tooltip = G.T("v4.fund.refillSub");
+                if (armed) fb.schedule.Execute(() => { if (PlanHome && !playing && !OrdArmed(fk)) RenderPlan(); }).ExecuteLater(4100);   // 4초 지나 풀리면 글자를 되돌림 (판은 주기 갱신이 없음)
+            }
             foreach (var L in D.LOCList.Where(L => (!L.rt || S.rt) && !G.locHidden(L.id) && L.id != "work"))
             {
                 bool open = L.open.Contains(S.slot); string id = L.id;

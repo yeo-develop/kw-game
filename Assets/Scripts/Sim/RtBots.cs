@@ -109,6 +109,8 @@ namespace KwGame.Sim
         readonly GameData D; readonly string strat; readonly bool heistRoute; readonly Random r; readonly double mgLo, mgHi;
         /// pro 변형 (측정용): trader = 알바 없이 칸마다 장만 봄 · proloan = 납부일에 모자라면 김사장 돈으로 메움 · proall = 전적을 안 읽고 리포트를 전부 따라 탐
         readonly bool allWatch, bridge, blind;
+        /// "…fund" 변형 (profund · casualfund): 바탕 전략 그대로 + 관문에서 낼 돈이 모자라면 복학 통장을 깨고, 집에서 여유가 있으면 도로 채움 (바탕 전략은 통장을 안 깸)
+        readonly bool fundBot;
         /// 작전주 봇 변형 (측정용). 지켜보는 쪽: opread = 끌어올리기가 시작되면 타고 온도 추세·전조를 보며 나눠 팖 · opfix = 거래량이 오르면 타서 온도 55 에 전부 · opchase = 온도 80 에 올라탐.
         /// 안 지켜보는 쪽: opwork = 거래량이 오르면 타고 알바 감, 일하다 +15% 면 몰래 폰으로 팖 (제목의 장면) · ophold = 작전이 끝날 때까지 듦
         readonly string opMode;
@@ -139,6 +141,7 @@ namespace KwGame.Sim
             foreach (var om in new[] { "opread", "opfix", "opwork", "ophold", "opchase", "opscan" }) if (strat.EndsWith("+" + om)) { opMode = om; strat = strat.Substring(0, strat.Length - om.Length - 1); }   // "pro+opread" = pro 인데 작전주도 탐 (측정용)
             heistRoute = strat.EndsWith("+heist"); if (heistRoute) strat = strat.Substring(0, strat.Length - 6);   // "pro+heist" = pro 인데 털기 루트를 끝까지 탐
             string name = strat;
+            fundBot = strat.Length > 4 && strat.EndsWith("fund"); if (fundBot) strat = strat.Substring(0, strat.Length - 4);
             allWatch = strat == "trader"; blind = strat == "proall"; if (allWatch || blind || strat == "proloan") strat = "pro";
             D = d; this.strat = strat; r = new Random(seed * 7919 + 13); this.mgLo = mgLo; this.mgHi = mgHi;
             bridge = name == "proloan" || strat == "casual" && r.NextDouble() < 0.5;   // 보통 사람의 절반은 모자라면 빌려서 메움
@@ -423,6 +426,7 @@ namespace KwGame.Sim
                         {   // 원금 분납: 낼 수 있으면 냄. 모자라면 — 이번이 마지막 기회(연속 미납 직전·만기)면 급매해서라도, 아니면 가진 만큼만
                             bool can(string k0) => P.opts.Any(o => o.k == k0 && !o.dis);
                             if (can("gatePay")) return C("payday", "k", "gatePay");
+                            if (fundBot && can("gateFund")) return C("payday", "k", "gateFund");   // 통장을 깨는 봇: 모자란 만큼 깸 (깬 뒤 다시 고름)
                             bool must = S.missN + 1 >= R.V4_MISS_MAX || G.daysLeft() <= 0;
                             if (can("gateSell") && (must || strat == "random" && r.NextDouble() < 0.5)) return C("payday", "k", "gateSell");
                             return C("payday", "k", can("gatePart") ? "gatePart" : "gateSkip");
@@ -445,6 +449,7 @@ namespace KwGame.Sim
             if (G.v4 && G.gateOn && Human)
             {   // 관문 규칙의 사람 봇 (docs/BLUEPRINT.md): 아침에 장 보며 잡고 예약 걸고 → 낮엔 알바 → 밤엔 미래. 주말엔 납부 준비
                 var tg = TradeHomeGate(); if (tg != null) return tg;
+                if (fundBot && G.fundOn && S.fund < G.fundGoal() && S.cash > Due * 1.5 && G.fundRefillAmt(S.cash - Due * 1.5) > 0) return C("fund", "k", "refill", "amt", S.cash - Due * 1.5);   // 이번 주 납부액의 1.5배를 넘는 현금만 통장으로
                 if (S.debt > 0 && S.cash >= S.debt + Int) { repayAmt = S.debt; return C("repayOpen"); }
                 // 납부일 저녁인데 다 정리해도 모자람 → 김사장 돈으로 메움 (이번 주에 빌린 돈은 다음 주 몫. 만기 주엔 소용없음)
                 if (bridge && DaysToPay == 0 && S.slot == R.SLOTS - 1 && G.daysLeft() > 0 && G.loanOk() && S.cash < Due && S.cash + G.holdVal() * 0.8 < Due && loanT != G.Tnow()

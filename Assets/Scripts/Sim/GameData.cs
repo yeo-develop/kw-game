@@ -109,6 +109,9 @@ namespace KwGame.Sim
         /// 신호 대 잡음: v4 변동성 배수(0 = RT_VOL 그대로) · 속보 종목 뽑기에서 코인 가중 · 리포트가 코인을 다룰 확률 (결과가 1~2칸 뒤 → 잡고 자리를 비울 이유)
         public double V4_VOL = 0, V4_NEWS_COIN_W = 1, V4_NEWS_COIN_MAG = 1, V4_TIP_MAG = 1;   // V4_TIP_MAG = 찌라시(리포트 말고) 충격 배수
 
+        /// 스토리 "미래의 미래" (GameSim.Story.cs): 복학 통장 금액(0 = 기능 꺼짐) · 드러나는 날 · 등록 마감일 · 깨는 단위 · 깰 때 호감/스트레스 · 욕심 단계 문턱 3개 · 날짜 장면이 밀릴 수 있는 날 수
+        public double V4_FUND, V4_FUND_UNIT, V4_FUND_AFF, V4_FUND_ST; public int V4_FUND_DAY, V4_REG_DAY, V4_EV_LATE; public double[] V4_GREED_STEPS;
+
         public double HpCost(string k) => HP_COST != null && HP_COST.TryGetValue(k, out var v) ? v : 0;
         public double Gain(string k) => ADD_GAIN != null && ADD_GAIN.TryGetValue(k, out var v) ? v : 0;
     }
@@ -153,10 +156,10 @@ namespace KwGame.Sim
     public class KQDef { public string q, ok, good, bad; public string[] no; }
     /// 돌발 이벤트 (unity_events.json). lines = [who, text, face?] 목록, who: m·me·kim·nar
     /// day = v4 이야기 이벤트: 그 날(absDay, 2부도 1부터) 집에 오면 무조건 (랜덤 풀엔 안 들어감). part = 몇 부 이야기인지 (0 = 아무 때나)
-    public class EvDef { /** when = 조건으로 뜨는 장면 ("liq" = 청산당한 날 밤). day 대신 */ public string when; public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay, day, part, heistMin; public double minCash, minAddict; public List<EvOpt> opts; }
+    public class EvDef { /** when = 조건으로 뜨는 장면 ("liq" = 청산당한 날 밤). day 대신 */ public string when; /** 같은 묶음의 갈래는 한 번만 (본 표식 = (grp ?? id)@부) */ public string grp; public string id, title, bg, face; public List<string[]> lines; public int[] slots; public int minDay, maxDay, day, part, heistMin; public double minCash, minAddict; public List<EvOpt> opts; }
     /// v4: aff = 미래 호감 · greed = 욕심 · debtPct = 빚 비율 변화 (−0.3 = 30% 탕감)
-    public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict, aff, greed, debtPct, debt; public int heist = -1; public bool go; public EvOpt fail; }   // heist: 털기 단계로 (−1 = 그대로) · go: 만기 밤에 턴다
-    public class MenSet { public string[] msgs; public string last, ok, good, bad; public string[] no; }
+    public class EvOpt { public string l, sub, who, res, face; public double need, p = 1, cash, st, hp, fame, addict, aff, greed, debtPct, debt; public int heist = -1; public bool go; public EvOpt fail; /** 스토리: fund = 복학 통장을 이 금액으로 엶 · reg 1 등록 / 2 안 함 · calm/ride = 말림/같이 탐 횟수 · mom 1 = 엄마가 빚을 앎 · fundBet 1 = 통장 전액을 판돈으로 · fundFill 1 = 모자란 통장을 현금으로 채움 */ public double fund; public int reg, calm, ride, mom, fundBet, fundFill; }   // heist: 털기 단계로 (−1 = 그대로) · go: 만기 밤에 턴다
+    public class MenSet { public string[] msgs; public string last, ok, good, bad; public string[] no; /** "momNot" = 엄마가 빚을 알면 건너뜀 */ public string when; }
     public class ImpulseSet { public string line, ok, good, bad; public string[] no; }
     public class EndingDef
     {

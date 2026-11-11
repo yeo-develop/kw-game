@@ -112,7 +112,7 @@ namespace KwGame.Sim
         }
 
         // ---------- 하루 결과: 정산 카드 · 밤의 미래 · 호감 버프 (docs/BLUEPRINT.md ① ⑥-5·6) ----------
-        static readonly string[] SETTLE_SKIP = { "work", "invest", "debt", "loan", "repay", "interest" };
+        static readonly string[] SETTLE_SKIP = { "work", "invest", "debt", "loan", "repay", "interest", "fund" };   // fund = 복학 통장 깸 · 채움 (옮긴 돈)
         void dayBaseSet() { S.dayReal0 = S.realized; S.dayLiq0 = S.st.liq; S.dayCash0 = S.cash; S.dayLed0 = S.today.Count; S.dayRes = null; S.dayBase = absDay() * 10 + S.part; }
         /// 오늘(아침 이후) 매매 실현손익 · 청산 횟수
         public double dayPnl() => S.realized - S.dayReal0;
@@ -139,6 +139,7 @@ namespace KwGame.Sim
             if (S.dayRes == "jackpot") greedD(R.V4_NIGHT_GREED);
             if (S.day == R.MONTH_DAYS && S.paidMonth != S.month && S.debt > 0) return;   // 이자일 저녁 집 대사는 김사장 얘기
             var L = TA("v4.night." + S.dayRes); if (L.Count == 0) return;
+            if (wage == 0) { var L2 = L.Where(x => !x.Contains("{w}")).ToList(); if (L2.Count > 0) L = L2; }   // 알바 안 간 날엔 '일당 0원' 줄을 뺌
             string line = fpick(L).Replace("{a}", won(Math.Abs(pnl))).Replace("{w}", won(wage));
             S.hl = new HomeLine { T = Tnow(), t = line };
             Emit("night", "cls", S.dayRes, "line", line);
@@ -291,12 +292,14 @@ namespace KwGame.Sim
         {
             double hv = stockValFree() + coinVal(), part = Math.Floor(Math.Min(S.cash, need) / 10000) * 10000;   // 잠긴 주식은 급매로도 못 팖
             string left = $"{S.missN + 1}/{R.V4_MISS_MAX}";
-            return new List<Opt> {
+            var L = new List<Opt> {
                 new Opt { k = "gatePay", l = T("v4.gate.pay", "p", won(need)), sub = T("pd.cash", "c", won(S.cash)), dis = S.cash < need },
                 new Opt { k = "gateSell", l = T("pd.sell"), sub = hv > 0 ? T("pd.sellSub", "v", won(hv)) : stockVal() > 0 ? T("v4.op.lock") : T("pd.sellNone"), dis = hv <= 0 || S.cash >= need },
                 new Opt { k = "gatePart", l = T("v4.gate.part", "c", won(part)), sub = T("v4.gate.missSub", "s", won(need - part), "f", won(round1k((need - part) * R.V4_LATE_FEE)), "n", left), dis = part < 10000 || S.cash >= need },
                 new Opt { k = "gateSkip", l = T("v4.gate.skip"), sub = T("v4.gate.missSub", "s", won(need), "f", won(round1k(need * R.V4_LATE_FEE)), "n", left) },
             };
+            if (fundP1 && S.fund > 0) L.Insert(2, gateFundOpt(need));   // 복학 통장 깨기 (1부 · 잔액이 있을 때만, 급매 다음 자리)
+            return L;
         }
         /// 이자를 낸 뒤: 이번 주 원금 분납. 이미 상한 밑이면 바로 통과
         void gateStart(bool say = true)
@@ -312,6 +315,7 @@ namespace KwGame.Sim
             double need = gatePrincipal();
             if (ck == "gatePay") { repay(need); gatePass(); return true; }
             if (ck == "gateSell") { double sv = stockValFree(); double t = closeAll(); t -= fireSale(sv); N(T("pd.sold", "t", sgnWon(t), "c", won(S.cash))); gateStart(false); return true; }
+            if (ck == "gateFund") { fundBreak(need); gateStart(false); return true; }   // 깬 뒤 선택지를 다시 (이제 낼 수 있을 수 있음)
             if (ck == "gatePart") { double part = Math.Floor(Math.Min(S.cash, need) / 10000) * 10000; repay(part); gateMiss(need - part); return true; }
             if (ck == "gateSkip") { gateMiss(need); return true; }
             return false;
@@ -405,13 +409,17 @@ namespace KwGame.Sim
             opWeek();       // 작전주: 주가 바뀌면 새로 뽑고, 아침마다 단계를 넘김
             if (buffTier() >= 1 && R.V4_BUFF_LUNCH > 0) { stress(-R.V4_BUFF_LUNCH); toast(T("v4.buff.lunch", "s", R.V4_BUFF_LUNCH), "good"); }   // 호감 버프: 도시락
             if (S.sleepD == absDay() && R.V4_SLEEP_RSCH > 0) toast(T("v4.rest.morning", "n", R.V4_SLEEP_RSCH), "good");   // 어젯밤 푹 잠
-            if (S.greed >= R.V4_GREED_HEIST) pushK("m", fpick(TA("v4.greedK2")));        // 털기 문턱 넘음
+            string gk = greedKey();   // 욕심 단계 (V4_GREED_STEPS: 아빠 입버릇에 한 발씩). 문턱이 없으면 예전대로
+            if (gk != null) { if (gk != "") pushK("m", fpick(TA(gk))); }
+            else if (S.greed >= R.V4_GREED_HEIST) pushK("m", fpick(TA("v4.greedK2")));        // 털기 문턱 넘음
             else if (S.greed >= R.V4_GREED_HEIST - 15) pushK("m", fpick(TA("v4.greedK")));   // 슬슬
+            storyMorning();   // 복학 통장 안전망 · 등록 마감 알림
         }
         void v4DayEnd()
         {
             if (!v4) return;
             promJudge();
+            storyDayEnd();   // 등록 마감이 지났으면 미등록
             if (S.dateN == 0) affD(-R.V4_AFF_DECAY * dv("decay"));   // 하루 종일 안 놀아 주면 식음 (난이도별)
             S.dateN = 0;
         }
@@ -470,7 +478,7 @@ namespace KwGame.Sim
             if (!v4 || S.slot < 0 || S.slot >= R.SLOTS) return;
             slotLogDayCheck();
             double net = S.realized - S.slotReal0;
-            for (int i = Math.Min(S.slotLed0, S.today.Count); i < S.today.Count; i++) { var x = S.today[i]; if (x.kind != "invest" && x.kind != "debt" && x.kind != "loan" && x.kind != "repay" && x.kind != "interest") net += x.amt; }
+            for (int i = Math.Min(S.slotLed0, S.today.Count); i < S.today.Count; i++) { var x = S.today[i]; if (x.kind != "invest" && x.kind != "debt" && x.kind != "loan" && x.kind != "repay" && x.kind != "interest" && x.kind != "fund") net += x.amt; }
             S.slotNet[S.slot] = net;
         }
         /// 오늘 s 번째 칸에 한 일 (아직 안 했으면 null) · 그 칸의 손익 (끝난 칸만)
@@ -495,7 +503,7 @@ namespace KwGame.Sim
         bool storyCheck()
         {
             if (!v4 || D.EVENTS.Count == 0 || fainted() || S.ending != null) return false;
-            var ev = D.EVENTS.FirstOrDefault(e => e.day == absDay() && (e.part == 0 || e.part == S.part) && (e.slots == null || e.slots.Contains(S.slot)) && S.heist >= e.heistMin && !S.evSeen.Contains(e.id + "@" + S.part));
+            var ev = storyDue();   // 정해진 날부터 V4_EV_LATE 일 안 · 조건(when) · 묶음(grp) (GameSim.Story.cs)
             if (ev == null)
             {   // 조건 장면: 청산당한 날 밤 (하루 한 번, 이자일 저녁 빼고)
                 if (isEve() && S.dayRes == "liq" && S.nightEvD != absDay() && S.day != R.MONTH_DAYS)
@@ -503,9 +511,9 @@ namespace KwGame.Sim
                     var ne = D.EVENTS.FirstOrDefault(e => e.when == "liq" && (e.part == 0 || e.part == S.part));
                     if (ne != null) { S.nightEvD = absDay(); S.evT = Tnow(); evStart(ne); return true; }
                 }
-                return false;
+                return fundAskCheck();   // 조건 장면: 등록금으로 딱 한 번만
             }
-            S.evSeen.Add(ev.id + "@" + S.part); S.evT = Tnow();
+            S.evSeen.Add(evKey(ev, S.part)); S.evT = Tnow();
             evStart(ev);
             return true;
         }
@@ -530,7 +538,7 @@ namespace KwGame.Sim
 
         // ---------- 엔딩 ----------
         /// 만기(28일째 이자일 뒤)에 빚이 남았을 때. 털기 루트(이야기 이벤트 4개)를 끝까지 타고 "턴다"를 골랐으면 빚과 상관없이 털기:
-        /// 호감 V4_AFF_HEIST(믿고 따라옴) + 욕심 V4_GREED_HEIST(끝까지 감) 둘 다면 성공 `heist`, 아니면 `heistFail`. 그 밖엔 bad1 (빚 60% 이하면 같이/혼자 원양어선)
+        /// 호감 V4_AFF_HEIST(믿고 따라옴) + 욕심 V4_GREED_HEIST(끝까지 감) 둘 다면 성공 `heist`, 아니면 `heistFail`. 그 밖엔 bad1 (빚이 V4_DUO_DEBT — 보통 35% — 이하면 같이/혼자 원양어선)
         void maturityEnd()
         {
             kim(false);
@@ -545,16 +553,23 @@ namespace KwGame.Sim
             if (!v4) return;
             bool good = S.aff >= R.V4_AFF_GOOD;
             var v = V("debt", won(S.debt), "aff", S.aff, "d", absDay(), "p", S.part, "pct", Math.Max(0, Math.Round((1 - S.debt / debtStart()) * 100)));   // pct = 갚은 비율 (같이 원양어선 문턱 = 1 − V4_DUO_DEBT)
+            bool reg = S.enroll == 1;   // 스토리: 복학 등록 (통장이 한 번도 안 드러난 판 = fundSeen 거짓 → 예전 그대로)
             if (kind == "clear")
             {
-                if (variant == "gamble" || variant == "rich") { if (!good) { variant = "lonely"; lead = T("v4.end.lonely", v); } return; }
-                variant = good ? "true" : "lonely";
-                lead = T(good ? (S.part > 1 ? "v4.end.true2" : "v4.end.true") : "v4.end.lonely", v);
+                if (variant == "gamble" || variant == "rich")
+                {
+                    if (!good) { variant = "lonely"; lead = T("v4.end.lonely", v); }
+                    else if (fundSeen) lead += "\n" + T("v4.end." + variant + (reg ? ".reg" : ".noreg"), v);
+                    return;
+                }
+                variant = !good ? "lonely" : S.part <= 1 && fundSeen && !reg ? "hollow" : "true";
+                lead = T(variant == "hollow" ? "v4.end.hollow" : good ? (S.part > 1 ? "v4.end.true2" : "v4.end.true") : "v4.end.lonely", v);
+                if (good && S.part > 1 && fundSeen) lead += "\n" + T(reg ? "v4.end.true2.reg" : "v4.end.true2.noreg", v);
             }
             else if (kind == "bad1" && absDay() >= R.V4_DAYS && S.debt <= debtStart() * duoDebt())
             {
-                variant = good ? "duo" : "sea";
-                lead = T(good ? "v4.end.duo" : "v4.end.half", v);
+                variant = !good ? "sea" : S.part <= 1 && fundSeen && reg ? "grad" : "duo";
+                lead = T(variant == "grad" ? "v4.end.grad" : good ? "v4.end.duo" : "v4.end.half", v);
             }
             else if (kind == "heist" || kind == "heistFail") lead = T("v4.end." + kind, v);
         }

@@ -76,7 +76,7 @@ namespace KwGame.View
                 case "loan": kimKey = "kim_base"; break;
                 case "map": bg = "map"; miraiOn = false; break;
                 case "encounter": bg = "map"; npcKey = D.SRC.TryGetValue(P.id, out var src) ? src.npc : null; break;
-                case "ending": cgKey = S.endInfo != null ? ArtCatalog.EndingCg(S.endInfo.kind, S.endInfo.variant) : null; toastCol.Clear(); break;
+                case "ending": cgKey = S.endInfo != null ? ArtCatalog.EndingCg(S.endInfo.kind, S.endInfo.variant, S.endInfo.grad) : null; toastCol.Clear(); break;
                 default:
                     {
                         string key = P.t == "loc" ? P.key : S.visit?.key;
@@ -86,6 +86,8 @@ namespace KwGame.View
             }
             SetBg(bg, night);
             if (Time.realtimeSinceStartup >= faceHold) { faceNow = MoodSprite(); faceStrong = false; }
+            // 그림 없는 hollow 엔딩 = 방 배경 + 미래 (얼굴은 엔딩이 정한 것, 보통 tired)
+            if (P?.t == "ending" && cgKey == null && S.endInfo?.variant == "hollow" && ArtCatalog.FaceSprite(S.endInfo.face) is string ef) faceNow = ef;
             DrawStage();
         }
 

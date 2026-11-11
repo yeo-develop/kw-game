@@ -174,7 +174,7 @@ namespace KwGame.Sim
                 g["amt"] = (double)g["amt"] + x.amt; g["n"] = (int)g["n"] + 1;
             }
             var Y = groups.Select(kv => { var o = new Dictionary<string, object>(kv.Value); if ((int)o["n"] > 1) o["label"] = o["label"] + " ×" + o["n"]; return o; }).ToList();
-            double net = 0; foreach (var x in Y) net = net + ((string)x["kind"] == "loan" || (string)x["kind"] == "debt" ? 0 : (double)x["amt"]);
+            double net = 0; foreach (var x in Y) net = net + ((string)x["kind"] == "loan" || (string)x["kind"] == "debt" || (string)x["kind"] == "fund" ? 0 : (double)x["amt"]);   // fund = 복학 통장 (옮긴 돈)
             string mline = mental() == "men" ? T("mline.men") : mental() == "anx" ? T("mline.anx") : S.hp < R.HP_LOW ? T("mline.tired") : S.addict >= R.ADD_NAG ? T("mline.addict") : S.stress < 25 ? T("mline.happy") : T("mline.calm");
             pushK("m", mline);
             var tod = S.today.Where(x => x.kind == "div" || x.kind == "ev").ToList();
@@ -404,7 +404,9 @@ namespace KwGame.Sim
         void menheraStart()
         {
             S.menKey = Tnow().ToString(); S.menCool = Tnow() + 3;
-            int si = (int)Math.Floor(rnd() * D.MEN_SETS.Count); var set = D.MEN_SETS[si];
+            int si = (int)Math.Floor(rnd() * D.MEN_SETS.Count);
+            for (int k = 0; v4 && S.momKnows && k < D.MEN_SETS.Count && D.MEN_SETS[si].when == "momNot"; k++) si = (si + 1) % D.MEN_SETS.Count;   // 엄마가 이미 알면 '엄마는 몰라' 묶음은 건너뜀 (난수는 그대로 한 번)
+            var set = D.MEN_SETS[si];
             string mf = S.stress >= yamiLine() ? "yami" : "menhera";   // 스트레스 90↑ = 야미 (눈에 빛 없음)
             Emit("menhera", "msgs", set.msgs, "face", mf);
             foreach (var m in set.msgs) pushK("m", m);
@@ -451,6 +453,7 @@ namespace KwGame.Sim
             if (c == null) return false;
             S.pending = null;
             pushK("me", c.l);
+            if (v4) { if (c.ok) S.calmN++; else S.rideN++; }   // 스토리: 말림 / 같이 탐
             if (c.ok) { S.st.menOk++; S.menRun = 0; stress(-35); affD(3); M(fill(set.good, V("n", D.TK[tk].name)), "happy"); hideDlg(); return true; }
             S.st.menBad++; S.menRun++; S.st.impulse++; double st0 = S.stress; greedD(5); affD(-3);
             double amt = round1k(S.cash * R.IMPULSE_CASH); bool stock = D.TK[tk].type == "stock";
@@ -498,6 +501,7 @@ namespace KwGame.Sim
         void ending(string kind)
         {
             var E = D.ENDINGS[kind];
+            if (kind == "clear") fundClearReg();   // 등록 마감 전에 다 갚음: 통장 + 현금으로 되면 등록 (GameSim.Story.cs)
             if (kind == "clear") S.resume = S.flow.ToList();
             S.phase = "ending"; S.ending = kind; S.flow = new List<string>(); S.pending = new Pending("ending") { kind = kind, cont = kind == "clear" };
             S.endSeen[kind] = (S.endSeen.TryGetValue(kind, out var es) ? es : 0) + 1;
@@ -538,8 +542,9 @@ namespace KwGame.Sim
             S.endInfo = new EndInfo
             {
                 kind = kind, variant = variant, tag = E.tag, ok = E.ok, h = pickV(E.hv, E.h), bg = pickV(E.bgv, E.bg),
-                face = variant == "rich" ? "flex" : kind == "clear" ? (S.stress < 60 ? "happy" : "tired") : E.face, lead = lead, days = absDay(), rank = rankOf(S.galFame).name,
-                noChar = E.noCharV != null && E.noCharV.TryGetValue(variant, out var nc) && nc != 0, night = kind == "clear", sb = sb, cont = kind == "clear"
+                face = variant == "rich" ? "flex" : variant == "hollow" ? "tired" : kind == "clear" ? (S.stress < 60 ? "happy" : "tired") : E.face, lead = lead, days = absDay(), rank = rankOf(S.galFame).name,
+                noChar = E.noCharV != null && E.noCharV.TryGetValue(variant, out var nc) && nc != 0, night = kind == "clear", sb = sb, cont = kind == "clear",
+                grad = v4 && ((kind == "clear" && variant == "true" && S.part > 1 && S.enroll == 1) || (kind == "bad1" && variant == "grad"))   // 졸업식을 보는 판 (화면: 졸업식 그림)
             };
             pushK("sys", T("end.k", "h", S.endInfo.h));
             Emit("ending", "kind", kind, "variant", variant, "sb", sb, "card", D.STR["v4.card.head"] != null ? ResultCard() : null);   // card = 공유용 결과 카드 (unity_v4.json 없는 웹 골든 데이터엔 null)
@@ -615,6 +620,7 @@ namespace KwGame.Sim
         void advance()
         {
             slotClose();   // 계획판: 방금 끝난 칸의 손익
+            fundBetSettle();   // 같이 태운 복학 통장: 그 칸이 끝날 때 정산 (v4)
             S.slot++;
             if (S.rt) S.min = slotStartMin(S.slot >= R.SLOTS ? 0 : S.slot);
             if (S.slot >= R.SLOTS)

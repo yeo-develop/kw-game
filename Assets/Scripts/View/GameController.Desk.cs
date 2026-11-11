@@ -207,6 +207,7 @@ namespace KwGame.View
             var tr = Ui.Row(); tr.style.marginTop = 6; it.Add(tr);
             void Tag(string text, Color c) { var b = Badge(text, c); b.style.marginLeft = 0; b.style.marginRight = 8; b.style.flexShrink = 0; b.style.whiteSpace = WhiteSpace.NoWrap; tr.Add(b); }
             if (PosPnl(id).HasValue) Tag("보유", Ui.Gold);
+            if (id == G.fundBetTk) Tag(G.T("v4.desk.fundBet"), Ui.Bad);   // 미래가 복학 통장으로 탄 종목 (칸이 끝날 때 정산)
             if (locked) Tag("하한가 잠김", Ui.Bad);
             else if (shut) Tag("휴장", StkAxis);
             else if (G.limitUp(id)) Tag("상한가", StkUp);

@@ -18,7 +18,7 @@ namespace KwGame.Sim
             return () => Rng.Float(ref a);
         }
         bool evFits(EvDef e) =>
-            e.day == 0 && e.when == null && (e.slots == null || e.slots.Contains(S.slot)) && absDay() >= Math.Max(1, e.minDay) && S.cash >= e.minCash && S.addict >= e.minAddict;
+            e.day == 0 && evWhenFits(e) && (e.slots == null || e.slots.Contains(S.slot)) && absDay() >= Math.Max(1, e.minDay) && S.cash >= e.minCash && S.addict >= e.minAddict;
 
         /// homeStep 에서 호출. 이벤트를 띄웠으면 true (pending = event)
         bool evCheck()
@@ -57,15 +57,16 @@ namespace KwGame.Sim
             {
                 string who = ln[0], face = ln.Length > 2 ? ln[2] : null;
                 if (who == "kim" && !kimOn) { kim(true); kimOn = true; }
-                say(who, ln[1], face);
+                say(who, storyFill(ln[1]), face);
             }
             if (kimOn) kim(false);
             var opts = new List<Opt>();
             for (int i = 0; i < ev.opts.Count; i++)
             {
                 var o = ev.opts[i];
-                bool dis = o.need > 0 && S.cash < o.need;
-                opts.Add(new Opt { k = "ev" + i, l = o.l, sub = dis ? won(o.need) + " 필요" : noHpText(o.sub), dis = dis });
+                double need = o.need > 0 ? o.need : v4 && o.fundFill > 0 ? fundFillNeed() : 0;   // fundFill = 모자란 복학 통장을 현금으로 (그때 금액)
+                bool dis = need > 0 && S.cash < need;
+                opts.Add(new Opt { k = "ev" + i, l = storyFill(o.l), sub = dis ? won(need) + " 필요" : storyFill(noHpText(o.sub)), dis = dis });
             }
             S.pending = new Pending("event") { evId = ev.id, opts = opts };
         }
@@ -79,6 +80,7 @@ namespace KwGame.Sim
             var o = ev.opts[i];
             var r = o.p < 1 && o.fail != null && rnd() >= o.p ? o.fail : o;
             evApply(ev, r, r.who ?? o.who ?? "m");
+            storyPick(ev, o, r);   // 통장 · 등록 · 말림/같이 탐 · 엄마 (GameSim.Story.cs)
             homeLine(); S.pending = new Pending("home");
             return true;
         }
@@ -108,7 +110,7 @@ namespace KwGame.Sim
             }
             if (r.heist >= 0 && v4 && S.heist != r.heist) { S.heist = r.heist; Emit("heist", "v", S.heist); bits.Add(S.heist > 0 ? "털기 준비 " + S.heist + "/3" : "털기 계획 접음"); }
             if (r.go && v4) S.heistGo = true;
-            if (r.res != null) say(who, r.res, r.face);
+            if (r.res != null) say(who, storyFill(r.res), r.face);
             string tail = bits.Count > 0 ? " (" + string.Join(" · ", bits) + ")" : "";
             pushF("🎲", ev.title + tail, "money");
             if (bits.Count > 0) toast(ev.title + tail, r.cash < 0 || r.st > 0 ? "liq" : "good");

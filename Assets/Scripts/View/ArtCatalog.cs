@@ -26,11 +26,16 @@ namespace KwGame.View
             ["boutique"] = "shop", ["shop"] = "shop",
             ["jobs"] = "work", ["work"] = "work", ["cafe"] = "cafe", ["store"] = "store", ["ware"] = "ware", ["mart"] = "mart",
             ["park"] = "park", ["bar"] = "bar", ["hosp"] = "hosp", ["sea"] = "sea", ["gall"] = "gall",
+            ["snack"] = "snack", ["campus"] = "campus",
         };
+        /// 그림이 나중에 들어오는 배경: 파일이 없으면 색 패널 대신 비슷한 기존 배경으로 (경고 없이)
+        static readonly Dictionary<string, string> BG_OLD = new Dictionary<string, string> { ["snack"] = "bar", ["campus"] = "park" };
         public static Sprite Background(string bg, bool night)
         {
             if (bg == "room") return Load("Backgrounds/" + (night ? "room_night" : "room_day"));
-            return bg != null && BG.TryGetValue(bg, out var f) ? Load("Backgrounds/" + f) : null;
+            if (bg == null || !BG.TryGetValue(bg, out var f)) return null;
+            if (BG_OLD.TryGetValue(bg, out var old) && !Has("Backgrounds/" + f)) f = old;
+            return Load("Backgrounds/" + f);
         }
 
         /// sim 표정 키(web FACES: neutral·happy·smug·sad·panic·tired·angry·menhera·flex·cry·shy + yami·pout·love) → 미래 스탠딩 이름
@@ -69,14 +74,19 @@ namespace KwGame.View
             ["ending_bad1_duo"] = "ending_bad1",
             ["ending_bad1_sea"] = "ending_bad1",
         };
-        /// 엔딩 CG: 변형 그림(ending_<kind>_<variant>)이 있으면 그것, 없으면 ALIAS, 그것도 없으면 ending_<kind> (없으면 null = 배경만)
-        public static string EndingCg(string kind, string variant) => EndingCg(kind, variant, k => Has("CG/" + k));
-        public static string EndingCg(string kind, string variant, System.Func<string, bool> has)
+        /// 종류 그림으로 떨어지면 뜻이 틀어지는 변형 (hollow: 둘이 웃는 ending_clear 가 아니라 그림 없이 방 배경 + 미래)
+        static readonly HashSet<string> NO_KIND = new HashSet<string> { "ending_clear_hollow" };
+        /// 엔딩 CG: 변형 그림(ending_<kind>_<variant>)이 있으면 그것, 없으면 ALIAS, 그것도 없으면 ending_<kind> (없으면 null = 배경만).
+        /// grad = 졸업식을 보는 판(EndInfo.grad): clear 면 졸업식 그림 ending_clear_true 를 먼저. ending_clear_true 는 grad 판에서만 씀
+        public static string EndingCg(string kind, string variant, bool grad = false) => EndingCg(kind, variant, k => Has("CG/" + k), grad);
+        public static string EndingCg(string kind, string variant, System.Func<string, bool> has, bool grad = false)
         {
             if (kind == null) return null;
-            string v = string.IsNullOrEmpty(variant) ? null : "ending_" + kind + "_" + variant;
+            if (grad && kind == "clear" && has("ending_clear_true")) return "ending_clear_true";
+            string v = string.IsNullOrEmpty(variant) || (kind == "clear" && variant == "true") ? null : "ending_" + kind + "_" + variant;
             if (v != null && has(v)) return v;
             if (v != null && ALIAS.TryGetValue(v, out var a) && has(a)) return a;   // v4 새 변형: 아직 전용 그림 없으면 뜻 맞는 그림으로
+            if (v != null && NO_KIND.Contains(v)) return null;
             return has("ending_" + kind) ? "ending_" + kind : null;
         }
         /// 미니게임 그림 (Icons/Minigame/<키>). player(나)처럼 일부러 안 그린 키도 있어서 없으면 경고 없이 null → 색 도형으로 그림

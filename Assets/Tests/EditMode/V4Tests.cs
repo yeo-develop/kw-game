@@ -173,13 +173,12 @@ namespace KwGame.Tests
             Go(g, "evPick", "k", "ev0");
             Assert.That(S.heist, Is.EqualTo(1));
             // 17일째 아침 비번 이야기는 1단계가 있어야
+            // (날짜를 직접 옮기므로 지나온 날의 장면은 본 것으로 — 안 그러면 이틀 안에 놓친 15일 장면이 먼저 뜸: 밀림 규칙)
             var h = New(); var H = h.S;
-            H.month = 3; H.day = 3; H.slot = 0; H.min = h.slotStartMin(0); H.pending = null; H.flow = new List<string> { "home" };
-            h.Apply(C("debug", "k", "noop"));
+            AtDay(h, 17, 0);
             Assert.That(H.pending?.evId, Is.Not.EqualTo("v4_h2_code"), "루트 안 탔으면 비번 이야기 없음");
             var k = New(); var K = k.S; K.heist = 1;
-            K.month = 3; K.day = 3; K.slot = 0; K.min = k.slotStartMin(0); K.pending = null; K.flow = new List<string> { "home" };
-            k.Apply(C("debug", "k", "noop"));
+            AtDay(k, 17, 0);
             Assert.That(K.pending?.evId, Is.EqualTo("v4_h2_code"));
             // 23일째 도주 차량: 현금 없으면 김사장 돈으로 사는 길
             var m = New(); var M = m.S; M.heist = 2; M.cash = 0; double d0 = M.debt;
@@ -1469,6 +1468,304 @@ namespace KwGame.Tests
             Assert.That(g.slotYHas(), "어제 기록이 남음"); Assert.That(g.slotActYOf(0), Is.EqualTo("work:store")); Assert.That(g.slotActYOf(1), Is.EqualTo("rest")); Assert.That(g.slotActYOf(2), Is.EqualTo("date"));
             Assert.That(g.slotNetYOf(0), Is.GreaterThan(0), "어제 오전에 번 일당");
             Assert.That(g.Apply(C("quick", "loc", "shop")).Any(e => e.t == "error"), "숨긴 장소는 못 감");
+        }
+        // ---------- 스토리 "미래의 미래" (docs/BLUEPRINT_V3.md ③-b · ⑥ 14~19-4, GameSim.Story.cs) ----------
+        /// 1부 absDay 날 slot 칸 집으로 옮겨 장면 판정을 돌림 (그때 나온 이벤트들). late = 거쳐 온 날의 장면을 본 것으로 치지 않음 (밀림 확인용)
+        static List<SimEvent> AtDay(GameSim g, int abs, int slot, bool late = false)
+        {
+            var S = g.S; var R = Data.RULES;
+            if (!late) foreach (var e in Data.EVENTS.Where(e => e.day > 0 && e.day < abs)) { string k = (e.grp ?? e.id) + "@" + S.part; if (!S.evSeen.Contains(k)) S.evSeen.Add(k); }   // 순간이동이라 지나온 날 장면은 본 것으로
+            S.month = (abs - 1) / R.MONTH_DAYS + 1; S.day = (abs - 1) % R.MONTH_DAYS + 1; S.slot = slot; S.min = g.slotStartMin(slot);
+            S.pending = null; S.flow = new List<string> { "home" };
+            return g.Apply(C("debug", "k", "noop"));
+        }
+        static string EvAt(GameSim g, int abs, int slot, bool late = false) { AtDay(g, abs, slot, late); return g.S.pending?.t == "event" ? g.S.pending.evId : null; }
+
+        /// 26일 장면: 등록한 판과 못 한 판의 대사가 갈리고(못 했으면 말을 아낌), 한쪽을 보면 다른 쪽은 안 뜬다
+        [Test]
+        public void AfterSceneSplitsByEnroll()
+        {
+            var a = Data.EVENTS.First(e => e.id == "v4_after"); int slot = a.slots[0];
+            var y = New(); y.S.enroll = 1; Assert.That(EvAt(y, a.day, slot), Is.EqualTo("v4_after"));
+            var n = New(); n.S.enroll = 2; Assert.That(EvAt(n, a.day, slot), Is.EqualTo("v4_after_n"));
+            Assert.That(EvAt(New(), a.day, slot), Is.EqualTo("v4_after_n"), "통장이 없던 판도 '못 한 판' 대사");
+            Go(n, "evPick", "k", "ev0"); ToHome(n);
+            n.S.enroll = 1;
+            string next = EvAt(n, a.day + 1, slot, true);
+            Assert.That(next == null || !next.StartsWith("v4_after"), "같은 묶음은 한 번만: " + next);
+        }
+
+        /// 옛 저장: 새 필드가 없던 저장은 전부 0 · false · null 로 읽힌다(초깃값 식을 안 거침). 마감 전이면 다음 날 아침 통장이 열리고, 마감 뒤면 통장 없는 판(예전 엔딩 규칙)으로 굴러간다
+        [Test]
+        public void OldSaveWithoutStoryFieldsStillPlays()
+        {
+            var R = Data.RULES;
+            void Old(GameState s) { s.fund = 0; s.fundOpened = false; s.enroll = 0; s.fundBrokeN = 0; s.momKnows = false; s.calmN = s.rideN = s.fundAskW = 0; s.fundBet = null; }
+            var g = New(); Old(g.S); AtDay(g, R.V4_FUND_DAY + R.V4_EV_LATE + 1, 2); ToHome(g);
+            Assert.That(g.fundOn, Is.False); Assert.That(g.fundHud(), Is.Null);
+            Go(g, "rest"); ToHome(g);
+            Assert.That(g.fundOn, "마감 전: 다음 날 아침 통장이 열림"); Assert.That(g.S.fund, Is.EqualTo(R.V4_FUND));
+            var h = New(); Old(h.S); AtDay(h, R.V4_REG_DAY + 2, 2); ToHome(h); Go(h, "rest"); ToHome(h);
+            Assert.That(h.fundOn, Is.False, "마감 뒤: 통장 없는 판"); Assert.That(h.fundHud(), Is.Null); Assert.That(h.fundRefillAmt(), Is.EqualTo(0));
+            Assert.That(ClearWith(Old).S.endInfo.variant, Is.EqualTo("true"), "통장 없는 판의 클리어는 예전대로 진엔딩");
+        }
+
+        /// ⑥-14: 1~4주차마다 정해진 장면 2개 이상 · 정해진 칸을 놓치면 V4_EV_LATE 일 안의 다음 가능한 칸에 뜸 · 그 뒤엔 안 뜸. 대사의 {n} · {b} 는 늘 채워짐
+        [Test]
+        public void StoryScenesEveryWeekAndLateOnesStillFire()
+        {
+            var R = Data.RULES;
+            Assert.That(R.V4_EV_LATE, Is.GreaterThan(0));
+            for (int w = 1; w <= 4; w++)
+                Assert.That(Data.EVENTS.Count(e => e.day > 0 && e.part <= 1 && (e.day - 1) / R.MONTH_DAYS + 1 == w && (e.grp == null || Data.EVENTS.First(x => x.grp == e.grp) == e)), Is.GreaterThanOrEqualTo(2), $"{w}주차 장면");
+            var leave = Data.EVENTS.First(e => e.id == "v4_leave");
+            int slot = leave.slots[0];
+            Assert.That(EvAt(New(), leave.day, slot), Is.EqualTo("v4_leave"), "정해진 날");
+            Assert.That(EvAt(New(), leave.day + 1, slot, true), Is.EqualTo("v4_leave"), "놓쳤으면 다음 날 같은 칸");
+            Assert.That(EvAt(New(), leave.day + R.V4_EV_LATE, slot, true), Is.EqualTo("v4_leave"), "밀림 한도 끝날까지");
+            Assert.That(EvAt(New(), leave.day + R.V4_EV_LATE + 1, slot, true), Is.Not.EqualTo("v4_leave"), "밀림 한도를 넘기면 안 뜸");
+            var g = New(); EvAt(g, leave.day, slot); Go(g, "evPick", "k", "ev0"); ToHome(g);
+            Assert.That(EvAt(g, leave.day + 1, slot, true), Is.Not.EqualTo("v4_leave"), "본 장면은 다시 안 뜸");
+            // {n} = 이번 주 작전 종목 (없으면 상장 주식 이름). 화면에 자리표시자가 그대로 나오지 않음
+            var lead = Data.EVENTS.First(e => e.id == "v4_leading");
+            var h = New(); h.S.ops.Clear();
+            var ev = AtDay(h, lead.day, lead.slots[0]);
+            Assert.That(h.S.pending.evId, Is.EqualTo("v4_leading"));
+            var says = ev.Where(e => e.t == "say").Select(e => e.Str("text")).ToList();
+            Assert.That(says.Any(x => Data.TKList.Any(t => t.IsStock && x.Contains(t.name))), "종목 이름이 들어감");
+            Assert.That(says.Concat(h.S.pending.opts.Select(o => o.l + o.sub)).All(x => !x.Contains("{n}") && !x.Contains("{b}")), "자리표시자가 남지 않음");
+        }
+
+        /// ⑥-15: 관문에서 현금 + 보유분으로 모자랄 때만, 모자란 만큼 100만 단위로 올려 깸 (호감·스트레스 비용). 20일까지 도로 채울 수 있고, 등록하면 못 깨고 못 채움
+        [Test]
+        public void FundBreaksOnlyWhenShortInUnitsAndRefillsBeforeDeadline()
+        {
+            var R = Data.RULES;
+            var g = New(); var S = g.S;
+            Assert.That(EvAt(g, R.V4_FUND_DAY, 1), Is.EqualTo("v4_fund"));
+            Assert.That(g.fundOn, Is.False, "장면 전엔 통장이 안 보임");
+            Go(g, "evPick", "k", "ev0");
+            Assert.That(S.fund, Is.EqualTo(R.V4_FUND)); Assert.That(g.fundOn); Assert.That(g.fundHud(), Is.Not.Null);
+            // 넉넉하면 꺼짐
+            var a = New(); a.S.fund = R.V4_FUND; a.S.cash = 50000000; ToGate(a);
+            Assert.That(a.S.pending.stage, Is.EqualTo("gate"));
+            var fo = a.S.pending.opts.First(o => o.k == "gateFund");
+            Assert.That(fo.dis, "모자라지 않으면 못 깸"); Assert.That(fo.sub, Is.EqualTo(a.T("v4.gate.fundNo")));
+            Assert.That(a.S.pending.opts.FindIndex(o => o.k == "gateFund"), Is.EqualTo(a.S.pending.opts.FindIndex(o => o.k == "gateSell") + 1), "급매 다음 자리");
+            // 130만 모자람 → 200만 꺼냄
+            S.day = R.MONTH_DAYS; S.slot = 2; S.min = g.slotStartMin(2);
+            double due = g.interestDue(), need = g.gatePrincipal();
+            S.cash = due + need - 1300000; S.stress = 20; double aff0 = S.aff = 70;
+            ToGate(g);
+            Assert.That(S.pending.stage, Is.EqualTo("gate"));
+            var f = S.pending.opts.First(o => o.k == "gateFund");
+            Assert.That(f.dis, Is.False); Assert.That(f.l, Does.Contain(g.man(2000000)));
+            Assert.That(S.pending.opts.First(o => o.k == "gatePay").dis, "아직은 못 냄");
+            aff0 = S.aff; double st0 = S.stress;
+            Go(g, "payday", "k", "gateFund");
+            Assert.That(S.fund, Is.EqualTo(R.V4_FUND - 2000000)); Assert.That(S.fundBrokeN, Is.EqualTo(1));
+            Assert.That(S.aff, Is.EqualTo(aff0 + R.V4_FUND_AFF)); Assert.That(S.stress, Is.GreaterThan(st0));
+            Assert.That(S.pending.stage, Is.EqualTo("gate")); Assert.That(S.pending.opts.First(o => o.k == "gatePay").dis, Is.False, "깨고 나면 낼 수 있음");
+            Go(g, "payday", "k", "gatePay"); ToHome(g);
+            // 도로 채우기 (집 · 칸 안 씀)
+            S.cash = 5000000; int t0 = g.Tnow();
+            Assert.That(g.fundRefillAmt(), Is.EqualTo(2000000));
+            Go(g, "fund", "k", "refill");
+            Assert.That((S.fund, S.cash, g.Tnow()), Is.EqualTo((R.V4_FUND, 3000000.0, t0)));
+            Assert.That(g.Apply(C("fund", "k", "refill")).Any(e => e.t == "error"), "가득이면 못 채움");
+            // 20일 당일까지 채울 수 있음, 21일엔 안 됨
+            S.fund = 1000000; S.cash = 2000000;
+            AtDay(g, R.V4_REG_DAY, 0); if (S.pending.t != "home") { S.pending = new Pending("home"); S.flow.Clear(); }
+            Go(g, "fund", "k", "refill"); Assert.That(S.fund, Is.EqualTo(3000000));
+            AtDay(g, R.V4_REG_DAY + 1, 0); if (S.pending.t != "home") { S.pending = new Pending("home"); S.flow.Clear(); }
+            Assert.That(g.Apply(C("fund", "k", "refill")).Any(e => e.t == "error"), "마감 뒤엔 못 채움");
+            // 20일: 모자라면 내 돈으로 채워 등록하는 선택지
+            var r = New(); r.S.fund = 3000000; r.S.cash = 500000;
+            Assert.That(EvAt(r, R.V4_REG_DAY, 0), Is.EqualTo("v4_reg_no"));
+            Assert.That(r.S.pending.opts[0].dis, "현금이 모자라면 못 채움"); Assert.That(r.S.pending.opts[0].sub, Does.Contain(r.won(1000000)));
+            var k = New(); k.S.fund = 3000000; k.S.cash = 2500000;
+            Assert.That(EvAt(k, R.V4_REG_DAY, 0), Is.EqualTo("v4_reg_no"));
+            Go(k, "evPick", "k", "ev0");
+            Assert.That((k.S.enroll, k.S.fund, k.S.cash), Is.EqualTo((1, 0.0, 1500000.0)), "채우고 등록");
+            // 등록하면 못 깨고 못 채움
+            var e2 = New(); e2.S.fund = R.V4_FUND;
+            Assert.That(EvAt(e2, R.V4_REG_DAY, 1), Is.EqualTo("v4_reg_ok"));
+            Go(e2, "evPick", "k", "ev0"); ToHome(e2);
+            Assert.That((e2.S.enroll, e2.S.fund), Is.EqualTo((1, 0.0)));
+            e2.S.cash = 5000000; Assert.That(e2.Apply(C("fund", "k", "refill")).Any(x => x.t == "error"));
+            e2.S.cash = 3000000; ToGate(e2);
+            Assert.That(e2.S.pending.opts?.Any(o => o.k == "gateFund") ?? false, Is.False, "등록 뒤엔 관문에 통장이 없음");
+            // 마감날 밤이 지나면 미등록
+            var n = New(); n.S.fund = 2000000; n.S.evSeen.Add("v4_reg@1"); AtDay(n, R.V4_REG_DAY, 2); ToHome(n); Go(n, "rest"); ToHome(n);
+            Assert.That(n.S.enroll, Is.EqualTo(2));
+        }
+
+        static GameSim AtMaturityWith(double debt, double aff, System.Action<GameState> mut)
+        {
+            var g = New(); var S = g.S;
+            S.month = 4; S.day = 7; S.slot = 2; S.min = g.slotStartMin(2); S.paidMonth = 3;
+            S.debt = debt; S.aff = aff; S.cash = 20000000; mut(S);
+            Go(g, "rest");
+            for (int i = 0; i < 10 && S.pending?.t != "ending"; i++)
+            {
+                var P = S.pending; Assert.That(P, Is.Not.Null);
+                if (P.t == "payday") Go(g, "payday", "k", P.stage == "repay" ? "keep" : P.stage == "gate" ? "gateSkip" : "pay"); else ToHome(g);
+            }
+            Assert.That(S.pending?.t, Is.EqualTo("ending"));
+            return g;
+        }
+        static GameSim ClearWith(System.Action<GameState> mut)
+        {
+            var g = New(); var S = g.S;
+            S.debt = 100000; S.cash = 1000000; S.aff = 80; mut(S);
+            Go(g, "repayOpen"); Go(g, "repay", "amt", 100000); ToHome(g);   // 2부 첫날은 돌발 이벤트가 낄 수 있음
+            if (S.pending?.t != "ending") Go(g, "rest");
+            for (int i = 0; i < 10 && S.pending?.t != "ending"; i++) ToHome(g);
+            Assert.That(S.ending, Is.EqualTo("clear"));
+            return g;
+        }
+
+        /// ⑥-16: 엔딩 표의 줄마다 (통장이 한 번도 안 드러난 옛 판은 예전 그대로)
+        [Test]
+        public void EndingTableSplitsByEnroll()
+        {
+            var R = Data.RULES;
+            string V(GameSim x) => x.S.endInfo.variant;
+            Assert.That(V(ClearWith(s => { })), Is.EqualTo("true"), "옛 판 = 예전 진엔딩");
+            var t = ClearWith(s => s.enroll = 1);
+            Assert.That(V(t), Is.EqualTo("true")); Assert.That(t.S.endInfo.lead, Does.StartWith(t.T("v4.end.true", "d", t.absDay()).Substring(0, 6)));
+            Assert.That(t.S.endInfo.h, Is.EqualTo(Data.ENDINGS["clear"].hv["true"]));
+            var auto = ClearWith(s => { s.fund = R.V4_FUND; });
+            Assert.That((V(auto), auto.S.enroll), Is.EqualTo(("true", 1)), "마감 전에 다 갚으면 통장으로 등록");
+            var autoCash = ClearWith(s => { s.fund = 1000000; s.cash = R.V4_FUND; });
+            Assert.That((V(autoCash), autoCash.S.enroll), Is.EqualTo(("true", 1)), "모자란 건 현금으로 채워 등록");
+            var hol = ClearWith(s => { s.fund = 1000000; });
+            Assert.That(V(hol), Is.EqualTo("hollow"), "통장 + 현금으로도 등록금이 안 되면");
+            Assert.That(hol.S.endInfo.face, Is.EqualTo("tired")); Assert.That(hol.S.endInfo.h, Is.EqualTo(Data.ENDINGS["clear"].hv["hollow"]));
+            Assert.That(V(ClearWith(s => { s.fund = R.V4_FUND; s.enroll = 2; })), Is.EqualTo("hollow"), "등록 안 한 판");
+            Assert.That(V(ClearWith(s => { s.enroll = 1; s.aff = 20; })), Is.EqualTo("lonely"));
+            var rich = ClearWith(s => { s.enroll = 1; s.cash = R.RT_RICH + 1000000; });
+            Assert.That(V(rich), Is.EqualTo("rich")); Assert.That(rich.S.endInfo.lead, Does.EndWith(rich.T("v4.end.rich.reg")));
+            var richOld = ClearWith(s => { s.cash = R.RT_RICH + 1000000; });
+            Assert.That(richOld.S.endInfo.lead, Does.Not.Contain(richOld.T("v4.end.rich.noreg")), "옛 판엔 꼬리 없음");
+            var gam = ClearWith(s => { s.enroll = 2; s.fund = 0; s.st.gnet = 10000000; });
+            Assert.That(V(gam), Is.EqualTo("gamble")); Assert.That(gam.S.endInfo.lead, Does.EndWith(gam.T("v4.end.gamble.noreg")));
+            var p2 = ClearWith(s => { s.part = 2; s.enroll = 1; s.fund = 0; });
+            Assert.That(V(p2), Is.EqualTo("true")); Assert.That(p2.S.endInfo.lead, Does.EndWith(p2.T("v4.end.true2.reg"))); Assert.That(p2.S.endInfo.grad);
+            Assert.That(p2.CheckAchievements(), Does.Contain("grad"));
+            var p2n = ClearWith(s => { s.part = 2; s.enroll = 2; s.fund = 0; });
+            Assert.That(p2n.S.endInfo.lead, Does.EndWith(p2n.T("v4.end.true2.noreg"))); Assert.That(p2n.S.endInfo.grad, Is.False);
+            // 만기
+            double low = 10000000;
+            var gr = AtMaturityWith(low, 80, s => { s.enroll = 1; s.fund = 0; });
+            Assert.That((gr.S.ending, V(gr)), Is.EqualTo(("bad1", "grad"))); Assert.That(gr.S.endInfo.grad);
+            Assert.That(gr.S.endInfo.h, Is.EqualTo(Data.ENDINGS["bad1"].hv["grad"]));
+            Assert.That(gr.ResultCard(), Does.Contain(gr.T("v4.tag.grad")));
+            Assert.That(gr.CheckAchievements(), Does.Contain("tuna").And.Contain("grad"));
+            Assert.That(AtMaturityWith(low, 80, s => { s.enroll = 1; s.fund = 0; s.fundBrokeN = 1; }).CheckAchievements(), Does.Not.Contain("grad"), "통장을 깬 적이 있으면 졸업 업적은 없음");
+            Assert.That(V(AtMaturityWith(low, 80, s => { s.enroll = 2; s.fund = 0; })), Is.EqualTo("duo"));
+            Assert.That(V(AtMaturityWith(low, 30, s => { s.enroll = 1; s.fund = 0; })), Is.EqualTo("sea"));
+            Assert.That(V(AtMaturityWith(low, 80, s => { })), Is.EqualTo("duo"), "옛 판 = 예전 같이 원양어선");
+            // 도감: 새 줄 · 과로 뺌
+            var cat = Data.J["V4_END_LIST"].Select(x => (string)x["key"]).ToList();
+            Assert.That(cat, Does.Contain("clear:hollow").And.Contain("bad1:grad").And.Not.Contain("bad3"));
+        }
+
+        /// ⑥-19: 엄마가 빚을 아는 판 / 모르는 판에서 13일 장면이 갈리고, 모르는 판에서 털어놓아도 다음 날 다른 갈래가 또 뜨지 않음
+        [Test]
+        public void MomVisitDiffersByWhatMomKnows()
+        {
+            var mk = Data.EVENTS.First(e => e.id == "v4_mom_k"); int day = mk.day, slot = mk.slots[0];
+            var g = New();
+            Assert.That(EvAt(g, day, slot), Is.EqualTo("v4_mom_n"), "모르는 판");
+            int tell = Data.EVENTS.First(e => e.id == "v4_mom_n").opts.FindIndex(o => o.mom == 1);
+            Assert.That(tell, Is.GreaterThanOrEqualTo(0));
+            Go(g, "evPick", "k", "ev" + tell); ToHome(g);
+            Assert.That(g.S.momKnows);
+            Assert.That(EvAt(g, day + 1, slot), Is.Not.EqualTo("v4_mom_k"), "같은 묶음은 한 번만");
+            var h = New(); h.S.momKnows = true;
+            Assert.That(EvAt(h, day, slot), Is.EqualTo("v4_mom_k"), "아는 판");
+            // 돌발 '엄마 전화'는 모르는 판 · 방문 전까지만
+            var call = Data.EVENTS.First(e => e.id == "mom_call");
+            Assert.That((call.when, call.maxDay), Is.EqualTo(("momNot", day - 1)));
+            Assert.That(call.opts.First(o => o.p < 1).mom, Is.EqualTo(1)); Assert.That(call.opts.First(o => o.p < 1).fail.mom, Is.EqualTo(1));
+            Assert.That(Data.MEN_SETS.Count(m => m.when == "momNot"), Is.EqualTo(1));
+        }
+
+        /// ⑥-19-2: 욕심 25 · 40 · 60 에서 아침 카톡 묶음이 바뀜 · "등록금으로 딱 한 번만"은 통장 온전 + 욕심 60↑ 일 때만 주 1번 · 말리면 통장 그대로 · 같이 타면 그 칸 끝에 잔액이 가격 비율만큼 바뀜
+        [Test]
+        public void GreedStepsAndFundAsk()
+        {
+            var R = Data.RULES; var G = R.V4_GREED_STEPS;
+            Assert.That(G, Is.EqualTo(new double[] { 25, 40, 60 }));
+            string Morning(double greed, int heist = 0)
+            {
+                var g = New(); var S = g.S;
+                S.slot = 2; S.min = g.slotStartMin(2); S.greed = greed + R.V4_GREED_DECAY; S.heist = heist;
+                S.kk["m"].Clear();
+                Go(g, "rest"); ToHome(g);
+                foreach (var k in new[] { "v4.greedHeist", "v4.greedK3", "v4.greedK2", "v4.greedK" })
+                    if (S.kk["m"].Any(m => Data.SA(k).Contains(m.x))) return k;
+                return null;
+            }
+            Assert.That(Morning(G[0] - 2), Is.Null);
+            Assert.That(Morning(G[0] + 1), Is.EqualTo("v4.greedK"));
+            Assert.That(Morning(G[1] + 1), Is.EqualTo("v4.greedK2"));
+            Assert.That(Morning(G[2] + 1), Is.EqualTo("v4.greedK3"));
+            Assert.That(Morning(G[2] + 1, 1), Is.EqualTo("v4.greedHeist"));
+            // 등록금으로 딱 한 번만: 평일 장중 칸
+            GameSim Ask(double fund, double greed) { var g = New(); g.S.fund = fund; g.S.greed = greed; return g; }
+            var a = Ask(R.V4_FUND, 70);
+            Assert.That(EvAt(a, 3, 1), Is.EqualTo("v4_fundask"));
+            Go(a, "evPick", "k", "ev0"); ToHome(a);
+            Assert.That((a.S.fund, a.S.calmN), Is.EqualTo((R.V4_FUND, 1)), "말리면 통장 그대로");
+            a.S.greed = 70; Assert.That(EvAt(a, 5, 1), Is.Not.EqualTo("v4_fundask"), "주 1번");
+            Assert.That(EvAt(Ask(R.V4_FUND, 50), 3, 1), Is.Not.EqualTo("v4_fundask"), "욕심이 모자람");
+            Assert.That(EvAt(Ask(R.V4_FUND - 1000000, 70), 3, 1), Is.Not.EqualTo("v4_fundask"), "통장이 깨져 있으면");
+            Assert.That(EvAt(Ask(R.V4_FUND, 70), 3, 0), Is.Not.EqualTo("v4_fundask"), "장이 안 열린 칸");
+            var b = Ask(R.V4_FUND, 70);
+            Assert.That(EvAt(b, 3, 1), Is.EqualTo("v4_fundask"));
+            double cash0 = b.S.cash; int hold0 = b.S.hold.Count;
+            Go(b, "evPick", "k", "ev1");
+            Assert.That(b.fundBetTk, Is.Not.Null); Assert.That(b.S.rideN, Is.EqualTo(1)); Assert.That(b.S.fund, Is.EqualTo(R.V4_FUND), "칸이 끝날 때까진 그대로");
+            string tk = b.fundBetTk; double p0 = b.S.fundBet.p0;
+            ToHome(b);
+            var ev = Go(b, "rest");
+            var bet = ev.FirstOrDefault(e => e.t == "fund" && e.Str("k") == "bet");
+            Assert.That(bet, Is.Not.Null, "칸 끝에 정산");
+            Assert.That(b.S.fundBet, Is.Null);
+            Assert.That(b.S.fund, Is.EqualTo(MathK.Round1k(R.V4_FUND * b.S.mk.tk[tk].p / p0)).Within(1000));
+            Assert.That(b.S.hold.Count, Is.EqualTo(hold0), "실제 주식은 안 삼"); Assert.That(b.S.cash, Is.EqualTo(cash0).Within(1e6), "현금도 안 건드림 (알바·사건 정도만)");
+        }
+
+        /// ⑥-19-3: 24일 장면의 마지막 대사가 말린 횟수 · 같이 탄 횟수로 갈림 (동률은 '닮았나 봐')
+        [Test]
+        public void DadSceneSplitsByCalmAndRide()
+        {
+            var dad = Data.EVENTS.First(e => e.id == "v4_dad"); int day = dad.day, slot = dad.slots[0];
+            var g = New(); g.S.calmN = 2; g.S.rideN = 1;
+            Assert.That(EvAt(g, day, slot), Is.EqualTo("v4_dad_calm"));
+            Assert.That(EvAt(New(), day, slot), Is.EqualTo("v4_dad"), "0:0 = 닮았나 봐");
+            var h = New(); h.S.calmN = 1; h.S.rideN = 1;
+            Assert.That(EvAt(h, day, slot), Is.EqualTo("v4_dad"));
+            Go(h, "evPick", "k", "ev0"); ToHome(h); h.S.calmN = 5;
+            Assert.That(EvAt(h, day + 1, slot), Is.Not.EqualTo("v4_dad_calm"), "같은 묶음은 한 번만");
+        }
+
+        /// ⑥-17: 통장을 깨는 봇이 안 깨는 봇보다 클리어가 10%p 넘게 늘지 않고, 진엔딩 비율은 높지 않음 (깨기 = 공짜 돈이 아님)
+        [Test]
+        public void FundBreakingIsNotFreeMoney()
+        {
+            const int N = 100;   // 같은 씨앗 짝 비교 (300판 실측: casual 9% · casualfund 10% · 진엔딩 6.7% = 6.7%, pro 56% = profund 56%)
+            foreach (var (b, f) in new[] { ("casual", "casualfund"), ("pro", "profund") })
+            {
+                var B = RtBots.Summarize(Data, b, N); var F = RtBots.Summarize(Data, f, N);
+                TestContext.WriteLine(B); TestContext.WriteLine(F);
+                Assert.That(F.errs, Is.EqualTo(0));
+                Assert.That(F.clear - B.clear, Is.LessThanOrEqualTo(0.10), $"{f} 클리어 {F.clear:P0} vs {b} {B.clear:P0}");
+                double tB = B.ends.TryGetValue("clear/true", out var x) ? x : 0, tF = F.ends.TryGetValue("clear/true", out var y) ? y : 0;
+                Assert.That(tF, Is.LessThanOrEqualTo(tB), $"진엔딩 {f} {tF:P0} vs {b} {tB:P0}");
+            }
         }
     }
 }

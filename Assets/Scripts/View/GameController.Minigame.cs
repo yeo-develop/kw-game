@@ -361,7 +361,7 @@ namespace KwGame.View
             ["cafe"] = new[] { new[] { "보기", "주문을 잠깐만 보여 줌 → 외우기" }, new[] { "1~5", "음료 담기 · S 샷 · 0 비우기" }, new[] { "Enter", "서빙! 까먹으면 R (1번)" } },
             ["store"] = new[] { new[] { "보기", "바늘이 왔다 갔다" }, new[] { "Space", "초록 칸에서 삑! (노랑 = PERFECT)" }, new[] { "I", "소주는 신분증 먼저" } },
             ["ware"] = new[] { new[] { "Space", "연타로 박스 올리기" }, new[] { "손 떼!", "빨간 '깨지기 쉬움' 땐 1초 쉬기" }, new[] { "6초", "무거운 박스는 3번" } },
-            ["mart"] = new[] { new[] { "← →", "좌우로 피하기 (드래그도 됨)" }, new[] { "!", "위에 경고 뜨면 미리 비키기" }, new[] { "박카스", "먹으면 ♥ 회복 · 뒤로 갈수록 빨라짐" } },
+            ["mart"] = new[] { new[] { "← →", "좌우로 피하기 (드래그도 됨)" }, new[] { "!", "위에 경고 뜨면 미리 비키기" }, new[] { "피로회복제", "먹으면 ♥ 회복 · 뒤로 갈수록 빨라짐" } },
         };
 
         /// 카드 한 장: 왼쪽 = 시연 (계속 움직임), 오른쪽 = 조작 3줄. 한 번 본 게임은 2.5초 뒤 저절로 시작.
@@ -610,7 +610,7 @@ namespace KwGame.View
         /// 판 전체가 한 번 쿵
         void Punch(float s = 1.035f) { var b = mgBoard; if (b != null) Fx(Tween(0.16f, p => b.style.scale = new Scale(Vector3.one * Mathf.Lerp(s, 1, EaseOut(p))))); }
 
-        /// setup 에 없는 화면용 변주(손님·상품·박스 종류·박카스)는 setup 값으로 씨앗을 만든 난수로 → 같은 판이면 같은 변주
+        /// setup 에 없는 화면용 변주(손님·상품·박스 종류·피로회복제)는 setup 값으로 씨앗을 만든 난수로 → 같은 판이면 같은 변주
         static System.Random MgRng(WorkSetup su)
         {
             long h = 1469598103934665603;
@@ -777,7 +777,7 @@ namespace KwGame.View
             {
                 if (oi >= NO || reUsed || !hidden) return;
                 reUsed = true; hidden = false; peekLeft = 1.5f; patience -= PATIENCE * 0.15f; msg.text = "손님: (한숨) …다시 말씀드릴게요";
-                Bubble("아 죄송해요 ㅎ 귀가 빚 때문에 막혔나 봐", "tired"); Show();
+                Bubble("자기야 주문 다시 들어 봐! 나 여기서도 들려 ㅎ", "tired"); Show();
             }
             void Finish(bool right, string stampText, string line)
             {
@@ -945,7 +945,7 @@ namespace KwGame.View
                 else
                 {
                     Flash(Ui.Bad); Shake(meter); Beep(Ui.Bad); Judge(under ? "미성년자 판매?!" : "MISS", Ui.Bad, 64);
-                    Bubble(under ? "미성년자한테 소주 팔면 우리 빚 2배야!" : "바코드도 나 싫어하나 봐 ㅠ", under ? "panic" : "tired");
+                    Bubble(under ? "미성년자한테 소주 팔면 우리 빚 2배야!" : "바코드도 자기 싫어하나 봐 ㅠ", under ? "panic" : "tired");
                 }
                 MgHud(combo, (double)hits / NB);
                 speed += 30 * H; Zone();
@@ -1055,7 +1055,7 @@ namespace KwGame.View
                 if (combo % 10 == 0) Judge(combo >= 20 ? $"{combo} COMBO!! 허리 불탐" : $"{combo} COMBO!", Ui.Gold);
                 right.style.backgroundColor = new Color(1, 0.55f, 0.1f, Mathf.Min(0.24f, combo * 0.008f));
                 MgHud(combo, Math.Min(1, (double)n / GOAL));
-                if (prev < 12 && n >= 12) Bubble("허리 나갔어 ㅠㅠ", "angry");
+                if (prev < 12 && n >= 12) Bubble("허리 조심해 ㅠㅠ", "angry");
                 if (prev < 26 && n >= 26) Bubble("박스 = 1틱 박스 = 1틱 박스 = 1틱", "tired");
             }
 
@@ -1084,7 +1084,7 @@ namespace KwGame.View
         }
 
         // ---------- 🛒 마트 창고: 피하기 ----------
-        // 떨어지기 0.6초 전 위에 경고, 떨어지는 동안 바닥에 그림자. 아슬하게 피하면 콤보. 가끔 박카스 → 먹으면 하트 1개 회복.
+        // 떨어지기 0.6초 전 위에 경고, 떨어지는 동안 바닥에 그림자. 아슬하게 피하면 콤보. 가끔 피로회복제 → 먹으면 하트 1개 회복.
         // 똥피하기 중후반 느낌: 뒤로 갈수록 빨라지고(×1→1.7) 박스가 몰려옴, 일부는 내 머리 위를 노림(aim).
         class Drop { public float t, x, y = -80, vx; public bool k, heal, aim, on, done, passed, warned; public VisualElement el, shadow, warn; }
 
@@ -1099,7 +1099,7 @@ namespace KwGame.View
             var livesRow = Ui.Row(); top.Add(livesRow);
             var lives = Ui.Label("", 44, Ui.Bad, true); livesRow.Add(lives);
             var lost = Ui.Label("", 44, new Color(1, 1, 1, 0.18f), true); livesRow.Add(lost);
-            var msg = Ui.Label(hpF < 0.8f && !G.hpOff ? $"체력 {su.hp:0} — 몸이 무거움 (이동 {hpF * 100:0}%)" : "← → / A D / 드래그 · 박카스는 먹기", 24, hpF < 0.8f && !G.hpOff ? Ui.Bad : Ui.Dim, true); top.Add(msg);
+            var msg = Ui.Label(hpF < 0.8f && !G.hpOff ? $"체력 {su.hp:0} — 몸이 무거움 (이동 {hpF * 100:0}%)" : "← → / A D / 드래그 · 피로회복제는 먹기", 24, hpF < 0.8f && !G.hpOff ? Ui.Bad : Ui.Dim, true); top.Add(msg);
 
             var arena = Ui.Box(new Color(0.08f, 0.09f, 0.08f, 0.9f), 0, 16); arena.style.width = W; arena.style.height = AH; arena.style.alignSelf = Align.Center; arena.style.marginTop = 8;
             arena.style.overflow = Overflow.Hidden; Ui.Border(arena, MgLine, 3); mgBoard.Add(arena);
@@ -1173,7 +1173,7 @@ namespace KwGame.View
                         if (o.warn != null) o.warn.style.opacity = Mathf.PingPong(t * 8, 1);
                         if (t < o.t) continue;
                         o.on = true; o.warn?.RemoveFromHierarchy(); o.warn = null;
-                        o.el = o.heal ? Icon("bacchus", new Color32(0xe8, 0xb8, 0x2a, 0xff), "박카스", 64)
+                        o.el = o.heal ? Icon("bacchus", new Color32(0xe8, 0xb8, 0x2a, 0xff), "피로회복제", 64)
                              : o.k ? Icon("cart", new Color32(0xd0, 0x3a, 0x3a, 0xff), "진상", 90) : Icon("box", BoxC, null, 74);
                         o.el.style.position = Position.Absolute;
                         o.shadow = Ui.Box(new Color(0, 0, 0, 0.5f), 0, 8); o.shadow.style.position = Position.Absolute; o.shadow.style.height = 14; o.shadow.pickingMode = PickingMode.Ignore;
@@ -1196,9 +1196,9 @@ namespace KwGame.View
                         if (o.heal)
                         {
                             bool healed = hits > 0; if (healed) hits--; Lives();
-                            Float(arena, healed ? "+♥ 박카스" : "박카스 원샷", x - 20, AH - 220, Ui.Good, 40); Flash(Ui.Good);
+                            Float(arena, healed ? "+♥ 피로회복제" : "피로회복제 원샷", x - 20, AH - 220, Ui.Good, 40); Flash(Ui.Good);
                             if (healed) { Judge("회복!", Ui.Good); Pop(lives); }
-                            Bubble("박카스 = 합법 도핑", "smug");
+                            Bubble("피로회복제 = 합법 도핑", "smug");
                         }
                         else
                         {
@@ -1206,7 +1206,7 @@ namespace KwGame.View
                             msg.text = o.k ? "진상: \"사장 나오라 그래!!!\" (−일당)" : "박스에 맞음. 허리도 매도함 (−일당)"; msg.style.color = Ui.Bad;
                             Flash(Ui.Bad); Shake(arena, 18); Float(arena, "아야", x, AH - 200, Ui.Bad);
                             JuiceHeart(arena, x + PW / 2, AH - 250);
-                            if (hits == 2) Bubble("자기 괜찮아?? 그거 계란 박스였음", "panic");
+                            if (hits == 2) Bubble("자기 괜찮아?? 그거 계란 박스였어!!", "panic");
                         }
                         MgHud(combo, Mathf.Clamp01(1 - (float)hits / LIVES));
                     }

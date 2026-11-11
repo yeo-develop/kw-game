@@ -148,11 +148,11 @@ namespace KwGame.Sim
             return r;
         }
         /// 엔딩 태그 (엔딩 화면 제목과 같음: v4 만기 결산이면 만기 태그)
-        string endTag()
+        public string endTag()
         {
-            var E = S.endInfo;
+            var E = S.endInfo; if (E == null) return "";
             bool matured = v4 && E.kind == "bad1" && E.days >= R.V4_DAYS && S.paidMonth == S.month;
-            return matured ? T(E.variant == "duo" ? "v4.tag.duo" : "v4.tag.sea") : E.tag ?? "";
+            return matured ? T(E.variant == "duo" ? "v4.tag.duo" : E.variant == "grad" ? "v4.tag.grad" : "v4.tag.sea") : E.tag ?? "";
         }
         /// 공유용 결과 카드 (여러 줄). 엔딩 전엔 ""
         public string ResultCard()
@@ -188,7 +188,7 @@ namespace KwGame.Sim
             add("heist", k == "heist");
             add("heist_fail", k == "heistFail");
             add("no_loan", clr && S.st.borrowed == 0);
-            add("work_only", S.st.invest == 0 && (clr || (k == "bad1" && vr == "duo")));
+            add("work_only", S.st.invest == 0 && (clr || (k == "bad1" && (vr == "duo" || vr == "grad"))));
             add("lev100", clr && S.maxLev >= 100);
             add("liq_work", S.liqWork >= 1);
             add("liq5", S.st.liq >= 5);
@@ -199,6 +199,8 @@ namespace KwGame.Sim
             add("part2_true", clr && vr == "true" && S.part > 1);
             add("asset1e8", S.st.maxAsset >= 1e8);
             add("gamble_end", k == "bad2");
+            add("grad", ((clr && vr == "true" && S.part > 1 && S.enroll == 1) || (k == "bad1" && vr == "grad")) && S.fundBrokeN == 0);   // 졸업식을 보는 엔딩 + 복학 통장을 한 번도 안 깸
+            add("tuna", k == "bad1" && vr == "grad");
             var known = new HashSet<string>(Achievements(D).Select(a => a.id));
             return known.Count == 0 ? o : o.Where(known.Contains).ToList();
         }
