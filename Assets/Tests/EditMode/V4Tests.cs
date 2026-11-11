@@ -47,6 +47,29 @@ namespace KwGame.Tests
             return g;
         }
 
+        /// 하루는 장이 여는 09:00 에 시작한다 (예전 08:00 은 주식장이 닫힌 한 시간을 그냥 흘려보냈음). 옛 저장의 08:xx 는 칸 시작으로 당겨짐
+        [Test]
+        public void DayStartsWhenTheMarketOpens()
+        {
+            var g = New(); var S = g.S; var R = Data.RULES;
+            Assert.That(R.RT_DAY0, Is.EqualTo(R.RT_STOCK[0]), "하루 시작 = 장 여는 시각");
+            Assert.That(S.slot, Is.EqualTo(0)); Assert.That(S.min, Is.EqualTo(540));
+            Assert.That(GameSim.clockOf(g.slotStartMin(0)), Is.EqualTo("09:00"));
+            Assert.That(g.stockOpen(), Is.True, "오전 칸 첫 순간부터 장이 열려 있음 (평일)");
+            Go(g, "watch");
+            Assert.That(g.stockOpen(), Is.True, "장 보기를 누르면 기다림 없이 바로 거래 가능");
+            Go(g, "tick", "m", 1);
+            Assert.That(S.min, Is.EqualTo(541));
+            // 다음 날도 09:00
+            var h = New();
+            for (int i = 0; i < 3; i++) { Go(h, "rest"); ToHome(h); }
+            Assert.That((h.S.day, h.S.slot, h.S.min), Is.EqualTo((2, 0, 540)));
+            // 08:00 시작이던 때의 저장: 오전 칸 08:20 → 불러오면 09:00
+            var old = New(); old.S.min = 500;
+            old.EnableRt();
+            Assert.That(old.S.min, Is.EqualTo(540));
+        }
+
         [Test]
         public void ClockOnlyMovesWhileWatchingAndEachActionTakesASlot()
         {
@@ -1810,7 +1833,8 @@ namespace KwGame.Tests
             a.S.greed = 70; Assert.That(EvAt(a, 5, 1), Is.Not.EqualTo("v4_fundask"), "주 1번");
             Assert.That(EvAt(Ask(R.V4_FUND, 50), 3, 1), Is.Not.EqualTo("v4_fundask"), "욕심이 모자람");
             Assert.That(EvAt(Ask(R.V4_FUND - 1000000, 70), 3, 1), Is.Not.EqualTo("v4_fundask"), "통장이 깨져 있으면");
-            Assert.That(EvAt(Ask(R.V4_FUND, 70), 3, 0), Is.Not.EqualTo("v4_fundask"), "장이 안 열린 칸");
+            Assert.That(EvAt(Ask(R.V4_FUND, 70), 3, 2), Is.Not.EqualTo("v4_fundask"), "장이 안 열린 칸 (밤)");
+            Assert.That(EvAt(Ask(R.V4_FUND, 70), 3, 0), Is.EqualTo("v4_fundask"), "오전 칸도 장중 — 하루가 09:00(장 여는 시각)에 시작");
             var b = Ask(R.V4_FUND, 70);
             Assert.That(EvAt(b, 3, 1), Is.EqualTo("v4_fundask"));
             double cash0 = b.S.cash; int hold0 = b.S.hold.Count;

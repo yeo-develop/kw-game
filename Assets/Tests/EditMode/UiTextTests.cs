@@ -181,6 +181,23 @@ namespace KwGame.Tests
             Assert.That(pop.style.bottom.value.value, Is.EqualTo(24).Within(0.1f), "대사가 끝나면 제자리");
         }
 
+        /// 집에서 폰을 열어도 알림(토스트)이 미래 말풍선을 덮지 않는다 (배포본 캡처에서 본 겹침)
+        [Test]
+        public void ToastsStayLeftOfTheSpeechBubbleEvenWithThePhoneOpen()
+        {
+            using var rig = new ViewRig(sim: true);
+            var bubble = rig.Get<VisualElement>("planBubble"); var toasts = rig.Get<VisualElement>("toastCol");
+            foreach (bool open in new[] { false, true })
+            {
+                rig.Set("phoneOpen", open); rig.Render();
+                rig.Call("Toast", "수상한 강아지 목줄 가보급 유물 획득", "big", null);
+                rig.Call("PlaceAlerts"); rig.Layout();
+                Assert.That(bubble.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex), "집에선 말풍선이 보임");
+                Assert.That(toasts.worldBound.xMax, Is.LessThanOrEqualTo(bubble.worldBound.x), $"알림 칸이 말풍선 왼쪽에서 끝남 (폰 {(open ? "열림" : "닫힘")})");
+                foreach (var t in toasts.Children()) Assert.That(t.worldBound.xMax, Is.LessThanOrEqualTo(bubble.worldBound.x + 1), "알림 하나하나도");
+            }
+        }
+
         // ---------- 넘기기 누름 보호 ----------
         static void Press(ViewRig rig, Vector2 at)
         {

@@ -5,7 +5,7 @@ using System.Linq;
 namespace KwGame.Sim
 {
     // 실시간 모드 (S.rt). 웹 sim 에 없는 Unity 전용 규칙이라 골든 벡터(턴 모드)엔 안 걸림.
-    // 하루 = 08:00~24:00 게임 시간이 흐름 (view 가 "tick" 명령으로 분 단위 전달). 아침·점심·저녁은 시간대 이름으로만 남고,
+    // 하루 = RT_DAY0~24:00 게임 시간이 흐름 (v4 는 09:00 — 장이 열리는 시각부터. 예전 08:00 은 주식장이 닫힌 한 시간을 그냥 흘려보냈음) (view 가 "tick" 명령으로 분 단위 전달). 아침·점심·저녁은 시간대 이름으로만 남고,
     // 시간대 끝 처리(시세 결산·정보 결과·뉴스·이자일)는 시계가 경계를 넘을 때 기존 칸 끝 흐름(AFTER_SLOT)을 그대로 돈다.
     // 시세: 시간대마다 정해 둔 종가(planMarket)까지 1분씩 브라운 다리로 움직이고 30분봉을 쌓음. 국장은 09:00~15:30, 하루 ±30%.
     public partial class GameSim
@@ -28,7 +28,11 @@ namespace KwGame.Sim
             foreach (var kv in S.mk.tk) { if (kv.Value.ref0 <= 0) kv.Value.ref0 = kv.Value.p; }
             if (S.mplan != null && D.TKList.Any(t => !S.mplan.r.ContainsKey(t.id) || !S.mplan.w.ContainsKey(t.id))) S.mplan = null;   // 새 종목이 빠진 옛 시세 계획은 다시 짬
             if (S.pending?.t == "liqAlert") { S.pending = null; ev = new List<SimEvent>(); after("spend"); run(); }   // 없어진 '알바 중 청산 경보' 화면에서 저장한 판: 참은 걸로 치고 남은 알바 시간을 흘려 이어 감
-            if (S.rt) return;
+            if (S.rt)
+            {   // 하루 시작이 08:00 → 09:00 로 바뀌기 전 저장: 오전 칸의 장 열리기 전 시각이면 칸 시작으로 당김
+                if (S.min < slotStartMin(S.slot)) S.min = slotStartMin(S.slot);
+                return;
+            }
             S.rt = true; S.min = slotStartMin(S.slot); S.owe = 0;
             foreach (var kv in S.mk.tk) { kv.Value.sT = int.MinValue; kv.Value.cb = int.MinValue; kv.Value.ref0 = kv.Value.p; }
         }

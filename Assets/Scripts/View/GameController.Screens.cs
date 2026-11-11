@@ -454,7 +454,8 @@ namespace KwGame.View
             {   // 띠 아래, 폰 왼쪽: 배너 → 그 아래 토스트
                 float w = Mathf.Max(320, W - 24 - PhoneW - 20 - 16);
                 At(bannerCol, 24, w);
-                At(toastCol, 24, Mathf.Min(HudW, w)); toastCol.style.top = top + bh;
+                // 집에선 폰이 열려 있어도 미래 말풍선(x 340~)이 그대로 보임 → 알림이 그 위를 덮지 않게 좁게
+                At(toastCol, 24, home ? PlanBubbleX - 24 - 16 : Mathf.Min(HudW, w)); toastCol.style.top = top + bh;
             }
             else if (desk)
             {   // 데스크: 가운데 차트 칸 위쪽 (왼쪽 종목 목록 380 · 오른쪽 주문 패널 470 사이)
