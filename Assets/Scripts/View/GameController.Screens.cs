@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using DG.Tweening;
-using Febucci.TextAnimatorForUnity;
 using KwGame.Sim;
 using KwGame.Persistence;
 using Newtonsoft.Json.Linq;
@@ -49,6 +48,7 @@ namespace KwGame.View
             if (font != null) root.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(font));
             root.style.color = Ui.Text;
             root.style.width = Length.Percent(100); root.style.height = Length.Percent(100);
+            BuildGuard();   // 넘기기 누름이 방금 뜬 버튼까지 누르지 않게 (GameController.Type.cs)
 
             // 장면 (화면 전체)
             stage = Ui.Box(BG["room"]); stage.style.flexGrow = 1; stage.style.position = Position.Relative; stage.style.overflow = Overflow.Hidden;
@@ -92,14 +92,7 @@ namespace KwGame.View
             Ui.Abs(dlg, 40, null, 40, 24); dlg.style.minHeight = 250;
             Ui.Border(dlg, new Color(1, 1, 1, 0.16f), 2);
             dlgName = Ui.Label("", 30, Ui.Accent, true); dlg.Add(dlgName);
-            dialogueTiming = ScriptableObject.CreateInstance<TypingDelaysByCharacter>();
-            dialogueTiming.hideFlags = HideFlags.DontSave;
-            dialogueTiming.avoidMultiplePunctuationWait = true;
-            dialogueTiming.waitForLastCharacter = false;
-            dialogueAnimation = ScriptableObject.CreateInstance<AnimatorSettingsScriptable>();
-            dialogueAnimation.hideFlags = HideFlags.DontSave;
-            dialogueAnimation.Settings.defaultAppearanceTags = new[] { "fade" };
-            dlgText = new AnimatedLabel { name = "dialogueText", TimingSettings = dialogueTiming, AnimationSettings = dialogueAnimation };
+            dlgText = NewDialogueText();   // 타자 효과 (GameController.Type.cs)
             dlgText.style.fontSize = 32; dlgText.style.color = Ui.Text;
             dlgText.style.whiteSpace = WhiteSpace.Normal;
             dlgText.style.marginTop = 10;
@@ -481,18 +474,19 @@ namespace KwGame.View
             // 카톡 팝업 (GameController.Phone.cs 가 처음 띄울 때 만듦)
             if (kkPopCol != null)
             {
+                float dlgTop = DlgClear();   // 대사가 나오는 동안엔 어느 화면에서든 대사창 위로 (대사 첫머리를 가리던 문제)
                 if (!mgFull && desk)
                 {   // 데스크: 차트 칸 왼쪽 아래 (차트는 누르는 곳이 아님 · 소식 띠와 종목 목록을 안 가림)
                     float lw2 = DeskPart("list") is VisualElement dl2 && dl2.layout.width > 10 ? dl2.layout.width : 380;
-                    kkPopCol.style.left = 24 + lw2 + 16; kkPopCol.style.right = StyleKeyword.Auto; kkPopCol.style.bottom = 12 + 170 + 10 + 12;
+                    kkPopCol.style.left = 24 + lw2 + 16; kkPopCol.style.right = StyleKeyword.Auto; kkPopCol.style.bottom = Mathf.Max(12 + 170 + 10 + 12, dlgTop);
                 }
                 else if (!mgFull && home)
                 {   // 집: 누를 곳(계획판 · 띠)이 없는 왼쪽 아래
-                    kkPopCol.style.left = 24; kkPopCol.style.right = StyleKeyword.Auto; kkPopCol.style.bottom = 24;
+                    kkPopCol.style.left = 24; kkPopCol.style.right = StyleKeyword.Auto; kkPopCol.style.bottom = Mathf.Max(24, dlgTop);
                 }
                 else
                 {
-                    float dh = dlg.resolvedStyle.display != DisplayStyle.None && dlg.layout.height > 1 ? dlg.layout.height + 24 + 12 : 24;
+                    float dh = Mathf.Max(24, dlgTop);
                     // 폰이 열리면 선택지 상자가 아래로 내려와 있음 → 그 위로 올려서 버튼을 안 가리게
                     bool boxLow = !mgFull && phoneOpen && panel.resolvedStyle.display != DisplayStyle.None;
                     float ph = panel.layout.height > 1 ? panel.layout.height : 380;
@@ -502,6 +496,9 @@ namespace KwGame.View
                 }
             }
         }
+
+        /// 대사창이 떠 있으면 화면 아래에서 그 윗변까지의 높이 + 여백, 없으면 0. 방금 띄워서 아직 배치 전이면 최소 높이(250)로 계산
+        float DlgClear() => dlg != null && dlg.style.display == DisplayStyle.Flex ? Mathf.Max(250, float.IsNaN(dlg.layout.height) ? 0 : dlg.layout.height) + 24 + 12 : 0;
 
         /// 선택지 상자가 넘치면 아래쪽 "▼ 더 있음"
         void PanelMoreSync()
@@ -536,10 +533,10 @@ namespace KwGame.View
             var P = S?.pending;
             if (P?.t == "home" && G.v4 && planBubbleText != null)
             {
-                planBubbleText.text = Ui.Clean(HomeLine() ?? "");
+                planBubbleText.text = Ui.Show(HomeLine() ?? "");
                 dlgName.style.display = DisplayStyle.None; idleText.text = "";
             }
-            else if (P?.t == "home") { dlgName.text = "미래"; dlgName.style.display = DisplayStyle.Flex; idleText.text = Ui.Clean(HomeLine() ?? ""); idleText.style.color = Ui.Text; }
+            else if (P?.t == "home") { dlgName.text = "미래"; dlgName.style.display = DisplayStyle.Flex; idleText.text = Ui.Show(HomeLine() ?? ""); idleText.style.color = Ui.Text; }
             else
             {
                 dlgName.style.display = DisplayStyle.None;
@@ -968,7 +965,7 @@ namespace KwGame.View
         }
 
         // ---------- 행동 패널 (pending 마다) ----------
-        void Title(string t) => panelTitle.text = Ui.Clean(t);
+        void Title(string t) => panelTitle.text = Ui.Show(t);
         void Btn(string text, Action a, string sub = null, bool dis = false, Color? bg = null) { var b = Ui.Button(text, a, sub, dis, bg); KeyBadge(b, a, dis, bg); panelBody.Add(b); }
         /// 선택지 숫자 키 (1~9): 넣은 순서대로 번호. 버튼 오른쪽 위에 작게 표시
         void KeyBadge(Button b, Action a, bool dis, Color? bg = null)

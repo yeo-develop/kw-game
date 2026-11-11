@@ -36,6 +36,7 @@ namespace KwGame.View
                 ("story", new Func<IEnumerator>(WsStory), 60f),
                 ("endings", new Func<IEnumerator>(WsEndings), 120f),
                 ("faces", new Func<IEnumerator>(WsFaces), 15f),
+                ("text", new Func<IEnumerator>(WsText), 60f),   // 맨 뒤에 둠: 앞 화면들의 번호가 안 밀리게
             };
             foreach (var st in steps)
             {
@@ -180,7 +181,7 @@ namespace KwGame.View
         }
         bool AtDesk(string name) => WWant(DeskActive, name, "데스크가 아님: " + Pt);
         bool AtLoc(string key) => Pt == "loc" && S.pending.key == key;
-        bool MgHas(string text) => mg != null && mg.Query<Label>().ToList().Any(l => l.text == text);
+        bool MgHas(string text) => mg != null && mg.Query<Label>().ToList().Any(l => Ui.Plain(l.text) == text);
         string OpenCoin() => G.tkOpen("BTK") ? "BTK" : D.TKList.Where(x => x.IsCoin && G.tkOpen(x.id)).Select(x => x.id).FirstOrDefault();
 
         /// 아침 카드 (sim morning 이벤트와 같은 필드, 지금 상태로). 첫날 아침은 sim 이 안 보내서 직접
@@ -848,6 +849,59 @@ namespace KwGame.View
         }
 
         /// 미래 표정 스탠딩 전부: 한 장에 8개씩
+        /// 글자가 깨지던 곳들: "…" 로 시작하는 대사의 타자 효과(반쯤 · 끝) · 대사 중 카톡 알림 자리 · 긴 카톡 말풍선 · 어제 기록이 있는 아침 한 장
+        IEnumerator WsText()
+        {
+            NewGame(WebShotSeed + 1, "normal");
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return WSend("start");
+            yield return WToHome();
+            if (!WWant(Pt == "home", "type_half", "집이 아님: " + Pt)) yield break;
+            RenderAll();
+            // 1) 타자 효과: 예전에 낱말 끝 글자가 사라지던 줄. 반쯤 나온 순간(앞에서부터 차례로 · 뒤는 자리만) → 다 나온 뒤
+            const string line = "…엄마가 자기 목소리 좋대. 반찬 보내 준대 ㅠㅠ";
+            SetFace("happy");
+            dlg.style.display = DisplayStyle.Flex; dlgText.style.display = DisplayStyle.Flex; idleText.style.display = DisplayStyle.None; dlgHint.style.display = DisplayStyle.Flex;
+            dlgName.text = "미래"; dlgName.style.display = DisplayStyle.Flex; dlgText.style.unityFontStyleAndWeight = FontStyle.Normal;
+            DlgSync();
+            float sp = dlgType.Speed; dlgType.Speed = 1;
+            string shown = Ui.Show(line); int half = shown.IndexOf('좋');
+            dlgType.Start(shown);
+            for (int i = 0; i < 2000 && dlgType.Typing && dlgType.Shown < half; i++) dlgType.Tick(0.02f);
+            DlgPaint(true); UpdateDialogueHint();
+            yield return WShot("type_half", 0.4f);
+            // 2) 대사가 나오는 동안 온 카톡: 대사창을 가리지 않고 그 위에
+            KakaoPop("m", "오늘 밤 칸은 내 거야. 밤엔 나랑 있어 줘.");
+            KakaoPop("hy", "형이다. 요즘 갤 분위기 보니까 곧 대세 상승임 (3년째 말함)");
+            PlaceAlerts();
+            CompleteDialogueText();
+            yield return WShot("type_full_popup", 0.5f);
+            dlgType.Speed = sp;
+            if (kkPopCol != null) kkPopCol.Clear();
+            HideDialogue();
+            // 3) 긴 카톡: 두 줄 · 세 줄 말풍선이 서로 겹치지 않고 시각이 안 잘림
+            foreach (var x in new[] { "투표 안 했다고? 기권도 의사 표현이야…", "자기 어디야? 밥은 먹었어? 이자 생각하니까 입맛 없어 ㅠㅠ", "자기 밥은 먹었어? 나 오늘 좀 불안해 ㅠㅠ 코인 생각 안 할게 약속!", "자기 어디야? 밥은 먹었어? 나 혼자 집에 있으니까 무서워 ㅠㅠ", "자기 아직 안 자지? 밤엔 나랑 있어 줄 거지? 흥", "자기야 아직 일어났어? 나 무서워서 잠이 안 와 ㅠㅠ 그리고 이건 세 줄까지 가는 아주 긴 말이야. 말풍선이 넘치는지 보려고 일부러 길게 썼어 진짜로" })
+                S.kk["m"].Add(new KMsg { w = "m", x = x, t = "12:00", d = G.absDay() });
+            S.kk["m"].Add(new KMsg { w = "me", x = "응 알겠어. 오늘은 알바만 하고 바로 들어갈게. 코인은 진짜 안 볼게 약속", t = "12:01", d = G.absDay() });
+            phoneOpen = true; phoneTab = "kakao"; kkRoom = "m";
+            RenderAll();
+            yield return null; yield return null;
+            if (phoneSv != null) phoneSv.scrollOffset = new Vector2(0, 99999);
+            yield return WShot("kakao_long", 0.4f);
+            phoneOpen = false; RenderAll();
+            // 4) 아침 한 장 (어제 기록 · 부탁이 있는 날)
+            var me = WMorningEvent();
+            me.d["day"] = Math.Max(2, S.day); me.d["mline"] = "잠 못 잤어. 꿈에 김사장 나왔어 ㅠㅠ";
+            me.d["Y"] = new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { ["label"] = "상하차 일당 (성과 100%)", ["amt"] = 378000.0 },
+                new Dictionary<string, object> { ["label"] = "멍멍코인 3x 청산 · 증거금 76% 증발", ["amt"] = -75000.0 },
+                new Dictionary<string, object> { ["label"] = "코인 펀딩비 ×2", ["amt"] = -1613.0 },
+            };
+            me.d["net"] = 301387.0; me.d["netConv"] = "최저시급 알바 29시간";
+            yield return WCard(Morning(me), "morning_day2");
+        }
+
         IEnumerator WsFaces()
         {
             var all = new[] { "base", "excited", "smug", "shy", "pout", "annoyed", "tired", "pajama", "crying", "crying_comic", "shocked", "dizzy", "mental", "yami", "flex", "love" };

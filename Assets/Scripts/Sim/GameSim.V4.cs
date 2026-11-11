@@ -271,6 +271,38 @@ namespace KwGame.Sim
         public double gateDue() => (S.paidMonth == S.month ? 0 : interestDue()) + gatePrincipal();
         /// 이번 주 납부일까지 남은 날 (납부일 당일 = 0)
         public int gateDays() => Math.Max(0, R.MONTH_DAYS - S.day);
+        /// 납부 사다리 한 칸 (화면용): 주마다 얼마를 내야 하고, 지금 가진 돈으로 어디까지 닿는가
+        public class GateStep
+        {
+            public int week;                     // 1~
+            public int state;                    // 0 지난 주 · 1 이번 주 · 2 앞으로
+            public bool paid;                    // 이번 주인데 이미 다 냄
+            public double interest, principal, due;   // 이번 주는 실제 값, 앞으로는 "매주 제때 내면" 기준 예상
+            public double gap;                   // 모자란 돈. 이번 주 = 납부액 − 현금 (상태 띠와 같은 규칙) · 앞으로 = 그 주까지 낼 돈 합계 − (현금 + 보유분 평가)
+        }
+        /// 이번 판의 납부 일정 전체. 마지막 칸까지 다 내면 빚 0 (원금 합계 = 지금 빚). 관문 규칙이 아니면 빈 목록
+        public List<GateStep> gateLadder()
+        {
+            var L = new List<GateStep>();
+            if (!gateOn) return L;
+            int n = R.V4_GATE_CAP.Length, now = (int)clamp(S.month, 1, n);
+            double d = S.debt, cum = 0, have = equity();
+            for (int w = 1; w <= n; w++)
+            {
+                var st = new GateStep { week = w, state = w < now ? 0 : w == now ? 1 : 2 };
+                if (w == now) { st.interest = S.paidMonth == S.month ? 0 : interestDue(); st.principal = gatePrincipal(); }
+                else if (w > now) { st.interest = round1k(d * rate()); st.principal = Math.Max(0, d - gateCap(w)); }
+                st.due = st.interest + st.principal;
+                if (w >= now)
+                {
+                    d -= st.principal; cum += st.due;
+                    st.paid = w == now && st.due <= 0;
+                    st.gap = Math.Max(0, w == now ? st.due - S.cash : cum - have);
+                }
+                L.Add(st);
+            }
+            return L;
+        }
         /// 순자산(화면용): 현금 + 들고 있는 주식·포지션 평가액. 빚은 뺀 값이 아님 (빚은 옆에 따로 보임)
         public double equity() => S.cash + holdVal();
         /// 코인 증거금 합계 상한 = 주차별 (마지막 값이 끝까지, 2부는 빚 비율만큼)

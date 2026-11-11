@@ -40,6 +40,36 @@ namespace KwGame.View
             return sb.ToString().Replace("<b>", "").Replace("</b>", "").TrimStart();
         }
 
+        /// 낱말 이음표 (U+2060): 폭 0 · 안 보임 · 그 앞뒤에서는 줄이 안 끊김
+        public const char WJ = '⁠';
+        /// 이 글자 수까지의 낱말만 묶음. 더 긴 덩어리(ㅋㅋㅋㅋ… · 주소)는 좁은 칸에서 넘치지 않게 그대로 둠
+        public const int KeepMax = 10;
+
+        /// 한글 낱말이 글자 중간에서 줄바꿈되지 않게 ("무서워 ㅠ / ㅠ" · "미 / 래가") 낱말 안 글자 사이에 이음표를 넣는다.
+        /// 이 Unity 의 기본 텍스트 생성기(Advanced)엔 '낱말 단위 줄바꿈' 설정이 없어서 글 쪽에서 막음. 띄어쓰기 없는 한 낱말은 그대로 (비교 · 좁은 칸).
+        public static string KeepAll(string s)
+        {
+            if (string.IsNullOrEmpty(s) || s.IndexOf(WJ) >= 0) return s ?? "";
+            int sp = -1;
+            for (int i = 0; i < s.Length; i++) if (char.IsWhiteSpace(s[i])) { sp = i; break; }
+            if (sp < 0) return s;
+            var sb = new StringBuilder(s.Length * 2);
+            int a = 0;
+            while (a < s.Length)
+            {
+                if (char.IsWhiteSpace(s[a])) { sb.Append(s[a++]); continue; }
+                int b = a; while (b < s.Length && !char.IsWhiteSpace(s[b])) b++;
+                bool join = b - a <= KeepMax;
+                for (int i = a; i < b; i++) { if (join && i > a) sb.Append(WJ); sb.Append(s[i]); }
+                a = b;
+            }
+            return sb.ToString();
+        }
+        /// 이음표를 뺀 원래 글 (글자 비교 · 길이 계산용)
+        public static string Plain(string s) => s == null ? null : s.IndexOf(WJ) < 0 ? s : s.Replace(WJ.ToString(), "");
+        /// 화면에 올릴 글: 이모지 정리 + 낱말 단위 줄바꿈
+        public static string Show(string s) => KeepAll(Clean(s));
+
         public static VisualElement Box(Color? bg = null, float pad = 0, float radius = 0)
         {
             var v = new VisualElement();
@@ -75,7 +105,7 @@ namespace KwGame.View
 
         public static Label Label(string text, float size = 24, Color? color = null, bool bold = false)
         {
-            var l = new Label(Clean(text));
+            var l = new Label(Show(text));
             l.style.fontSize = size;
             l.style.color = color ?? Text;
             l.style.whiteSpace = WhiteSpace.Normal;

@@ -343,6 +343,32 @@ namespace KwGame.Tests
 
         // ---------- 주간 납부 관문 · 증거금 상한 (docs/BLUEPRINT.md ⑥-1·7·8·9) ----------
         /// 이자일 밤으로 보내고 이자까지 냄 → 원금 분납 단계(또는 이미 통과)에서 멈춤
+        /// 납부 일정(사다리): 주마다 한 칸 · 이번 주 칸 = 상태 띠의 납부액 · 끝까지 내면 빚 0 · 주가 넘어가면 지난 칸이 됨
+        [Test]
+        public void GateLadderListsEveryWeekAndEndsAtZeroDebt()
+        {
+            var g = New(); var S = g.S; var R = Data.RULES;
+            var L = g.gateLadder();
+            Assert.That(L.Count, Is.EqualTo(R.V4_GATE_CAP.Length), "주마다 한 칸");
+            Assert.That(L.Select(x => x.state), Is.EqualTo(new[] { 1, 2, 2, 2 }), "첫 주: 이번 주 + 앞으로 3칸");
+            Assert.That(L[0].due, Is.EqualTo(g.gateDue()), "이번 주 칸 = 상태 띠의 납부액");
+            Assert.That(L[0].interest + L[0].principal, Is.EqualTo(L[0].due));
+            Assert.That(L.Sum(x => x.principal), Is.EqualTo(S.debt).Within(1), "원금 칸을 다 더하면 지금 빚 = 끝까지 내면 빚 0");
+            for (int i = 1; i < L.Count; i++) Assert.That(L[i].due, Is.GreaterThan(L[i - 1].due), "뒤로 갈수록 커짐 (돈을 불려야 하는 이유)");
+            Assert.That(L[0].gap, Is.EqualTo(System.Math.Max(0, L[0].due - S.cash)), "이번 주 모자란 돈 = 납부액 − 현금");
+            Assert.That(L[1].gap, Is.EqualTo(System.Math.Max(0, L[0].due + L[1].due - g.equity())).Within(1), "다음 주 = 그때까지 낼 돈 − 가진 돈");
+            double w2 = L[1].due;
+            S.cash = 100000; Assert.That(g.gateLadder()[0].gap, Is.EqualTo(L[0].due - 100000), "현금이 줄면 모자란 돈이 늘어남");
+            S.cash = 5000000;
+            ToGate(g); Go(g, "payday", "k", "gatePay"); ToHome(g);
+            Assert.That(S.month, Is.EqualTo(2), "첫 납부 통과 → 2주차");
+            var L2 = g.gateLadder();
+            Assert.That(L2.Select(x => x.state), Is.EqualTo(new[] { 0, 1, 2, 2 }), "지난 주는 지난 칸");
+            Assert.That(L2[1].due, Is.EqualTo(g.gateDue()));
+            Assert.That(L2[1].due, Is.EqualTo(w2).Within(1), "지난주에 본 '다음 주 예상' = 실제 이번 주 납부액 (제때 냈을 때)");
+            Assert.That(L2[0].due, Is.EqualTo(0), "지난 칸엔 금액 없음");
+        }
+
         static void ToGate(GameSim g)
         {
             var S = g.S;

@@ -54,6 +54,8 @@ namespace KwGame.Title
             var document = GetComponent<UIDocument>();
             document.visualTreeAsset = layout;
             root = document.rootVisualElement.Q("titleRoot");
+            // 화면에 박아 둔 글도 낱말 단위로 줄바꿈 ("미 / 래가" 처럼 글자 중간에서 끊기지 않게). 입력 칸은 제외
+            foreach (var t in root.Query<TextElement>().ToList()) if (!(t.parent is TextField) && !(t is TextField)) t.text = Ui.KeepAll(t.text);
             content = root.Q("titleContent");
             overlay = root.Q("dialogOverlay");
             dialog = root.Q("dialogPanel");
@@ -210,7 +212,7 @@ namespace KwGame.Title
                     string extra = id == "normal" ? "기본" : cash > 1 ? "시작 현금 넉넉" : cash < 1 ? "시작 현금 적음" : "";
                     if (id != "normal" && duo < rules.V4_DUO_DEBT) extra += " · 못 갚았을 때 미래가 따라와 주는 조건이 빡빡함";
                     if (id != "normal" && duo > rules.V4_DUO_DEBT) extra += " · 못 갚았을 때 미래가 따라와 주는 조건이 느슨함";
-                    b.Q<Label>(className: "diff-detail").text = $"이자 {rate * 100:0.#}% · {extra}";
+                    b.Q<Label>(className: "diff-detail").text = Ui.KeepAll($"이자 {rate * 100:0.#}% · {extra}");
                 }
             }
         }
@@ -389,8 +391,8 @@ namespace KwGame.Title
             void Line(string text, string detail = null, bool dim = false)
             {
                 var row = new VisualElement(); row.AddToClassList("records-row");
-                var l = new Label(text); l.AddToClassList("records-line"); if (dim) l.AddToClassList("records-dim"); row.Add(l);
-                if (!string.IsNullOrEmpty(detail)) { var d = new Label(detail); d.AddToClassList("records-detail"); row.Add(d); }
+                var l = new Label(Ui.KeepAll(text)); l.AddToClassList("records-line"); if (dim) l.AddToClassList("records-dim"); row.Add(l);
+                if (!string.IsNullOrEmpty(detail)) { var d = new Label(Ui.KeepAll(detail)); d.AddToClassList("records-detail"); row.Add(d); }
                 recordsBody.Add(row);
             }
             Heading("통계");
@@ -443,7 +445,7 @@ namespace KwGame.Title
             confirmingNewGame = false;
             returnFocus = owner;
             dialogTitle.text = title;
-            dialogMessage.text = message;
+            dialogMessage.text = Ui.KeepAll(message);
             foreach (var b in bodies) b.EnableInClassList("hidden", b != body);
             cancelButton.AddToClassList("hidden");
             confirmButton.text = "닫기";

@@ -66,6 +66,7 @@ namespace KwGame.View
             planFoot.style.display = board ? DisplayStyle.Flex : DisplayStyle.None;
             planBubble.style.display = board && !string.IsNullOrEmpty(planBubbleText.text) ? DisplayStyle.Flex : DisplayStyle.None;
             planEl.SetEnabled(!playing);   // 재생 중엔 판은 그대로 두되 안 눌리게
+            if (kkPopCol != null) PlaceAlerts();   // 대사창이 뜨고 걷힐 때 카톡 알림 자리도 같이 (대사를 가리지 않게)
         }
 
         static string Hm(int m) => m >= 1440 ? "24:00" : GameSim.clockOf(m);

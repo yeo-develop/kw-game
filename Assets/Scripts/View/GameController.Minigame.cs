@@ -393,7 +393,7 @@ namespace KwGame.View
             {
                 t += Time.unscaledDeltaTime; tick(t);
                 go.style.opacity = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(t * 3));
-                if (t > 0.5f && AnyPress()) break;
+                if (t > 0.5f && AnyPressGuard()) break;
                 if (seen && t > 2.5f) break;
                 yield return null;
             }
@@ -522,7 +522,7 @@ namespace KwGame.View
             yield return Tween(0.35f, p => { card.style.scale = new Scale(Vector3.one * Mathf.Lerp(0.6f, 1f, EaseOut(p))); card.style.opacity = p; });
             if (pay > 0) JuiceCoins(dim, dim.WorldToLocal(new Vector2(card.worldBound.center.x, card.worldBound.yMax)), dim.WorldToLocal(pl.worldBound.center));   // 코인이 튀어 올라 일당으로
             float t = 0;
-            while (t < 4f) { t += Time.unscaledDeltaTime; if (t > 0.8f && AnyPress()) break; yield return null; }   // 연타하던 손에 바로 넘어가지 않게
+            while (t < 4f) { t += Time.unscaledDeltaTime; if (t > 0.8f && AnyPressGuard()) break; yield return null; }   // 연타하던 손에 바로 넘어가지 않게
         }
 
         static bool AnyPress() => Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return);
@@ -776,12 +776,12 @@ namespace KwGame.View
             void Again()
             {
                 if (oi >= NO || reUsed || !hidden) return;
-                reUsed = true; hidden = false; peekLeft = 1.5f; patience -= PATIENCE * 0.15f; msg.text = "손님: (한숨) …다시 말씀드릴게요";
+                reUsed = true; hidden = false; peekLeft = 1.5f; patience -= PATIENCE * 0.15f; msg.text = Ui.Show("손님: (한숨) …다시 말씀드릴게요");
                 Bubble("자기야 주문 다시 들어 봐! 나 여기서도 들려 ㅎ", "tired"); Show();
             }
             void Finish(bool right, string stampText, string line)
             {
-                msg.text = line;
+                msg.text = Ui.Show(line);
                 stamp.text = stampText; stamp.style.color = right ? Ui.Good : Ui.Bad; Ui.Border(stamp, right ? Ui.Good : Ui.Bad, 5);
                 stamp.style.paddingLeft = 14; stamp.style.paddingRight = 14; Ui.Radius(stamp, 12);
                 Fx(Tween(0.6f, p => { stamp.style.opacity = p < 0.7f ? 1 : (1 - p) / 0.3f; stamp.style.scale = new Scale(Vector3.one * Mathf.Lerp(1.8f, 1f, EaseOut(p * 3))); }));
@@ -920,9 +920,9 @@ namespace KwGame.View
                 {
                     if (idOk) return;
                     idOk = true; idBadge.text = "인증 완료 ✓"; idBadge.style.backgroundColor = Ui.Good; Pop(idBadge);
-                    msg.text = "손님: (민증 꺼냄) 97년생인데요";
+                    msg.text = Ui.Show("손님: (민증 꺼냄) 97년생인데요");
                 }
-                else { msg.text = "손님: 저 마흔둘인데요;; (시간 낭비)"; Bubble("컵라면 사는데 민증 검사 ㅋㅋ", "smug"); }
+                else { msg.text = Ui.Show("손님: 저 마흔둘인데요;; (시간 낭비)"); Bubble("컵라면 사는데 민증 검사 ㅋㅋ", "smug"); }
             }
             void Scan()
             {
@@ -933,7 +933,7 @@ namespace KwGame.View
                 if (ok) { hits++; combo++; } else combo = 0;
                 var m = markLbl[tries]; m.text = perfect ? "★" : ok ? "O" : "X"; m.style.color = Ui.Ink; m.style.backgroundColor = perfect ? Ui.Gold : ok ? Ui.Good : Ui.Bad; Pop(m);
                 tries++;
-                msg.text = under ? "민증 확인 안 함! 점장: \"너 영업정지 먹고 싶냐\"" : perfect ? "삑!! (완벽한 손목 스냅)" : ok ? "삑! (정상 결제)" : "삐빅— 다시 찍어 주세요 (점장 째려봄)";
+                msg.text = Ui.Show(under ? "민증 확인 안 함! 점장: \"너 영업정지 먹고 싶냐\"" : perfect ? "삑!! (완벽한 손목 스냅)" : ok ? "삑! (정상 결제)" : "삐빅— 다시 찍어 주세요 (점장 째려봄)");
                 if (ok)
                 {
                     Flash(Ui.Good); Beep(perfect ? Ui.Gold : Ui.Good);
@@ -1203,7 +1203,7 @@ namespace KwGame.View
                         else
                         {
                             hits++; combo = 0; Lives();
-                            msg.text = o.k ? "진상: \"사장 나오라 그래!!!\" (−일당)" : "박스에 맞음. 허리도 매도함 (−일당)"; msg.style.color = Ui.Bad;
+                            msg.text = Ui.Show(o.k ? "진상: \"사장 나오라 그래!!!\" (−일당)" : "박스에 맞음. 허리도 매도함 (−일당)"); msg.style.color = Ui.Bad;
                             Flash(Ui.Bad); Shake(arena, 18); Float(arena, "아야", x, AH - 200, Ui.Bad);
                             JuiceHeart(arena, x + PW / 2, AH - 250);
                             if (hits == 2) Bubble("자기 괜찮아?? 그거 계란 박스였어!!", "panic");

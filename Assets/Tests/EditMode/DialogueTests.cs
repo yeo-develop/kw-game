@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Linq;
 using System.Reflection;
-using Febucci.TextAnimatorForUnity;
 using KwGame.View;
 using NUnit.Framework;
 using UnityEngine;
@@ -14,7 +13,8 @@ namespace KwGame.Tests
         const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
         GameObject game;
         GameController controller;
-        AnimatedLabel label;
+        Label label;
+        TypeReveal type;
         PanelSettings panelSettings;
 
         [SetUp]
@@ -23,7 +23,9 @@ namespace KwGame.Tests
             game = new GameObject("Dialogue test");
             controller = game.AddComponent<GameController>();
             Call("BuildUi");
-            label = (AnimatedLabel)Get("dlgText");
+            label = (Label)Get("dlgText");
+            type = (TypeReveal)Get("dlgType");
+            type.Speed = 1;
             panelSettings = ((UIDocument)Get("doc")).panelSettings;
         }
 
@@ -38,10 +40,12 @@ namespace KwGame.Tests
         public void FirstInputRevealsAndSameFrameInputCannotAdvance()
         {
             var wait = BeginLine("한 글자씩 나타나는 충분히 긴 대사입니다.");
-            Assert.That(label.Typewriter.IsShowingText, Is.True);
+            Assert.That(type.Typing, Is.True);
+            Assert.That(type.Shown, Is.LessThan(type.Text.Length), "처음엔 일부만 보임");
             Call("RequestAdvance");
-            Assert.That(label.Typewriter.IsShowingText, Is.False);
-            Assert.That(label.Characters.Take(label.CharactersCount).All(c => c.isVisible), Is.True);
+            Assert.That(type.Typing, Is.False);
+            Assert.That(Enumerable.Range(0, type.Text.Length).All(i => type.Alpha(i) == 255), Is.True, "첫 입력 = 전부 표시");
+            Assert.That(Ui.Plain(label.text), Is.EqualTo("한 글자씩 나타나는 충분히 긴 대사입니다."), "화면 글 = 대사 그대로 (자리는 처음부터 다 잡혀 있음)");
             Assert.That((bool)Get("clicked"), Is.False);
             Call("RequestAdvance");
             Assert.That((bool)Get("clicked"), Is.False);
@@ -62,8 +66,8 @@ namespace KwGame.Tests
             Call("RequestAdvance");
             Assert.That(wait.MoveNext(), Is.False);
             BeginLine("동일한 대사도 다시 타이핑합니다.");
-            Assert.That(label.Typewriter.IsShowingText, Is.True);
-            Assert.That(label.Characters.Take(label.CharactersCount).Any(c => !c.isVisible), Is.True);
+            Assert.That(type.Typing, Is.True);
+            Assert.That(Enumerable.Range(0, type.Text.Length).Any(i => type.Alpha(i) == 0), Is.True);
         }
 
         [Test]
@@ -79,8 +83,7 @@ namespace KwGame.Tests
         [Test]
         public void ModalWaitStillAdvancesWithOneInput()
         {
-            label.Typewriter.ShowText("이전 대사");
-            label.Typewriter.StartShowingText(true);
+            type.Start("이전 대사");
             var wait = (IEnumerator)Call("WaitClick", false);
             Assert.That(wait.MoveNext(), Is.True);
             Set("waitFrame", Time.frameCount - 1);
@@ -94,8 +97,8 @@ namespace KwGame.Tests
         {
             controller.autoSkipDialog = true;
             var wait = BeginLine("데모에서 모든 글자가 즉시 표시됩니다.");
-            Assert.That(label.Typewriter.IsShowingText, Is.False);
-            Assert.That(label.Characters.Take(label.CharactersCount).All(c => c.isVisible), Is.True);
+            Assert.That(type.Typing, Is.False);
+            Assert.That(Enumerable.Range(0, type.Text.Length).All(i => type.Alpha(i) == 255), Is.True);
             Assert.That(wait.MoveNext(), Is.False);
         }
 

@@ -19,7 +19,6 @@ namespace KwGame.View
         int textSpeed = 1;
         bool skipSeen, sceneInstant;
         List<string> seenScenes;
-        float baseNormal = -1, baseLong, baseMiddle;
 
         /// 시작할 때 (새 게임 · 이어하기 모두) 저장된 설정 적용
         void LoadPlayPrefs()
@@ -32,15 +31,7 @@ namespace KwGame.View
             ApplyTextSpeed();
         }
 
-        void ApplyTextSpeed()
-        {
-            if (dialogueTiming == null) return;
-            if (baseNormal < 0) { baseNormal = dialogueTiming.waitForNormalChars; baseLong = dialogueTiming.waitLong; baseMiddle = dialogueTiming.waitMiddle; }
-            float m = TextSpeedMult[Mathf.Clamp(textSpeed, 0, 3)];
-            dialogueTiming.waitForNormalChars = baseNormal * m;
-            dialogueTiming.waitLong = baseLong * m;
-            dialogueTiming.waitMiddle = baseMiddle * m;
-        }
+        void ApplyTextSpeed() => dlgType.Speed = TextSpeedMult[Mathf.Clamp(textSpeed, 0, 3)];
 
         bool SeenScene(string key) => seenScenes != null && seenScenes.Contains(key);
 

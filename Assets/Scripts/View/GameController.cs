@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Febucci.TextAnimatorForUnity;
 using KwGame.Sim;
 using KwGame.Audio;
 using Newtonsoft.Json.Linq;
@@ -23,11 +22,10 @@ namespace KwGame.View
         UIDocument doc; VisualElement root;
         VisualElement hudBar, stage, dlg, panel, panelBody, toastCol, modal, phone;
         Label stageTitle, dlgName, dlgHint, panelTitle;
-        AnimatedLabel dlgText;
-        TypingDelaysByCharacter dialogueTiming;
-        AnimatorSettingsScriptable dialogueAnimation;
         bool playing, waiting, clicked; int waitFrame;
         bool waitingForDialogue;
+        /// 지금 기다림이 "아무 데나 눌러 넘기기"(WaitClick)인가. 버튼을 고르는 기다림(오프닝 다시 보기 카드)은 false — 그 누름은 버튼 것
+        bool waitAny;
         int advanceFrame = -1;
         bool phoneOpen; string phoneTab = "stock";
         double stakeFrac = 0.1;
@@ -201,10 +199,9 @@ namespace KwGame.View
             dlgName.text = Ui.Clean(who == "m" ? "미래" : who == "me" ? "나" : who == "kim" ? "김사장" : who == "npc" ? name : "");
             dlgName.style.display = dlgName.text == "" ? DisplayStyle.None : DisplayStyle.Flex;
             dlgText.style.unityFontStyleAndWeight = who == "nar" ? FontStyle.Italic : FontStyle.Normal;
-            dlgText.ResumeAnimation();
-            dlgText.Typewriter.ShowText(Ui.Clean(text));
-            dlgText.Typewriter.StartShowingText(true);
-            if (textSpeed >= 3 || sceneInstant) dlgText.Typewriter.SkipTypewriter();   // 글자 속도 '즉시' · 읽은 장면 빨리 넘기기
+            dlgType.Start(Ui.Show(text));
+            if (textSpeed >= 3 || sceneInstant) dlgType.Complete();   // 글자 속도 '즉시' · 읽은 장면 빨리 넘기기
+            DlgPaint(true);
             UpdateDialogueHint();
             if (face != null) SetFace(face);
             SpeakerArt(who, name, face);
@@ -218,9 +215,9 @@ namespace KwGame.View
                 yield return null; yield break;
             }
             waitingForDialogue = dialogue;
-            waiting = true; clicked = false; waitFrame = Time.frameCount;
+            waiting = true; waitAny = true; clicked = false; waitFrame = Time.frameCount;
             while (!clicked) yield return null;
-            waiting = false; waitingForDialogue = false;
+            waiting = false; waitAny = false; waitingForDialogue = false;
         }
         // ---------- 실시간 (GameSim.Realtime.cs) ----------
         int rtSpeed = 1; float rtAcc, rtPhoneT, rtSaveT;
@@ -272,8 +269,8 @@ namespace KwGame.View
             FaceTick();
             if (waitingForDialogue)
             {
-                dlgText.Typewriter.UpdateTypewriter();
-                if (dlgText.Typewriter.IsShowingText) KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.Blip);   // 타자음 (간격 BlipInterval)
+                if (dlgType.Tick(Time.unscaledDeltaTime)) DlgPaint(false);
+                if (dlgType.Typing) KwGame.Audio.GameAudioManager.Play(KwGame.Audio.SoundCue.Blip);   // 타자음 (간격 BlipInterval)
                 UpdateDialogueHint();
             }
             if (!waiting) return;
@@ -284,7 +281,8 @@ namespace KwGame.View
         {
             if (!waiting || Time.frameCount <= waitFrame || advanceFrame == Time.frameCount) return;
             advanceFrame = Time.frameCount;
-            if (waitingForDialogue && dlgText.Typewriter.IsShowingText)
+            if (waitAny) GuardUi();   // 이 누름은 '넘기기'로 썼음 → 같은 누름 · 이어지는 연타가 방금 뜬 버튼에 닿지 않게 (GameController.Type.cs)
+            if (waitingForDialogue && dlgType.Typing)
             {
                 CompleteDialogueText();
                 return;
@@ -294,40 +292,21 @@ namespace KwGame.View
 
         void CompleteDialogueText()
         {
-            dlgText.Typewriter.SkipTypewriter();
-            dlgText.SetVisibilityEntireText(true, false);
+            dlgType.Complete();
+            DlgPaint(false);
             UpdateDialogueHint();
         }
 
         void UpdateDialogueHint()
         {
-            dlgHint.text = dlgText.Typewriter.IsShowingText ? "클릭 / Space : 즉시 표시" : "클릭 / Space ▶";
+            dlgHint.text = dlgType.Typing ? "클릭 / Space : 즉시 표시" : "클릭 / Space ▶";
         }
 
         void HideDialogue()
         {
-            dlgText.Typewriter.StopShowingText();
-            dlgText.PauseAnimation();
             dlgText.style.display = DisplayStyle.None; idleText.style.display = DisplayStyle.Flex; dlgHint.style.display = DisplayStyle.None;
             if (G != null) SetIdle();
             DlgSync();   // v4 집 · 데스크: 대사가 끝나면 대사창을 걷고 계획판으로
-        }
-
-        void OnDestroy()
-        {
-            dlgText?.Typewriter?.StopShowingText();
-            dlgText?.PauseAnimation();
-            dlgText?.Typewriter?.Dispose();
-            if (Application.isPlaying)
-            {
-                Destroy(dialogueTiming);
-                Destroy(dialogueAnimation);
-            }
-            else
-            {
-                DestroyImmediate(dialogueTiming);
-                DestroyImmediate(dialogueAnimation);
-            }
         }
 
         /// 오프닝: 처음 한 번은 전부, 2회차부터는 미래 한 줄 + "오프닝 다시 보기" (kw.v4.opening)
@@ -398,83 +377,6 @@ namespace KwGame.View
         string DuoGoal() => $"못 갚아도: 만기에 빚 {Man(DuoDebt())} 이하 + 호감 {D.RULES.V4_AFF_GOOD}이면 미래가 같이 가 줌 (지금 빚 {Man(S.debt)})";
         /// 금액 표시: 1만 이상은 만 단위 ("3,000만원" · "18만원"), 1만 미만은 원 단위 그대로
         string Man(double v) => G.man(v) + "원";
-
-        IEnumerator Morning(SimEvent e)
-        {
-            modal.Clear();
-            modal.style.display = DisplayStyle.Flex;
-            HoldFace("pajama");   // 밤잠 자고 일어난 아침
-            var card = Card(900);
-            bool first = false;
-            if (e["v4"] is bool v4 && v4)
-            {
-                int ch = (int)e.Num("ch");
-                card.Add(Ui.Label($"{(e.Num("part") > 1 ? "2부 · " : "")}{ch}장 {G.chapterName(ch)} · {(e.Num("month") - 1) * D.RULES.MONTH_DAYS + e.Num("day")}일째 아침", 40, Ui.Gold, true));
-                bool wkd = e["wk"] is bool wk && wk;
-                bool paid4 = e["paid"] is bool pd4 && pd4; double dd4 = e.Num("dd"), wday = e.Num("day");
-                first = (e.Num("month") - 1) * D.RULES.MONTH_DAYS + wday <= 1;   // 첫날 = 짧은 브리핑 (어제 결산 없음)
-                card.Add(Ui.Label($"원금 만기까지 {e.Num("left")}일" + (wkd ? " · 오늘은 주말 (국장 휴장)" : ""), 26, Ui.Accent));
-                // 아침 브리핑: 매일 같은 줄 반복 X → 시간표·대출·레버리지·숏은 첫날 · 바뀐 날 · 손 닿을 때만. 부탁 · 이자 D-1 · 만기 목표는 늘
-                if (first || wday == 1 || wday == D.RULES.V4_WEEKDAYS + 1)
-                    card.Add(Ui.Label(wkd ? "오늘: 하루 종일 미래 · 생활 (코인만 열림)" : "오늘: 오전 · 오후 = 장 (국장 09:00~15:30) · 밤 = 미래 · 생활 (코인만)", 22, Ui.Text));
-                bool loanNow = G.loanOk(), shortNow = G.shortOk();
-                if (G.gateOn)
-                {   // 주간 납부 관문: 납부 줄 (HUD 와 같은 글) · 증거금 상한 · 대출/숏 잠김 (잠긴 동안만)
-                    double gd = G.gateDue(), gi = S.paidMonth == S.month ? 0 : G.interestDue();
-                    bool lastWk = S.month >= D.RULES.V4_GATE_CAP.Length;
-                    string gs = gd <= 0 ? (lastWk ? "이번 주 납부 끝" : G.T("v4.gate.hudOk", "cap", G.man(G.gateCap(S.month + 1))))
-                        : G.T("v4.gate.hud", "d", G.man(gd), "i", G.man(gi), "p", G.man(G.gatePrincipal())) + " · " + (dd4 <= 0 ? "D-DAY (오늘 밤)" : $"D-{dd4}");
-                    var gln = Ui.Label(gs, 26, gd <= 0 ? Ui.Good : dd4 <= 1 ? Ui.Bad : Ui.Gold, true); gln.style.whiteSpace = WhiteSpace.Normal; card.Add(gln);
-                    if (S.missN > 0) card.Add(Ui.Label($"미납 {S.missN}/{D.RULES.V4_MISS_MAX} — 이번 주도 못 내면 원양어선", 22, Ui.Bad, true));
-                    if (G.marginNext() is string mn) card.Add(Ui.Label("코인: " + mn, 22, Ui.Dim));
-                    // 숏 = 주차가 차면 자동으로 · 대출 = 첫 납부 통과 뒤 (따로 열림)
-                    if (!shortNow) card.Add(Ui.Label("숏: " + G.shortLockWhy(), 22, Ui.Dim));
-                    else if (mShortSeen == false) card.Add(Ui.Label("숏 · 곱버스: 새로 열림!", 22, Ui.Good, true));
-                    if (!loanNow) card.Add(Ui.Label("대출: " + G.T("v4.gate.loanNext"), 22, Ui.Dim));
-                    else if (mLoanSeen == false) card.Add(Ui.Label("대출: 새로 열림!", 22, Ui.Good, true));
-                }
-                else
-                {
-                    if (G.creditNext() is string cn) { if (first || !paid4 && dd4 <= 1) card.Add(Ui.Label("대출: " + cn, 22, Ui.Gold)); }
-                    else if (mLoanSeen == false) card.Add(Ui.Label("대출: 새로 열림!", 22, Ui.Good, true));
-                    if (mShortSeen == false && shortNow) card.Add(Ui.Label("숏: 열림", 22, Ui.Dim));
-                }
-                mLoanSeen = loanNow; mShortSeen = shortNow;
-                // 호감 버프: 켜진 것 + 구간 설명 (첫날 · 단계가 바뀐 날만)
-                var bfs = G.buffs(); int bt = G.buffTier();
-                if (bfs.Count > 0) card.Add(Ui.Label("호감 버프: " + string.Join(" · ", bfs), 22, new Color(1f, 0.6f, 0.75f), true));
-                if (first || bt != mBuffSeen) { var bh = Ui.Label(G.T("v4.buff.help"), 20, Ui.Dim); bh.style.whiteSpace = WhiteSpace.Normal; card.Add(bh); }
-                mBuffSeen = bt;
-                if (G.promNow() is GameSim.Prom pm) { card.Add(Ui.Label("미래 부탁: " + pm.hud, 22, Ui.Accent)); if (!first) CoachCtx("mirai"); }   // 둘째 날부터 첫 부탁 → 미래 설명 카드
-                if (wkd) CoachCtx("unlock");   // 첫 주말 아침 (첫 해금이 먼저면 그때)
-                if (G.gateOn) { }   // 납부 줄은 위에서
-                else if (!paid4 && dd4 <= 1) card.Add(Ui.Label($"이자일 {(dd4 <= 0 ? "D-DAY (오늘 밤)" : "D-1 (내일 밤)")} · 이자 {Man(e.Num("due"))}", 26, Ui.Bad, true));
-                else if (first) card.Add(Ui.Label($"이자일까지 D-{dd4} · 이자 {Man(e.Num("due"))}", 22, Ui.Dim));
-                card.Add(Ui.Label("목표: 빚 0원 = 클리어", 24, Ui.Gold, true));
-                var gl = Ui.Label(DuoGoal(), 20, DuoOk() ? Ui.Good : Ui.Dim); gl.style.whiteSpace = WhiteSpace.Normal; card.Add(gl);
-            }
-            else
-            {
-                card.Add(Ui.Label($"{e.Num("month")}개월차 {e.Num("day")}일 아침", 40, Ui.Gold, true));
-                card.Add(Ui.Label(e["paid"] is bool p && p ? "이번 달 이자 냄" : $"이자일까지 D-{e.Num("dd")} · 이자 {Man(e.Num("due"))}", 26, Ui.Dim));
-            }
-            var Y = e["Y"] as List<Dictionary<string, object>>;
-            if (Y != null && Y.Count > 0 && !(G.v4 && first))
-            {
-                card.Add(Ui.Label("어제 결산", 28, Ui.Text, true));
-                // v4: 큰 것 3줄 + 합계 (예전엔 8줄까지)
-                var top = G.v4 ? Y.OrderByDescending(y => Math.Abs(Convert.ToDouble(y["amt"]))).Take(3).ToList() : Y.Take(8).ToList();
-                foreach (var y in top) card.Add(Ui.Label($"· {y["label"]}  {G.sgnMan(Convert.ToDouble(y["amt"]))}", 22, UpDn(Convert.ToDouble(y["amt"]))));   // 돈 손익 = 폰과 같은 색 (이익 빨강 · 손실 파랑)
-                if (Y.Count > top.Count) card.Add(Ui.Label($"· 그 밖 {Y.Count - top.Count}건", 20, Ui.Dim));
-                card.Add(Ui.Label($"합계 {G.sgnMan(e.Num("net"))} ({e.Str("netConv")})", 24, e.Num("net") == 0 ? Ui.Text : UpDn(e.Num("net")), true));
-            }
-            if (!string.IsNullOrEmpty(e.Str("ev")) && !(G.v4 && first)) card.Add(Ui.Label("오늘의 사건: " + e.Str("ev"), 24, Ui.Gold));
-            card.Add(Ui.Label("미래: " + e.Str("mline"), 24, Ui.Accent));
-            card.Add(Ui.Label("(클릭해서 계속)", 20, Ui.Dim));
-            modal.Add(card);
-            yield return WaitClick();
-            modal.style.display = DisplayStyle.None;
-        }
 
         static string ArgValue(string name)
         {

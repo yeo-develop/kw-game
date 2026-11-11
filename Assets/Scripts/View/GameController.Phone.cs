@@ -239,6 +239,8 @@ namespace KwGame.View
             }
             else if (S.kq != null) { var n = LinkBtn("미래가 답장 기다림 →", () => { kkRoom = "m"; Send("read", "what", "kakao", "room", "m"); RenderAll(); }, Ink, KkMe); n.style.marginTop = 10; n.style.alignSelf = Align.Center; body.Add(n); }
         }
+        /// 말풍선 한 줄의 최대 폭 · 그 안에서 시각 글자가 차지하는 폭 (여백 포함)
+        const float KkColW = 560, KkTimeW = 76;
         void KkBubble(VisualElement body, string w, string x, string t, (string k, string n, Color c) room)
         {
             if (w == "sys")
@@ -249,11 +251,13 @@ namespace KwGame.View
             bool me = w == "me";
             var row = Ui.Row(); row.style.alignItems = Align.FlexStart; row.style.marginBottom = 10; row.style.justifyContent = me ? Justify.FlexEnd : Justify.FlexStart; body.Add(row);
             if (!me) { var av = Avatar(room.n, room.c, 46); av.style.marginRight = 10; row.Add(av); }
-            var col = new VisualElement(); col.style.maxWidth = 560; col.style.flexShrink = 1;
+            var col = new VisualElement(); col.style.maxWidth = KkColW; col.style.flexShrink = 0;
             if (!me) { var nm = Ui.Label(w == "m" ? "미래" : w == "kim" ? "김사장" : "형나믿지", 18, Ink); nm.style.marginBottom = 3; col.Add(nm); }
             var line = Ui.Row(); line.style.alignItems = Align.FlexEnd; line.style.flexDirection = me ? FlexDirection.RowReverse : FlexDirection.Row; col.Add(line);
             var bub = Ui.Label(x, 20, Ink); bub.style.backgroundColor = me ? KkMe : Color.white; Ui.Radius(bub, 14);
-            bub.style.paddingLeft = 14; bub.style.paddingRight = 14; bub.style.paddingTop = 9; bub.style.paddingBottom = 9; bub.style.flexShrink = 1;
+            bub.style.paddingLeft = 14; bub.style.paddingRight = 14; bub.style.paddingTop = 9; bub.style.paddingBottom = 9;
+            // 줄바꿈은 말풍선 자신의 최대 폭으로 (줄어들기에 맡기면 줄 높이가 한 줄로 계산돼 다음 말풍선과 겹침 · 시각이 잘림)
+            bub.style.maxWidth = KkColW - KkTimeW; bub.style.flexShrink = 0;
             line.Add(bub);
             var tl = Ui.Label(t ?? "", 18, Ink2); tl.style.marginLeft = 6; tl.style.marginRight = 6; tl.style.flexShrink = 0; line.Add(tl);
             row.Add(col);

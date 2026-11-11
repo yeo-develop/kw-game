@@ -161,7 +161,7 @@ namespace KwGame.View
             card.style.scale = new Scale(Vector3.one); card.style.translate = new Translate(0, 0);
             yield return null;
             float wait = autoSkipDialog ? 0.4f : 6f; tt = 0;
-            while (tt < wait && !AnyPress()) { tt += Time.unscaledDeltaTime; a.style.opacity = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(tt * 5)); yield return null; }
+            while (tt < wait && !AnyPressGuard()) { tt += Time.unscaledDeltaTime; a.style.opacity = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(tt * 5)); yield return null; }
             dim.RemoveFromHierarchy();
         }
 
@@ -188,7 +188,7 @@ namespace KwGame.View
             card.style.rotate = new Rotate(new Angle(0));
             yield return null;
             float wait = autoSkipDialog ? 0.3f : 5f; tt = 0;
-            while (tt < wait && !AnyPress()) { tt += Time.unscaledDeltaTime; ic.style.opacity = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(tt * 4)); card.style.translate = new Translate(Mathf.Sin(tt * 2.1f) * 6, Mathf.Sin(tt * 1.3f) * 4); yield return null; }   // 어질어질
+            while (tt < wait && !AnyPressGuard()) { tt += Time.unscaledDeltaTime; ic.style.opacity = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(tt * 4)); card.style.translate = new Translate(Mathf.Sin(tt * 2.1f) * 6, Mathf.Sin(tt * 1.3f) * 4); yield return null; }   // 어질어질
             dim.RemoveFromHierarchy();
         }
 

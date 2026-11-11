@@ -475,7 +475,7 @@ namespace KwGame.View
                 deskFaceShown = faceNow; var s = ArtCatalog.Mirai(faceNow);
                 deskFace.style.backgroundImage = s != null ? new StyleBackground(s) : new StyleBackground(StyleKeyword.None);
             }
-            string txt = Time.realtimeSinceStartup < deskSayUntil && !string.IsNullOrEmpty(deskSay) ? deskSay : DeskIdleLine();
+            string txt = Ui.Show(Time.realtimeSinceStartup < deskSayUntil && !string.IsNullOrEmpty(deskSay) ? deskSay : DeskIdleLine());
             if (deskBubble.text != txt) deskBubble.text = txt;
         }
         /// 할 말이 없을 때 한마디 (포지션 상태만 봄. 전조 · 숨은 값에는 반응하지 않음 — "말이 없으면 안전" 누수 방지)

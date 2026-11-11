@@ -3,9 +3,7 @@
     "rootNamespace": "KwGame.View",
     "references": [
         "KwGame.Sim",
-        "KwGame.Persistence",
-        "Febucci.TextAnimatorForUnity.Runtime",
-        "Febucci.TextAnimatorForUnity.UITk.Runtime"
+        "KwGame.Persistence"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -13,7 +11,6 @@
     "overrideReferences": true,
     "precompiledReferences": [
         "Newtonsoft.Json.dll",
-        "Febucci.TextAnimatorCore.dll",
         "DOTween.dll",
         "Sirenix.OdinInspector.Attributes.dll"
     ],
