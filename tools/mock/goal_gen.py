@@ -55,7 +55,7 @@ A = left('좋은 아침! 다음 주 납부는 386만이래. 지금 속도면… 
   <div style="left:22px;top:124px;width:672px;font-size:14.5px"><b class="g">끝까지 2,985만 더 · 남은 81칸</b> <span class="d">→ 칸마다</span> <b>+37만</b> <span class="d">이 제 속도 (알바 한 번 ≈ 27만 → 알바만으론 모자람)</span></div>
   <div class="bar" style="left:22px;top:152px;width:672px;height:8px"><i style="width:10%;background:var(--gold)"></i></div>
   <div style="left:22px;top:172px;width:672px;height:226px;border:2px solid var(--pink);border-radius:14px;background:rgba(255,107,157,.06)"></div>
-  <div style="left:38px;top:180px;font-size:17px" class="t pk">오전 · 지금</div><div style="left:132px;top:183px;font-size:13px" class="d">08:00 ~ 12:00 · 이 칸에 고른 일의 예상 수입이 카드에 보임</div>
+  <div style="left:38px;top:180px;font-size:17px" class="t pk">오전 · 지금</div><div style="left:132px;top:183px;font-size:13px" class="d">09:00 ~ 12:00 · 이 칸에 고른 일의 예상 수입이 카드에 보임</div>
   {cards(hint={'장':'<b class=u>속보 2건 대기</b> · 수입은 내 손에 달림', '알':'<b class=o>확실한 +18~50만</b> · 제 속도의 50~150%'}).format(y0=208,y1=300,ah=90)}
   {tail(410)}
   <div style="left:22px;top:524px;width:672px;font-size:13.5px" class="d">어제 <b class="u">+26만</b> · 제 속도(3칸 +111만)보다 <b class="n">−85만</b> — 이번 주 납부는 이미 다 모았으니 남는 돈을 불릴 때</div>
@@ -71,7 +71,7 @@ B = left('이번 주 숙제 봤어? 알바 한 번만 더 가면 하나 끝이�
  <div class="p" style="left:540px;top:66px;width:716px;height:586px;padding:0">
   <div style="left:22px;top:14px;font-size:21px" class="t g">오늘</div><div style="left:80px;top:20px;font-size:13.5px" class="d">행동 하나 = 한 칸 · 장은 09:00~15:30</div>
   <div style="left:22px;top:54px;width:672px;height:238px;border:2px solid var(--pink);border-radius:14px;background:rgba(255,107,157,.06)"></div>
-  <div style="left:38px;top:62px;font-size:17px" class="t pk">오전 · 지금</div><div style="left:132px;top:65px;font-size:13px" class="d">08:00 ~ 12:00</div>
+  <div style="left:38px;top:62px;font-size:17px" class="t pk">오전 · 지금</div><div style="left:132px;top:65px;font-size:13px" class="d">09:00 ~ 12:00</div>
   {cards(hint={'장':'<span class=tag style="color:var(--gold)">할 일</span>리포트 따라 사서 이익 1번', '알':'<span class=tag style="color:var(--gold)">할 일</span>알바 3번 (2/3) · 한 번 더 가면 끝'}).format(y0=92,y1=186,ah=94)}
   {tail(306)}
   <div style="left:22px;top:424px;width:672px;font-size:13.5px" class="d">어제: 오전 장 보기 <b class="u">+20.9만</b> · 오후 편의점 알바 <b class="u">+17.2만</b> · 밤 카지노 <b class="n">−11.9만</b> · 합계 <b class="u">+26.2만</b></div>
@@ -85,7 +85,7 @@ C = left('오늘은 장 보기부터 해 볼까? 내가 옆에서 봐 줄게.') 
   <div style="left:22px;top:126px;width:672px;height:52px;border-radius:12px;background:linear-gradient(90deg,rgba(255,107,157,.28),rgba(255,107,157,.08));border:1px solid var(--pink)"></div>
   <div style="left:36px;top:132px;width:650px;font-size:15px"><span class="tag pk">길잡이 2/7</span><b>지금 할 일: 장 보기에서 아무 종목이나 한 번 사 보기</b><br><span class="d" style="font-size:13px">어제는 알바로 확실한 돈을 벌었어요. 오늘은 그 돈을 불려 보는 날 — 첫 매매는 10만원이면 충분해요.</span></div>
   <div style="left:22px;top:190px;width:672px;height:212px;border:2px solid var(--pink);border-radius:14px;background:rgba(255,107,157,.06)"></div>
-  <div style="left:38px;top:198px;font-size:17px" class="t pk">오전 · 지금</div><div style="left:132px;top:201px;font-size:13px" class="d">08:00 ~ 12:00</div>
+  <div style="left:38px;top:198px;font-size:17px" class="t pk">오전 · 지금</div><div style="left:132px;top:201px;font-size:13px" class="d">09:00 ~ 12:00</div>
   {cards(dim={'놀','알'}, glow={'장'}, hint={'장':'<b class=pk>← 여기</b> · 속보가 뜨면 시세가 움직여요'}).format(y0=226,y1=316,ah=80)}
   {tail(414, chips=False)}
   <div style="left:22px;top:480px;width:672px;font-size:13.5px" class="d">길잡이: <b class="o">1 알바 한 번 ✓</b> → <b class="pk">2 한 번 사 보기</b> → 3 속보 보고 팔기 → 4 리포트 보기 → 5 미래랑 놀기 → 6 빚 미리 갚기 → 7 납부</div>
