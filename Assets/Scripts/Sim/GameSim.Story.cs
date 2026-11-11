@@ -55,20 +55,21 @@ namespace KwGame.Sim
             toast(T("v4.fund.new", "b", man(S.fund)), "good");
             Emit("fund", "k", "new", "v", S.fund);
         }
-        /// 관문에서 모자란 돈 (현금 + 지금 팔 수 있는 보유분으로도 모자란 만큼)
-        double fundShort(double need) => need - (S.cash + stockValFree() + coinVal());
-        /// 관문에서 꺼내는 돈 = min(잔액, 모자람을 단위로 올림)
+        /// 관문에서 팔 수 있는 보유분(안 잠긴 주식 · 코인)이 남아 있나. 통장은 그걸 다 정리한 뒤의 마지막 수단 —
+        /// 평가액으로 미리 셈하면 급매 손해(V4_FIRESALE) · 수수료만큼 어긋나 통장을 두 번 깨게 됨 (누르는 순서로 벌이 갈림)
+        bool gateHoldLeft() => stockValFree() + coinVal() > 0;
+        /// 관문에서 꺼내는 돈 = min(잔액, 현금으로 모자란 만큼을 단위로 올림). 팔 수 있는 보유분이 남아 있으면 0
         double fundTake(double need)
         {
-            double s = fundShort(need), u = R.V4_FUND_UNIT > 0 ? R.V4_FUND_UNIT : 1;
-            if (!fundP1 || S.enroll == 1 || S.fund <= 0 || S.fundBet != null || s <= 0) return 0;
+            double s = need - S.cash, u = R.V4_FUND_UNIT > 0 ? R.V4_FUND_UNIT : 1;
+            if (!fundP1 || S.enroll == 1 || S.fund <= 0 || S.fundBet != null || s <= 0 || gateHoldLeft()) return 0;
             return Math.Min(S.fund, Math.Ceiling(s / u) * u);
         }
         /// 관문 선택지 (1부 · 잔액이 있을 때만 목록에 들어감)
         Opt gateFundOpt(double need)
         {
             double take = fundTake(need);
-            string sub = S.enroll == 1 ? T("v4.gate.fundReg") : take <= 0 ? T("v4.gate.fundNo")
+            string sub = S.enroll == 1 ? T("v4.gate.fundReg") : take <= 0 ? T(S.cash < need && gateHoldLeft() ? "v4.gate.fundSell" : "v4.gate.fundNo")
                 : T(absDay() <= R.V4_REG_DAY && S.enroll == 0 ? "v4.gate.fundSub" : "v4.gate.fundSubLate", "b", man(S.fund - take));
             return new Opt { k = "gateFund", l = T("v4.gate.fund", "a", man(take)), sub = sub, dis = take <= 0 };
         }
@@ -159,11 +160,14 @@ namespace KwGame.Sim
         string greedKey()
         {
             var G = R.V4_GREED_STEPS; if (G == null || G.Length < 3) return null;
-            return S.greed >= G[2] ? (S.heist >= 1 ? "v4.greedHeist" : "v4.greedK3") : S.greed >= G[1] ? "v4.greedK2" : S.greed >= G[0] ? "v4.greedK" : "";
+            return S.greed >= G[2] ? (S.heist >= 1 && absDay() % 2 == 0 ? "v4.greedHeist" : "v4.greedK3") : S.greed >= G[1] ? "v4.greedK2" : S.greed >= G[0] ? "v4.greedK" : "";
         }
         void storyDayEnd()
         {
-            if (fundP1 && absDay() >= R.V4_REG_DAY && S.enroll == 0 && fundHas) fundNoReg();
+            if (!(fundP1 && absDay() >= R.V4_REG_DAY && S.enroll == 0 && fundHas)) return;
+            // 20일 장면(묶음 v4_reg)을 끝내 못 본 판 — 다른 장면에 칸을 내줬거나 집에 없었음: 통장이 온전하면 미래가 혼자 누른 것으로 (장면 하나 없이 미등록이 되지 않게)
+            if (S.fund >= R.V4_FUND && !S.evSeen.Contains("v4_reg@" + S.part)) { fundReg(T("lbl.fundReg")); string x = T("v4.fund.autoReg"); pushK("m", x); toast(x, "good", "kakao", "m"); }
+            else fundNoReg();
         }
 
         // ---------- 장면 ----------
@@ -180,7 +184,7 @@ namespace KwGame.Sim
                 case "calm": return S.calmN > S.rideN;
                 case "ride": return S.rideN >= S.calmN;
                 case "regYes": return S.enroll == 1;
-                case "regNo": return S.enroll != 1;
+                case "regNo": return S.enroll == 2;   // 통장이 없던 판(옛 저장 · enroll 0)은 어느 갈래도 아님
                 default: return false;
             }
         }
@@ -188,8 +192,8 @@ namespace KwGame.Sim
         /// 오늘 띄울 날짜 장면: 정해진 날부터 V4_EV_LATE 일 안 (칸 조건은 그대로). 여럿이면 날짜가 이른 것부터
         EvDef storyDue()
         {
-            int ad = absDay(), late = Math.Max(0, R.V4_EV_LATE);
-            return D.EVENTS.Where(e => e.day > 0 && e.day <= ad && ad - e.day <= late && (e.part == 0 || e.part == S.part) && (e.slots == null || e.slots.Contains(S.slot)) && S.heist >= e.heistMin && whenOk(e.when) && !S.evSeen.Contains(evKey(e, S.part)))
+            int ad = absDay(), late = Math.Max(0, R.V4_EV_LATE);   // 장면마다 late 가 있으면 그 값 (요일 · 날짜를 말하는 장면은 짧게)
+            return D.EVENTS.Where(e => e.day > 0 && e.day <= ad && ad - e.day <= (e.late >= 0 ? Math.Min(e.late, late) : late) && (e.part == 0 || e.part == S.part) && (e.slots == null || e.slots.Contains(S.slot)) && S.heist >= e.heistMin && whenOk(e.when) && !S.evSeen.Contains(evKey(e, S.part)))
                 .OrderBy(e => e.day).FirstOrDefault();
         }
         bool fundAskOk()
@@ -227,7 +231,7 @@ namespace KwGame.Sim
             return x;
         }
         /// 돌발 이벤트 when · maxDay: when 은 엄마 갈래만 판정해서 통과 (그 밖의 when 은 조건 장면이라 돌발 풀에서 뺌)
-        bool evWhenFits(EvDef e) => (e.when == null || ((e.when == "momKnows" || e.when == "momNot") && whenOk(e.when))) && (e.maxDay <= 0 || absDay() <= e.maxDay);
+        bool evWhenFits(EvDef e) => (e.when == null || ((e.when == "momKnows" || e.when == "momNot") && whenOk(e.when))) && (!v4 || e.maxDay <= 0 || absDay() <= e.maxDay);
         /// fundFill 선택지에 필요한 현금 (= 등록금 − 잔액)
         double fundFillNeed() => Math.Max(0, R.V4_FUND - Math.Max(0, S.fund));
         /// 선택지 고른 뒤: 말림/같이 탐은 고른 선택지(o) 기준, 엄마는 실제로 적용된 쪽(r) 기준

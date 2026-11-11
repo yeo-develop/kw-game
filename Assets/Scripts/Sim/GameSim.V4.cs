@@ -563,7 +563,7 @@ namespace KwGame.Sim
                     return;
                 }
                 variant = !good ? "lonely" : S.part <= 1 && fundSeen && !reg ? "hollow" : "true";
-                lead = T(variant == "hollow" ? "v4.end.hollow" : good ? (S.part > 1 ? "v4.end.true2" : "v4.end.true") : "v4.end.lonely", v);
+                lead = T(variant == "hollow" ? "v4.end.hollow" : good ? (S.part > 1 ? "v4.end.true2" : fundSeen ? "v4.end.true" : "v4.end.true0") : "v4.end.lonely", v);   // true0 = 통장이 없던 판(옛 저장)의 본문
                 if (good && S.part > 1 && fundSeen) lead += "\n" + T(reg ? "v4.end.true2.reg" : "v4.end.true2.noreg", v);
             }
             else if (kind == "bad1" && absDay() >= R.V4_DAYS && S.debt <= debtStart() * duoDebt())

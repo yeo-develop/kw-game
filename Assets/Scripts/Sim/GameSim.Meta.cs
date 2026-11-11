@@ -182,14 +182,14 @@ namespace KwGame.Sim
             bool clr = k == "clear";
             void add(string id, bool ok) { if (ok) o.Add(id); }
             add("first_end", true);
-            add("true_end", clr && vr == "true");
+            add("true_end", clr && vr == "true" && (S.part <= 1 || !fundSeen || S.enroll == 1));   // 힌트가 "복학 등록까지" — 2부에서 등록 못 한 판은 2부 도전과제만
             add("lonely", clr && vr == "lonely");
             add("duo", k == "bad1" && vr == "duo");
             add("heist", k == "heist");
             add("heist_fail", k == "heistFail");
             add("no_loan", clr && S.st.borrowed == 0);
             add("work_only", S.st.invest == 0 && (clr || (k == "bad1" && (vr == "duo" || vr == "grad"))));
-            add("lev100", clr && S.maxLev >= 100);
+            add("lev100", clr && S.maxLev >= 50);   // 코인 최대 배율이 50배라 100배는 닿을 수 없었음 (id 는 저장된 기록과 맞게 그대로)
             add("liq_work", S.liqWork >= 1);
             add("liq5", S.st.liq >= 5);
             add("speed14", clr && E.days <= 14);

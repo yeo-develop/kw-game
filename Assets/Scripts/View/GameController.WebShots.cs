@@ -760,10 +760,13 @@ namespace KwGame.View
             CloseStatusCard();
 
             // 원금 분납: 현금이 모자라 통장 깨기가 켜진 상태 (선택지 5개)
+            // 팔 수 있는 보유분이 남아 있으면 통장은 잠기므로(먼저 정리해야 함) 화면용으로 잠깐 비워 둠
+            var hold0 = S.hold; var cps0 = S.cps; S.hold = new OMap<Holding>(); S.cps = new List<CoinPos>();
             S.cash = 300000; RenderAll();
             if (Pt == "home") yield return WSend("debug", "k", "gate");
             if (WWant(Pt == "payday" && S.pending.stage == "gate" && S.pending.opts.Any(o => o.k == "gateFund"), "gate_fund", "통장 깨기가 든 원금 분납이 아님: " + Pt + "/" + S.pending?.stage))
                 yield return WShot("gate_fund");
+            S.hold = hold0; S.cps = cps0;
             S.pending = new Pending("home"); S.cash = Math.Max(cash0, 2000000); RenderAll();
 
             // 20일 등록 장면 (통장이 다 찬 쪽: 학교 정문 배경 — 그림이 없으면 공원)
@@ -794,7 +797,7 @@ namespace KwGame.View
             Action matured = () => { S.month = last / MD + 1; S.day = last % MD + 1; S.paidMonth = S.month; S.debt = 8000000; };   // 28일째 만기 · 빚 30% 아래
             var list = new List<(string name, string kind, Action setup)>
             {
-                ("end_true", "clear", () => S.aff = 80),
+                ("end_true", "clear", () => { S.aff = 80; S.fundOpened = true; S.fund = 0; S.enroll = 1; }),   // 진엔딩 = 복학 등록까지
                 ("end_lonely", "clear", () => S.aff = 30),
                 ("end_rich", "rich", () => S.aff = 80),
                 ("end_gamble_clear", "clear", () => { S.aff = 80; S.st.gnet = 5000000; }),

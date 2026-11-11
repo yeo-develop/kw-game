@@ -70,7 +70,8 @@ namespace KwGame.View
             npcKey = null; kimKey = null; cgKey = null; miraiOn = true;
             switch (P?.t)
             {
-                case null: case "start": case "home": case "menhera": case "impulse": case "tempt": case "event": break;
+                case null: case "start": case "home": case "menhera": case "impulse": case "tempt": break;
+                case "event": { var ev = D.EVENTS.Find(x => x.id == P.evId); if (!string.IsNullOrEmpty(ev?.bg)) bg = ev.bg; break; }   // 장면의 배경(분식집 · 학교 정문)이 선택지가 뜬 뒤에도 남게 — 예전엔 다시 그릴 때 방으로 돌아감
                 case "relic": if (S.phase == "opening") cgKey = "opening_box"; break;
                 case "payday": night = true; kimKey = "kim_menace"; break;
                 case "loan": kimKey = "kim_base"; break;

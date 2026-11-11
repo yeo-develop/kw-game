@@ -1488,7 +1488,8 @@ namespace KwGame.Tests
             var a = Data.EVENTS.First(e => e.id == "v4_after"); int slot = a.slots[0];
             var y = New(); y.S.enroll = 1; Assert.That(EvAt(y, a.day, slot), Is.EqualTo("v4_after"));
             var n = New(); n.S.enroll = 2; Assert.That(EvAt(n, a.day, slot), Is.EqualTo("v4_after_n"));
-            Assert.That(EvAt(New(), a.day, slot), Is.EqualTo("v4_after_n"), "통장이 없던 판도 '못 한 판' 대사");
+            string old = EvAt(New(), a.day, slot);
+            Assert.That(old == null || !old.StartsWith("v4_after"), "통장이 없던 판(옛 저장)은 학교 얘기 장면이 안 뜸: " + old);
             Go(n, "evPick", "k", "ev0"); ToHome(n);
             n.S.enroll = 1;
             string next = EvAt(n, a.day + 1, slot, true);
@@ -1508,6 +1509,38 @@ namespace KwGame.Tests
             var h = New(); Old(h.S); AtDay(h, R.V4_REG_DAY + 2, 2); ToHome(h); Go(h, "rest"); ToHome(h);
             Assert.That(h.fundOn, Is.False, "마감 뒤: 통장 없는 판"); Assert.That(h.fundHud(), Is.Null); Assert.That(h.fundRefillAmt(), Is.EqualTo(0));
             Assert.That(ClearWith(Old).S.endInfo.variant, Is.EqualTo("true"), "통장 없는 판의 클리어는 예전대로 진엔딩");
+        }
+
+        /// 20일 장면을 끝내 못 본 판: 통장이 온전하면 밤에 미래가 혼자 등록(장면 없이 미등록이 되지 않게), 모자라면 미등록. 장면을 보고 미룬 판은 그대로 미등록
+        [Test]
+        public void RegDeadlineWithoutTheSceneStillRegistersAFullFund()
+        {
+            var R = Data.RULES;
+            GameSim Night(double fund, bool seen)
+            {
+                var g = New(); g.S.fund = fund; g.S.fundOpened = true;
+                AtDay(g, R.V4_REG_DAY, 2); if (seen) g.S.evSeen.Add("v4_reg@1"); else g.S.evSeen.Remove("v4_reg@1");
+                if (g.S.pending.t != "home") { g.S.pending = new Pending("home"); g.S.flow.Clear(); }   // 그 칸 장면은 안 본 채로 밤을 넘김
+                Go(g, "rest"); ToHome(g);
+                return g;
+            }
+            var full = Night(R.V4_FUND, false);
+            Assert.That(full.S.enroll, Is.EqualTo(1), "통장이 온전하면 등록"); Assert.That(full.S.fund, Is.EqualTo(0));
+            Assert.That(Night(R.V4_FUND - 1000000, false).S.enroll, Is.EqualTo(2), "모자라면 미등록");
+            Assert.That(Night(R.V4_FUND, true).S.enroll, Is.EqualTo(2), "장면에서 미루고 넘긴 판은 미등록");
+        }
+
+        /// 요일 · 날짜를 말하는 장면은 밀림 한도가 짧다: 분식집(주말)은 하루만, 만기 전날 밤은 그날만
+        [Test]
+        public void DatedScenesHaveShortLateWindows()
+        {
+            var snack = Data.EVENTS.First(e => e.id == "v4_snack"); var eve = Data.EVENTS.First(e => e.id == "v4_eve");
+            Assert.That(snack.late, Is.EqualTo(1)); Assert.That(eve.late, Is.EqualTo(0));
+            GameSim Fresh() { var g = New(); g.S.evSeen.Add("v4_fund@1"); g.S.evSeen.Add("v4_leave@1"); return g; }
+            Assert.That(EvAt(Fresh(), snack.day + 1, snack.slots[0], true), Is.EqualTo("v4_snack"), "일요일까지는 뜸");
+            Assert.That(EvAt(Fresh(), snack.day + 2, snack.slots[0], true), Is.Not.EqualTo("v4_snack"), "월요일엔 안 뜸 (장이 열리는 날에 '장도 쉬는 날'이 안 나오게)");
+            var late = New(); foreach (var e in Data.EVENTS.Where(e => e.day > 0 && e.id != "v4_eve")) late.S.evSeen.Add((e.grp ?? e.id) + "@1");
+            Assert.That(EvAt(late, eve.day + 1, eve.slots[0], true), Is.Not.EqualTo("v4_eve"), "만기 당일 밤에 '내일 밤이 만기'가 안 뜸");
         }
 
         /// ⑥-14: 1~4주차마다 정해진 장면 2개 이상 · 정해진 칸을 놓치면 V4_EV_LATE 일 안의 다음 가능한 칸에 뜸 · 그 뒤엔 안 뜸. 대사의 {n} · {b} 는 늘 채워짐
@@ -1567,6 +1600,21 @@ namespace KwGame.Tests
             Assert.That(S.aff, Is.EqualTo(aff0 + R.V4_FUND_AFF)); Assert.That(S.stress, Is.GreaterThan(st0));
             Assert.That(S.pending.stage, Is.EqualTo("gate")); Assert.That(S.pending.opts.First(o => o.k == "gatePay").dis, Is.False, "깨고 나면 낼 수 있음");
             Go(g, "payday", "k", "gatePay"); ToHome(g);
+            // 팔 수 있는 주식이 남아 있으면 통장은 잠김(먼저 정리) → 급매 뒤 한 번만 깨면 낸다. 평가액으로 미리 셈하면 급매 손해만큼 어긋나 두 번 깨게 됨 (누르는 순서로 벌이 갈리던 것)
+            var m = New(); var M = m.S; M.fund = R.V4_FUND; M.fundOpened = true;
+            M.cps.Clear(); foreach (var k0 in m.STK().ToList()) if (M.hold.Has(k0)) M.hold.Remove(k0);
+            string mtk = m.STK().First(k0 => m.tkOpen(k0)); double mq = System.Math.Floor(500000 / M.mk.tk[mtk].p);
+            M.hold.Set(mtk, new Holding { q = mq, cost = M.mk.tk[mtk].p * mq, t0 = m.Tnow(), bday = m.absDay() });
+            M.day = R.MONTH_DAYS; M.slot = 2; M.min = m.slotStartMin(2);
+            M.cash = m.interestDue() + m.gatePrincipal() - 1000000;   // 현금으로 100만 모자람 · 주식 50만어치 (급매하면 40만쯤)
+            ToGate(m);
+            var mf = M.pending.opts.First(o => o.k == "gateFund");
+            Assert.That(mf.dis, "보유분이 남아 있으면 통장은 못 깸"); Assert.That(mf.sub, Is.EqualTo(m.T("v4.gate.fundSell")));
+            Go(m, "payday", "k", "gateSell");
+            Assert.That(M.pending.stage, Is.EqualTo("gate")); Assert.That(M.pending.opts.First(o => o.k == "gateFund").dis, Is.False, "정리하고도 모자라면 열림");
+            Go(m, "payday", "k", "gateFund");
+            Assert.That(M.fundBrokeN, Is.EqualTo(1)); Assert.That(M.pending.opts.First(o => o.k == "gatePay").dis, Is.False, "한 번 깨면 낼 수 있음");
+            Assert.That(M.pending.opts.First(o => o.k == "gateFund").dis, "낼 수 있으면 더는 안 깨짐");
             // 도로 채우기 (집 · 칸 안 씀)
             S.cash = 5000000; int t0 = g.Tnow();
             Assert.That(g.fundRefillAmt(), Is.EqualTo(2000000));
@@ -1728,6 +1776,7 @@ namespace KwGame.Tests
             double cash0 = b.S.cash; int hold0 = b.S.hold.Count;
             Go(b, "evPick", "k", "ev1");
             Assert.That(b.fundBetTk, Is.Not.Null); Assert.That(b.S.rideN, Is.EqualTo(1)); Assert.That(b.S.fund, Is.EqualTo(R.V4_FUND), "칸이 끝날 때까진 그대로");
+            Assert.That(b.S.cash, Is.EqualTo(cash0), "판돈은 현금에서 안 나감"); Assert.That(b.S.hold.Count, Is.EqualTo(hold0), "실제 주식은 안 삼");
             string tk = b.fundBetTk; double p0 = b.S.fundBet.p0;
             ToHome(b);
             var ev = Go(b, "rest");
@@ -1735,7 +1784,7 @@ namespace KwGame.Tests
             Assert.That(bet, Is.Not.Null, "칸 끝에 정산");
             Assert.That(b.S.fundBet, Is.Null);
             Assert.That(b.S.fund, Is.EqualTo(MathK.Round1k(R.V4_FUND * b.S.mk.tk[tk].p / p0)).Within(1000));
-            Assert.That(b.S.hold.Count, Is.EqualTo(hold0), "실제 주식은 안 삼"); Assert.That(b.S.cash, Is.EqualTo(cash0).Within(1e6), "현금도 안 건드림 (알바·사건 정도만)");
+            Assert.That(b.S.hold.Count, Is.EqualTo(hold0), "정산도 실제 주식과 무관");
         }
 
         /// ⑥-19-3: 24일 장면의 마지막 대사가 말린 횟수 · 같이 탄 횟수로 갈림 (동률은 '닮았나 봐')
