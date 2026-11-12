@@ -8,7 +8,7 @@ window.CONFIG = {
   volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
 
   // ── 한 판의 목표 ─────────────────────────────────────────────
-  house_price: { value: 25000000, min: 10000000, max: 60000000, step: 1000000 }, // 1주차 집값
+  house_price: { value: 31000000, min: 10000000, max: 60000000, step: 1000000 }, // 1주차 집값
   house_growth: { value: 0.07, min: 0, max: 0.2, step: 0.01 }, // 매주 오르는 비율
   days: { value: 28, min: 7, max: 56, step: 7 }, // 한 판의 길이 (일)
 
@@ -78,7 +78,39 @@ window.CONFIG = {
   rel_article: { value: 0.72, min: 0.5, max: 1, step: 0.02 }, // 기사
   rel_rumor: { value: 0.5, min: 0.3, max: 1, step: 0.05 }, // 찌라시
   fake_back: { value: 0.6, min: 0, max: 1.5, step: 0.1 }, // 거짓 뉴스일 때 반대로 가는 크기 (뉴스 크기 대비)
-  study_acc: { value: 0.9, min: 0.5, max: 1, step: 0.05 }, // 공부(리포트)가 맞을 확률
+  study_acc: { value: 0.85, min: 0.5, max: 1, step: 0.05 }, // 공부(리포트)가 맞을 확률
+
+  // ── 레벨 · 특성 ──────────────────────────────────────────────
+  xp_job: { value: 10, min: 0, max: 50, step: 1 }, // 알바 한 번 (등급에 따라 ×0.4~1.6)
+  xp_quest: { value: 30, min: 0, max: 200, step: 5 },
+  xp_study: { value: 8, min: 0, max: 50, step: 1 },
+  xp_day: { value: 5, min: 0, max: 50, step: 1 }, // 하루를 넘길 때
+  xp_profit: { value: 1, min: 0, max: 10, step: 0.5 }, // 실현 이익 1만 원당
+  xp_profit_cap: { value: 40, min: 0, max: 200, step: 5 }, // 한 번의 매매로 얻는 상한
+  lv_base: { value: 40, min: 10, max: 200, step: 5 }, // 레벨 1 → 2 에 드는 경험치
+  lv_step: { value: 30, min: 0, max: 100, step: 5 }, // 레벨마다 더 드는 양
+  perk_iron: { value: 15, min: 0, max: 50, step: 5 }, // 강철 체력: 최대 체력
+  perk_sleep: { value: 10, min: 0, max: 30, step: 1 }, // 꿀잠: 밤 회복
+  perk_hustle: { value: 0.05, min: 0, max: 0.3, step: 0.01 }, // 일머리: 일당
+  perk_hands: { value: 0.08, min: 0, max: 0.3, step: 0.01 }, // 금손: 미니게임 점수에 더함
+  perk_lazy: { value: 0.1, min: 0, max: 0.3, step: 0.05 }, // 요령: 대충 배율
+  perk_streak: { value: 0.01, min: 0, max: 0.05, step: 0.005 }, // 리듬: 콤보 한 단계의 보너스
+  perk_thrift: { value: 0.12, min: 0, max: 0.4, step: 0.01 }, // 짠돌이: 끼니 · 찜질방 · 고정비
+  perk_early: { value: 6, min: 0, max: 20, step: 1 }, // 아침형 인간: 아침 체력
+  perk_quest: { value: 0.5, min: 0, max: 2, step: 0.1 }, // 보상 사냥꾼: 퀘스트 현금 보상
+  perk_legs: { value: 0.01, min: 0, max: 0.03, step: 0.005 }, // 발품: 집값 인상률을 깎음
+  perk_sense: { value: 0.03, min: 0, max: 0.1, step: 0.01 }, // 눈치: 리포트 정확도
+  perk_guts: { value: 0.3, min: 0, max: 0.8, step: 0.05 }, // 강심장: 청산 때 건지는 비율
+  perk_tip_acc: { value: 0.75, min: 0.5, max: 1, step: 0.05 }, // 정보통: 아침 귀띔이 맞을 확률
+
+  // ── 콤보 · 팁 · 돌발 사건 ────────────────────────────────────
+  combo_bonus: { value: 0.015, min: 0, max: 0.1, step: 0.005 }, // 콤보 한 단계마다 일당
+  combo_max: { value: 10, min: 1, max: 30, step: 1 },
+  tip_p: { value: 0.25, min: 0, max: 1, step: 0.05 }, // 완벽일 때 팁이 붙을 확률
+  tip_min: { value: 10000, min: 0, max: 100000, step: 5000 },
+  tip_max: { value: 30000, min: 0, max: 200000, step: 5000 },
+  event_p: { value: 0.6, min: 0, max: 1, step: 0.05 }, // 아침에 돌발 사건이 뜰 확률 (2일째부터)
+  ev_sleep_pen: { value: 15, min: 0, max: 50, step: 5 }, // 잠을 설칠 때 깎이는 회복
 
   // ── 퀘스트 보상 (원) ─────────────────────────────────────────
   q_survive_cash: { value: 20000, min: 0, max: 200000, step: 10000 },

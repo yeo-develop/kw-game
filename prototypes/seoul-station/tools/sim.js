@@ -19,7 +19,9 @@ function play(seed, bot) {
   const s = R.create(seed, 'bot');
   let guard = 0;
   while (!s.ended && guard++ < 2000) {
-    if (s.phase === 'night') { R.nextDay(s); continue; }
+    if (s.phase === 'night') { if (process.env.TRACE) console.log('day', s.day, 'tier', s.tier, 'cash', Math.round(s.cash / M), 'worth', Math.round(R.worth(s) / M), 'hp', Math.round(s.hp), 'lv', s.lv, 'lev', s.lev ? s.lev.dir * s.lev.lev + 'x' + Math.round(s.lev.put / M) : '-', 'arrears', Math.round(s.arrears / M), 'notes', (s.last.notes || []).map(n => n.text.slice(0, 18)).join('|')); R.nextDay(s); continue; }
+    if (s.event) { const v = R.eventView(s); R.choose(s, v.a.ok ? 'a' : 'b'); continue; } // 돌발 사건: 돈이 되면 첫째, 아니면 둘째
+    if (s.offer) { const pr = bot.perks || PRIO; R.pickPerk(s, pr.find(id => s.offer.includes(id)) || s.offer[0]); continue; }
     // 주거
     if (s.tier < bot.upTo) {
       const info = R.moveInfo(s, s.tier + 1);
@@ -45,6 +47,7 @@ function play(seed, bot) {
   }
   return s;
 }
+const PRIO = ['hustle', 'legs', 'iron', 'sleep', 'tipster', 'sense', 'vip', 'thrift', 'quester', 'early', 'hands', 'streak', 'guts', 'lazy']; // 봇이 특성을 고르는 순서
 const bestJob = (s, acts) => { const j = acts.filter(a => a.kind === 'job' && a.ok).sort((a, b) => b.pay - a.pay)[0]; return j || acts.find(a => a.kind === 'rest'); };
 // 체력을 봐 가며: 가장 돈 되는 알바, 안 되면 다음 것, 다 안 되면 쉬기
 const bots = {
@@ -56,15 +59,15 @@ const bots = {
   // 뉴스를 믿을 만한 것만 따라가는 사람: 공시 · 기사 호재면 화끈식품, 원룸 뒤엔 코인 3배 (공부는 안 함)
   news: { upTo: 3, sellToMove: true, score: () => 0.75, pick: bestJob, trade: s => newsTrade(s, false) },
   // 공부까지 하는 사람: 자산이 500만을 넘으면 오전 칸을 공부에 씀
-  study: { upTo: 3, sellToMove: true, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study')) || bestJob(s, acts), trade: s => newsTrade(s, true) },
+  study: { upTo: 3, sellToMove: true, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true) },
   // 공부 + 과감: 5배, 남는 현금의 90%
-  studyAggro: { upTo: 3, sellToMove: true, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study')) || bestJob(s, acts), trade: s => newsTrade(s, true, 5, 0.9) },
+  studyAggro: { upTo: 3, sellToMove: true, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true, 5, 0.9) },
   // 주식만 (원룸에 안 감): 공부 + 화끈식품/대장전자
-  stockOnly: { upTo: 2, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 300 * M && acts.find(a => a.kind === 'study')) || bestJob(s, acts), trade: s => newsTrade(s, true) },
+  stockOnly: { upTo: 2, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 300 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true) },
   // 처음 해 보는 조심스러운 사람: 미니게임은 보통, 공부 안 함, 믿을 만한 소식에만 2배로 현금의 25%
   firstTimer: { upTo: 3, sellToMove: true, score: () => 0.6, pick: bestJob, trade: s => newsTrade(s, false, 2, 0.25) },
   // 두 번째 판쯤: 미니게임 잘함, 저녁에 공부, 3배로 현금의 절반
-  second: { upTo: 3, sellToMove: true, score: () => 0.8, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study')) || bestJob(s, acts), trade: s => newsTrade(s, true, 3, 0.5) },
+  second: { upTo: 3, sellToMove: true, score: () => 0.8, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true, 3, 0.5) },
   // 무지성: 원룸까지는 알바, 그 뒤 전 재산 5배 롱/숏 아무거나
   gamble: { upTo: 3, sellToMove: true, score: () => 0.75, pick: bestJob, trade: s => { if (s.tier >= 3 && !s.lev && s.cash > 50 * M) R.levOpen(s, R.rnd2(s) < 0.5 ? 1 : -1, s.cash - 20 * M, 5); } },
 };
@@ -85,6 +88,7 @@ function newsTrade(s, useReport, lev = 3, share = 0) {
     else if (ds >= 0 && s.cash > keep + 30 * M && s.hold.buldak.units === 0) R.buy(s, 'daejang', (s.cash - keep) * 0.8);
   }
 }
+if (process.env.TRACE) { const [b, sd] = process.env.TRACE.split(':'); const s = play(Number(sd), bots[b]); console.log(JSON.stringify(s.ended), JSON.stringify(s.perks), s.evSeen.join(',')); process.exit(0); } // TRACE=봇:씨앗 → 그 한 판을 날마다 찍음
 const names = (process.env.BOTS || Object.keys(bots).join(',')).split(',');
 for (const name of names) {
   let win = 0, sumPct = 0, days = 0, liq = 0, minPct = 9, maxPct = 0; const pcts = [];
@@ -92,6 +96,7 @@ for (const name of names) {
     const s = play(i * 7 + 1, bots[name]);
     const e = s.ended || { kind: 'stuck', worth: R.worth(s), price: R.housePrice(s) };
     const pct = e.worth / e.price; pcts.push(pct);
+    if (process.env.WORST && pct < Number(process.env.WORST)) console.log('  낮은 판', name, 'seed', i * 7 + 1, pct.toFixed(2));
     if (e.kind === 'home') { win++; days += e.day; }
     sumPct += pct; liq += s.stats.liq;
   }

@@ -12,7 +12,7 @@ const LINT = () => {
   let n;
   while ((n = w.nextNode())) {
     const t = n.textContent.trim(); if (!t) continue;
-    const el = n.parentElement; if (el.closest('.hide') || el.closest('#fx') || el.closest('#toast')) continue;
+    const el = n.parentElement; if (el.closest('.hide') || el.closest('#fx') || el.closest('#toasts') || el.closest('.stamp')) continue;
     const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue;
     const r = document.createRange(); r.selectNodeContents(n);
     const rs = [...r.getClientRects()].filter(b => b.width > 0.5 && b.height > 0.5); if (!rs.length) continue;
@@ -27,7 +27,7 @@ const LINT = () => {
       const pr = p.getBoundingClientRect();
       if (b.x1 > pr.right + 2 || b.y1 > pr.bottom + 2 || b.x0 < pr.left - 2 || b.y0 < pr.top - 2) { if (!(ps.textOverflow === 'ellipsis' || ps.webkitLineClamp !== 'none')) bad.push('잘림(' + (p.id || p.className) + '): ' + t.slice(0, 24)); break; }
     }
-    const box = el.closest('#status,#acts,#panel,#top,#scene,.win,.e-box,.t-box');
+    const box = el.closest('#hud,#me,#quest,#today,#board,.win,.e-box,.t-box');
     if (box) { const br = box.getBoundingClientRect(); if (b.x1 > br.right + 1 || b.y1 > br.bottom + 1 || b.x0 < br.left - 1 || b.y0 < br.top - 1) bad.push('칸 밖(' + (box.id || box.className) + '): ' + t.slice(0, 24)); }
     leaves.push({ el, b, t });
   }
@@ -64,7 +64,7 @@ const LINT = () => {
   await shot('01_title');
   await page.click('[data-do="new"]'); await step(20);
   await shot('02_intro');
-  let guard = 0, mgShot = 0;
+  let guard = 0, mgShot = 0, fxSeen = 0, perks = 0, evts = 0;
   const M = 10000;
   while (guard++ < 4000) {
     const s = await st();
@@ -81,6 +81,13 @@ const LINT = () => {
       await shot('03_mg_result');
       await step(30); await G(() => window.game.press('Space')); await step(20);
       continue;
+    }
+    if (s.modal === 'quest') fxSeen = Math.max(fxSeen, await G(() => window.game.fx.parts));
+    if (s.modal === 'perk') { await shot('pop_perk'); await step(20); await G(() => window.game.press('Digit1')); await step(20); perks++; continue; } // 특성: 첫째 카드
+    if (s.modal === 'event') { // 돌발 사건: 돈이 되면 첫째, 아니면 둘째 → 결과 확인
+      await shot('pop_event'); await step(20);
+      await G(() => { const b = document.querySelector('[data-do="ev"][data-arg="a"]'); window.game.press(b && !b.disabled ? 'Digit1' : 'Digit2'); }); await step(25);
+      await shot('pop_event_result'); await G(() => window.game.press('Space')); await step(20); evts++; continue;
     }
     if (s.modal) {
       await shot('pop_' + s.modal + (s.modal === 'quest' ? '_' + s.quest : ''), s.modal !== 'quest' || s.quest < 4);
@@ -137,7 +144,7 @@ const LINT = () => {
       continue;
     }
     // 칸 행동: 공부형은 자산이 크면 저녁에 공부, 아니면 가장 돈 되는 알바, 안 되면 쉬기
-    const pick = await G(({ style, M }) => { const R = window.Rules, S = window.game.state.raw; const acts = R.acts(S); if (style === 'study' && S.slot === 2 && R.worth(S) > 500 * M && acts.find(a => a.kind === 'study')) return ['study', '']; const j = acts.filter(a => a.kind === 'job' && a.ok).sort((a, b) => b.pay - a.pay)[0]; return j ? [(S.day <= 2 || S.day % 5 === 0) ? 'job' : 'skip', j.id] : ['rest', '']; }, { style, M });
+    const pick = await G(({ style, M }) => { const R = window.Rules, S = window.game.state.raw; const acts = R.acts(S); if (style === 'study' && S.slot === 2 && R.worth(S) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) return ['study', '']; const j = acts.filter(a => a.kind === 'job' && a.ok).sort((a, b) => b.pay - a.pay)[0]; return j ? [(S.day <= 2 || S.day % 5 === 0) ? 'job' : 'skip', j.id] : ['rest', '']; }, { style, M });
     if (process.env.DBG) console.log('pick', JSON.stringify(pick), JSON.stringify(await st()), await G(() => document.getElementById('veil').className + '|' + document.getElementById('veil').innerHTML.slice(0, 120)));
     if (pick[0] === 'job') await page.click('[data-do="job"][data-arg="' + pick[1] + '"]', { position: { x: 20, y: 60 }, timeout: 3000 });
     else if (pick[0] === 'skip') await page.click('[data-do="skip"][data-arg="' + pick[1] + '"]');
@@ -148,6 +155,8 @@ const LINT = () => {
   await step(20);
   await shot('30_results_' + (end.ended ? end.ended.kind : 'none'));
   await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=figures'); await page.screenshot({ path: path.join(out, 'figures.png') });
-  console.log(JSON.stringify({ seed, style, loops: guard, end: end.ended, shots: shots.length, errors: errs.slice(0, 8), lint }, null, 1));
+  const zones = await G(() => document.querySelectorAll('[data-zone]').length);
+  console.log(JSON.stringify({ seed, style, loops: guard, end: end.ended, shots: shots.length, perks, events: evts, fxAfterQuest: fxSeen, errors: errs.slice(0, 8), lint }, null, 1));
+  if (errs.length || Object.keys(lint).length || !fxSeen || !evts || !perks) process.exitCode = 1; // 오류 · 넘침이 있거나, 폭죽 · 사건 · 특성 창을 한 번도 못 봤으면 실패
   await browser.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

@@ -1,7 +1,8 @@
-boots	pass	화면으로 끝까지 몬 세 판(tools/check.js: 씨앗 5 · 9 · 3)과 실제 클릭 점검(tools/rt.js) 모두 콘솔 오류 · 잡히지 않은 오류 0
-shot	pass	evidence/play.png 등 17장을 직접 봄
+boots	pass	화면으로 끝까지 몬 세 판(tools/check.js: 씨앗 5 · 3 · 9)과 실제 클릭 점검(tools/rt.js) 모두 콘솔 오류 · 잡히지 않은 오류 0
+shot	pass	evidence/ 의 화면 21장을 직접 봄
 brief_words	pass	evidence/brief-words.tsv 4줄 · evidence/nearest-game.txt
-emoji_outlines	pass	게임 파일 7개에 이모지 · 기호 그림 0줄, evidence/figures.png 에 등장물 46개가 저마다 다른 윤곽
-layout	pass	세 판의 주요 화면 90여 장에서 글자 넘침 · 겹침 · 14px 미만 0건, 글이 가장 많은 날(tools/worst.js)도 0건
-rules	pass	tools/rules-test.js 20개 통과
-independent_review	pass	코드 검토 20건 · 처음 하는 사람 눈으로 해 본 검토 16건 → 높음 7건 포함 반영. 남긴 것은 넘겨줄 때 적음
+emoji_outlines	pass	게임 파일 7개에 이모지 · 기호 그림 0줄, evidence/figures.png 에 등장물과 아이콘 66개
+layout	pass	세 판의 주요 화면에서 글자 넘침 · 겹침 · 14px 미만 0건, 글이 가장 많은 날(tools/worst.js) 0건, 구역 배치(tools/zones.js) 통과
+text	pass	tools/textcount.js: 첫 빌드(꼬리표 one-shot/seoul-station)보다 보이는 글자 수 −48% · −44% · −43% · −52%
+rules	pass	tools/rules-test.js 31개 통과
+balance	pass	tools/sim.js 300판: 알바만 0%(집값의 65%) · second 58% · studyAggro 80% · gamble 9%
