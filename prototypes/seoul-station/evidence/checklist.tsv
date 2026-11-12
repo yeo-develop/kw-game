@@ -1,0 +1,30 @@
+F1	pass	evidence/quest-done.png · rules.js questTick	퀘스트가 늘 1개. 끝내면 완료 창에 보상과 다음 퀘스트가 함께 뜸 (12개, 때를 놓친 것은 건너뜀)
+F2	pass	evidence/play.png · rules.js acts	칸마다 알바 · 쉬기 · 공부 중 하나. 체력이 모자라면 흐려지고 이유가 적힘, 눌러도 이유를 알려 줌
+F3	pass	evidence/mg_flyer.png mg_loading.png mg_store.png mg_delivery.png	4종이 조작과 그림이 다름. 점수에 따라 ×0.6/1.0/1.2/1.4, 대충 ×0.8, 직접 한 횟수로 숙련도
+F4	pass	evidence/confirm-move.png · tools/rules-test.js	서울역 → 찜질방 → 고시원 → 원룸 → 내 집. 잠 +25/+50/+65/+80, 일요일 밤 고정비(산 날만큼), 연속 2회 미납이면 내려감
+F5	pass	evidence/stock.png coin.png	주식 3종은 고시원부터, 코인 롱 · 숏 · 청산은 원룸부터. 소식(공시 · 기사 · 찌라시)과 공부(리포트)
+F6	pass	evidence/results-home.png results-fail.png · tools/rules-test.js	집값 2,500 → 2,675 → 2,862 → 3,063만. 순자산이 넘으면 계약 = 엔딩, 28일 밤이 지나면 실패
+F7	pass	evidence/night.png play.png	밤 정산에 번 돈 · 쓴 돈이 출처별로, 위쪽 띠에 집까지 %, 상태창에 지금 퀘스트 · 고정비 · 집값 인상, 거의 다 됨 표시, 행동마다 저장, 번 돈 숫자가 누른 자리에서 현금 칸으로 날아감
+F8	pass	evidence/title.png results-fail.png	제목(조작 안내 · 이어하기) · 결과 · 다시 하기 · 소리 끄기(M). 소리 자체는 들어 보지 못함
+F9	pass	evidence/title.png play.png	이름 입력, 순자산에 따라 칭호 5단계 + 집주인 (얇은 대역)
+M1	pass	evidence/title.png play.png	새로 시작 → 새벽빛의 서울역 벤치
+M2	not_assessed	evidence/play.png	상태창과 시작 창은 뜸. '띠링' 소리와 꺾쇠가 먼저 그려지는 연출은 화면 없는 브라우저로는 못 봄 — 직접 해 봐야 함
+M3	pass	evidence/play.png	퀘스트 1 "첫 끼니를 벌어라", 행동 카드는 전단지 · 상하차 · 쉬기 세 장, 아래에 주거 사다리
+M4	pass	evidence/mg_flyer.png	전단지 7초 미니게임 (걷는 사람이 손 앞에 왔을 때 Space)
+M5	pass	evidence/quest-done.png	일당 숫자가 떠올라 현금 칸으로, 퀘스트 완료 창에 삼각김밥(체력 +10)과 다음 퀘스트 "오늘을 버텨라"
+M6	not_assessed	-	"이 게임의 맛"은 사람이 해 봐야 아는 것
+C1	pass	tools/rules-test.js · evidence/play.png	서울역에서 자면 체력 +25뿐 → 다음 퀘스트가 찜질방
+C2	pass	evidence/night.png	일요일 밤 고정비(그 주에 산 날만큼), 집값 매주 7%
+C3	pass	tools/rules-test.js	연속 2회 미납 → 한 단계 내려가고 거기서 못 쓰는 계좌 정리
+C4	pass	evidence/results-fail.png	28일 밤이 지나면 실패 → 다시 하기
+C5	pass	evidence/coin.png · tools/rules-test.js	원룸 고정비 주 80만, 코인은 반대로 100/배율 % 가면 청산
+C6	pass	tools/sim.js 300판	알바만 하면 집값의 59%. 조심스러운 첫 판 66%, 공부 + 3배는 51% 성공, 과감 81%, 무지성 5배 11%. 봇 수치이지 사람을 잰 값이 아님
+L1	pass	evidence/play.png figures.png	남색 + 주황 + 청록, 평면 벡터 인물, 수익 빨강 · 손실 파랑, 이모지 없음. 꺾쇠 연출 · 소리는 M2 와 같음
+L2	pass	-	참고 그림 없음. 특정 작품의 화면 · 이름을 쓰지 않음 (evidence/nearest-game.txt)
+L3	pass	evidence/play.png · evidence/rt (800×450 · 1920×1080)	2D 고정 한 화면, 왼쪽 장면 + 상태창 / 오른쪽 할 일 + 사다리 · 투자, 창에 맞춰 통째로 늘고 줆
+S1	pass	evidence/title.png	user 시점 롤플레잉: 이름 + 칭호 (얇은 대역)
+S2	pass	evidence/play.png	상태창
+S3	pass	evidence/mg_*.png	알바
+S4	pass	evidence/night.png	고정비
+S5	pass	evidence/stock.png coin.png	자산투자
+S6	pass	evidence/results-home.png	1차 엔딩: 집을 사기 (점검용으로 일당을 올린 판에서 확인. 보통 값으로는 봇만 확인)
