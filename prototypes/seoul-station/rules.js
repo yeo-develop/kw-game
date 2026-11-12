@@ -65,6 +65,7 @@
 
   // ── 새 판 ───────────────────────────────────────────────────
   function create(seed, name) {
+    seed = ((seed >>> 0) % 1679616) || 1; // 판 코드(SS-XXXX)로 그대로 적을 수 있는 범위
     const s = {
       v: 1, seed: seed | 0, rng: seed | 0, rng2: (Math.imul(seed | 0, 7919) + 13) | 0, rng3: (Math.imul(seed | 0, 104729) + 71) | 0, name: (name || '').trim() || '나',
       lv: 1, xp: 0, perks: {}, offer: null, picks: 0, combo: 0, buff: {}, event: null, evSeen: [], ach: [], hpBonus: 0, gutsUsed: false,
@@ -130,17 +131,19 @@
       out.push({ kind: 'job', id: j.id, name: j.name, note: j.note, pay: round1k(T['pay_' + j.id] * (1 + T.skill_bonus * lv) * (1 + T.perk_hustle * perk(s, 'hustle'))), hp, lv, toNext: skillNext(s, j.id), ok: s.hp >= hp, why: s.hp >= hp ? '' : '체력이 모자랍니다' });
     }
     out.push({ kind: 'rest', id: 'rest', name: '쉬기', hp: -(s.tier === 0 ? T.rest_hp_station : T.rest_hp), ok: true, why: '', note: s.tier === 0 ? '벤치에서는 덜 풀린다' : '' });
-    if (unlocked(s, 'study')) { const read = !!(s.market.intel && s.market.intel.madeOn === s.day); out.push({ kind: 'study', id: 'study', name: '공부', hp: 0, ok: !read, why: read ? '오늘 리포트는 이미 읽었습니다' : '', note: '내일 나올 소식을 미리 안다' }); }
+    if (unlocked(s, 'study')) { const read = studied(s); out.push({ kind: 'study', id: 'study', name: '공부', hp: 0, ok: !read, why: read ? '오늘 리포트는 이미 읽었습니다' : '', note: '내일 나올 소식을 미리 안다' }); }
     return out;
   }
 
   // ── 칸 행동 ─────────────────────────────────────────────────
+  const studied = s => !!(s.market.intel && s.market.intel.madeOn === s.day && !s.market.intel.free); // 오늘 한 칸을 써서 읽었나 (공짜로 얻은 리포트는 안 침)
   function canAct(s) { return !s.ended && s.phase === 'day' && s.slot < 3 && !s.event; } // 돌발 사건이 떠 있으면 먼저 골라야 함
+  const skipMult = s => T.mult_skip + T.perk_lazy * perk(s, 'lazy'); // "대충"의 일당 배율 (특성 '요령' 포함)
   function doJob(s, id, score) { // score: 0~1, null 이면 "대충 하기"
     const a = acts(s).find(x => x.id === id);
     if (!canAct(s) || !a || !a.ok) return false;
     const g = score == null ? 'skip' : grade(score + T.perk_hands * perk(s, 'hands'));
-    const mult = g === 'skip' ? T.mult_skip + T.perk_lazy * perk(s, 'lazy') : T['mult_' + g];
+    const mult = g === 'skip' ? skipMult(s) : g === 'miss' ? Math.max(T.mult_miss, skipMult(s)) : T['mult_' + g]; // 직접 하면 실수해도 "대충"보다 덜 받지 않는다
     const comboWas = s.combo, comboMult = 1 + (T.combo_bonus + T.perk_streak * perk(s, 'streak')) * comboWas, extra = s.buff.nextJob || 1;
     const pay = round1k(a.pay * mult * comboMult * extra);
     const before = skill(s, id);
@@ -166,8 +169,10 @@
     return true;
   }
   function doStudy(s) {
-    if (!canAct(s) || !unlocked(s, 'study') || (s.market.intel && s.market.intel.madeOn === s.day)) return false;
-    const count = readReport(s);
+    if (!canAct(s) || !unlocked(s, 'study') || studied(s)) return false;
+    const it = s.market.intel, free = it && it.madeOn === s.day && it.free;
+    if (free) it.free = false; // 귀띔으로 이미 받은 리포트면 다시 뽑지 않고 그대로 (다시 굴려서 고르는 길을 막음)
+    const count = free ? it.items.length : readReport(s);
     s.studied++;
     ev(s, 'study', { count });
     sys(s, count ? '리포트 입수. 내일 소식 ' + count + '건의 진짜 방향을 표시했습니다(' + Math.round(studyAcc(s) * 100) + '% 맞음). 시세는 소식 말고도 출렁입니다.' : '리포트 입수. 내일은 조용합니다. 조용한 것도 정보입니다.');
@@ -405,7 +410,7 @@
       ev(s, 'ending', { kind: 'fail' });
       return true;
     }
-    const before = housePrice(s);
+    const before = housePrice(s), quest0 = s.quest;
     s.day++; s.slot = 0; s.phase = 'day';
     s.market.news = s.market.news.filter(n => n.day >= s.day);
     s.market.brief = s.market.intel && s.market.intel.day === s.day ? s.market.intel : null; s.market.intel = null; // 어제 읽은 리포트는 오늘 소식 옆에 붙는다
@@ -414,13 +419,13 @@
     beginDay(s);
     ev(s, 'day', { day: s.day });
     if (perk(s, 'tipster')) tipster(s);
-    rollEvent(s);
     const now = housePrice(s);
     if (now > before) sys(s, '집값이 올랐습니다. ' + won(before) + ' → ' + won(now) + '. 집은 기다려 주지 않습니다.', 'warn');
     const b = bill(s);
     if (b && b.inDays === 0) sys(s, '오늘 밤 고정비 ' + won(b.amt) + '이 나갑니다. 현금으로 준비하세요.', 'warn');
     if (unlocked(s, 'stock')) for (const n of todayNews(s)) if (n.asset !== 'coin' || unlocked(s, 'coin')) ev(s, 'news', { news: n });
     after(s);
+    if (s.quest === quest0 && !s.offer) rollEvent(s); // 퀘스트 완료 · 특성 고르기가 뜨는 아침에는 사건을 겹치지 않는다
     return true;
   }
   const sum = rows => rows.reduce((a, r) => a + r.amt, 0);
@@ -487,7 +492,7 @@
     { id: 'sleep', name: '꿀잠', icon: 'zzz', max: 3, desc: () => '밤마다 체력을 ' + T.perk_sleep + ' 더 회복' },
     { id: 'hustle', name: '일머리', icon: 'coin', max: 3, desc: () => '알바 일당 +' + pc(T.perk_hustle) },
     { id: 'hands', name: '금손', icon: 'sparkle', max: 2, desc: () => '미니게임 판정이 후해진다' },
-    { id: 'lazy', name: '요령', icon: 'skip', max: 2, desc: () => '"대충"의 일당 배율 +' + T.perk_lazy },
+    { id: 'lazy', name: '요령', icon: 'skip', max: 2, desc: () => '"대충" 배율 +' + T.perk_lazy + ', 실수해도 그만큼은 받는다' },
     { id: 'streak', name: '리듬', icon: 'fire', max: 2, desc: () => '콤보 한 단계의 보너스 +' + pc(T.perk_streak) + 'p' },
     { id: 'thrift', name: '짠돌이', icon: 'tag', max: 2, desc: () => '끼니 · 찜질방 · 고정비 −' + pc(T.perk_thrift) },
     { id: 'early', name: '아침형 인간', icon: 'sun', max: 2, desc: () => '매일 아침 체력 +' + T.perk_early },
@@ -501,7 +506,7 @@
   const xpNeed = lv => T.lv_base + T.lv_step * (lv - 1);
   function gainXp(s, n) {
     if (!(n > 0) || s.ended) return;
-    s.xp += n;
+    s.xp += n; s.stats.xp = (s.stats.xp || 0) + n;
     while (s.xp >= xpNeed(s.lv)) { s.xp -= xpNeed(s.lv); s.lv++; s.picks = (s.picks || 0) + 1; ev(s, 'level', { lv: s.lv }); }
     if (s.picks > 0 && !s.offer) makeOffer(s);
   }
@@ -556,8 +561,8 @@
       b: { label: '반을 떼어 준다', run: s => { gainXp(s, 12); return '나눠 먹었다. 해탈에 한 걸음 가까워졌다.'; } } },
     { id: 'soup', icon: 'meal', tier: [0, 1], title: '무료 급식', text: '역 광장에 무료 급식 줄이 늘어섰다. 국밥 냄새가 난다.',
       a: { label: '줄을 선다', run: s => { heal(s, 14); return '뜨끈한 국밥 한 그릇. 살 것 같다.'; } },
-      b: { label: '줄에 전단지를 돌린다', run: s => { income(s, '짬짬이 전단지', 20000); return '줄 선 사람들에게 전단지를 돌려 2만을 벌었다.'; } } },
-    { id: 'egg', icon: 'egg', tier: [1, 1], title: '식혜 내기', text: '옆자리 아저씨가 가위바위보로 2만 내기를 하자고 한다.',
+      b: { label: '그 시간에 전단지를 돌린다', run: s => { income(s, '짬짬이 전단지', 20000); return '점심 손님들에게 전단지를 돌려 2만을 벌었다.'; } } },
+    { id: 'egg', icon: 'egg', tier: [1, 1], title: '가위바위보 내기', text: '옆자리 아저씨가 삶은 달걀을 까며 2만 내기 가위바위보를 하자고 한다. 진 사람이 식혜도 산다.',
       a: { label: '한다', cost: 20000, run: s => { if (rnd3(s) < 0.5) { income(s, '내기', 20000); return '이겼다. 2만과 식혜를 얻었다.'; } expense(s, '내기', 20000); return '졌다. 2만이 식혜와 함께 사라졌다.'; } },
       b: { label: '잠이나 잔다', run: s => { heal(s, 8); return '아저씨의 한숨을 자장가 삼아 잤다.'; } } },
     { id: 'lunchbox', icon: 'lunchbox', tier: [1, 2], title: '폐기 도시락', text: '편의점 사장이 유통기한이 임박한 도시락을 내민다.',
@@ -579,7 +584,7 @@
       a: { label: '믿고 20만 산다', cost: 200000, run: s => { buy(s, 'hantang', 200000); return '샀다. 이제 기도뿐이다.'; } },
       b: { label: '끈다', run: s => { heal(s, 5); return '귀가 편해졌다.'; } } },
     { id: 'regular', icon: 'eye', tier: [2, 3], title: '단골의 귀띔', text: '편의점 단골이 "내일 큰 소식 있다더라"고 속삭인다.',
-      a: { label: '믿어 본다', run: s => { if (rnd3(s) < 0.5) { readReport(s); return '진짜였다. 내일 리포트를 공짜로 얻었다.'; } gainXp(s, 5); return '헛소문이었다. 단골은 벌써 가고 없다.'; } },
+      a: { label: '믿어 본다', run: s => { if (rnd3(s) < 0.5) { readReport(s); s.market.intel.free = true; return '진짜였다. 내일 리포트를 공짜로 얻었다.'; } gainXp(s, 5); return '헛소문이었다. 단골은 벌써 가고 없다.'; } },
       b: { label: '흘려듣는다', run: s => { gainXp(s, 5); return '웃어넘겼다.'; } } },
     { id: 'clinic', icon: 'clinic', tier: [2, 3], title: '건강검진 문자', text: '"올해 검진 대상자입니다." 몇 년째 미뤘다.',
       a: { label: '받는다', cost: 30000, run: s => { expense(s, '검진', 30000); s.hpBonus = (s.hpBonus || 0) + 5; heal(s, 5); return '생각보다 멀쩡했다. 최대 체력 +5.'; } },
@@ -587,8 +592,8 @@
     { id: 'wrench', icon: 'wrench', tier: [3, 3], title: '보일러 고장', text: '보일러가 숨을 거뒀다. 집주인은 전화를 안 받는다.',
       a: { label: '내 돈으로 고친다', cost: 150000, run: s => { expense(s, '보일러 수리', 150000); return '15만을 냈다. 방이 다시 따뜻하다.'; } },
       b: { label: '버틴다', run: s => { s.buff.sleepPen = 3; return '패딩을 입고 자기로 했다. 사흘은 춥겠다.'; } } },
-    { id: 'ticket', icon: 'ticket', tier: [0, 3], title: '복권 가게', text: '"1등 3번 나온 집." 간판이 유난히 반짝인다.',
-      a: { label: '한 장 산다', cost: 5000, run: s => { expense(s, '복권', 5000); const r = rnd3(s); if (r < 0.03) { s.stats.lotto = 1; income(s, '복권 당첨', 1000000); return '1등은 아니지만 100만이 됐다. 손이 떨린다.'; } if (r < 0.2) { income(s, '복권 당첨', 30000); return '3만 당첨. 본전은 넘겼다.'; } return '꽝. 종이 한 장이 남았다.'; } },
+    { id: 'ticket', icon: 'ticket', tier: [1, 3], title: '복권 가게', text: '"1등 3번 나온 집." 간판이 유난히 반짝인다.',
+      a: { label: '한 장 산다', cost: 10000, run: s => { expense(s, '복권', 10000); const r = rnd3(s); if (r < 0.02) { s.stats.lotto = 1; income(s, '복권 당첨', 300000); return '3등. 30만이 됐다. 손이 떨린다.'; } if (r < 0.14) { income(s, '복권 당첨', 30000); return '3만 당첨. 본전은 넘겼다.'; } return '꽝. 종이 한 장이 남았다.'; } }, // 기대값은 본전에 조금 못 미친다 (0.02×30 + 0.12×3 − 1 = −0.04만)
       b: { label: '지나친다', run: s => { gainXp(s, 5); return '확률을 아는 사람의 뒷모습이다.'; } } },
     { id: 'umbrella', icon: 'umbrella', tier: [0, 3], title: '소나기', text: '갑자기 비가 쏟아진다. 우산 없는 사람들이 뛴다.',
       a: { label: '우산을 떼다 판다', cost: 20000, run: s => { expense(s, '우산 떼기', 20000); if (rnd3(s) < 0.6) { income(s, '우산 장사', 80000); return '불티나게 팔렸다. 6만을 남겼다.'; } return '사자마자 비가 그쳤다. 우산 열 개가 남았다.'; } },
@@ -598,7 +603,7 @@
       b: { label: '지나간다', run: s => { gainXp(s, 3); return '고양이가 한심하다는 듯 쳐다봤다.'; } } },
   ];
   function rollEvent(s) {
-    if (s.event || s.day < 2 || rnd3(s) >= T.event_p) return;
+    if (s.event || s.ended || s.day < T.event_from || rnd3(s) >= T.event_p) return;
     const pool = EVENTS.filter(e => s.tier >= e.tier[0] && s.tier <= e.tier[1] && s.evSeen.indexOf(e.id) < 0);
     if (!pool.length) return;
     s.event = pool[Math.floor(rnd3(s) * pool.length)].id;
@@ -615,8 +620,10 @@
     if (!e || s.ended || (k !== 'a' && k !== 'b')) return false;
     if (s.cash < (e[k].cost || 0)) return fail(s, '현금이 모자랍니다');
     s.event = null; s.evSeen.push(e.id); s.stats.events = (s.stats.events || 0) + 1;
+    const was = { cash: s.cash, hp: s.hp, xp: s.stats.xp || 0, hpMax: hpMax(s), pen: s.buff.sleepPen || 0 };
     const text = e[k].run(s);
-    ev(s, 'event_done', { id: e.id, icon: e.icon, title: e.title, text });
+    const fx = { cash: s.cash - was.cash, hp: Math.round(s.hp - was.hp), xp: (s.stats.xp || 0) - was.xp, hpMax: hpMax(s) - was.hpMax, nights: (s.buff.sleepPen || 0) - was.pen }; // 고른 것이 바꾼 것 (화면이 숫자로 보여 줌)
+    ev(s, 'event_done', { id: e.id, icon: e.icon, title: e.title, text, fx });
     sys(s, e.title + ' — ' + text);
     after(s);
     return true;
@@ -661,7 +668,7 @@
     if (!e) return '';
     const home = e.kind === 'home', st = s.stats;
     return ['[서울역 상태창] ' + (home ? '내 집 마련 · ' + e.rank + '등급' : '올해도 무주택 · 집값의 ' + Math.floor(e.pct * 100) + '%'),
-      s.name + ' · ' + (home ? e.day + '일째에 ' + won(e.price) + '짜리 집 계약' : e.day + '일 동안 순자산 ' + won(e.worth)),
+      s.name + ' · ' + (home ? e.day + '일째에 ' + won(e.price) + '짜리 집 계약 · 순자산 ' + won(e.worth) : e.day + '일 동안 순자산 ' + won(e.worth)),
       '알바 ' + won(st.alba) + ' · 투자 ' + (st.trade >= 0 ? '+' : '') + won(st.trade) + ' · 청산 ' + st.liq + '번 · Lv.' + s.lv + ' · 업적 ' + s.ach.length + '개',
       '판 코드 ' + codeOf(s.seed)].join('\n');
   }
@@ -687,10 +694,10 @@
   }
 
   return {
-    setTune, HOMES, JOBS, ASSETS, SRC, QUESTS, GRADE, create, acts, canAct, doJob, doRest, doStudy, endDay, nextDay,
+    setTune, HOMES, ASSETS, create, acts, canAct, doJob, doRest, doStudy, endDay, nextDay,
     buy, sell, levOpen, levClose, levValue, levLiq, move, moveInfo, buyHouse, worth, invested, holdValue, housePrice, weekOf, bill, riseIn,
-    skill, grade, unlocked, todayNews, intelView, questView, rnd2, won, save, load, weekCost,
+    skill, skipMult, unlocked, todayNews, intelView, questView, rnd2, won, save, load, weekCost,
     hpMax, mealCost, saunaCost, sleepGain, studyAcc, perk, pickPerk, offerView, perksView, xpView, PERKS,
-    eventView, choose, EVENTS, achList, ACH, codeOf, seedOf, dailySeed, resultCard,
+    eventView, choose, EVENTS, achList, codeOf, seedOf, dailySeed, resultCard,
   };
 });

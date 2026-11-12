@@ -19,12 +19,16 @@ fs.mkdirSync(out, { recursive: true });
   const wait = ms => page.waitForTimeout(ms);
   const shot = n => page.screenshot({ path: path.join(out, n + '.png') });
   const note = async t => { const s = await st(); log.push(t + ' → ' + JSON.stringify(s)); return s; };
-  const clear = async () => { // 떠 있는 창을 종류에 맞게 닫음 (특성은 첫째 카드, 돌발 사건은 둘째 선택 뒤 확인)
-    for (let i = 0; i < 12; i++) {
-      const m = (await st()).modal; if (!m) return;
+  const clear = async () => { // 떠 있는 창을 종류에 맞게 닫고(특성은 첫째 카드, 돌발 사건은 둘째 선택 뒤 확인), 본 창의 종류를 차례로 돌려줌
+    const seen = []; let last = '';
+    for (let i = 0; i < 16; i++) {
+      const m = (await st()).modal; if (!m) break;
+      const sig = m + ':' + await page.evaluate(() => (document.querySelector('#veil h3, #veil .qdone b') || {}).textContent || ''); // 같은 종류라도 제목이 다르면 다른 창
+      if (sig !== last) { seen.push(m); last = sig; }
       if (m === 'perk') await page.click('.pcard'); else if (m === 'event' && await page.locator('[data-do="ev"]').count()) await page.click('[data-do="ev"][data-arg="b"]'); else await page.click('#veil [data-do="ok"]');
-      await wait(550);
+      await wait(750);
     }
+    return seen;
   };
   const mgButtons = () => page.evaluate(() => Array.from(document.querySelectorAll('[data-mg]')).map(b => b.dataset.mg + ':' + b.textContent.trim()));
   await wait(500); await page.fill('#name', '동여'); await shot('rt01_title');
@@ -41,12 +45,15 @@ fs.mkdirSync(out, { recursive: true });
   await page.waitForSelector('.mg-res', { timeout: 6000 });
   await page.keyboard.press('Space'); await wait(150); // 미니게임의 마지막 누름: 결과 창이 바로 닫히면 안 됨
   if ((await st()).modal !== 'mg') errs.push('결과 창이 뜨자마자 닫힘');
-  await wait(700); await shot('rt05_minigame_result');
+  for (let i = 0; i < 12; i++) { await page.keyboard.press('Space'); await wait(150); } // 1.8초 동안 연타
+  if ((await st()).modal !== 'mg' || !(await page.locator('.mg-res').count())) errs.push('연타로 결과 창이 넘어감');
+  await wait(500); await shot('rt05_minigame_result');
   const res = await page.textContent('.mg-res'); log.push('결과: ' + res.replace(/\s+/g, ' '));
   // 결과가 뜨자마자 Space 를 연타해도 퀘스트 창까지 한꺼번에 닫히지 않아야 함
-  await page.keyboard.press('Space'); await page.keyboard.press('Space'); await wait(120);
+  await page.keyboard.press('Space'); await wait(60); await page.keyboard.press('Space'); await wait(120); // 멈췄다 누른 첫 번째만 듣는다
   s = await note('결과에서 Space 두 번');
-  await wait(600); s = await st();
+  for (let i = 0; i < 8; i++) { await page.keyboard.press('Space'); await wait(150); } // 이어지는 연타도 다음 창을 넘기지 못한다
+  s = await st();
   if (s.modal !== 'quest') errs.push('퀘스트 완료 창이 떠 있어야 하는데: ' + s.modal);
   await shot('rt06_quest_done');
   await clear();
@@ -58,7 +65,7 @@ fs.mkdirSync(out, { recursive: true });
     const bs = page.locator('[data-mg]'); const n = await bs.count(); if (n) await bs.nth(i % n).dispatchEvent('pointerdown');
     if (i === 6) await shot('rt07_loading_mid');
   }
-  await page.waitForSelector('.mg-res', { timeout: 6000 }); await wait(700); await page.click('#veil [data-do="ok"]'); await wait(500);
+  await page.waitForSelector('.mg-res', { timeout: 6000 }); await wait(1100); await page.click('#veil [data-do="ok"]'); await wait(500);
   if ((await st()).modal === 'perk') await shot('rt07b_level_up');
   await clear();
   s = await note('상하차 뒤');
@@ -72,13 +79,21 @@ fs.mkdirSync(out, { recursive: true });
   await page.click('[data-do="endday"]'); await wait(700); await shot('rt09_night'); await note('하루 마치기');
   await page.keyboard.press('Space'); await wait(800);
   if ((await st()).modal) await shot('rt10_morning_popup');
-  await clear();
+  { // 2일째 아침에 뜨는 창을 세어 본다: 퀘스트 완료 한 장(+ 레벨이 올랐으면 특성 고르기)까지만
+    const seen = await clear();
+    log.push('2일째 아침에 뜬 창: ' + (seen.join(' → ') || '없음'));
+    if (seen.filter(m => m === 'quest').length > 1) errs.push('퀘스트 완료 창이 여러 장: ' + seen.join(' → '));
+    if (seen.indexOf('event') >= 0) errs.push('2일째 아침에 돌발 사건이 겹쳐 뜸: ' + seen.join(' → '));
+    if (seen.length > 2) errs.push('2일째 아침에 창이 ' + seen.length + '장: ' + seen.join(' → '));
+  }
   s = await note('2일째 아침');
   if (s.day !== 2) errs.push('2일째가 아님');
   // 찜질방으로 옮기기 (사다리 버튼)
   if (await page.locator('[data-do="move"]').count()) { await page.click('[data-do="move"]'); await wait(600); if ((await st()).modal) await shot('rt11_roof_quest'); await clear(); }
   s = await note('찜질방 이동'); await shot('rt12_sauna');
   // 저장: 새로 고침 뒤 이어하기
+  await page.evaluate(() => { const S = window.game.state.raw; if (S.ach.indexOf('kind') < 0) S.ach.push('kind'); }); // 알림이 뜨기 전에 판 저장에만 들어간 업적을 흉내
+  await page.click('#hud [data-do="quit"]'); await wait(400); // 나가면서 저장
   await page.reload(); await wait(600); await shot('rt13_title_continue');
   if (!(await page.locator('[data-do="continue"]').count())) errs.push('이어하기 버튼이 없음');
   else { await page.click('[data-do="continue"]'); await wait(600); const r = await note('이어하기'); if (r.day !== 2) errs.push('이어하기가 2일째가 아님: ' + r.day); }
@@ -86,6 +101,7 @@ fs.mkdirSync(out, { recursive: true });
   // 업적 · 기록은 판 저장과 따로 남는다: 새로 고친 뒤에도 있고, 도감에서 보인다
   const metaAch = await page.evaluate(() => Object.keys(window.game.meta.ach).length);
   if (metaAch < 1) errs.push('새로 고친 뒤 업적이 남아 있지 않음'); log.push('남아 있는 업적 ' + metaAch + '개');
+  if (!(await page.evaluate(() => window.game.meta.ach.kind))) errs.push('판 저장에만 있던 업적이 이어하기 때 기록에 맞춰지지 않음');
   await page.click('#hud [data-do="achs"]'); await wait(500); await shot('rt14a_achievements');
   if (!(await page.locator('.ach.got').count())) errs.push('도감에 얻은 업적이 안 보임');
   await page.click('#veil [data-do="ok"]'); await wait(400);
@@ -105,12 +121,19 @@ fs.mkdirSync(out, { recursive: true });
   await page.click('#hud [data-do="quit"]'); await wait(500);
   await page.fill('#code', 'ss-00a5'); await page.click('[data-do="new"]'); await wait(400);
   if (await page.evaluate(() => window.game.scene) !== 'title') errs.push('저장이 있는데 확인 없이 새 판이 시작됨');
-  await shot('rt14d_title_ask'); await page.fill('#code', 'ss-00a5'); await page.click('[data-do="new"]'); await wait(700);
+  await page.click('[data-do="daily"]'); await wait(400); // 다른 버튼으로 넘어가면 그 버튼도 한 번 더 물어야 함
+  if (await page.evaluate(() => window.game.scene) !== 'title') errs.push('"새로 시작"의 확인이 "오늘의 판"으로 새어 나감');
+  await shot('rt14d_title_ask'); await page.fill('#code', 'ss-00a5'); await page.click('[data-do="new"]'); await wait(400);
+  if (await page.evaluate(() => window.game.scene) !== 'title') errs.push('확인 없이 새 판이 시작됨 (오늘의 판 → 새로 시작)');
+  await page.fill('#code', 'ss-00a5'); await page.click('[data-do="new"]'); await wait(700);
   const seed = await page.evaluate(() => window.game.state.raw && window.game.state.raw.seed);
   if (seed !== parseInt('00A5', 36)) errs.push('판 코드로 시작한 씨앗이 다름: ' + seed); log.push('판 코드 SS-00A5 → 씨앗 ' + seed);
   await clear();
-  await page.evaluate(() => { const S = window.game.state.raw; S.cash = 50000000; window.game.render(); window.game.run('house'); }); await wait(500);
-  await page.click('#veil [data-do="ok"]'); await wait(900); await shot('rt14e_results_home');
+  await page.evaluate(() => { const S = window.game.state.raw; S.cash = 50000000; window.game.render(); window.game.run('house'); }); await wait(600);
+  await page.keyboard.press('Space'); await wait(600); // 확인 창에서 Space 는 늘 "돌아가기"
+  if ((await st()).modal || await page.evaluate(() => window.game.scene) !== 'play') errs.push('계약 확인 창에서 Space 가 돌아가기가 아님');
+  await page.evaluate(() => window.game.run('house')); await wait(600);
+  await page.keyboard.press('Enter'); await wait(900); await shot('rt14e_results_home'); // Enter 가 "한다"
   const card = await page.evaluate(() => (document.querySelector('.e-card pre') || {}).textContent || '');
   if (!/판 코드 SS-00A5/.test(card)) errs.push('결과 카드에 판 코드가 없음: ' + card);
   await page.click('[data-do="copy"]'); await wait(400);
@@ -121,5 +144,6 @@ fs.mkdirSync(out, { recursive: true });
   await page.setViewportSize({ width: 800, height: 450 }); await wait(400); await shot('rt15_small_800x450');
   await page.setViewportSize({ width: 1920, height: 1080 }); await wait(400); await shot('rt16_large_1080p');
   console.log(JSON.stringify({ errors: errs, log }, null, 1));
+  if (errs.length) process.exitCode = 1;
   await browser.close();
 })().catch(e => { console.error('FAIL', e.message.split('\n').slice(0, 6).join('\n')); process.exit(1); });

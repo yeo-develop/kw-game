@@ -22,7 +22,7 @@ window.CONFIG = {
   hp_store: { value: 9, min: 0, max: 50, step: 1 },
   hp_delivery: { value: 24, min: 0, max: 60, step: 1 },
   // 미니게임 결과별 일당 배율 (실수 · 보통 · 잘함 · 완벽 · 대충 하기)
-  mult_miss: { value: 0.6, min: 0.2, max: 1, step: 0.05 },
+  mult_miss: { value: 0.8, min: 0.2, max: 1, step: 0.05 },
   mult_ok: { value: 1.0, min: 0.5, max: 1.5, step: 0.05 },
   mult_good: { value: 1.2, min: 0.8, max: 2, step: 0.05 },
   mult_perfect: { value: 1.4, min: 1, max: 3, step: 0.05 },
@@ -97,7 +97,7 @@ window.CONFIG = {
   perk_streak: { value: 0.01, min: 0, max: 0.05, step: 0.005 }, // 리듬: 콤보 한 단계의 보너스
   perk_thrift: { value: 0.12, min: 0, max: 0.4, step: 0.01 }, // 짠돌이: 끼니 · 찜질방 · 고정비
   perk_early: { value: 6, min: 0, max: 20, step: 1 }, // 아침형 인간: 아침 체력
-  perk_quest: { value: 0.5, min: 0, max: 2, step: 0.1 }, // 보상 사냥꾼: 퀘스트 현금 보상
+  perk_quest: { value: 1, min: 0, max: 2, step: 0.1 }, // 보상 사냥꾼: 퀘스트 현금 보상
   perk_legs: { value: 0.01, min: 0, max: 0.03, step: 0.005 }, // 발품: 집값 인상률을 깎음
   perk_sense: { value: 0.03, min: 0, max: 0.1, step: 0.01 }, // 눈치: 리포트 정확도
   perk_guts: { value: 0.3, min: 0, max: 0.8, step: 0.05 }, // 강심장: 청산 때 건지는 비율
@@ -109,7 +109,8 @@ window.CONFIG = {
   tip_p: { value: 0.25, min: 0, max: 1, step: 0.05 }, // 완벽일 때 팁이 붙을 확률
   tip_min: { value: 10000, min: 0, max: 100000, step: 5000 },
   tip_max: { value: 30000, min: 0, max: 200000, step: 5000 },
-  event_p: { value: 0.6, min: 0, max: 1, step: 0.05 }, // 아침에 돌발 사건이 뜰 확률 (2일째부터)
+  event_p: { value: 0.5, min: 0, max: 1, step: 0.05 }, // 조용한 아침(퀘스트 완료 · 레벨 업이 없는 아침)에 돌발 사건이 뜰 확률
+  event_from: { value: 3, min: 2, max: 10, step: 1 }, // 돌발 사건이 뜨기 시작하는 날
   ev_sleep_pen: { value: 15, min: 0, max: 50, step: 5 }, // 잠을 설칠 때 깎이는 회복
 
   // ── 퀘스트 보상 (원) ─────────────────────────────────────────

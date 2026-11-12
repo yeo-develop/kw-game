@@ -29,11 +29,11 @@ async function measure(folder) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     await page.goto('file://' + path.join(folder, 'index.html') + '?manual=1&scene=play&seed=5');
     const step = n => page.evaluate(n => window.game.step(n), n);
-    await step(40); await page.keyboard.press('Space'); await step(40);
+    await step(60); await page.keyboard.press('Space'); await step(60);
     await page.evaluate(STATES[name]); await step(40);
     for (let i = 0; i < 6; i++) { // 뜬 창은 닫고(특성은 첫째, 사건은 둘째), 잠깐 떠 있는 글이 사라질 때까지 기다린 뒤 센다
       const modal = await page.evaluate(() => window.game.state.modal); if (!modal) break;
-      await page.keyboard.press(modal === 'perk' ? 'Digit1' : modal === 'event' ? 'Digit2' : 'Space'); await step(30); await page.keyboard.press('Space'); await step(30);
+      await page.keyboard.press(modal === 'perk' ? 'Digit1' : modal === 'event' ? 'Digit2' : 'Space'); await step(60); await page.keyboard.press('Space'); await step(60);
     }
     await step(460);
     out[name] = await page.evaluate(COUNT);

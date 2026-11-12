@@ -203,11 +203,12 @@ ok('돌발 사건: 16개 모두 두 선택지가 끝까지 돌고, 돈이 음수
   }
   const poor = R.create(1); poor.event = 'wrench'; poor.tier = 3; poor.cash = 1000; assert.equal(R.eventView(poor).a.ok, false); assert.equal(R.choose(poor, 'a'), false); assert.ok(R.choose(poor, 'b'));
 });
-ok('돌발 사건: 2일째부터 하루에 많아야 하나, 주거에 맞는 것만, 한 판에서 되풀이되지 않는다', () => {
+ok('돌발 사건: 3일째부터 하루에 많아야 하나, 주거에 맞는 것만, 한 판에서 되풀이되지 않는다', () => {
   withTune({ event_p: 1 }, () => {
     const s = R.create(5), seen = []; assert.equal(s.event, null);
     while (!s.ended) {
-      if (s.event) { const e = R.EVENTS.find(x => x.id === s.event); assert.ok(s.tier >= e.tier[0] && s.tier <= e.tier[1], e.id + ' @tier ' + s.tier); assert.ok(!seen.includes(e.id)); seen.push(e.id); assert.ok(s.day >= 2); R.choose(s, 'b'); assert.equal(s.event, null); }
+      while (s.offer) R.pickPerk(s, s.offer[0]); // 특성을 고르지 않고 두면 그 아침에는 사건이 뜨지 않는다
+      if (s.event) { const e = R.EVENTS.find(x => x.id === s.event); assert.ok(s.tier >= e.tier[0] && s.tier <= e.tier[1], e.id + ' @tier ' + s.tier); assert.ok(!seen.includes(e.id)); seen.push(e.id); assert.ok(s.day >= T.event_from); R.choose(s, 'b'); assert.equal(s.event, null); }
       if (s.day === 4 && s.tier === 0) { s.cash += 100 * M; R.move(s, 1); R.move(s, 2); } if (s.day === 12 && s.tier === 2) { s.cash += 600 * M; R.move(s, 3); }
       while (s.slot < 3) R.doRest(s); R.endDay(s); R.nextDay(s);
     }
@@ -271,5 +272,45 @@ ok('사건의 뒷일: 대타는 다음 알바 한 번만 1.5배, 코골이를 �
   const c0 = a.cash; R.doJob(a, 'flyer', 0.5); assert.equal(a.cash - c0, T.pay_flyer);
   const b = R.create(1); b.tier = 2; b.day = 3; b.movedDay = 1; b.hp = 10; b.event = 'snore'; R.choose(b, 'b'); while (b.slot < 3) R.doRest(b); const h = b.hp; R.endDay(b); assert.equal(b.hp, Math.min(100, h + T.sleep_gosiwon - T.ev_sleep_pen)); assert.ok(!b.buff.sleepPen);
   const c = R.create(1); c.tier = 2; c.day = 3; c.cash = 50 * M; c.event = 'play'; R.choose(c, 'a'); assert.ok(R.holdValue(c, 'hantang') > 19 * M); assert.equal(c.cash, 30 * M);
+});
+ok('결과 카드에 순자산이 있고, 큰 씨앗도 판 코드로 다시 열 수 있다', () => {
+  const h = R.create(77, '동여'); h.cash = 4000 * M; R.buyHouse(h); assert.ok(/순자산 4,000만/.test(R.resultCard(h)), R.resultCard(h));
+  const big = R.create(1679616 + 365); assert.equal(R.seedOf(R.codeOf(big.seed)), big.seed); assert.deepEqual(R.create(R.seedOf(R.codeOf(big.seed))).market.px, big.market.px);
+});
+ok('복권은 남는 장사가 아니고 찜질방부터 나온다, 공짜 리포트는 그날 공부를 막지 않는다', () => {
+  let net = 0; const N = 4000;
+  for (let seed = 1; seed <= N; seed++) { const s = R.create(seed); s.tier = 1; s.day = 3; s.cash = 10 * M; s.event = 'ticket'; R.choose(s, 'a'); net += s.cash - 10 * M; }
+  assert.ok(net / N <= 0, '한 장당 평균 ' + Math.round(net / N)); assert.equal(R.EVENTS.find(e => e.id === 'ticket').tier[0], 1);
+  let hit = 0;
+  for (let seed = 1; seed < 40 && !hit; seed++) {
+    const s = R.create(seed); s.tier = 2; s.day = 3; s.event = 'regular'; R.choose(s, 'a'); if (!R.intelView(s)) continue;
+    hit = 1; const before = JSON.stringify(R.intelView(s).items); assert.equal(R.acts(s).find(a => a.id === 'study').ok, true);
+    assert.ok(R.doStudy(s)); assert.equal(JSON.stringify(R.intelView(s).items), before, '공부했더니 리포트가 다시 뽑힘'); assert.equal(R.doStudy(s), false);
+  }
+  assert.ok(hit);
+});
+ok('돌발 사건은 조용한 아침에만: 퀘스트가 끝나거나 특성을 고르는 아침에는 뜨지 않는다', () => {
+  const night = s => { while (s.slot < 3) R.doRest(s); R.endDay(s); R.nextDay(s); };
+  withTune({ event_p: 1, event_from: 2 }, () => {
+    const s = R.create(5); R.doJob(s, 'flyer', 0.5); while (s.offer) R.pickPerk(s, s.offer[0]);
+    night(s); assert.equal(s.day, 2); assert.equal(s.quest, 2, '밤을 넘겨 "오늘을 버텨라"가 끝남'); assert.equal(s.event, null, '퀘스트가 끝난 아침');
+    night(s); assert.equal(s.day, 3); assert.equal(s.offer, null); assert.ok(s.event, '조용한 아침에는 뜬다'); R.choose(s, 'b'); while (s.offer) R.pickPerk(s, s.offer[0]);
+    s.xp = T.lv_base + T.lv_step * (s.lv - 1) - 1; night(s); assert.ok(s.offer, '밤에 레벨이 올라 특성을 고를 차례'); assert.equal(s.event, null, '특성을 고르는 아침');
+  });
+  withTune({ event_p: 1 }, () => { const s = R.create(5); s.quest = 99; night(s); assert.equal(s.event, null, T.event_from + '일째 전'); });
+});
+ok('돌발 사건의 결과는 바뀐 것을 숫자로 알려 준다 (현금 · 체력 · 경험치 · 최대 체력 · 잠)', () => {
+  const run = (id, k, tier, set) => { const s = R.create(3); s.tier = tier; s.day = 5; s.quest = 99; s.cash = 10 * M; s.hp = 50; if (set) set(s); s.event = id; s.ev.length = 0; assert.ok(R.choose(s, k)); return s.ev.find(e => e.t === 'event_done').fx; };
+  assert.deepEqual(run('purse', 'b', 0), { cash: 30000, hp: -6, xp: 0, hpMax: 0, nights: 0 });
+  assert.deepEqual(run('cat', 'a', 0), { cash: -3000, hp: 3, xp: 15, hpMax: 0, nights: 0 });
+  assert.deepEqual(run('snore', 'b', 2), { cash: 0, hp: 0, xp: 0, hpMax: 0, nights: 1 });
+  assert.deepEqual(run('wrench', 'b', 3), { cash: 0, hp: 0, xp: 0, hpMax: 0, nights: 3 });
+  assert.deepEqual(run('clinic', 'a', 2), { cash: -30000, hp: 5, xp: 0, hpMax: 5, nights: 0 });
+  assert.equal(run('soup', 'a', 0, s => { s.hp = R.hpMax(s) - 4; }).hp, 4, '최대 체력에서 잘린 만큼만');
+});
+ok('직접 하면 실수해도 "대충"보다 덜 받지 않는다 (해 보는 것이 손해가 아니다)', () => {
+  const pay = (score, lazy) => { const s = R.create(4); s.quest = 99; if (lazy) s.perks.lazy = lazy; R.doJob(s, 'flyer', score); return s.cash; };
+  assert.ok(pay(0.1) >= pay(null), '실수 ' + pay(0.1) + ' · 대충 ' + pay(null)); assert.ok(pay(0.5) > pay(null)); assert.ok(T.mult_miss >= T.mult_skip);
+  for (const lazy of [1, 2]) { assert.ok(pay(0.1, lazy) >= pay(null, lazy), '요령 ' + lazy + ': 실수 ' + pay(0.1, lazy) + ' · 대충 ' + pay(null, lazy)); assert.ok(pay(0.5, lazy) >= pay(null, lazy)); } // 특성 '요령'으로 대충이 올라도
 });
 console.log(n + '개 통과');

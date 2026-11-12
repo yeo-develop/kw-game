@@ -51,7 +51,7 @@ const LINT = () => {
   page.on('pageerror', e => errs.push('uncaught: ' + e.message));
   await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&seed=' + seed);
   const G = (fn, arg) => page.evaluate(fn, arg);
-  const step = n => G(n => window.game.step(n), n);
+  const step = n => G(n => { const g = window.game; g.step(n); const left = g.state.guard || 0; if (left) g.step(left + 1); }, n); // 누름이 막힌 동안(창이 막 뜬 직후)은 마저 기다린다
   const st = () => G(() => { const s = window.game.state; return { scene: window.game.scene, day: s.day, slot: s.slot, cash: s.cash, worth: s.worth, hp: s.hp, tier: s.tier, quest: s.quest, modal: s.modal, ended: s.ended, price: s.housePrice }; });
   const seen = new Set();
   async function shot(name, once = true) {
@@ -107,9 +107,9 @@ const LINT = () => {
     const reserve = mv === 3 ? 250 * M : mv === 2 ? 5 * M : 0;
     if (mv && style !== 'stay') {
       const need = await G(t => { const R = window.Rules, S = window.game.state.raw; return R.moveInfo(S, t).need; }, mv);
-      if (s.cash >= need + reserve) { await page.click('[data-do="move"]'); await step(20); if (mv >= 2) { await shot('07_confirm_move' + mv); await G(() => window.game.press('Space')); await step(20); } continue; }
+      if (s.cash >= need + reserve) { await page.click('[data-do="move"]'); await step(20); if (mv >= 2) { await shot('07_confirm_move' + mv); await G(() => window.game.press('Enter')); await step(20); } continue; }
     }
-    if (s.worth >= s.price) { await G(() => window.game.run('tab', 'ladder')); await shot('20_house_ready'); await page.click('[data-do="house"]'); await step(20); await shot('21_confirm_house'); await G(() => window.game.press('Space')); await step(20); continue; }
+    if (s.worth >= s.price) { await G(() => window.game.run('tab', 'ladder')); await shot('20_house_ready'); await page.click('[data-do="house"]'); await step(20); await shot('21_confirm_house'); await G(() => window.game.press('Enter')); await step(20); continue; }
     // 투자 (공부형: 리포트 · 공시 · 기사를 따름)
     if (s.tier >= 2 && style !== 'alba') {
       await G(({ style, M }) => {

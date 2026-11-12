@@ -1,5 +1,5 @@
 F2	pass	evidence/play.png · rules.js acts	칸마다 알바 · 쉬기 · 공부 중 하나. 체력이 모자라면 흐려지고 이유가 적힘, 눌러도 이유를 알려 줌
-F3	pass	evidence/mg_flyer.png mg_loading.png mg_store.png mg_delivery.png	4종이 조작과 그림이 다름. 점수에 따라 ×0.6/1.0/1.2/1.4, 대충 ×0.8, 직접 한 횟수로 숙련도
+F3	pass	evidence/mg_flyer.png mg_loading.png mg_store.png mg_delivery.png	4종이 조작과 그림이 다름. 점수에 따라 ×0.8/1.0/1.2/1.4, 대충 ×0.8(직접 하면 실수해도 대충보다 덜 받지 않음), 직접 한 횟수로 숙련도
 F4	pass	evidence/confirm-move.png · tools/rules-test.js	서울역 → 찜질방 → 고시원 → 원룸 → 내 집. 잠 +25/+50/+65/+80, 일요일 밤 고정비(산 날만큼), 연속 2회 미납이면 내려감
 F5	pass	evidence/stock.png coin.png	주식 3종은 고시원부터, 코인 롱 · 숏 · 청산은 원룸부터. 소식(공시 · 기사 · 찌라시)과 공부(리포트)
 F8	pass	evidence/title.png results-fail.png	제목(조작 안내 · 이어하기) · 결과 · 다시 하기 · 소리 끄기(M). 소리 자체는 들어 보지 못함
@@ -23,14 +23,14 @@ S3	pass	evidence/mg_*.png	알바
 S4	pass	evidence/night.png	고정비
 S5	pass	evidence/stock.png coin.png	자산투자
 S6	pass	evidence/results-home.png	1차 엔딩: 집을 사기 (점검용으로 일당을 올린 판에서 확인. 보통 값으로는 봇만 확인)
-F1	pass	evidence/quest-done.png · rules.js questTick	퀘스트가 늘 1개(12개, 때를 놓친 것은 건너뜀). 끝내면 완료 창에 보상과 다음 퀘스트
+F1	pass	evidence/quest-done.png · rules.js questTick	퀘스트가 늘 1개(12개, 때를 놓친 것은 건너뜀). 끝내면 완료 창에 보상과 다음 퀘스트. 한꺼번에 끝난 것 · 건너뛴 것은 창 한 장에 모아 적음 (evidence/quest-many.png)
 F6	pass	evidence/results-home.png results-fail.png · tools/rules-test.js	집값 3,100 → 3,317 → 3,549 → 3,798만. 순자산이 넘으면 계약 = 엔딩, 28일 밤이 지나면 실패
 F7	pass	evidence/night.png play.png	밤 정산에 번 돈 · 쓴 돈이 출처별로, 위쪽 띠에 집까지 %, 상태창에 지금 퀘스트 · 고정비 · 집값 인상 칩, 거의 다 됨, 행동마다 저장, 번 돈 숫자가 누른 자리에서 현금 칸으로
-C6	pass	tools/sim.js 300판	알바만 하면 집값의 65%. 조심스러운 첫 판 61%, 공부 + 3배는 58% 성공, 과감 80%, 무지성 5배 9%. 봇 수치이지 사람을 잰 값이 아님
+C6	pass	tools/sim.js 1000판	알바만 하면 집값의 65%. 조심스러운 첫 판 61%, 공부 + 3배는 60% 성공, 과감 81%, 무지성 5배 8%. 봇 수치이지 사람을 잰 값이 아님
 L3	pass	evidence/play.png · tools/zones.js	구역 다섯 개(hud · me · quest · today · board)가 겹치지 않고 간격 8px, 800×450 · 1920×1080 에서도 같은 비율
-F10	pass	tools/zones.js · tools/textcount.js · evidence/help.png	구역 5개 + 아이콘 66개. 같은 화면 네 곳의 글자 수가 첫 빌드보다 48 · 44 · 43 · 52% 적음. 아이콘마다 설명(title), 도움말 한 장
+F10	pass	tools/zones.js · tools/textcount.js · evidence/help.png	구역 5개 + 아이콘 67개. 같은 화면 네 곳의 글자 수가 첫 빌드보다 45 · 40 · 40 · 48% 적음. 아이콘마다 설명(title), 도움말 한 장(구역별 아이콘 사전). 처음 보는 사람이 못 읽던 곳(현금/순자산 · 남은 날 · 칩 · 보증금 · 수수료)에는 짧은 이름표를 되돌림
 F11	pass	evidence/levelup.png · tools/rules-test.js	경험치 → 레벨 업 → 특성 14개 중 셋에서 하나. 특성마다 규칙 확인
-F12	pass	evidence/event.png · tools/rules-test.js	돌발 사건 16개 × 선택지 둘이 모두 끝까지 돌고, 하루에 많아야 하나 · 주거에 맞는 것만 · 되풀이 없음
+F12	pass	evidence/event.png · tools/rules-test.js	돌발 사건 16개 × 선택지 둘이 모두 끝까지 돌고, 하루에 많아야 하나 · 주거에 맞는 것만 · 되풀이 없음. 3일째부터, 퀘스트 완료 · 특성 고르기가 없는 아침에만. 결과 창에 바뀐 것(현금 · 체력 · 경험치)이 숫자로 나옴
 F13	pass	tools/rules-test.js · evidence/quest-done.png	콤보(잘함 이상 +1, 보통 유지, 실수 · 대충 0) · 팁 · 일하는 동안의 시세
 F14	pass	evidence/achievements.png title.png results-home.png · tools/rt.js	업적 24개 도감, 새로 고침 뒤에도 남는 업적 · 기록, 결과 카드 복사, 판 코드로 같은 판, 오늘의 판
 F15	pass	evidence/levelup.png stamp.png · tools/worst.js · tools/check.js	폭죽 · 흔들림 · 도장. 효과 줄이기면 꺼짐. 소리와 움직임의 느낌은 사람이 확인해야 함

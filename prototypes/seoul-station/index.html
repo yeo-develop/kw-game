@@ -71,6 +71,7 @@
   .money { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .money .ic { color: var(--dim); }
   .money b { font-size: 21px; display: inline-block; }
+  .money i { font-style: normal; font-size: 14px; color: var(--dim); margin-right: -1px; } /* 아이콘 옆 이름표: 현금 · 순자산 · 남은 */
   #cash.bump, #worth.bump { animation: bump .35s; }
   @keyframes bump { 30% { transform: scale(1.18); color: var(--gold); } }
   .goal { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 15px; }
@@ -96,7 +97,7 @@
   .me-row.low .ic { color: var(--bad); }
   .me-row b { min-width: 62px; text-align: right; }
   .perks { height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-top: 1px solid var(--night2); box-sizing: border-box; }
-  .perks .pk { position: relative; width: 24px; height: 24px; border-radius: 6px; background: var(--night2); display: flex; align-items: center; justify-content: center; color: var(--gold); }
+  .perks .pk { cursor: pointer; position: relative; width: 24px; height: 24px; border-radius: 6px; background: var(--night2); display: flex; align-items: center; justify-content: center; color: var(--gold); }
   .perks .pk svg { width: 17px; height: 17px; }
   .perks .pk.x2 { box-shadow: 0 0 0 1px var(--gold); } .perks .pk.x3 { box-shadow: 0 0 0 2px var(--gold); }
   .perks .none { color: var(--night3); display: flex; align-items: center; gap: 6px; }
@@ -229,7 +230,7 @@
   .levform .row > .ic { color: var(--dim); }
   .levform .seg { flex: 1; } .levform .seg button { flex: 1; padding: 0; }
   .pos { margin: 0; font-size: 15px; display: flex; flex-direction: column; gap: 7px; }
-  .pos span { display: flex; align-items: center; gap: 8px; } .pos .ic { color: var(--dim); }
+  .pos span { display: flex; align-items: center; gap: 8px; } .pos .ic { color: var(--dim); } .pos i { color: var(--dim); font-size: 14px; min-width: 38px; }
   .stamp { position: absolute; right: 40px; top: 400px; padding: 4px 14px; border: 4px solid currentColor; border-radius: 10px; font-size: 34px; font-weight: 900; transform: rotate(-9deg); pointer-events: none; animation: stamp 1.6s forwards; background: rgba(11,16,34,.55); text-align: center; line-height: 1.1; z-index: 3; }
   .stamp i { display: block; font-size: 15px; font-weight: 700; }
   @keyframes stamp { 0% { transform: rotate(-9deg) scale(2.4); opacity: 0; } 12% { transform: rotate(-9deg) scale(1); opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
@@ -252,6 +253,12 @@
   .win .foot { margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px; align-items: center; }
   .win .rewardbox { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(255,209,102,.1); border: 1px solid rgba(255,209,102,.4); font-size: 17px; display: flex; align-items: center; gap: 8px; }
   .win .rewardbox .ic { color: var(--gold); }
+  .win .qdone { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; } /* 한꺼번에 끝난 퀘스트들 */
+  .win .qdone > div { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: rgba(255,209,102,.08); border: 1px solid rgba(255,209,102,.3); font-size: 16px; }
+  .win .qdone > div > .ic { color: var(--good); flex: none; }
+  .win .qdone b { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .win .qdone span { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 15px; }
+  .win .qdone .off { background: none; border-color: var(--night3); color: var(--dim); } .win .qdone .off > .ic { color: var(--dim); }
   .win .nextbox { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(83,224,255,.08); border: 1px solid var(--sysDim); }
   .win .nextbox i { font-size: 14px; color: var(--sys); font-weight: 700; display: flex; align-items: center; gap: 5px; }
   .win .nextbox b { display: block; font-size: 20px; margin-top: 2px; }
@@ -274,9 +281,12 @@
   .pcard .ic { width: 46px; height: 46px; color: var(--gold); }
   .pcard b { font-size: 20px; } .pcard span { font-size: 15px; line-height: 1.4; color: var(--text); min-height: 42px; }
   .pcard .key { position: absolute; left: 8px; top: 8px; }
+  .pcard .have { font-style: normal; font-size: 14px; color: var(--dim); }
   .win.evt { width: 560px; }
   .evt-top { display: flex; gap: 16px; align-items: center; }
   .evt-top > .ic { width: 64px; height: 64px; color: var(--warm); flex: none; }
+  .evfx { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; } /* 고른 것이 바꾼 것 */
+  .evfx > span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; background: var(--night1); border: 1px solid var(--night3); font-size: 16px; font-weight: 700; }
   .evt-btns { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
   .evt-btns .btn { justify-content: flex-start; height: 48px; }
   .evt-btns .btn .cost { margin-left: auto; font-weight: 400; color: var(--gold); display: inline-flex; align-items: center; gap: 4px; }
@@ -315,23 +325,27 @@
   .ach .ic { width: 30px; height: 30px; color: var(--night3); }
   .ach b { font-size: 15px; line-height: 1.2; color: var(--dim); } .ach span { font-size: 14px; line-height: 1.2; color: var(--dim); }
   .ach.got { border-color: var(--gold); } .ach.got .ic { color: var(--gold); } .ach.got b { color: var(--text); }
-  .helps { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 22px; font-size: 15px; line-height: 1.4; }
-  .helps div { display: flex; gap: 10px; align-items: flex-start; }
-  .helps .ic { color: var(--sys); margin-top: 1px; }
-  .helps b { color: #fff; }
+  .hzs { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+  .hz { display: grid; grid-template-columns: 104px 1fr; gap: 10px; align-items: start; font-size: 15px; line-height: 1.35; }
+  .hz > b { display: flex; gap: 6px; align-items: center; color: #fff; }
+  .hz > div { display: flex; flex-wrap: wrap; gap: 3px 14px; align-items: center; }
+  .hz span { display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; }
+  .hz .ic { color: var(--sys); } .hz .rel { color: var(--sys); }
+  .hz em { font-style: normal; color: var(--dim); font-size: 14px; flex-basis: 100%; }
   .rec { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* ── 뜨는 숫자 · 알림 · 폭죽 ── */
   #fxc { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; pointer-events: none; }
   #fx { position: absolute; inset: 0; pointer-events: none; }
-  .fly { position: absolute; font-size: 26px; font-weight: 900; text-shadow: 0 2px 8px rgba(0,0,0,.7); animation: fly 1s ease-in forwards; white-space: nowrap; }
+  .fly { position: absolute; font-size: 26px; font-weight: 900; text-shadow: 0 2px 8px rgba(0,0,0,.7); animation: fly 1s ease-in both; white-space: nowrap; }
   @keyframes fly { 0% { transform: scale(.8); opacity: 0; } 12% { transform: translateY(-8px) scale(1.2); opacity: 1; } 45% { transform: translateY(-16px) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.7); opacity: .15; } }
-  #toasts { position: absolute; right: 12px; top: 70px; width: 320px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; z-index: 5; }
+  #toasts { position: absolute; left: 22px; top: 108px; width: 320px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; pointer-events: none; z-index: 5; } /* '나' 구역의 그림 위: 숫자나 버튼을 가리지 않는 자리 */
   .toast { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 8px; background: rgba(11,16,34,.96); border: 1px solid var(--gold); box-shadow: 0 0 18px rgba(255,209,102,.3); font-size: 15px; animation: toastin .25s ease-out; }
   .toast .ic { width: 26px; height: 26px; color: var(--gold); }
   .toast b { display: block; } .toast span { font-size: 14px; color: var(--dim); }
   .toast.deny { border-color: var(--bad); box-shadow: none; color: var(--bad); }
-  @keyframes toastin { 0% { transform: translateX(30px); opacity: 0; } }
+  .toast.tip { border-color: var(--sysDim); box-shadow: none; } .toast.tip .ic { color: var(--sys); flex: none; } .toast.tip span { color: var(--text); line-height: 1.4; }
+  @keyframes toastin { 0% { transform: translateX(-30px); opacity: 0; } }
   #s-play.shake { animation: shake .4s; }
   @keyframes shake { 15% { transform: translate(-8px, 3px); } 30% { transform: translate(7px, -4px); } 45% { transform: translate(-6px, 2px); } 60% { transform: translate(4px, -2px); } 80% { transform: translate(-2px, 1px); } }
 
@@ -354,7 +368,8 @@
   .e-box .rank { position: absolute; right: 28px; top: 20px; width: 80px; height: 80px; border-radius: 12px; border: 2px solid var(--gold); color: var(--gold); font-size: 52px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
   .e-box p { margin: 8px 0 0; font-size: 17px; line-height: 1.5; }
   .e-stats { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 18px; font-size: 16px; }
-  .e-stats div { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--night2); padding-bottom: 4px; gap: 6px; }
+  .e-stats div { display: flex; align-items: center; border-bottom: 1px solid var(--night2); padding-bottom: 4px; gap: 6px; }
+  .e-stats span:not(.ic) { color: var(--dim); font-size: 15px; } .e-stats b { margin-left: auto; }
   .e-stats .ic { color: var(--dim); }
   .e-tips { margin-top: 10px; font-size: 15px; line-height: 1.5; color: var(--gold); }
   .e-card { margin-top: 12px; display: flex; gap: 10px; align-items: stretch; }
