@@ -34,3 +34,4 @@ F12	pass	evidence/event.png · tools/rules-test.js	돌발 사건 16개 × 선택
 F13	pass	tools/rules-test.js · evidence/quest-done.png	콤보(잘함 이상 +1, 보통 유지, 실수 · 대충 0) · 팁 · 일하는 동안의 시세
 F14	pass	evidence/achievements.png title.png results-home.png · tools/rt.js	업적 24개 도감, 새로 고침 뒤에도 남는 업적 · 기록, 결과 카드 복사, 판 코드로 같은 판, 오늘의 판
 F15	pass	evidence/levelup.png stamp.png · tools/worst.js · tools/check.js	폭죽 · 흔들림 · 도장. 효과 줄이기면 꺼짐. 소리와 움직임의 느낌은 사람이 확인해야 함
+F16	pass	tools/tut.js · tools/rt.js · evidence/tut-intro.png tut-job.png tut-howto.png tut-slots.png tut-move.png tut-goal.png tut-stock.png	첫 판 안내 다섯 단계(전단지 → 남은 칸 → 하루 마치기 → 찜질방 → 상태창)가 차례로 뜨고, 짚은 것만 눌리고(다른 것을 누르면 이유가 뜸), 짚은 것을 할 수 없으면 막지 않음. 처음 하는 알바는 "시작"을 눌러야 시간이 감. 주식 · 코인 설명은 한 번만. 끄기 · 다시 켜기 · 새로 고침 · 이어하기 · 예전 기록. 처음 보는 사람 역할의 검토에서 "막힘" 없음 — 실제 사람이 이것으로 "뭘 해야 할지" 아는지는 해 봐야 함

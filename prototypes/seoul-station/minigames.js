@@ -166,7 +166,7 @@
     let t = 0, phase = 'ready', endT = 0, pending = null;
     impl.state.wt = -READY; impl.state.phase = phase;
     const game = {
-      w: W, h: H, title: impl.title, howto: impl.howto, controls: impl.controls,
+      w: W, h: H, title: impl.title, howto: impl.howto, how: impl.how || [impl.howto], controls: impl.controls,   // howto = 창 머리의 한 줄, how = 처음 할 때 보여 주는 하는 법
       done: false, result: null,
       _state: impl.state,
       update: function (dt) {
@@ -198,7 +198,7 @@
         if (left > 0) box(ctx, 16, 7, Math.max(8, (W - 32) * left), 8, 4, left < 0.25 ? P.gold : P.sys);
         // 준비 · 시작 · 끝
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        if (phase === 'ready') {
+        if (phase === 'ready' && !game.idle) {   // idle = 하는 법을 읽는 동안: 띠 없이 첫 장면만
           ctx.fillStyle = fade(P.night0, 0.66); ctx.fillRect(0, H / 2 - 58, W, 116);
           ctx.fillStyle = P.sys; ctx.fillRect(0, H / 2 - 58, W, 3); ctx.fillRect(0, H / 2 + 55, W, 3);
           bigText(ctx, P, font, '준비', 68 * Math.max(0.3, pop(t / 0.18)), P.text);
@@ -378,6 +378,7 @@
     }
     return {
       title: '전단지 돌리기', howto: '걷는 사람만, 손 앞에 오면 Space',
+      how: ['걷는 사람이 꺾쇠 안에 들어오면 Space', '뛰어가는 사람에게 내밀거나, 아무도 없을 때 누르면 감점'],
       controls: [{ code: 'Space', label: '건네기' }],
       state: S,
       tick: function (dt, wt, playing) {
@@ -528,6 +529,7 @@
     }
     return {
       title: '상하차', howto: '상자가 선에 오면 표시된 방향키',
+      how: ['상자가 점선에 닿으면, 상자에 그려진 방향키', '다른 방향을 누르거나, 상자가 없을 때 누르면 감점'],
       controls: [{ code: 'ArrowLeft', label: '왼쪽 트럭' }, { code: 'ArrowUp', label: '위 선반' }, { code: 'ArrowRight', label: '오른쪽 트럭' }],
       state: S,
       tick: function (dt, wt, playing) {
@@ -729,6 +731,7 @@
     }
     return {
       title: '편의점 계산', howto: '말풍선 순서대로 번호 1~4',
+      how: ['손님 말풍선의 물건을 왼쪽부터 차례로, 아래 번호 1~4 로 찍는다', '틀리면 감점 — 마구 누르지 않는다'],
       controls: ITEM_NAMES.map(function (name, i) { return { code: DIGIT_CODES[i], label: name }; }),
       state: S,
       tick: function (dt, wt) {
@@ -917,6 +920,7 @@
     const S = { lane: 1, x: laneX(1), lean: 0, inv: 0, crashes: 0, got: 0, total: nPins, obs: obs, pins: pins, safe: pl.L, rowAt: function (k) { return T0 + k * gap; }, rows: R, tries: tries, pop: 0, edge: 0, edgeDir: 0, road: 0 };
     return {
       title: '배달', howto: '좌우로 차를 피하고 초록 지점 밟기',
+      how: ['방향키로 차선을 바꿔 차를 피한다', '초록 핀이 있는 차선으로 지나가면 배달 완료 — 부딪히면 감점'],
       controls: [{ code: 'ArrowLeft', label: '왼쪽 차선' }, { code: 'ArrowRight', label: '오른쪽 차선' }],
       state: S,
       tick: function (dt, wt, playing) {

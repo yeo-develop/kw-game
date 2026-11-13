@@ -1,6 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 화면 없는 브라우저(Playwright)는 KW_PLAYWRIGHT 환경 변수로 위치를 줄 수 있다.
 // 실제 시간 · 실제 클릭으로 첫 이틀을 해 보는 점검 (사람이 하듯: 클릭 사이에 기다림). 창 없이 돈다.
+// 처음 연 사람의 길 그대로라서 첫 판 안내(튜토리얼)를 따라간다: 전단지 → 하는 법 → 세 칸 → 하루 마치기 → 찜질방 → 마무리.
 // node rt.js <게임 폴더> <찍을 폴더>
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
@@ -15,7 +16,7 @@ fs.mkdirSync(out, { recursive: true });
   page.on('pageerror', e => errs.push('uncaught: ' + e.message));
   const url = 'file://' + path.resolve(dir, 'index.html') + '?seed=5';
   await page.goto(url);
-  const st = () => page.evaluate(() => { const s = window.game.state; return { scene: window.game.scene, day: s.day, slot: s.slot, cash: s.cash, hp: s.hp, tier: s.tier, quest: s.quest, modal: s.modal }; });
+  const st = () => page.evaluate(() => { const s = window.game.state; return { scene: window.game.scene, day: s.day, slot: s.slot, cash: s.cash, hp: s.hp, tier: s.tier, quest: s.quest, modal: s.modal, coach: s.coach }; });
   const wait = ms => page.waitForTimeout(ms);
   const shot = n => page.screenshot({ path: path.join(out, n + '.png') });
   const note = async t => { const s = await st(); log.push(t + ' → ' + JSON.stringify(s)); return s; };
@@ -30,15 +31,26 @@ fs.mkdirSync(out, { recursive: true });
     }
     return seen;
   };
+  const coach = async (id, where) => { const c = (await st()).coach; if (c !== id) errs.push(where + ': 안내가 "' + id + '"여야 하는데 "' + c + '"'); };
+  const begin = async () => { // 처음 하는 알바: 하는 법이 떠 있는 동안은 시간이 가지 않고, "시작"을 눌러야 시작
+    if (!(await page.evaluate(() => window.game.state.wait))) { errs.push('처음 하는 알바에 하는 법이 안 뜸'); return; }
+    const t0 = await page.evaluate(() => window.game.mg._state.wt); await wait(900);
+    if (await page.evaluate(() => window.game.mg._state.wt) !== t0) errs.push('하는 법을 읽는 동안 미니게임 시간이 감');
+    await page.click('[data-do="mgstart"]'); await wait(150);
+    if (await page.evaluate(() => window.game.state.wait)) errs.push('"시작"을 눌러도 시작되지 않음');
+  };
   const mgButtons = () => page.evaluate(() => Array.from(document.querySelectorAll('[data-mg]')).map(b => b.dataset.mg + ':' + b.textContent.trim()));
   await wait(500); await page.fill('#name', '동여'); await shot('rt01_title');
   await page.click('text=새로 시작'); await wait(700); await shot('rt02_intro'); await note('새로 시작');
   await page.click('[data-do="ok"]'); await wait(600); await note('시작 확인');
-  await shot('rt03_first_screen');
+  await shot('rt03_first_screen'); await coach('job', '첫 화면');
+  await page.click('[data-do="job"][data-arg="loading"]', { position: { x: 30, y: 80 } }); await wait(300); // 안내가 짚지 않은 카드는 안 눌린다
+  if ((await st()).modal || (await st()).slot !== 0) errs.push('안내가 전단지를 짚는 동안 상하차가 눌림');
   // 전단지: 카드를 두 번 연달아 눌러도 한 번만 시작
   await page.dblclick('[data-do="job"][data-arg="flyer"]', { position: { x: 30, y: 80 } }); await wait(400);
   let s = await note('전단지 두 번 누름');
   if (s.modal !== 'mg') errs.push('미니게임이 열리지 않음');
+  await wait(300); await shot('rt03b_howto'); await begin();
   const title = await page.textContent('.mg-head b'); const howto = await page.textContent('.mg-head span');
   log.push('미니게임: ' + title + ' / ' + howto + ' / 버튼: ' + (await mgButtons()).join(' | '));
   for (let i = 0; i < 16; i++) { await wait(560); if (i === 5) await shot('rt04_minigame_mid'); if (await page.locator('.mg-res').count()) break; await page.keyboard.press('Space'); }
@@ -57,8 +69,9 @@ fs.mkdirSync(out, { recursive: true });
   if (s.modal !== 'quest') errs.push('퀘스트 완료 창이 떠 있어야 하는데: ' + s.modal);
   await shot('rt06_quest_done');
   await clear();
+  await wait(300); await coach('slots', '첫 알바 뒤'); await shot('rt06b_coach_slots');
   // 화면 버튼(마우스)만으로 미니게임 하기: 상하차
-  await page.click('[data-do="job"][data-arg="loading"]', { position: { x: 30, y: 80 } }); await wait(1000);
+  await page.click('[data-do="job"][data-arg="loading"]', { position: { x: 30, y: 80 } }); await wait(700); await begin(); await wait(300);
   log.push('상하차 화면 버튼: ' + (await mgButtons()).join(' | '));
   for (let i = 0; i < 14; i++) {
     await wait(500); if (await page.locator('.mg-res').count()) break;
@@ -75,6 +88,7 @@ fs.mkdirSync(out, { recursive: true });
   await wait(500); s = await note('대충 세 번 연타');
   if (s.slot !== 3 || s.modal === 'night') errs.push('연타가 칸을 여러 개 쓰거나 밤으로 넘어감: slot ' + s.slot + ' modal ' + s.modal);
   await clear();
+  await wait(300); await coach('endday', '세 칸을 쓴 뒤');
   await shot('rt08_day_done');
   await page.click('[data-do="endday"]'); await wait(700); await shot('rt09_night'); await note('하루 마치기');
   await page.keyboard.press('Space'); await wait(800);
@@ -88,16 +102,22 @@ fs.mkdirSync(out, { recursive: true });
   }
   s = await note('2일째 아침');
   if (s.day !== 2) errs.push('2일째가 아님');
+  await wait(300); await coach('move', '2일째 아침'); await shot('rt10b_coach_move');
   // 찜질방으로 옮기기 (사다리 버튼)
   if (await page.locator('[data-do="move"]').count()) { await page.click('[data-do="move"]'); await wait(600); if ((await st()).modal) await shot('rt11_roof_quest'); await clear(); }
-  s = await note('찜질방 이동'); await shot('rt12_sauna');
+  s = await note('찜질방 이동'); await wait(100); await coach('goal', '찜질방으로 옮긴 뒤');
+  await page.click('#hud [data-do="help"]'); await wait(500); await page.keyboard.press('Space'); await wait(60); // 도움말을 닫으면 안내가 다시 뜬다. 뜨자마자 연타해도 읽기 전에 넘어가지 않는다
+  await page.keyboard.press('Space'); await wait(120); await page.keyboard.press('Space'); await wait(100);
+  await coach('goal', '마무리 안내가 뜨자마자 연타'); await wait(400); await shot('rt12_sauna');
   // 저장: 새로 고침 뒤 이어하기
   await page.evaluate(() => { const S = window.game.state.raw; if (S.ach.indexOf('kind') < 0) S.ach.push('kind'); }); // 알림이 뜨기 전에 판 저장에만 들어간 업적을 흉내
   await page.click('#hud [data-do="quit"]'); await wait(400); // 나가면서 저장
   await page.reload(); await wait(600); await shot('rt13_title_continue');
   if (!(await page.locator('[data-do="continue"]').count())) errs.push('이어하기 버튼이 없음');
   else { await page.click('[data-do="continue"]'); await wait(600); const r = await note('이어하기'); if (r.day !== 2) errs.push('이어하기가 2일째가 아님: ' + r.day); }
-  await shot('rt14_continued');
+  await shot('rt14_continued'); await coach('goal', '이어하기 (하다 만 안내)');
+  await wait(700); await page.click('[data-do="coachok"]'); await wait(400); await coach('', '마무리 안내를 읽은 뒤');
+  if (await page.evaluate(() => window.game.meta.tut) !== 2) errs.push('안내를 끝낸 것이 기록되지 않음');
   // 업적 · 기록은 판 저장과 따로 남는다: 새로 고친 뒤에도 있고, 도감에서 보인다
   const metaAch = await page.evaluate(() => Object.keys(window.game.meta.ach).length);
   if (metaAch < 1) errs.push('새로 고친 뒤 업적이 남아 있지 않음'); log.push('남아 있는 업적 ' + metaAch + '개');
@@ -108,7 +128,9 @@ fs.mkdirSync(out, { recursive: true });
   await page.click('#hud [data-do="help"]'); await wait(500); await shot('rt14a_help'); await page.click('#veil [data-do="ok"]'); await wait(400);
   // 코인: "정리하기"를 두 번 눌러도 새 포지션이 열리면 안 됨 (원룸 상태로 건너뛰어 확인)
   await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.deposit = 5000000; S.cash = 3000000; window.game.run('tab', 'coin'); });
-  await wait(400); await page.click('[data-do="long"]'); await wait(600);
+  await wait(400); await clear(); await wait(300); await coach('coin', '코인 탭을 처음 열 때'); await shot('rt14b0_coach_coin');
+  await wait(500); await page.click('[data-do="coachok"]'); await wait(400);
+  await page.click('[data-do="long"]'); await wait(600);
   await clear(); // 건너뛴 탓에 밀린 퀘스트 창들
   if (!(await page.evaluate(() => !!window.game.state.raw.lev))) errs.push('롱이 열리지 않음');
   await shot('rt14b_coin_position');
@@ -127,6 +149,7 @@ fs.mkdirSync(out, { recursive: true });
   if (await page.evaluate(() => window.game.scene) !== 'title') errs.push('확인 없이 새 판이 시작됨 (오늘의 판 → 새로 시작)');
   await page.fill('#code', 'ss-00a5'); await page.click('[data-do="new"]'); await wait(700);
   const seed = await page.evaluate(() => window.game.state.raw && window.game.state.raw.seed);
+  if (await page.evaluate(() => window.game.state.tut)) errs.push('안내를 끝냈는데 다음 판에 또 뜸');
   if (seed !== parseInt('00A5', 36)) errs.push('판 코드로 시작한 씨앗이 다름: ' + seed); log.push('판 코드 SS-00A5 → 씨앗 ' + seed);
   await clear();
   await page.evaluate(() => { const S = window.game.state.raw; S.cash = 50000000; window.game.render(); window.game.run('house'); }); await wait(600);

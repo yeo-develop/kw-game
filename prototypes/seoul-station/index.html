@@ -9,7 +9,8 @@
 <title>서울역 상태창</title>
 <style>
   /* 색은 palette.js 가 :root 에 --이름 으로 넣는다. 화면은 1280×720 으로 짜고 창에 맞춰 통째로 늘이고 줄인다.
-     play 화면은 구역 다섯 개: hud(위쪽 띠) · me(나) · quest(상태창) · today(오늘 할 일) · board(사다리 · 투자). 간격은 8px. */
+     play 화면은 구역 다섯 개: hud(위쪽 띠) · me(나) · quest(상태창) · today(오늘 할 일) · board(사다리 · 투자). 간격은 8px.
+     그 위에 겹치는 것: veil(창) · fx(뜨는 숫자) · toasts(알림) · coach(첫 판 안내). */
   html, body { margin: 0; height: 100%; background: #05070f; overflow: hidden; }
   body { font-family: var(--font); color: var(--text); font-variant-numeric: tabular-nums; word-break: keep-all; overflow-wrap: break-word; -webkit-font-smoothing: antialiased; user-select: none; }
   #stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; background: var(--night0); overflow: hidden; }
@@ -241,7 +242,7 @@
   .frame.corner::before, .frame.corner::after { animation: cornerIn .3s ease-out both; }
   @keyframes cornerIn { 0% { width: 0; height: 0; opacity: 0; } 35% { opacity: 1; } 100% { width: 16px; height: 16px; opacity: 1; } }
   .frame > .win { animation: winin .22s .12s both; }
-  #veil.arming [data-do="ok"], #veil.arming [data-do="no"] { opacity: .4; }
+  #veil.arming [data-do="ok"], #veil.arming [data-do="no"], #veil.arming [data-do="mgstart"], #coach.arming [data-do="coachok"] { opacity: .4; }
   .win { position: relative; box-sizing: border-box; background: linear-gradient(180deg, #10283c, #0d1b30); border: 1px solid var(--sysDim); box-shadow: 0 0 40px var(--sysGlow); padding: 22px 26px; animation: winin .22s ease-out; }
   @keyframes winin { 0% { transform: scale(.94); opacity: 0; } }
   .win .sweep { position: absolute; left: 0; right: 0; top: 0; height: 100%; pointer-events: none; overflow: hidden; }
@@ -263,8 +264,6 @@
   .win .nextbox i { font-size: 14px; color: var(--sys); font-weight: 700; display: flex; align-items: center; gap: 5px; }
   .win .nextbox b { display: block; font-size: 20px; margin-top: 2px; }
   .win .nextbox span { display: block; font-size: 15px; margin-top: 2px; line-height: 1.45; }
-  .win .legend { margin-top: 12px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 15px; color: var(--dim); }
-  .win .legend span { display: inline-flex; align-items: center; gap: 5px; } .win .legend .ic { color: var(--text); }
   .win.pop { width: 520px; }
   .crows { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 16px; line-height: 1.35; }
   .crows > div { display: flex; gap: 10px; align-items: flex-start; }
@@ -303,6 +302,16 @@
   .mg-res .s { font-size: 16px; color: var(--dim); display: flex; align-items: center; gap: 12px; }
   .mg-res .s span { display: inline-flex; align-items: center; gap: 4px; }
   .mg-res .w { font-size: 16px; display: flex; align-items: center; gap: 6px; }
+  /* 처음 하는 알바: 하는 법 (시작을 누르기 전에는 시간이 가지 않음). 그림을 가리지 않게 조작 버튼 자리에 둔다 */
+  .mg-ctl.how { min-height: 118px; align-items: center; }
+  .mg-how { flex: 1; display: flex; align-items: center; gap: 18px; text-align: left; padding: 9px 14px 10px 16px; border-radius: 10px; border: 1px solid var(--gold); background: rgba(255,209,102,.07); animation: winin .2s; }
+  .mg-how .l { flex: 1; min-width: 0; }
+  .mg-how em { font-style: normal; font-size: 14px; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+  .mg-how ol { margin: 1px 0 0; padding-left: 24px; font-size: 18px; line-height: 1.4; } .mg-how li:first-child { font-weight: 700; } .mg-how li + li { font-size: 15px; }
+  .mg-how .keys { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 14px; }
+  .mg-how .keys > span { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px; background: var(--night2); font-weight: 700; }
+  .mg-how .keys i { color: var(--dim); }
+  .mg-how .btn { flex: none; height: 56px; padding: 0 24px; font-size: 20px; }
   /* 정산 */
   .win.night { width: 760px; padding: 20px 28px 22px; }
   .n-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 12px; }
@@ -349,6 +358,34 @@
   #s-play.shake { animation: shake .4s; }
   @keyframes shake { 15% { transform: translate(-8px, 3px); } 30% { transform: translate(7px, -4px); } 45% { transform: translate(-6px, 2px); } 60% { transform: translate(4px, -2px); } 80% { transform: translate(-2px, 1px); } }
 
+  /* ── 첫 판 안내: 짚는 곳만 밝히고(나머지는 어둡게) 고리와 말풍선 하나 ── */
+  #coach { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+  #coach > svg { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; }
+  #coach > svg > rect { fill: rgba(5,7,15,.68); }
+  #coach .ring { position: absolute; box-sizing: border-box; border: 2px solid var(--gold); border-radius: 12px; animation: ring 1.2s ease-in-out infinite; }
+  @keyframes ring { 50% { box-shadow: 0 0 0 5px rgba(255,209,102,.25), 0 0 26px rgba(255,209,102,.45); } }
+  #coach u { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 12px; background: var(--gold); color: var(--ink); font-size: 15px; font-weight: 800; flex: none; }
+  #coach .ring u { position: absolute; left: -12px; top: -12px; }
+  #coach .bubble { position: absolute; width: 372px; box-sizing: border-box; padding: 12px 16px 12px; border-radius: 10px; background: #0b1226; border: 2px solid var(--gold); box-shadow: 0 6px 30px rgba(0,0,0,.6); pointer-events: auto; font-size: 19px; font-weight: 700; line-height: 1.4; color: #fff; }
+  #coach .bubble.in { animation: winin .22s ease-out; }
+  #coach .bubble.nudge { animation: nudge .3s; }
+  @keyframes nudge { 20% { transform: translateX(-7px); } 45% { transform: translateX(6px); } 70% { transform: translateX(-4px); } }
+  #coach .bubble em { display: block; font-style: normal; font-size: 14px; color: var(--gold); letter-spacing: 1px; }
+  #coach .bubble .no { display: none; color: var(--warm); letter-spacing: 0; } /* 짚지 않은 것을 눌렀을 때: 이름표 자리에 이유가 뜬다 (말풍선 크기는 그대로) */
+  #coach .bubble.nudge .no { display: inline; } #coach .bubble.nudge .lab { display: none; }
+  #coach .bubble b { color: var(--gold); }
+  #coach .bubble .tx > i { display: block; margin-top: 4px; font-size: 15px; font-weight: 400; line-height: 1.45; color: var(--text); }
+  #coach .bubble .tx > i b { color: #fff; }
+  #coach .bubble p { margin: 0 0 5px; display: flex; gap: 8px; align-items: flex-start; font-size: 16px; font-weight: 400; line-height: 1.45; color: var(--text); }
+  #coach .bubble .ic { color: var(--gold); }
+  #coach .bubble .foot { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; }
+  #coach [data-do="coachoff"] { font-size: 14px; font-weight: 400; color: var(--dim); text-decoration: underline; padding: 4px 0; }
+  #coach [data-do="coachoff"]:hover { color: var(--text); }
+  #coach .bubble.up::before, #coach .bubble.down::before, #coach .bubble.left::before { content: ''; position: absolute; border: 10px solid transparent; }
+  #coach .bubble.down::before { bottom: -12px; left: calc(var(--a) - 10px); border-bottom: 0; border-top-color: var(--gold); }
+  #coach .bubble.up::before { top: -12px; left: calc(var(--a) - 10px); border-top: 0; border-bottom-color: var(--gold); }
+  #coach .bubble.left::before { left: -12px; top: calc(var(--a) - 10px); border-left: 0; border-right-color: var(--gold); }
+
   /* ── 제목 · 결과 · 등장물 ── */
   .t-box { position: absolute; left: 660px; top: 86px; width: 580px; }
   .t-box .tag { font-size: 15px; font-weight: 700; color: var(--sys); letter-spacing: 2px; }
@@ -383,7 +420,7 @@
   .fig .p { width: 100px; height: 62px; background: var(--night1); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .fig .p svg, .fig .p canvas { max-width: 100%; max-height: 100%; display: block; }
   .fig.icn { width: 44px; } .fig.icn .p { width: 44px; height: 34px; } .fig.icn .p svg { width: 24px; height: 24px; }
-  @media (prefers-reduced-motion: reduce) { .stamp, .fly, #s-play.shake, .frame > .win, .win { animation-duration: .01s !important; } }
+  @media (prefers-reduced-motion: reduce) { .stamp, .fly, #s-play.shake, .frame > .win, .win, #coach .bubble { animation-duration: .01s !important; } #coach .ring { animation: none; } }
 </style>
 </head>
 <body>
@@ -402,6 +439,7 @@
   <canvas id="fxc" width="1280" height="720"></canvas>
   <div id="fx"></div>
   <div id="toasts"></div>
+  <div id="coach" class="hide"></div>
 </div>
 <script src="config.js"></script>
 <script src="palette.js"></script>
