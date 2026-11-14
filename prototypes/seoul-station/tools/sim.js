@@ -1,6 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 화면 없는 브라우저(Playwright)는 KW_PLAYWRIGHT 환경 변수로 위치를 줄 수 있다.
-// 규칙만으로 한 판을 끝까지 굴려 보는 간단한 봇 (균형 감 잡기용 · 게임 폴더 밖)
+// 규칙만으로 긴 판(기한 없음, DAYS 일까지)을 굴려 보는 봇 (균형 감 잡기용 · 게임 폴더 밖)
+// 쓰는 법: node tools/sim.js [폴더] [판 수] [이름=값 …]   환경 변수: BOTS=biz,invest · DAYS=150 · TRACE=봇:씨앗 · START=집단계:만원
 const path = require('path');
 const dir = require('path').resolve(process.argv[2] || require('path').join(__dirname, '..'));
 global.window = {};
@@ -12,65 +13,128 @@ for (const a of process.argv.slice(4)) { const [k, v] = a.split('='); over[k] = 
 const T = new Proxy({}, { get: (_, k) => (k in over ? over[k] : (C[k] && typeof C[k] === 'object' ? C[k].value : C[k])) });
 R.setTune(T);
 const N = Number(process.argv[3] || 300);
+const DAYS = Number(process.env.DAYS || 150);
+const SHARE = Number(process.env.SHARE || 0.5); // invest · owner 가 한 번에 거는 몫 (현금 − 남길 돈의). 손잡이 실측용
 const M = 10000;
+const won = n => R.won(Math.round(n / 10000) * 10000);
 
-// 봇 공통: 주거는 돈이 되면 바로 올림(upTo 까지), 칸마다 pickAct, 칸 사이에 trade
+// ── 봇 공통 ──────────────────────────────────────────────────
+// 하루: 아침에 사건 · 특성 → (칸마다) 키우기 · 집 사기 · 매매 → 칸 고르기 → 일요일이면 청구 현금 마련 → 하루 마치기
 function play(seed, bot) {
   const s = R.create(seed, 'bot');
+  if (process.env.START) { const [t, c] = process.env.START.split(':').map(Number); s.tier = t; s.movedDay = 1; s.cash = c * M; s.quest = 9; s.stats.maxTier = t; } // 중간 단계에서 바로 시작 (START=집단계:만원)
+  s.bot = { labor: [], reach: {}, bizAt: {} };
   let guard = 0;
-  while (!s.ended && guard++ < 2000) {
-    if (s.phase === 'night') { if (process.env.TRACE) console.log('day', s.day, 'tier', s.tier, 'cash', Math.round(s.cash / M), 'worth', Math.round(R.worth(s) / M), 'hp', Math.round(s.hp), 'lv', s.lv, 'lev', s.lev ? s.lev.dir * s.lev.lev + 'x' + Math.round(s.lev.put / M) : '-', 'arrears', Math.round(s.arrears / M), 'notes', (s.last.notes || []).map(n => n.text.slice(0, 18)).join('|')); R.nextDay(s); continue; }
-    if (s.event) { const v = R.eventView(s); R.choose(s, s.event === 'den' ? (bot.den ? 'a' : 'b') : v.a.ok ? 'a' : 'b'); continue; } // 돌발 사건: 돈이 되면 첫째, 아니면 둘째 (친구의 전화는 den 봇만 간다)
-    if (s.den) { const b = R.denView(s).bets.filter(x => x.ok).pop(); if (bot.den && b) R.denBet(s, b.amt, 'odd'); else R.denLeave(s); continue; } // den 봇: 걸 수 있는 가장 큰 판돈으로 끝까지
-    if (s.offer) { const pr = bot.perks || PRIO; R.pickPerk(s, pr.find(id => s.offer.includes(id)) || s.offer[0]); continue; }
-    // 주거: 순자산 기준이 되면 바로 올림(upTo 까지). 보증금이 없으니 현금을 남겨 둘 까닭이 없다
-    if (s.tier < bot.upTo && R.moveInfo(s, s.tier + 1).ok) R.move(s, s.tier + 1);
-    if (R.worth(s) >= R.housePrice(s)) { R.buyHouse(s); break; }
+  while (!s.ended && guard++ < DAYS * 40) {
+    if (s.phase === 'night') {
+      s.bot.labor.push(s.last.labor); if (s.bot.labor.length > 7) s.bot.labor.shift();
+      if (process.env.TRACE) trace(s);
+      if (s.day >= DAYS) break;
+      R.nextDay(s); continue;
+    }
+    if (s.event) { const v = R.eventView(s); R.choose(s, s.event === 'den' ? 'b' : v.a.ok && v.a.cost <= s.cash * 0.05 ? 'a' : 'b'); continue; } // 돌발 사건: 현금의 5% 안이면 첫째, 아니면 둘째. 도박장은 안 간다
+    if (s.den) { R.denLeave(s); continue; }
+    if (s.offer) { R.pickPerk(s, PRIO.find(id => s.offer.includes(id)) || s.offer[0]); continue; }
+    if (s.tier < 3 && R.moveInfo(s, s.tier + 1).ok) R.move(s, s.tier + 1); // 빌려 사는 곳은 기준이 되면 바로
+    if (s.tier >= 8 && R.worth(s) >= T.top_worth) { raise(s, R.worth(s)); R.declareTop(s); break; }
+    grow(s, bot);
+    note(s);
     if (s.slot >= 3) {
       const b = R.bill(s);
-      if (b && b.inDays === 0 && s.cash < b.amt + 3 * M && bot.trade) { // 고정비 현금 마련
-        for (const a of R.ASSETS) if (s.cash < b.amt + 3 * M && s.hold[a.id].units > 0) R.sell(s, a.id, 1);
-        if (s.cash < b.amt + 3 * M && s.lev) R.levClose(s);
-      }
+      if (b && b.inDays === 0) raise(s, b.amt + 3 * M); // 청구 현금 마련: 투자한 것을 판다
       R.endDay(s); continue;
     }
     if (bot.trade) bot.trade(s);
-    const acts = R.acts(s);
-    const act = bot.pick(s, acts);
-    if (act.kind === 'job') R.doJob(s, act.id, bot.score(s)); else if (act.kind === 'study') R.doStudy(s); else R.doRest(s);
+    const acts = R.acts(s), act = bot.pick ? bot.pick(s, acts) : bestJob(s, acts);
+    if (process.env.TRACE) (s.bot.acts = s.bot.acts || []).push(act.id + '@' + Math.round(s.hp));
+    if (act.kind === 'job') R.doJob(s, act.id, bot.score || 0.75); else if (act.kind === 'study') { if (!R.doStudy(s, studyPick(s, act))) R.doRest(s); } else R.doRest(s);
+    if (s.ev.some(e => e.t === 'sys' && /거래량/.test(e.text))) s.htSeen = s.day;
     s.ev.length = 0;
   }
+  note(s);
   return s;
+}
+function note(s) { // 단계별 처음 닿은 날
+  for (let t = 4; t <= 9; t++) if (s.stats.maxTier >= t && !s.bot.reach[t]) s.bot.reach[t] = s.day;
+  for (let b = 1; b <= 5; b++) if (s.biz >= b && !s.bot.bizAt[b]) s.bot.bizAt[b] = s.day;
+}
+function raise(s, amt) { // 현금이 amt 가 되도록 투자한 것을 판다 (작은 것부터가 아니라 그냥 다)
+  if (s.cash >= amt) return;
+  for (const a of R.ASSETS) if (s.cash < amt && a.kind === 'stock' && s.hold[a.id].units > 0) R.sell(s, a.id, 1);
+  if (s.cash < amt && s.lev) R.levClose(s);
+}
+const sellable = s => R.invested(s);
+const weekIncome = s => (s.bot.labor.length ? s.bot.labor.reduce((a, b) => a + b, 0) / s.bot.labor.length : 0) * 7; // 지난 며칠 평균 일당 × 7
+const loanK = () => T.loan_rate + 1 / T.loan_weeks; // 대출 1원에 붙는 주 원리금
+// 키우기: 사업이 먼저(바로 일당이 오름), 그다음 집. 조심하는 봇은 다음 청구 + 여유를 현금으로 남긴다
+function grow(s, bot) {
+  if (s.ended || s.phase !== 'day') return;
+  const reserve = () => (R.bill(s) ? R.bill(s).amt : 0) + (bot.reckless ? 0 : weekCostNow(s));
+  for (let guard = 0; guard < 6; guard++) {
+    let did = false;
+    const v = R.bizView(s);
+    if (bot.biz && v.next && s.tier >= v.next.needTier && s.cash + sellable(s) >= v.next.cost + reserve()) { raise(s, v.next.cost + reserve()); did = R.bizUp(s) || did; }
+    const to = s.tier + 1;
+    if (to >= 4 && to <= 8) {
+      const i = R.homeInfo(s, to);
+      if (to === 4) { const r = bot.reckless ? 0 : i.fixed; if (s.cash + sellable(s) >= i.full + r) { raise(s, i.full + r); did = R.buyHome(s, 4, 0) || did; } } // 내 집: 산 뒤 첫 주 관리비만 남기면 된다
+      else if (bot.reckless) { if (s.cash + sellable(s) >= i.down) { raise(s, i.down); did = R.buyHome(s, to, i.loanMax) || did; } }
+      else {
+        // 조심: 빌리는 돈은 되도록 적게. 산 뒤에 현금 ≥ 한 주 원리금 × 3 (+ 바로 차릴 사업 값), 그리고 벌이가 한 주 (고정비 + 원리금)의 1.5배를 넘을 때만.
+        // 벌이: 사업 값까지 쥐고 사면 바로 한 단계 키운 뒤의 벌이로, 아니면 지금 벌이로 본다
+        const have = s.cash + sellable(s), k = loanK(), fixed = i.fixed, w = weekIncome(s);
+        const nb = R.bizView(s).next, withBiz = bot.biz && nb && nb.needTier === to ? nb.cost + 2 * R.weekCost(s, to) : 0;
+        for (const extra of withBiz ? [withBiz, 0] : [0]) {
+          const L = Math.max(0, Math.ceil((i.full + extra - have) / (1 - 3 * k) / M) * M), inc = extra ? w * T.biz_mult : w;
+          if (L <= i.loanMax && inc >= 1.5 * (fixed + L * k)) { raise(s, i.full - L + 3 * L * k + extra); did = R.buyHome(s, to, L) || did; break; }
+        }
+      }
+    }
+    if (!did) break;
+  }
+}
+const weekCostNow = s => R.weekCost(s) + (R.loanView(s) ? R.loanView(s).weekly : 0);
+function trace(s) {
+  const l = R.loanView(s), b = s.last.billed;
+  console.log('day', s.day, R.HOMES[s.tier].name, R.BIZ[s.biz].name + (R.bizView(s).eff < s.biz ? '(반영 ' + R.bizView(s).eff + ')' : ''), 'cash', won(s.cash), 'worth', won(R.worth(s)), 'labor', won(s.last.labor), 'hp', Math.round(s.hp),
+    (s.bot.acts || []).splice(0).join(' '), 'loan', l ? won(l.balance) + '/주 ' + won(l.weekly) : '-', b ? (b.paid ? '청구 ' + won(b.amt) : '못 냄' + (b.foreclosed ? ' 압류' : '')) : '', 'inv', won(R.invested(s)), (s.last.notes || []).map(n => n.text.slice(0, 24)).join('|'));
+}
+// 공부할 종목: 사람이 할 법하게. 오늘 한탕바이오 알림을 봤으면 그것 → 코인 포지션이 있으면 코인 → 든 주식 중 가장 큰 것 → 원룸부터는 코인 → 소식이 잦은 화끈식품
+function studyPick(s, act) {
+  const can = id => !act.assets || act.assets.some(a => a.id === id);
+  if (s.htSeen === s.day && can('hantang')) return 'hantang';
+  if (s.lev && can('coin')) return 'coin';
+  const held = R.ASSETS.filter(a => a.kind === 'stock' && a.id !== 'hantang' && s.hold[a.id].units > 0).sort((a, b) => R.holdValue(s, b.id) - R.holdValue(s, a.id))[0];
+  if (held) return held.id;
+  return can('coin') ? 'coin' : 'buldak';
 }
 const PRIO = ['hustle', 'legs', 'iron', 'sleep', 'tipster', 'sense', 'vip', 'thrift', 'quester', 'early', 'hands', 'streak', 'guts', 'lazy']; // 봇이 특성을 고르는 순서
 const bestJob = (s, acts) => { const j = acts.filter(a => a.kind === 'job' && a.ok).sort((a, b) => b.pay - a.pay)[0]; return j || acts.find(a => a.kind === 'rest'); };
-// 체력을 봐 가며: 가장 돈 되는 알바, 안 되면 다음 것, 다 안 되면 쉬기
+// 공부가 알바 한 칸보다 값질 때 저녁 칸을 공부에: 굴리는 현금의 절반 × 하루 2% > 알바 일당 − 그 칸에도 들어오는 자동 수입.
+// 어차피 쉬어야 하는 칸(체력이 모자람)이면 공부 (자동 수입은 같고 리포트가 남는다)
+const studyWorth = (s, acts) => {
+  const st = acts.find(a => a.kind === 'study' && a.ok), j = bestJob(s, acts);
+  if (!st || s.slot !== 2) return null;
+  if (!j || j.kind !== 'job') return s.cash > 100 * M ? st : null;
+  return (s.cash + R.invested(s)) * SHARE * 0.02 > j.pay - st.auto ? st : null;
+};
 const bots = {
-  // 알바만 (미니게임 "잘함" 수준), 고시원까지만
-  alba: { upTo: 2, score: () => 0.75, pick: bestJob },
-  albaPerfect: { upTo: 2, score: () => 0.95, pick: bestJob },
-  // 알바 + 남는 돈은 전부 대장전자에 묻어 둠
-  hold: { upTo: 2, score: () => 0.75, pick: bestJob, trade: s => { if (s.tier >= 2 && s.cash > 60 * M) R.buy(s, 'daejang', s.cash - 55 * M); } },
-  // 뉴스를 믿을 만한 것만 따라가는 사람: 공시 · 기사 호재면 화끈식품, 원룸 뒤엔 코인 3배 (공부는 안 함)
-  news: { upTo: 3, score: () => 0.75, pick: bestJob, trade: s => newsTrade(s, false) },
-  // 공부까지 하는 사람: 자산이 500만을 넘으면 오전 칸을 공부에 씀
-  study: { upTo: 3, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true) },
-  // 공부 + 과감: 5배, 남는 현금의 90%
-  studyAggro: { upTo: 3, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true, 5, 0.9) },
-  // 주식만 (원룸에 안 감): 공부 + 화끈식품/대장전자
-  stockOnly: { upTo: 2, score: () => 0.75, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 300 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true) },
-  // 처음 해 보는 조심스러운 사람: 미니게임은 보통, 공부 안 함, 믿을 만한 소식에만 2배로 현금의 25%
-  firstTimer: { upTo: 3, score: () => 0.6, pick: bestJob, trade: s => newsTrade(s, false, 2, 0.25) },
-  // 두 번째 판쯤: 미니게임 잘함, 저녁에 공부, 3배로 현금의 절반
-  second: { upTo: 3, score: () => 0.8, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true, 3, 0.5) },
-  // 무지성: 원룸까지는 알바, 그 뒤 전 재산 5배 롱/숏 아무거나
-  // 친구가 부를 때마다 도박장에 가서 걸 수 있는 가장 큰 판돈으로 끝까지 (나머지는 second 와 같음 — second 와 비교)
-  den: { upTo: 3, den: true, score: () => 0.8, pick: (s, acts) => (s.slot === 2 && R.worth(s) > 500 * M && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true, 3, 0.5) },
-  gamble: { upTo: 3, score: () => 0.75, pick: bestJob, trade: s => { if (s.tier >= 3 && !s.lev && s.cash > 50 * M) R.levOpen(s, R.rnd2(s) < 0.5 ? 1 : -1, s.cash - 20 * M, 5); } },
+  // 일 + 사업 키우기 + 대장전자만 조금 (남는 현금의 10%). 대출은 산 뒤 한 주 (고정비 + 원리금)의 3배를 현금으로 쥐고서만
+  biz: { biz: true, trade: s => { if (s.tier >= 2 && s.slot === 0 && s.hold.daejang.units === 0) { const spare = s.cash - 2 * ((R.bill(s) ? R.bill(s).amt : 0) + weekCostNow(s)); if (spare > 20 * M) R.buy(s, 'daejang', spare * 0.1); } } },
+  // biz + 공부 따라 사기 (레버리지 없이 현금의 절반)
+  invest: { biz: true, pick: (s, acts) => studyWorth(s, acts) || bestJob(s, acts), trade: s => newsTrade(s, true, 1, SHARE) },
+  // 되는 대로: 대출 최대, 여유 없이 키우고, 원룸부터 매일 아침 코인 5배에 현금 전부
+  reckless: { biz: true, reckless: true, trade: s => { if (s.tier >= 3 && s.slot === 0 && !s.lev && s.cash > 30 * M) { const n = R.todayNews(s).find(x => x.asset === 'coin'); R.levOpen(s, n ? n.dir : (R.rnd2(s) < 0.5 ? 1 : -1), s.cash, 5); } else if (s.lev && s.slot === 2) R.levClose(s); } },
+  // 사업 · 투자 없음 (집은 biz 와 같은 기준으로 산다)
+  albaOnly: {},
+  // 그룹(사업 3단계)부터는 미니게임을 안 하고 자동 수입 + 투자만 (하루 한 번 공부, 나머지는 쉬기)
+  owner: { biz: true, pick: (s, acts) => (R.bizView(s).eff >= 3 ? acts.find(a => a.kind === 'study' && a.ok) || acts.find(a => a.kind === 'rest') : studyWorth(s, acts) || bestJob(s, acts)), trade: s => newsTrade(s, true, 1, SHARE) },
+  // 견주기용 (기본 표에는 안 나옴, BOTS=investDaily): invest 와 같되 고시원부터 매일 저녁 칸을 공부에
+  investDaily: { biz: true, pick: (s, acts) => (s.slot === 2 && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true, 1, 0.5) },
 };
 function newsTrade(s, useReport, lev = 3, share = 0) {
   if (s.tier < 2) return;
-  const keep = (R.bill(s) ? R.bill(s).amt : 0) + 10 * M;
+  const keep = (R.bill(s) ? R.bill(s).amt : 0) + weekCostNow(s) + 10 * M;
   if (s.slot === 0) { // 아침: 어제 들고 온 것 정리 후 오늘 소식에 맞춰 다시 잡음
     const news = R.todayNews(s);
     const sig = n => (useReport && n.report ? n.report * 2 : n.src === 'official' ? n.dir * 1.5 : n.src === 'article' ? n.dir : 0);
@@ -81,27 +145,36 @@ function newsTrade(s, useReport, lev = 3, share = 0) {
     const d = news.find(n => n.asset === 'daejang'), ds = d ? sig(d) : 0;
     if (s.hold.daejang.units > 0 && (ds < 0 || bs > 0 || (s.tier >= 3 && cs !== 0))) R.sell(s, 'daejang', 1);
     if (s.tier >= 3 && cs !== 0 && s.cash > keep + 30 * M) { R.levOpen(s, cs > 0 ? 1 : -1, (s.cash - keep) * (share || (Math.abs(cs) >= 1.5 ? 0.6 : 0.4)), lev); }
-    if (bs > 0 && s.cash > keep + 10 * M) R.buy(s, 'buldak', s.cash - keep);
-    else if (ds >= 0 && s.cash > keep + 30 * M && s.hold.buldak.units === 0) R.buy(s, 'daejang', (s.cash - keep) * 0.8);
+    if (bs > 0 && s.cash > keep + 10 * M) R.buy(s, 'buldak', (s.cash - keep) * (share || 1));
+    else if (ds >= 0 && s.cash > keep + 30 * M && s.hold.buldak.units === 0) R.buy(s, 'daejang', (s.cash - keep) * (share || 0.8));
   }
 }
-if (process.env.TRACE) { const [b, sd] = process.env.TRACE.split(':'); const s = play(Number(sd), bots[b]); console.log(JSON.stringify(s.ended), JSON.stringify(s.perks), s.evSeen.join(',')); process.exit(0); } // TRACE=봇:씨앗 → 그 한 판을 날마다 찍음
-const names = (process.env.BOTS || Object.keys(bots).join(',')).split(',');
-const worths = {}; // 봇별 판마다의 끝 순자산 (같은 씨앗끼리 견주기)
+if (process.env.TRACE) { const [b, sd] = process.env.TRACE.split(':'); const s = play(Number(sd), bots[b]); console.log(JSON.stringify(s.ended), 'reach', JSON.stringify(s.bot.reach), 'biz', JSON.stringify(s.bot.bizAt), '압류', s.stats.foreclosed, '청산', s.stats.liq); process.exit(0); } // TRACE=봇:씨앗 → 그 한 판을 날마다 찍음
+
+// ── 긴 판 표: 단계별 처음 닿은 날 (못 닿은 판은 ">DAYS" 로 셈) ────────
+const names = (process.env.BOTS || 'biz,invest,reckless,albaOnly,owner').split(',');
+const q = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(arr.length * p))];
+const fmt = d => (d === Infinity ? '>' + DAYS : String(d));
+const STAGES = [[4, '내 집'], [5, '아파트'], [6, '주택'], [7, '별장'], [8, '호텔'], [9, '엔딩']];
+const out = {};
+const t0 = Date.now();
 for (const name of names) {
-  let win = 0, sumW = 0, denNet = 0, sumPct = 0, days = 0, liq = 0, minPct = 9, maxPct = 0; const pcts = [];
-  for (let i = 1; i <= N; i++) {
-    const s = play(i * 7 + 1, bots[name]);
-    const e = s.ended || { kind: 'stuck', worth: R.worth(s), price: R.housePrice(s) };
-    const pct = e.worth / e.price; pcts.push(pct);
-    if (process.env.WORST && pct < Number(process.env.WORST)) console.log('  낮은 판', name, 'seed', i * 7 + 1, pct.toFixed(2));
-    if (e.kind === 'home') { win++; days += e.day; }
-    sumPct += pct; sumW += e.worth; liq += s.stats.liq; (worths[name] = worths[name] || []).push(e.worth); denNet += s.stats.denNet || 0;
-  }
-  pcts.sort((a, b) => a - b);
-  console.log(name.padEnd(12), 'win', (100 * win / N).toFixed(0).padStart(3) + '%', ' avgDay', win ? (days / win).toFixed(1) : '-', ' 순자산/집값 p10', pcts[Math.floor(N * .1)].toFixed(2), 'p50', pcts[Math.floor(N * .5)].toFixed(2), 'p90', pcts[Math.floor(N * .9)].toFixed(2), ' 청산/판', (liq / N).toFixed(2), ' 평균 순자산', Math.round(sumW / N / M) + '만' + (bots[name].den ? '  도박장 손익/판 ' + Math.round(denNet / N / M) + '만' : ''));
+  const runs = [];
+  for (let i = 1; i <= N; i++) runs.push(play(i * 7 + 1, bots[name]));
+  const row = { fore: runs.filter(s => s.stats.foreclosed > 0).length / N, foreN: runs.reduce((a, s) => a + s.stats.foreclosed, 0) / N, liq: runs.reduce((a, s) => a + s.stats.liq, 0) / N, st: {} };
+  for (const [t] of STAGES) { const d = runs.map(s => s.bot.reach[t] || Infinity).sort((a, b) => a - b); row.st[t] = { p10: q(d, 0.1), p50: q(d, 0.5), p90: q(d, 0.9), pct: d.filter(x => x < Infinity).length / N }; }
+  row.maxTier = runs.reduce((a, s) => a + Math.min(s.stats.maxTier, 9), 0) / N;
+  row.worth = runs.map(s => R.worth(s)).sort((a, b) => a - b);
+  row.biz = runs.reduce((a, s) => a + s.biz, 0) / N;
+  row.trade = runs.reduce((a, s) => a + s.stats.trade, 0) / N; row.study = runs.reduce((a, s) => a + s.studied, 0) / N;
+  out[name] = row;
 }
-if (worths.den && worths.second) { // 같은 씨앗끼리: 도박장에 가는 판 − 안 가는 판. 도박장 굴림이 rnd3 를 써서 뒤의 리포트 · 특성 후보가 달라지므로 흔들림이 크다
-  const d = worths.den.map((w, i) => w - worths.second[i]), mean = d.reduce((a, b) => a + b, 0) / N, sd = Math.sqrt(d.reduce((a, b) => a + (b - mean) * (b - mean), 0) / (N - 1));
-  console.log('den − second 평균 순자산', Math.round(mean / M) + '만', '(±' + Math.round(2 * sd / Math.sqrt(N) / M) + '만, 2 표준오차)');
+console.log('긴 판 표 (씨앗 ' + N + '개 · ' + DAYS + '일까지) — 단계마다 처음 닿은 날 p10 / 중앙 / p90, 닿은 판 %');
+console.log('봇'.padEnd(12) + STAGES.map(([, n]) => n.padEnd(19)).join('') + '압류 겪은 판 · 판당 압류 · 청산/판 · 최고 단계 평균 · 사업 평균 · 끝 순자산 중앙 · 투자 손익/판 · 공부/판');
+for (const name of names) {
+  const r = out[name];
+  console.log(name.padEnd(12) + STAGES.map(([t]) => { const x = r.st[t]; return (fmt(x.p10) + '/' + fmt(x.p50) + '/' + fmt(x.p90) + ' ' + Math.round(x.pct * 100) + '%').padEnd(20); }).join('') +
+    Math.round(r.fore * 100) + '% · ' + r.foreN.toFixed(2) + ' · ' + r.liq.toFixed(2) + ' · ' + r.maxTier.toFixed(2) + ' · ' + r.biz.toFixed(2) + ' · ' + won(q(r.worth, 0.5)) + ' · ' + won(r.trade) + ' · ' + r.study.toFixed(1));
 }
+console.log('(' + ((Date.now() - t0) / 1000).toFixed(1) + '초)');
+module.exports = { out };

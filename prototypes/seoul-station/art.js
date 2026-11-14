@@ -71,13 +71,13 @@
   function holo(x, y, w, h, o) {
     o = o || {};
     const b = Math.min(w, h) * .26, m = Math.max(2, w * .04), sw = o.sw || Math.max(1.6, w * .028), lw = Math.max(1.6, h * .07);
-    let s = glow(n(x + w / 2), n(y + h / 2), n(w * .95), P.sys, .2);
-    s += R(x, y, w, h, P.sysDeep, 1.5, 'fill-opacity=".66"') + R(x, y, w, h * .2, P.sys, 1.5, op(.16));
+    const halo = glow(n(x + w / 2), n(y + h / 2), n(w * .95), P.sys, .2);
+    let s = R(x, y, w, h, P.sysDeep, 1.5, 'fill-opacity=".66"') + R(x, y, w, h * .2, P.sys, 1.5, op(.16));
     const c = (px, py, dx, dy) => `M${n(px)},${n(py + dy * b)} V${n(py)} H${n(px + dx * b)}`;
     s += S(c(x - m, y - m, 1, 1) + c(x + w + m, y - m, -1, 1) + c(x - m, y + h + m, 1, -1) + c(x + w + m, y + h + m, -1, -1), P.sys, sw, 'stroke-linecap="square" stroke-linejoin="miter"');
     s += S(`M${n(x + w * .14)},${n(y + h * .38)} H${n(x + w * .58)}`, P.sys, lw);
     s += S(`M${n(x + w * .14)},${n(y + h * .6)} H${n(x + w * .86)} M${n(x + w * .14)},${n(y + h * .8)} H${n(x + w * .46)}`, P.sys, lw * .8, op(.55));
-    return G(s, '', o.op == null ? '' : op(o.op));
+    return G(halo + G(s, '', 'data-part="holo"'), '', o.op == null ? '' : op(o.op)); // data-part: 점검이 '나' 구역에서 잘리는지 잰다
   }
 
   // ───────── 주인공 ─────────
@@ -209,8 +209,8 @@
       + (label ? R(x + w * .1, y + h * .52, w * .3, h * .28, mix(P.text, P.night3, .12), 1) + S(`M${n(x + w * .15)},${n(y + h * .62)} h${n(w * .2)} M${n(x + w * .15)},${n(y + h * .71)} h${n(w * .13)}`, P.stone, Math.max(.8, w * .028)) : '');
   }
 
-  // ───────── 장면 4곳 (460×300) ─────────
-  const SCENE_NAME = ['서울역 광장 벤치', '찜질방 수면실', '고시원 방', '원룸'];
+  // ───────── 장면 9곳 (460×300) ─────────
+  const SCENE_NAME = ['서울역 광장 벤치', '찜질방 수면실', '고시원 방', '원룸', '내 집 거실', '아파트 고층 거실', '주택 마당', '바닷가 별장', '호텔 맨 위층 스위트'];
 
   function sceneStation(ph, key) {
     const a = amb(ph), tone = toneOf(ph), L = ph.lamp, far = a(mix(P.night1, P.night2, .7));
@@ -227,7 +227,7 @@
     b += E(224, 253, 106, 5.5, P.night0, op(.4)) + bench(138, 220, 172, a);
     b += R(150, 214.5, 36, 5.5, a(mix(P.text, P.night3, .32)), 1) + S('M154,217.2 H182', a(P.stone), 1, op(.6));
     // 주인공 (지침) + 상태창
-    b += G(hero({ pose: 'sit', face: 'tired', lap: 'paper', tilt: 4, warm: L > .5, tone }), at(224, 220, 1.05));
+    b += G(hero({ pose: 'sit', face: 'tired', lap: 'paper', tilt: 4, warm: L > .5, tone }), at(224, 220, 1.05), 'data-part="hero"');
     return b + holo(272, 94, 78, 50);
   }
 
@@ -253,7 +253,7 @@
     b += PG('177,250 187,250 185.5,266 178.5,266', a(mix(P.text, P.warm, .25))) + S('M183,250 L186,242', a(P.stoneLit), 1.4);
     // 주인공 (양머리 수건, 한숨 돌림) + 상태창
     b += E(222, 268, 40, 4, P.night0, op(.28));
-    b += G(hero({ pose: 'cross', face: 'content', hat: 'sheep', armL: 'lap', armR: 'lap', warm: false, tone }), at(222, 252, 1.05));
+    b += G(hero({ pose: 'cross', face: 'content', hat: 'sheep', armL: 'lap', armR: 'lap', warm: false, tone }), at(222, 252, 1.05), 'data-part="hero"');
     return b + holo(274, 106, 78, 50);
   }
 
@@ -281,7 +281,7 @@
     b += PG('323,137 338,131 343,143 329,150', L > 0 ? mix(P.warmDim, P.lamp, .2 + .6 * L) : a(P.stoneLit));
     if (L > 0) b += PG('329,150 343,143 356,169 310,169', P.lamp, op(.14 * L));
     // 주인공 (담담) + 상태창
-    b += G(hero({ pose: 'sit', face: 'calm', armL: 'lap', armR: 'lap', warm: false, tone }), at(184, 202, 1));
+    b += G(hero({ pose: 'sit', face: 'calm', armL: 'lap', armR: 'lap', warm: false, tone }), at(184, 202, 1), 'data-part="hero"');
     return b + holo(270, 66, 76, 48);
   }
 
@@ -307,19 +307,130 @@
     const chair = a(mix(P.stone, P.night1, .25)), chairHi = a(mix(P.stone, P.stoneLit, .3));
     b += E(272, 246, 34, 4, P.night0, op(.3)) + S('M250,244 L272,237 L294,244', metal, 4) + R(269.5, 212, 5, 27, metal) + R(239, 132, 66, 78, chair, 14) + R(239, 132, 9, 78, a(mix(P.stone, P.night0, .45)), 4.5)
       + R(233, 184, 9, 5, chairHi, 2.5) + R(302, 184, 9, 5, chairHi, 2.5) + R(236, 188, 3, 18, metal) + R(305, 188, 3, 18, metal) + R(241, 204, 62, 10, chairHi, 5);
-    b += G(hero({ pose: 'sit', face: 'smile', armL: 'lap', armR: 'hold', item: 'mug', warm: false, tone }), at(272, 205, 1.02));
+    b += G(hero({ pose: 'sit', face: 'smile', armL: 'lap', armR: 'hold', item: 'mug', warm: false, tone }), at(272, 205, 1.02), 'data-part="hero"');
     return b + holo(322, 92, 78, 50);
   }
 
+  // ───────── 내 집부터 (사서 사는 곳). 단계가 오를수록 창 · 천장이 높고 인물이 작아져 넓어 보인다 ─────────
+  // '나' 구역은 사업 · 대출 줄이 붙으면 그림 칸이 낮아져 위아래가 잘린다(가운데 기준) → 인물 · 상태창은 y 80~228 안에 둔다
+  function sofa(x, y, w, col, a) { // 등받이 · 앉는 면 · 팔걸이 · 다리. y = 앉는 면 위
+    const c = a(col), sh = a(mix(col, P.night0, .35)), hi = a(mix(col, P.text, .12));
+    return R(x + 10, y - 46, w - 20, 50, sh, 10) + R(x + 4, y - 2, w - 8, 22, hi, 8) + R(x - 6, y - 26, 20, 46, c, 8) + R(x + w - 14, y - 26, 20, 46, c, 8) + R(x + 6, y + 20, 5, 7, sh) + R(x + w - 11, y + 20, 5, 7, sh);
+  }
+  function plant(x, y, k, a) { // 화분 (바닥 y)
+    const pot = a(mix(P.warmDim, P.night2, .35)), leaf = a(mix(P.good, P.night2, .5)), leafSh = a(mix(P.good, P.night1, .68));
+    return R(x - 9 * k, y - 16 * k, 18 * k, 16 * k, pot, 2) + E(x - 7 * k, y - 26 * k, 7 * k, 12 * k, leafSh) + E(x + 7 * k, y - 28 * k, 7 * k, 13 * k, leafSh) + E(x, y - 34 * k, 8 * k, 16 * k, leaf);
+  }
+  function sceneHome(ph, key) { // 내 집: 작은 거실 — 낮은 천장 · 커튼 친 창 · 소파 · 액자 · 스탠드. 열쇠를 든 첫 집
+    const a = amb(ph), tone = toneOf(ph), L = ph.lamp;
+    const wall = a(mix(P.warmDim, P.night2, .58)), wallSh = a(mix(P.warmDim, P.night1, .74)), floor = a(mix(P.warmDim, P.night2, .42)), frame = a(mix(P.text, P.warmDim, .45));
+    let b = R(0, 0, 460, 228, wall) + R(0, 0, 460, 16, wallSh) + R(0, 220, 460, 8, wallSh) + R(0, 228, 460, 72, floor) + S('M0,252 H460 M0,276 H460', a(mix(P.warmDim, P.night1, .62)), 1.2, op(.6));
+    b += windowBox(44, 56, 112, 86, ph, frame, 12) + skyline(44, 142, 112, 33, 10, 34, mix(ph.bot, P.night0, key === 'night' ? .3 : .5), L > .5 ? P.warmDim : null) + R(98.5, 56, 3, 86, frame) + R(36, 144, 128, 5, frame, 1);
+    const cur = a(mix(P.up, P.night2, .62)), curSh = a(mix(P.up, P.night1, .75));
+    b += R(24, 46, 24, 112, cur, 3) + R(24, 46, 8, 112, curSh, 3) + R(152, 46, 24, 112, cur, 3) + R(168, 46, 8, 112, curSh, 3) + R(20, 42, 160, 5, frame, 2);
+    if (ph.beam) b += PG('60,228 160,228 210,298 90,298', ph.beam, op(ph.beamOp));
+    b += R(226, 58, 66, 48, frame, 2) + R(231, 63, 56, 38, a(mix(P.down, P.night2, .45))) + PG('231,101 252,78 266,92 276,84 287,101', a(mix(P.good, P.night2, .45))) + E(276, 72, 4, 4, P.lamp, op(.8));
+    if (L > 0) b += glow(424, 96, 96, P.warm, .42 * L) + pool(410, 236, 70, 12, P.warm, .2 * L);
+    b += R(423, 104, 3, 120, a(mix(P.stone, P.night1, .3))) + R(414, 222, 21, 4, a(mix(P.stone, P.night1, .3)), 2) + PG('410,106 440,106 434,84 416,84', L > 0 ? mix(P.warmDim, P.lamp, .3 + .7 * L) : a(mix(P.stoneLit, P.lamp, .2)));
+    b += E(300, 238, 130, 12, a(mix(P.sysDim, P.night2, .7))) + plant(196, 226, 1, a);
+    b += sofa(222, 188, 160, mix(P.hood, P.warmDim, .25), a);
+    b += G(hero({ pose: 'sit', face: 'joy', armL: 'lap', armR: 'up', item: 'key', warm: L > .5, tone }), at(282, 190, .98), 'data-part="hero"');
+    return b + holo(330, 92, 70, 44);
+  }
+  function sceneApt(ph, key) { // 아파트: 고층 거실 — 벽 하나가 통유리, 창밖 아래로 도시 야경 · 차 불빛
+    const a = amb(ph), tone = toneOf(ph), L = ph.lamp, night = key === 'night' || key === 'evening';
+    const wall = a(mix(P.stone, P.night2, .5)), wallSh = a(mix(P.stone, P.night1, .7)), floor = a(mix(P.stoneLit, P.night2, .55)), frame = a(mix(P.stone, P.night0, .3));
+    let b = R(0, 0, 460, 300, wall) + R(0, 0, 460, 18, wallSh);
+    b += skyFill(16, 26, 428, 172, skyOf(ph)) + (ph.star ? stars(52, 26, 16, 26, 428, 70, ph.star) : '');
+    b += skyline(16, 198, 428, 71, 18, 52, mix(ph.bot, P.night0, night ? .45 : .62), night ? P.warmDim : null) + skyline(16, 198, 428, 73, 6, 24, mix(ph.bot, P.night0, night ? .25 : .42), night ? P.lamp : null); // 높은 층이라 건물 꼭대기만 낮게 보인다
+    if (night) { const r = rng(57); for (let i = 0; i < 70; i++) b += R(16 + r() * 424, 150 + r() * 44, 2, 2, r() < .7 ? P.lamp : P.warm, 0, op(.5 + r() * .4)); } // 멀리 깔린 불빛
+    b += R(16, 186, 428, 12, mix(P.night1, P.night0, .3));
+    for (let x = 20; x < 440; x += 9) b += R(x, 190, 4, 2, night ? (x % 18 ? P.warm : P.up) : mix(P.stone, P.text, .3), 0, op(night ? .8 : .4)); // 저 아래 도로의 차 불빛
+    b += PG('60,26 120,26 40,198 16,198 16,150', P.text, op(.05)) + PG('300,26 330,26 250,198 230,198', P.text, op(.04)); // 유리에 비친 빛
+    for (const x of [16, 121, 228, 336, 440]) b += R(x - 2, 22, 6, 180, frame);
+    b += R(12, 22, 436, 6, frame) + R(12, 196, 436, 6, frame) + R(0, 202, 460, 98, floor) + R(0, 202, 460, 3, a(mix(P.stoneLit, P.text, .2)), 0, op(.5));
+    if (ph.beam) b += PG('20,202 440,202 470,300 0,300', ph.beam, op(ph.beamOp * .7));
+    if (L > 0) b += pool(120, 214, 90, 10, P.warm, .18 * L);
+    b += R(70, 196, 92, 6, a(mix(P.warmDim, P.night2, .2)), 2) + R(80, 202, 4, 18, a(mix(P.warmDim, P.night1, .5))) + R(148, 202, 4, 18, a(mix(P.warmDim, P.night1, .5)));
+    b += R(96, 186, 16, 10, a(mix(P.text, P.warm, .2)), 2) + plant(40, 222, 1.2, a);
+    b += sofa(190, 192, 230, mix(P.stoneLit, P.text, .18), a);
+    b += G(hero({ pose: 'sit', face: 'smile', armL: 'lap', armR: 'hold', item: 'mug', warm: false, tone }), at(292, 194, .92), 'data-part="hero"');
+    return b + holo(340, 96, 66, 42);
+  }
+  function sceneHouse(ph, key) { // 주택: 거실의 큰 미닫이 유리문 너머 마당 — 잔디 · 담장 · 나무
+    const a = amb(ph), tone = toneOf(ph), L = ph.lamp;
+    const wall = a(mix(P.text, P.warmDim, .62)), wallC = a(mix(wall, P.night2, .45)), wallSh = a(mix(P.warmDim, P.night1, .6)), floor = a(mix(P.warmDim, P.night2, .3)), frame = a(mix(P.text, P.stone, .4));
+    let b = R(0, 0, 460, 300, wallC) + R(0, 0, 460, 12, wallSh);
+    b += skyFill(150, 24, 290, 150, skyOf(ph)) + (ph.star ? stars(66, 20, 150, 24, 290, 60, ph.star) : '') + E(372, 50, 12, 12, ph.star ? P.lamp : P.gold, op(.9));
+    const grass = a(mix(P.good, P.night2, .5)), grassSh = a(mix(P.good, P.night1, .68)), tree = a(mix(P.good, P.night2, .38));
+    b += R(150, 150, 290, 80, grass) + R(150, 150, 290, 3, grassSh);
+    for (let x = 152; x < 440; x += 12) b += R(x, 126, 5, 30, a(mix(P.text, P.stoneLit, .35))); b += R(150, 134, 290, 3, a(mix(P.text, P.stoneLit, .35)));
+    b += R(410, 110, 9, 84, a(mix(P.warmDim, P.night1, .5))) + E(414, 92, 40, 36, tree) + E(394, 104, 22, 18, grassSh) + E(430, 78, 18, 16, a(mix(P.good, P.text, .1)));
+    b += E(196, 172, 22, 12, tree) + E(214, 176, 6, 5, P.up, op(.8)) + E(186, 170, 5, 4, P.gold, op(.8)) + R(150, 196, 290, 26, a(mix(P.warmDim, P.lamp, .12))) + R(150, 196, 290, 3, a(mix(P.warmDim, P.night1, .3))); // 덱
+    for (const x of [150, 246, 344, 440]) b += R(x - 3, 20, 6, 204, frame);
+    b += R(146, 18, 298, 7, frame) + R(0, 222, 460, 78, floor) + S('M0,248 H460 M0,272 H460', a(mix(P.warmDim, P.night1, .5)), 1.2, op(.5));
+    if (ph.beam) b += PG('150,222 440,222 470,300 180,300', ph.beam, op(ph.beamOp));
+    if (L > 0) b += glow(64, 92, 80, P.warm, .4 * L);
+    const chair = a(mix(P.warm, P.night2, .55)), chairSh = a(mix(P.warm, P.night1, .7));
+    b += R(56, 96, 3, 124, a(mix(P.stone, P.night1, .3))) + PG('44,98 72,98 66,76 50,76', L > 0 ? mix(P.warmDim, P.lamp, .3 + .7 * L) : a(mix(P.stoneLit, P.lamp, .2)));
+    b += R(78, 156, 60, 56, chairSh, 12) + R(72, 186, 72, 24, chair, 8) + R(68, 172, 14, 40, chair, 6) + R(134, 172, 14, 40, chair, 6) + R(80, 210, 5, 8, chairSh) + R(132, 210, 5, 8, chairSh);
+    b += E(260, 226, 34, 4, P.night0, op(.3));
+    b += G(hero({ pose: 'stand', face: 'content', armL: 'pocket', armR: 'down', warm: false, tone }), at(260, 196, .88), 'data-part="hero"');
+    return b + holo(296, 84, 64, 40);
+  }
+  function sceneVilla(ph, key) { // 별장: 높은 박공 천장 · 통창 너머 바다와 수평선 · 물에 비친 달(해)
+    const a = amb(ph), tone = toneOf(ph), L = ph.lamp, night = key === 'night' || key === 'evening';
+    const wood = a(mix(P.warmDim, P.night2, .3)), woodSh = a(mix(P.warmDim, P.night1, .6)), floor = a(mix(P.warmDim, P.lamp, .05)), frame = a(mix(P.warmDim, P.night0, .45));
+    let b = R(0, 0, 460, 300, woodSh);
+    b += skyFill(12, 30, 436, 120, skyOf(ph)) + (ph.star ? stars(77, 30, 12, 30, 436, 70, ph.star) : '');
+    const orb = ph.star ? P.lamp : mix(P.gold, P.lamp, .4); b += glow(330, 92, 50, orb, .3) + E(330, 92, 13, 13, orb);
+    b += PG('12,150 70,128 120,142 170,120 220,150', a(mix(P.night1, P.good, .2))); // 먼 섬
+    const sea = mix(P.down, P.night1, night ? .62 : .35), seaSh = mix(P.down, P.night0, night ? .72 : .5);
+    b += R(12, 150, 436, 52, sea) + R(12, 150, 436, 2, mix(P.text, P.down, .4), 0, op(.5));
+    for (let i = 0; i < 6; i++) b += R(330 - (24 - i * 3), 156 + i * 7, (24 - i * 3) * 2, 2.4, orb, 0, op(.55 - i * .07)); // 물에 비친 빛
+    b += S('M30,170 q20,-4 40,0 M110,186 q20,-4 40,0 M220,176 q20,-4 40,0 M380,190 q20,-4 40,0', seaSh, 2, op(.7));
+    for (const x of [12, 121, 230, 339, 448]) b += R(x - 3, 26, 6, 178, frame);
+    b += PG('0,0 230,0 0,34', wood) + PG('460,0 230,0 460,34', wood) + R(0, 22, 460, 8, frame) + S('M60,0 L40,24 M150,0 L130,24 M310,0 L330,24 M400,0 L420,24', frame, 4); // 박공 · 서까래
+    b += R(0, 202, 460, 98, floor) + R(0, 202, 460, 4, a(mix(P.warmDim, P.night1, .3)));
+    for (let x = 0; x < 460; x += 46) b += R(x, 206, 1.5, 94, a(mix(P.warmDim, P.night1, .35)), 0, op(.5));
+    if (ph.beam) b += PG('12,206 448,206 470,300 0,300', ph.beam, op(ph.beamOp * .8));
+    if (L > 0) b += pool(150, 222, 80, 10, P.warm, .22 * L) + glow(150, 170, 60, P.warm, .3 * L);
+    b += R(126, 170, 46, 34, a(mix(P.stone, P.night1, .2)), 4) + R(132, 176, 34, 22, L > 0 ? mix(P.warm, P.bad, .3) : a(mix(P.night0, P.stone, .3)), 3); // 벽난로 (불)
+    if (L > 0) b += PG('140,198 149,180 156,192 160,184 160,198', P.lamp, op(.8 * L));
+    const bed = a(mix(P.text, P.stoneLit, .4)), bedSh = a(mix(P.stoneLit, P.night2, .4));
+    b += R(214, 190, 190, 16, bedSh, 6) + R(210, 178, 198, 16, bed, 8) + R(380, 152, 30, 40, bedSh, 8) + plant(440, 222, 1.1, a);
+    b += G(hero({ pose: 'sit', face: 'content', armL: 'lap', armR: 'hold', item: 'mug', warm: L > .5, tone }), at(300, 180, .84), 'data-part="hero"');
+    return b + holo(342, 76, 62, 40);
+  }
+  function sceneHotel(ph, key) { // 호텔: 맨 위층 스위트 — 아주 높은 천장 · 샹들리에 · 금색 틀 통창 · 저 아래 아주 작은 도시
+    const a = amb(ph), tone = toneOf(ph), L = Math.max(.5, ph.lamp), night = key === 'night' || key === 'evening';
+    const wall = a(mix(P.night1, P.warmDim, .12)), drape = a(mix(P.up, P.night1, .72)), drapeSh = a(mix(P.up, P.night0, .8)), gold = mix(P.gold, P.warmDim, .35), carpet = a(mix(P.up, P.night1, .82));
+    let b = R(0, 0, 460, 300, wall);
+    b += skyFill(70, 14, 320, 184, skyOf(ph)) + (ph.star ? stars(91, 36, 70, 14, 320, 110, ph.star) : '');
+    b += skyline(70, 198, 320, 93, 6, 26, mix(ph.bot, P.night0, night ? .3 : .5), night ? P.lamp : null) + skyline(70, 198, 320, 95, 3, 12, mix(ph.bot, P.night0, night ? .15 : .35), night ? P.warm : null);
+    b += R(70, 194, 320, 4, mix(P.night0, P.night1, .4));
+    if (night) { const r = rng(83); for (let i = 0; i < 90; i++) b += R(70 + r() * 318, 168 + r() * 26 * (.4 + r() * .6), 1.6, 1.6, r() < .6 ? P.lamp : P.warm, 0, op(.45 + r() * .5)); } // 저 아래 깔린 도시 불빛 (맨 위층이라 아주 작게)
+    for (const x of [70, 150, 230, 310, 390]) b += R(x - 2, 12, 4, 188, gold);
+    b += R(66, 10, 328, 4, gold) + R(66, 196, 328, 4, gold);
+    b += R(30, 6, 44, 210, drape, 4) + R(30, 6, 14, 210, drapeSh, 4) + R(386, 6, 44, 210, drape, 4) + R(416, 6, 14, 210, drapeSh, 4) + R(24, 2, 412, 6, gold, 2);
+    b += S('M230,0 V22', gold, 2) + glow(230, 34, 64, P.lamp, .5 * L) + PG('212,26 248,26 242,40 218,40', gold) + [214, 222, 230, 238, 246].map(x => E(x, 44, 2.6, 4, P.lamp)).join(''); // 샹들리에
+    b += R(0, 216, 460, 84, carpet) + R(0, 216, 460, 3, gold, 0, op(.7)) + S('M40,236 H420 M60,258 H400', gold, 1.4, op(.35));
+    if (ph.beam) b += PG('70,216 390,216 430,300 30,300', ph.beam, op(ph.beamOp * .7));
+    b += R(96, 202, 70, 6, gold, 2) + R(104, 208, 4, 10, gold) + R(154, 208, 4, 10, gold) + R(118, 192, 14, 10, a(mix(P.text, P.sys, .2)), 2) + E(142, 197, 8, 5, a(mix(P.good, P.night2, .3)));
+    b += E(290, 222, 30, 4, P.night0, op(.35));
+    b += G(hero({ pose: 'stand', face: 'joy', armL: 'pocket', armR: 'up', warm: false, glow: P.gold, tone }), at(290, 196, .8), 'data-part="hero"');
+    return b + holo(318, 92, 58, 38);
+  }
+
   function scene(tier, phase) {
-    const key = PHASE[phase] ? phase : 'day', t = Math.max(0, Math.min(3, Math.round(Number(tier) || 0)));
-    return svg(460, 300, [sceneStation, sceneSauna, sceneGosi, sceneOneroom][t](PHASE[key], key), 'slice', SCENE_NAME[t]);
+    const key = PHASE[phase] ? phase : 'day', t = Math.max(0, Math.min(8, Math.round(Number(tier) || 0))); // 9(최고 부자)는 사는 곳이 아니라 호텔 그림
+    return svg(460, 300, [sceneStation, sceneSauna, sceneGosi, sceneOneroom, sceneHome, sceneApt, sceneHouse, sceneVilla, sceneHotel][t](PHASE[key], key), 'slice', SCENE_NAME[t]);
   }
 
   // ───────── 로드맵 카드 썸네일 (160×100) ─────────
-  const THUMB_NAME = ['서울역', '찜질방', '고시원', '원룸', '내 집'];
+  const THUMB_NAME = ['서울역', '찜질방', '고시원', '원룸', '내 집', '아파트', '주택', '별장', '호텔', '한국 최고 부자'];
   function thumb(tier) {
-    const t = Math.max(0, Math.min(4, Math.round(Number(tier) || 0))), a = c => c, N = PHASE.night;
+    const t = Math.max(0, Math.min(9, Math.round(Number(tier) || 0))), a = c => c, N = PHASE.night;
     let b = '';
     if (t === 0) {            // 돔과 시계 · 가로등 · 벤치
       b += skyFill(0, 0, 160, 84, skyOf(N)) + stars(3, 9, 0, 0, 160, 34, .9);
@@ -346,6 +457,36 @@
       b += windowBox(11, 13, 70, 44, N, mix(P.stoneLit, P.night3, .2), 5) + skyline(11, 57, 70, 5, 8, 26, mix(P.night1, P.night3, .5), P.warmDim) + R(45, 13, 2, 44, mix(P.stoneLit, P.night3, .2)) + R(5, 59, 82, 3, mix(P.stoneLit, P.night3, .2), 1);
       b += glow(123, 50, 40, mix(P.down, P.text, .4), .26) + R(96, 68, 3, 12, mix(P.warmDim, P.night1, .55)) + R(149, 68, 3, 12, mix(P.warmDim, P.night1, .55));
       b += monitor(94, 36, 28, 22, a, 'line') + monitor(124, 36, 28, 22, a, 'bars') + R(91, 65, 64, 4, mix(P.warmDim, P.night2, .3), 1);
+    } else if (t === 5) {     // 저녁 하늘 아래 아파트 세 동 (불 켜진 창이 촘촘)
+      b += skyFill(0, 0, 160, 86, [[0, mix(P.night2, P.up, .18)], [1, mix(P.warm, P.up, .32)]]) + glow(26, 80, 46, P.lamp, .35);
+      const tower = (x, w, h, c) => { let s2 = R(x, 86 - h, w, h, c) + R(x, 86 - h, w, 3, mix(c, P.night0, .3)); const r = rng(x * 7 + h); for (let wy = 90 - h; wy < 82; wy += 6) for (let wx = x + 3; wx < x + w - 3; wx += 5) s2 += R(wx, wy, 2.6, 2.6, r() < .55 ? P.lamp : mix(c, P.night0, .35), 0, op(.9)); return s2; };
+      b += tower(14, 38, 66, mix(P.stoneLit, P.night2, .25)) + tower(60, 44, 78, mix(P.stoneLit, P.night3, .1)) + tower(112, 36, 58, mix(P.stoneLit, P.night2, .35));
+      b += R(0, 86, 160, 14, mix(P.night2, P.good, .18)) + R(0, 86, 160, 1.5, mix(P.ground, P.stone, .5)) + R(66, 89, 30, 4, mix(P.stone, P.warmDim, .3), 2);
+    } else if (t === 6) {     // 낮의 마당 있는 주택: 잔디 · 담장 · 나무
+      b += skyFill(0, 0, 160, 80, [[0, mix(P.down, P.sys, .3)], [1, mix(P.text, P.down, .25)]]) + E(132, 18, 9, 9, P.lamp, op(.9));
+      b += R(0, 78, 160, 22, mix(P.good, P.night2, .45)) + R(0, 78, 160, 2, mix(P.good, P.night1, .6));
+      const wallc = mix(P.text, P.lamp, .35), roof = mix(P.down, P.night2, .45);
+      b += R(44, 40, 72, 40, wallc) + R(44, 40, 18, 40, mix(wallc, P.stoneLit, .35)) + PG('38,42 80,20 122,42', roof) + R(56, 26, 48, 3, mix(roof, P.night0, .25));
+      b += R(52, 48, 14, 11, mix(P.down, P.text, .45), 1) + R(96, 48, 14, 11, mix(P.down, P.text, .45), 1) + R(74, 56, 14, 24, mix(P.warmDim, P.night2, .25), 2) + R(52, 64, 14, 10, mix(P.down, P.text, .45), 1);
+      for (let x = 2; x < 160; x += 9) b += R(x, 82, 3, 12, mix(P.text, P.stoneLit, .3)); b += R(0, 85, 160, 2, mix(P.text, P.stoneLit, .3));
+      b += R(18, 58, 4, 24, mix(P.warmDim, P.night1, .5)) + E(20, 52, 14, 14, mix(P.good, P.night2, .35)) + E(140, 70, 12, 9, mix(P.good, P.night2, .3));
+    } else if (t === 7) {     // 밤의 호숫가 별장: 언덕 · 큰 유리창 · 물에 비친 불빛
+      b += skyFill(0, 0, 160, 60, skyOf(N)) + stars(17, 10, 0, 0, 160, 40, .9) + E(30, 16, 6, 6, P.lamp, op(.85));
+      b += PG('0,60 30,38 62,56 96,30 132,52 160,40 160,62 0,62', mix(P.night1, P.night2, .5));
+      b += R(0, 62, 160, 38, mix(P.night1, P.down, .25)) + R(0, 62, 160, 1.5, mix(P.down, P.text, .3), 0, op(.5));
+      b += R(64, 40, 64, 22, mix(P.stone, P.night1, .2)) + R(56, 37, 80, 4, mix(P.stoneLit, P.night1, .1)) + R(70, 44, 52, 14, P.warm, 0, op(.85)) + R(95, 44, 2, 14, mix(P.stone, P.night1, .2));
+      b += R(70, 66, 52, 3, P.warm, 0, op(.35)) + R(76, 72, 40, 2, P.warm, 0, op(.22)) + R(82, 77, 28, 1.5, P.warm, 0, op(.14)) + glow(96, 52, 40, P.warm, .25);
+    } else if (t === 8) {     // 밤의 호텔: 가운데 높은 탑 · 맨 위층 간판 · 불 켜진 창
+      b += skyFill(0, 0, 160, 92, skyOf(N)) + stars(23, 9, 0, 0, 160, 34, .8) + skyline(0, 92, 160, 41, 12, 34, mix(P.night1, P.night3, .4), P.warmDim);
+      const tw = mix(P.stoneLit, P.night3, .15);
+      b += R(56, 14, 48, 78, tw) + R(56, 14, 10, 78, mix(tw, P.night1, .35)) + R(62, 6, 36, 10, mix(tw, P.night1, .2)) + R(68, 8, 24, 5, P.gold, 0, op(.95)) + glow(80, 10, 26, P.gold, .35);
+      const r = rng(88); for (let wy = 20; wy < 88; wy += 6) for (let wx = 60; wx < 101; wx += 6) b += R(wx, wy, 3, 3, r() < .6 ? P.lamp : mix(tw, P.night0, .4), 0, op(.9));
+      b += R(0, 92, 160, 8, P.ground) + R(70, 84, 20, 8, mix(P.warm, P.warmDim, .4), 1);
+    } else if (t === 9) {     // 한국 최고 부자: 도시 위의 금빛 왕관
+      b += skyFill(0, 0, 160, 100, [[0, P.night0], [1, mix(P.night2, P.warmDim, .35)]]) + glow(80, 46, 70, P.gold, .42);
+      b += skyline(0, 100, 160, 61, 14, 40, mix(P.night1, P.night0, .3), P.gold);
+      b += PG('46,64 50,30 66,46 80,22 94,46 110,30 114,64', P.gold) + R(46, 62, 68, 9, mix(P.gold, P.warm, .4), 2) + PG('52,62 54,38 66,52 80,32 80,62', mix(P.gold, P.lamp, .45), op(.6));
+      b += E(50, 29, 3.4, 3.4, P.up) + E(80, 21, 4, 4, P.sys) + E(110, 29, 3.4, 3.4, P.good) + E(80, 66.5, 3, 3, P.up);
     } else {                  // 해 뜨는 하늘 아래 불 켜진 집
       const wallc = mix(P.lamp, P.stoneLit, .5), roof = mix(P.up, P.night2, .5);
       b += skyFill(0, 0, 160, 88, [[0, mix(P.night2, P.down, .22)], [.6, mix(P.night3, P.up, .32)], [1, mix(P.warm, P.up, .2)]]) + glow(122, 86, 62, P.lamp, .55) + E(122, 88, 15, 15, P.lamp);
@@ -404,7 +545,7 @@
       id = 'rest';
       const blanket = mix(P.down, P.night3, .5), blanketHi = mix(P.down, P.stoneLit, .5), pillow = mix(P.text, P.night3, .16);
       b += R(15, 14, 66, 46, pillow, 12) + R(15, 46, 66, 14, mix(pillow, P.night3, .25), 7);
-      b += G(hero({ pose: 'none', face: 'sleep', look: 0, glow: false }), at(48, 102, .95));
+      b += G(hero({ pose: 'none', face: 'sleep', look: 0, glow: false }), at(48, 102, .95), 'data-part="hero"');
       b += D('M8,74 Q8,63 20,63 Q48,56 76,63 Q88,63 88,74 V86 Q88,93 81,93 H15 Q8,93 8,86 Z', blanket) + D('M8,74 Q8,63 20,63 Q48,56 76,63 Q88,63 88,74 V75 Q48,65 8,75 Z', blanketHi) + S('M28,82 Q48,77 68,82', mix(P.down, P.night2, .6), 2.2);
       b += D('M84,3 a8.5,8.5 0 1 0 7.5,12.5 a6.6,6.6 0 1 1 -7.5,-12.5 Z', P.gold) + D('M70,8 l1,2.6 2.6,1 -2.6,1 -1,2.6 -1,-2.6 -2.6,-1 2.6,-1 Z', P.lamp);
     }
@@ -556,7 +697,7 @@
     // 가로등 · 벤치 · 작은 주인공 · 작은 청록 창
     b += pool(330, 676, 230, 30, P.warm, .2) + G(lampPost(0, 0, 150, 1, post, 108), at(296, 668, 1.7));
     b += E(442, 660, 112, 6, P.night0, op(.45)) + G(bench(0, 0, 172, a), at(356, 628, 1));
-    b += G(hero({ pose: 'sit', face: 'tired', lap: 'paper', tilt: 4, warm: true, tone: toneOf(PHASE.night) }), at(440, 628, 1));
+    b += G(hero({ pose: 'sit', face: 'tired', lap: 'paper', tilt: 4, warm: true, tone: toneOf(PHASE.night) }), at(440, 628, 1), 'data-part="hero"');
     b += holo(486, 528, 76, 50);
     // 오른쪽으로 갈수록 더 어둡게
     const v = uid('v');
@@ -568,20 +709,20 @@
   // 둘 다 가운데~오른쪽(x 520~1200, y 140~600)에 글자가 올라가므로 그 뒤는 하늘(그라디언트)만 둔다.
   function ending(kind) {
     let b = '';
-    if (kind === 'home') {            // 내 집 거실: 큰 창으로 해 뜨는 도시, 열쇠를 든 주인공
+    if (kind === 'home' || kind === 'top') { // 내 집 거실: 큰 창으로 해 뜨는 도시, 열쇠를 든 주인공. top 은 호텔 맨 위층 — 도시를 내려다보고 금빛이 더 짙다
       const wall = mix(P.night3, P.warmDim, .3), frame = mix(wall, P.lamp, .32), floor = mix(P.warmDim, P.night2, .42);
       const sk = uid('s'), cp = uid('c'), sofa = mix(P.hood, P.night2, .42);
       b += R(0, 0, 1280, 720, wall) + R(0, 0, 446, 720, mix(wall, P.night1, .22));
       b += `<defs>${lin(sk, 0, 96, 0, 652, [[0, mix(P.night2, P.down, .2)], [.6, mix(P.night3, P.up, .3)], [1, mix(P.warm, P.up, .16)]])}<clipPath id="${cp}"><rect x="470" y="96" width="766" height="556"/></clipPath></defs>`;
       b += R(458, 84, 790, 580, frame, 4) + R(470, 96, 766, 556, `url(#${sk})`);
-      b += G(glow(524, 650, 340, P.lamp, .55) + E(524, 650, 47, 47, P.lamp) + skyline(470, 652, 150, 31, 6, 15, mix(P.night2, P.up, .16)) + skyline(620, 652, 616, 32, 12, 46, mix(P.night2, P.up, .16)), '', `clip-path="url(#${cp})"`);
+      b += G(glow(524, 650, 340, P.lamp, .55) + E(524, 650, 47, 47, P.lamp) + (kind === 'top' ? skyline(470, 652, 766, 33, 40, 150, mix(P.night2, P.up, .12), P.gold) + skyline(470, 652, 766, 34, 10, 60, mix(P.night1, P.up, .1)) + glow(860, 300, 300, P.gold, .18) : skyline(470, 652, 150, 31, 6, 15, mix(P.night2, P.up, .16)) + skyline(620, 652, 616, 32, 12, 46, mix(P.night2, P.up, .16))), '', `clip-path="url(#${cp})"`);
       b += R(446, 652, 814, 16, frame, 3) + R(0, 668, 1280, 52, floor) + R(0, 668, 1280, 5, mix(P.warmDim, P.night1, .5)) + PG('470,673 1236,673 1170,720 300,720', P.lamp, op(.1));
       // 소파 (창 아래, 낮게)
       b += R(806, 612, 356, 86, mix(sofa, P.night1, .3), 16) + R(830, 648, 308, 44, sofa, 10) + R(792, 634, 46, 66, sofa, 14) + R(1130, 634, 46, 66, mix(sofa, P.lamp, .12), 14) + R(820, 698, 12, 10, P.night1) + R(1136, 698, 12, 10, P.night1);
       // 이삿짐 상자 · 주인공
       b += carton(34, 572, 132, 118, true) + carton(54, 478, 96, 94, false);
-      b += E(290, 694, 96, 9, P.night0, op(.35)) + G(hero({ pose: 'stand', face: 'joy', armL: 'down', armR: 'up', item: 'key', glow: P.lamp, glowOp: .6, look: 3 }), at(290, 600, 2.9));
-      return svg(1280, 720, b, 'slice', '내 집 거실의 아침');
+      b += E(290, 694, 96, 9, P.night0, op(.35)) + G(hero({ pose: 'stand', face: 'joy', armL: 'down', armR: 'up', item: 'key', glow: kind === 'top' ? P.gold : P.lamp, glowOp: .6, look: 3 }), at(290, 600, 2.9), 'data-part="hero"');
+      return svg(1280, 720, b, 'slice', kind === 'top' ? '호텔 맨 위층의 아침' : '내 집 거실의 아침');
     }
     // fail: 눈 오는 새벽의 서울역 벤치
     const a = c => mix(c, P.stoneLit, .2), snow = mix(P.text, P.stoneLit, .1), snowDim = mix(P.text, P.stoneLit, .45), ground = mix(P.stoneLit, P.text, .28);
@@ -591,7 +732,7 @@
     b += R(0, 608, 1280, 112, ground) + R(0, 608, 1280, 7, mix(P.stone, P.stoneLit, .7));
     b += G(lampPost(0, 0, 160, .4, mix(P.stone, P.night1, .2), 100) + R(-11, -164.5, 22, 3, snow, 1.5), at(98, 644, 1.5));
     b += E(292, 656, 150, 8, mix(P.stone, P.night2, .3), op(.4)) + G(bench(0, 0, 172, a) + R(0, -38.5, 172, 3.5, snow, 1.5) + R(-4, -2.5, 54, 3.5, snow, 1.5) + R(120, -2.5, 56, 3.5, snow, 1.5), at(172, 614, 1.4));
-    b += G(hero({ pose: 'sit', face: 'sad', lap: 'paper', hat: 'snow', tilt: 5, glowOp: .3, tone: a }), at(292, 614, 1.4));
+    b += G(hero({ pose: 'sit', face: 'sad', lap: 'paper', hat: 'snow', tilt: 5, glowOp: .3, tone: a }), at(292, 614, 1.4), 'data-part="hero"');
     b += E(340, 548, 8, 4.5, P.text, op(.13)) + holo(380, 476, 92, 58, { op: .5 });
     // 눈 (글자 자리에는 드물고 흐리게)
     const r = rng(77);

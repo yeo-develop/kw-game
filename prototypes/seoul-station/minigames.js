@@ -162,10 +162,11 @@
   }
 
   // ---------- 공통 틀: 준비 0.8초, 본 게임 seconds 초, 마무리 0.5초 ----------
-  function bigText(ctx, P, font, text, size, color) {
+  function bigText(ctx, P, font, text, size, color, y) {
+    y = y == null ? H / 2 : y;
     ctx.font = '800 ' + Math.round(size) + 'px ' + font;
-    ctx.fillStyle = P.ink; ctx.fillText(text, W / 2 + 3, H / 2 + 4);
-    ctx.fillStyle = color; ctx.fillText(text, W / 2, H / 2);
+    ctx.fillStyle = P.ink; ctx.fillText(text, W / 2 + 3, y + 4);
+    ctx.fillStyle = color; ctx.fillText(text, W / 2, y);
   }
   function build(opts, make) {
     opts = opts || {};
@@ -225,7 +226,7 @@
           bigText(ctx, P, font, '준비', 68 * Math.max(0.3, pop(t / 0.18)), P.text);
         } else if (phase === 'play' && wt < 0.45) {
           ctx.globalAlpha = 1 - wt / 0.45;
-          bigText(ctx, P, font, '시작!', 68 * (1 + wt * 0.6), P.gold);
+          bigText(ctx, P, font, '시작!', 68 * (1 + wt * 0.6), P.gold, impl.startY); // startY: 첫 장면의 중요한 것(편의점 첫 손님 말풍선)을 가리지 않는 높이
           ctx.globalAlpha = 1;
         } else if (phase === 'end') {
           const k = clamp(endT / 0.15, 0, 1);
@@ -442,7 +443,8 @@
         }
       },
       finish: function () {
-        return { score: clamp((S.hits - S.busyHits - 0.5 * S.empties) / S.total, 0, 1), hits: S.hits, total: S.total };
+        return { score: clamp((S.hits - S.busyHits - 0.5 * S.empties) / S.total, 0, 1), hits: S.hits, total: S.total, // detail: 결과 창의 한 줄 내역
+          detail: '건넨 전단지 ' + S.hits + ' / ' + S.total + (S.busyHits ? ' · 뛰는 사람에게 ' + S.busyHits + '번' : '') + (S.empties ? ' · 헛손질 ' + S.empties + '번' : '') };
       },
       draw: function (ctx) {
         streetBack(ctx, P, GY);
@@ -600,7 +602,8 @@
         }
       },
       finish: function () {
-        return { score: clamp((S.hits - 0.34 * S.empties) / S.total, 0, 1), hits: S.hits, total: S.total };
+        return { score: clamp((S.hits - 0.34 * S.empties) / S.total, 0, 1), hits: S.hits, total: S.total,
+          detail: '실은 상자 ' + S.hits + ' / ' + S.total + (S.wrongs ? ' · 떨어뜨림 ' + S.wrongs + '번' : '') + (S.empties ? ' · 헛누름 ' + S.empties + '번' : '') };
       },
       draw: function (ctx) {
         // 창고 벽과 바닥
@@ -771,7 +774,7 @@
       ctx.restore();
     }
     return {
-      title: '편의점 계산', howto: '말풍선 순서대로 번호 1~4',
+      title: '편의점 계산', howto: '말풍선 순서대로 번호 1~4', startY: 258,   // "시작!"은 말풍선 · 손님 아래 (번호 칸 위쪽)
       how: ['손님 말풍선의 물건을 왼쪽부터 차례로, 아래 번호 1~4 로 찍는다', '틀리면 감점 — 마구 누르지 않는다'],
       controls: ITEM_NAMES.map(function (name, i) { return { code: DIGIT_CODES[i], label: name }; }),
       state: S,
@@ -809,7 +812,8 @@
         if (S.idx >= c.items.length) nextCustomer(c);   // 이 손님 끝: 다음 손님
       },
       finish: function () {
-        return { score: clamp((S.hits - S.wrongs) / S.par, 0, 1), hits: Math.min(S.hits, S.par), total: S.par };   // 틀리면 그 물건을 잃고 1개만큼 더 깎인다 (번호 연타 막기)
+        return { score: clamp((S.hits - S.wrongs) / S.par, 0, 1), hits: Math.min(S.hits, S.par), total: S.par,
+          detail: '찍은 물건 ' + Math.min(S.hits, S.par) + ' / ' + S.par + (S.wrongs ? ' · 잘못 찍음 ' + S.wrongs + '번' : '') + (S.timeouts ? ' · 그냥 간 손님 ' + S.timeouts + '명' : '') };   // 틀리면 그 물건을 잃고 1개만큼 더 깎인다 (번호 연타 막기)
       },
       draw: function (ctx, wt) {
         // 가게 안: 뒷벽 · 뒤쪽 진열장
@@ -924,11 +928,13 @@
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed;
     const LANE_W = 108, RX0 = W / 2 - LANE_W * 1.5, RX1 = W / 2 + LANE_W * 1.5, SY = 298;
     const PB = 80;                                                          // 초록 지점을 밟는 폭(앞뒤): 스쿠터와 핀 그림이 닿는 거리
-    const vb = 280 * speed, gap = 0.62 / speed, T0 = 1.05;                  // 길 처음 속도 · 줄 간격 · 첫 줄 (둘 다 '흐른 시간' tau 로 잰다)
+    const easy = env.level === 0;                                           // 숙련 0단계: 한 줄에 한 차선만 막히고 줄 간격도 조금 넓다 (다른 세 알바와 비슷한 어려움)
+    const vb = 280 * speed, gap = 0.62 / speed * (easy ? 1.15 : 1), T0 = 1.05;   // 길 처음 속도 · 줄 간격 · 첫 줄 (둘 다 '흐른 시간' tau 로 잰다)
+    const rowT = function (k) { return T0 + k * gap; };
     // 길은 시작 vb -> 끝 vb x (1 + rEff). 초록 지점이 밟는 폭 안에 0.27초는 머물도록 rEff 를 누른다.
     const rEff = Math.max(0, Math.min(env.ramp, 2 * PB / 0.27 / vb - 1));
     const wp = env.warp(rEff);
-    const R = Math.max(3, Math.floor((wp.tau(seconds - 0.37) - T0) / gap) + 1);   // 차가 오는 줄 수
+    let R = 0; while (rowT(R) <= wp.tau(seconds - 0.37)) R++; R = Math.max(3, R);   // 차가 오는 줄 수
     const nPins = Math.max(2, Math.min(R, Math.round(R * 0.6)));
     const laneX = function (l) { return RX0 + LANE_W * (l + 0.5); };
     const CAR_COLORS = [P.stoneLit, P.hood, P.warmDim, P.sysDim];
@@ -950,7 +956,7 @@
       for (let k = 0; k < R; k++) {
         const a = L[k], b = L[k + 1];
         let blocked = [0, 1, 2].filter(function (x) { return x !== a && x !== b; });
-        if (a === b && rng() < 0.36) blocked = [a === 1 ? (rng() < 0.5 ? 0 : 2) : (rng() < 0.8 ? 1 : 2 - a)];
+        if (a === b && (easy || rng() < 0.36)) blocked = [a === 1 ? (rng() < 0.5 ? 0 : 2) : (rng() < 0.8 ? 1 : 2 - a)];
         rows.push(blocked);
       }
       const order = []; for (let g = 1; g < R; g++) order.push(g);
@@ -970,11 +976,11 @@
       let bus = false;
       for (const lane of pl.rows[k]) {
         const isBus = !bus && rng() < 0.3; bus = bus || isBus;
-        obs.push({ lane: lane, at: T0 + k * gap, bus: isBus, half: isBus ? 75 : 42, color: CAR_COLORS[env.pick(4)], y: -999, hit: false, row: k });
+        obs.push({ lane: lane, at: rowT(k), bus: isBus, half: isBus ? 75 : 42, color: CAR_COLORS[env.pick(4)], y: -999, hit: false, row: k });
       }
     }
-    for (const g of pl.pinGaps) pins.push({ lane: pl.L[g], at: T0 + (g - 0.5) * gap, y: -999, got: false, t: 0 });
-    const S = { lane: 1, x: laneX(1), lean: 0, inv: 0, crashes: 0, got: 0, total: nPins, obs: obs, pins: pins, safe: pl.L, rowAt: function (k) { return wp.inv(T0 + k * gap); }, rows: R, rEff: rEff, tries: tries, pop: 0, edge: 0, edgeDir: 0, road: 0 };
+    for (const g of pl.pinGaps) pins.push({ lane: pl.L[g], at: g ? (rowT(g - 1) + rowT(g)) / 2 : rowT(0) - 0.5 * gap, y: -999, got: false, t: 0 });
+    const S = { lane: 1, x: laneX(1), lean: 0, inv: 0, crashes: 0, got: 0, total: nPins, obs: obs, pins: pins, safe: pl.L, rowAt: function (k) { return wp.inv(rowT(k)); }, rows: R, rEff: rEff, tries: tries, pop: 0, edge: 0, edgeDir: 0, road: 0 };
     return {
       title: '배달', howto: '좌우로 차를 피하고 초록 지점 밟기',
       how: ['방향키로 차선을 바꿔 차를 피한다', '초록 핀이 있는 차선으로 지나가면 배달 완료 — 부딪히면 감점'],
@@ -1009,7 +1015,8 @@
         S.lane += d; S.lean = d;
       },
       finish: function () {
-        return { score: clamp(0.5 + 0.5 * S.got / S.total - 0.25 * S.crashes, 0, 1), hits: S.got, total: S.total };
+        return { score: clamp(0.5 + 0.5 * S.got / S.total - 0.25 * S.crashes, 0, 1), hits: S.got, total: S.total, crashes: S.crashes,
+          detail: '배달 ' + S.got + ' / ' + S.total + '건 · 충돌 ' + S.crashes + '번' };
       },
       draw: function (ctx) {
         const off = S.road;

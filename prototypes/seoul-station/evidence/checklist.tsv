@@ -1,37 +1,28 @@
-F2	pass	evidence/play.png · rules.js acts	칸마다 알바 · 쉬기 · 공부 중 하나. 체력이 모자라면 흐려지고 이유가 적힘, 눌러도 이유를 알려 줌
-F3	pass	evidence/mg_flyer.png mg_loading.png mg_store.png mg_delivery.png	4종이 조작과 그림이 다름. 점수에 따라 ×0.8/1.0/1.2/1.4, 대충 ×0.8(직접 하면 실수해도 대충보다 덜 받지 않음), 직접 한 횟수로 숙련도
-F4	pass	evidence/confirm-move.png · tools/rules-test.js	서울역 → 찜질방 → 고시원 → 원룸 → 내 집. 잠 +25/+50/+65/+80, 일요일 밤 고정비(산 날만큼), 연속 2회 미납이면 내려감
-F5	pass	evidence/stock.png coin.png	주식 3종은 고시원부터, 코인 롱 · 숏 · 청산은 원룸부터. 소식(공시 · 기사 · 찌라시)과 공부(리포트)
-F8	pass	evidence/title.png results-fail.png	제목(조작 안내 · 이어하기) · 결과 · 다시 하기 · 소리 끄기(M). 소리 자체는 들어 보지 못함
-F9	pass	evidence/title.png play.png	이름 입력, 순자산에 따라 칭호 5단계 + 집주인 (얇은 대역)
-M1	pass	evidence/title.png play.png	새로 시작 → 새벽빛의 서울역 벤치
-M2	not_assessed	evidence/play.png	상태창과 시작 창은 뜸. '띠링' 소리와 꺾쇠가 먼저 그려지는 연출은 화면 없는 브라우저로는 못 봄 — 직접 해 봐야 함
-M3	pass	evidence/play.png	퀘스트 1 "첫 끼니를 벌어라", 행동 카드는 전단지 · 상하차 · 쉬기 세 장, 아래에 주거 사다리
-M4	pass	evidence/mg_flyer.png	전단지 7초 미니게임 (걷는 사람이 손 앞에 왔을 때 Space)
-M5	pass	evidence/quest-done.png	일당 숫자가 떠올라 현금 칸으로, 퀘스트 완료 창에 삼각김밥(체력 +10)과 다음 퀘스트 "오늘을 버텨라"
-M6	not_assessed	-	"이 게임의 맛"은 사람이 해 봐야 아는 것
-C1	pass	tools/rules-test.js · evidence/play.png	서울역에서 자면 체력 +25뿐 → 다음 퀘스트가 찜질방
-C2	pass	evidence/night.png	일요일 밤 고정비(그 주에 산 날만큼), 집값 매주 7%
-C3	pass	tools/rules-test.js	연속 2회 미납 → 한 단계 내려가고 거기서 못 쓰는 계좌 정리
-C4	pass	evidence/results-fail.png	28일 밤이 지나면 실패 → 다시 하기
-C5	pass	evidence/coin.png · tools/rules-test.js	원룸 고정비 주 80만, 코인은 반대로 100/배율 % 가면 청산
-L1	pass	evidence/play.png figures.png	남색 + 주황 + 청록, 평면 벡터 인물, 수익 빨강 · 손실 파랑, 이모지 없음. 꺾쇠 연출 · 소리는 M2 와 같음
-L2	pass	-	참고 그림 없음. 특정 작품의 화면 · 이름을 쓰지 않음 (evidence/nearest-game.txt)
-S1	pass	evidence/title.png	user 시점 롤플레잉: 이름 + 칭호 (얇은 대역)
-S2	pass	evidence/play.png	상태창
-S3	pass	evidence/mg_*.png	알바
-S4	pass	evidence/night.png	고정비
-S5	pass	evidence/stock.png coin.png	자산투자
-S6	pass	evidence/results-home.png	1차 엔딩: 집을 사기 (점검용으로 일당을 올린 판에서 확인. 보통 값으로는 봇만 확인)
-F1	pass	evidence/quest-done.png · rules.js questTick	퀘스트가 늘 1개(12개, 때를 놓친 것은 건너뜀). 끝내면 완료 창에 보상과 다음 퀘스트. 한꺼번에 끝난 것 · 건너뛴 것은 창 한 장에 모아 적음 (evidence/quest-many.png)
-F6	pass	evidence/results-home.png results-fail.png · tools/rules-test.js	집값 3,100 → 3,317 → 3,549 → 3,798만. 순자산이 넘으면 계약 = 엔딩, 28일 밤이 지나면 실패
-F7	pass	evidence/night.png play.png	밤 정산에 번 돈 · 쓴 돈이 출처별로, 위쪽 띠에 집까지 %, 상태창에 지금 퀘스트 · 고정비 · 집값 인상 칩, 거의 다 됨, 행동마다 저장, 번 돈 숫자가 누른 자리에서 현금 칸으로
-C6	pass	tools/sim.js 1000판	알바만 하면 집값의 65%. 조심스러운 첫 판 61%, 공부 + 3배는 60% 성공, 과감 81%, 무지성 5배 8%. 봇 수치이지 사람을 잰 값이 아님
-L3	pass	evidence/play.png · tools/zones.js	구역 다섯 개(hud · me · quest · today · board)가 겹치지 않고 간격 8px, 800×450 · 1920×1080 에서도 같은 비율
-F10	pass	tools/zones.js · tools/textcount.js · evidence/help.png	구역 5개 + 아이콘 67개. 같은 화면 네 곳의 글자 수가 첫 빌드보다 45 · 40 · 40 · 48% 적음. 아이콘마다 설명(title), 도움말 한 장(구역별 아이콘 사전). 처음 보는 사람이 못 읽던 곳(현금/순자산 · 남은 날 · 칩 · 보증금 · 수수료)에는 짧은 이름표를 되돌림
-F11	pass	evidence/levelup.png · tools/rules-test.js	경험치 → 레벨 업 → 특성 14개 중 셋에서 하나. 특성마다 규칙 확인
-F12	pass	evidence/event.png · tools/rules-test.js	돌발 사건 16개 × 선택지 둘이 모두 끝까지 돌고, 하루에 많아야 하나 · 주거에 맞는 것만 · 되풀이 없음. 3일째부터, 퀘스트 완료 · 특성 고르기가 없는 아침에만. 결과 창에 바뀐 것(현금 · 체력 · 경험치)이 숫자로 나옴
-F13	pass	tools/rules-test.js · evidence/quest-done.png	콤보(잘함 이상 +1, 보통 유지, 실수 · 대충 0) · 팁 · 일하는 동안의 시세
-F14	pass	evidence/achievements.png title.png results-home.png · tools/rt.js	업적 24개 도감, 새로 고침 뒤에도 남는 업적 · 기록, 결과 카드 복사, 판 코드로 같은 판, 오늘의 판
-F15	pass	evidence/levelup.png stamp.png · tools/worst.js · tools/check.js	폭죽 · 흔들림 · 도장. 효과 줄이기면 꺼짐. 소리와 움직임의 느낌은 사람이 확인해야 함
-F16	pass	tools/tut.js · tools/rt.js · evidence/tut-intro.png tut-job.png tut-howto.png tut-slots.png tut-move.png tut-goal.png tut-stock.png	첫 판 안내 다섯 단계(전단지 → 남은 칸 → 하루 마치기 → 찜질방 → 상태창)가 차례로 뜨고, 짚은 것만 눌리고(다른 것을 누르면 이유가 뜸), 짚은 것을 할 수 없으면 막지 않음. 처음 하는 알바는 "시작"을 눌러야 시간이 감. 주식 · 코인 설명은 한 번만. 끄기 · 다시 켜기 · 새로 고침 · 이어하기 · 예전 기록. 처음 보는 사람 역할의 검토에서 "막힘" 없음 — 실제 사람이 이것으로 "뭘 해야 할지" 아는지는 해 봐야 함
+F1	pass	evidence/play.png quest-done.png · tools/rules-test.js	퀘스트 23개가 늘 하나씩, 끝내면 보상과 다음 퀘스트. 이사 · 집 사기 · 사업 · 선언은 상태창의 단추
+F2	pass	evidence/play.png · tools/rules-test.js	하루 세 칸. 잠 20/35/45/55/58~66, 밤 회복 상한 66 — 어느 단계에서도 무거운 알바 셋(72)을 매일 뛸 수 없음
+F3	pass	evidence/mg_loading.png mg-result.png · 미니게임 봇 점검	알바 4종. 한 판 안에서 +40% · 숙련 단계마다 +16% 빨라짐. 제때 누르면 만점, 안 누르면 낮음. 결과에 한 줄 내역
+F4	pass	evidence/roadmap.png roadmap-board.png confirm-move.png · tools/rules-test.js	사다리 10단계. 셋방은 보증금 없이 순자산 기준(고시원 1,500,000 · 원룸 5,000,000), 내 집부터는 사서 자산으로 남음. 값은 안 오름
+F5	pass	evidence/buy-apt.png loan.png repay.png foreclose.png · tools/rules-test.js · tools/sim.js	주담대 80% · 6회 · 주 2%. 미리 갚기. 두 번 연속 못 내면 압류되어 꼭 한 단계 아래(검토자가 세 번 연속 압류로 확인)
+F6	pass	evidence/biz.png auto-income.png · tools/rules-test.js	사업 6단계, 단계마다 일당 5배. 가게부터 일하지 않은 칸에 자동 수입(30~85%)
+F7	pass	evidence/stock.png coin.png	주식 3종 · 코인 레버리지. 종목 줄에 내 손익과 오늘 시세, 보유 합계 줄. 사는 금액은 현금의 25/50/100%
+F8	pass	evidence/gap.png study-pick.png report-check.png hantang-alert.png · tools/rules-test.js(균형 회귀)	밤사이 갭 · 공부는 고른 종목 하나(체력 8 · 열에 여섯 번쯤) · 다음 날 맞음/틀림을 알려 줌 · 한탕바이오 진짜/가짜 매집
+F9	pass	evidence/shock.png · tools/worst.js	불가항력 속보 띠(든 종목 · 안 든 종목 · 다른 창과 몰릴 때). 이름은 지어낸 것
+F10	pass	evidence/stock.png night.png · tools/check.js	"N일째" + 주간 띠(고시원부터, 끝 칸에 "고정비"). 고정비 · 원리금은 전날과 당일에만 알림
+F11	pass	evidence/night.png long-numbers.png · tools/check.js(굴림)	돈은 숫자로, 위쪽 띠는 굴러서 오름. 1억 이상에는 작은 단위 길잡이. 34,999,999,999원에서도 안 넘침
+F12	pass	evidence/title.png act1.png results-top.png · tools/rt.js	제목 화면 · 1막 끝 창 · 엔딩 결과 화면 · 등급 기준 한 줄
+F13	pass	evidence/play.png	이름과 칭호 (thin stand-in)
+F14	pass	evidence/levelup.png	레벨과 특성(셋 중 하나)
+F15	pass	evidence/aug-card.png · tools/worst.js · tools/rules-test.js	양날 특성 4종: 카드 딱지와 "대신" 줄, 막힌 행동은 단추가 잠기고 이유
+F16	pass	evidence/event.png event-result.png · tools/rules-test.js	돌발 사건 20개, 돈은 사는 곳에 맞게 커짐
+F17	pass	evidence/den.png · tools/rules-test.js(기대값 −3~−7%)	도박장: 주사위 홀짝 1.9배 · 다섯 판 · 따블. 굴림은 시세와 무관
+F18	pass	evidence/mg-result.png	콤보와 팁
+F19	pass	evidence/title.png results-top.png · tools/rt.js	업적 · 기록(내 집 최단 · 최고 부자 최단) · 결과 카드 복사 · 판 코드 · 오늘의 판
+F20	pass	evidence/stamp.png shock.png · tools/worst.js	폭죽 · 흔들림 · 도장, 효과 줄이기
+F21	pass	evidence/tut-*.png · tools/tut.js · tools/rt.js	첫 판 안내 다섯 단계 + 처음 하는 알바의 하는 법
+F22	pass	evidence/coin-drill.png · tools/tut.js · tools/rt.js	코인 연습 한 판(롱 · 숏 · 청산을 직접 눌러 결과까지, 판 상태는 안 바뀜)
+F23	pass	evidence/scene-4.png … scene-8.png · tools/check.js	사는 곳 그림 다섯(내 집 · 아파트 · 주택 · 별장 · 호텔)이 서로 다르고 대출 · 사업 줄이 붙어도 인물이 안 잘림
+S1	pass	tools/rules-test.js(v1 · v2 저장) · 코드 검토의 실제 옛 저장 재현	저장 v3: 앞선 두 버전의 저장을 읽어 이어 할 수 있음
+S2	pass	tools/rules-test.js · 코드 검토의 재현	판 코드가 같으면 무엇을 하든(공부 · 청산 · 도박장 · 대출 · 압류) 시세가 같음
+B1	pass	tools/sim.js 300판	봇: 사업을 조심스럽게 키우면 내 집 24일째 · 엔딩 77일째 · 압류 0% / 대출 최대 + 5배는 69%가 압류, 중앙 83일째 · 빠른 10%는 62일째 / 알바만은 아파트에서 멈춤
+B2	broken	tools/sim.js 300판	2막에서 투자가 곁다리: 공부하고 따라 사는 봇이 1일(1%)만 빠름 — 사다리 값에 돈을 계속 써서 굴릴 돈이 작음. 구조를 바꿔야 고쳐짐(해 본 뒤 정함)
+H1	not_assessed	—	사람이 해 봐야 아는 것: 굴러 오르는 숫자의 맛 · 빨라지는 미니게임(특히 배달) · 도박장의 긴장 · 대출 압박이 실제로 느껴지는지 · 2막이 "숫자만 커진 같은 일"로 느껴지지 않는지 · 판 길이(엔딩까지 한 시간 넘게)

@@ -23,7 +23,7 @@ fs.mkdirSync(out, { recursive: true });
   const clear = async () => { // 떠 있는 창을 종류에 맞게 닫고(특성은 첫째 카드, 돌발 사건은 둘째 선택 뒤 확인), 본 창의 종류를 차례로 돌려줌
     const seen = []; let last = '';
     for (let i = 0; i < 16; i++) {
-      const m = (await st()).modal; if (!m) break;
+      const m = (await st()).modal; if (!m || m === 'drill') break; // 코인 연습은 따로 눌러서 지나간다
       const sig = m + ':' + await page.evaluate(() => (document.querySelector('#veil h3, #veil .qdone b') || {}).textContent || ''); // 같은 종류라도 제목이 다르면 다른 창
       if (sig !== last) { seen.push(m); last = sig; }
       if (m === 'perk') await page.click('.pcard'); else if (m === 'event' && await page.locator('[data-do="ev"]').count()) await page.click('[data-do="ev"][data-arg="b"]'); else await page.click('#veil [data-do="ok"]');
@@ -78,6 +78,7 @@ fs.mkdirSync(out, { recursive: true });
     log.push('현금 굴림: ' + a[0] + ' → ' + b[0] + ' (판 ' + b[1] + ')'); if (b[0] !== b[1]) errs.push('굴림이 끝난 뒤 위쪽 띠의 현금이 판과 다름: ' + b.join(' ≠ '));
   }
   await wait(300); await coach('slots', '첫 알바 뒤'); await shot('rt06b_coach_slots');
+  if (await page.evaluate(() => window.game.state.cash >= window.Rules.saunaCost(window.game.state.raw) && !!document.querySelector('#hud [data-do="move"]'))) errs.push('첫날 안내 중인데 위쪽 띠에 "찜질방으로 옮기기" 버튼이 켜져 보임 (안내가 그 단계에 오기 전에는 눌러도 안 됨)');
   // 화면 버튼(마우스)만으로 미니게임 하기: 상하차
   await page.click('[data-do="job"][data-arg="loading"]', { position: { x: 30, y: 80 } }); await wait(700); await begin(); await wait(300);
   log.push('상하차 화면 버튼: ' + (await mgButtons()).join(' | '));
@@ -111,6 +112,7 @@ fs.mkdirSync(out, { recursive: true });
   s = await note('2일째 아침');
   if (s.day !== 2) errs.push('2일째가 아님');
   await wait(300); await coach('move', '2일째 아침'); await shot('rt10b_coach_move');
+  if (!(await page.evaluate(() => !!document.querySelector('#hud [data-do="move"]')))) errs.push('2일째(안내가 옮기기를 짚는 때)인데 위쪽 띠에 옮기기 버튼이 없음');
   // 찜질방으로 옮기기 (판 자리 로드맵의 다음 칸 버튼)
   if (!(await page.locator('#board .rung.next [data-do="move"]').count())) errs.push('2일째 아침 로드맵에 찜질방 옮기기 버튼이 없음');
   if (await page.locator('#board [data-do="move"]').count()) { await page.click('#board [data-do="move"]'); await wait(600); if ((await st()).modal) await shot('rt11_roof_quest'); await clear(); }
@@ -137,8 +139,26 @@ fs.mkdirSync(out, { recursive: true });
   await page.click('#hud [data-do="help"]'); await wait(500); await shot('rt14a_help'); await page.click('#veil [data-do="ok"]'); await wait(400);
   // 코인: "정리하기"를 두 번 눌러도 새 포지션이 열리면 안 됨 (원룸 상태로 건너뛰어 확인)
   await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 8000000; window.game.meta.seen.stock = 1; window.game.render(); window.game.run('tab', 'coin'); });
-  await wait(400); await clear(); await wait(300); await coach('coin', '코인 탭을 처음 열 때'); await shot('rt14b0_coach_coin');
-  await wait(500); await page.click('[data-do="coachok"]'); await wait(400);
+  await wait(400); // 코인 탭을 처음 열면 연습 창: 실제 클릭으로 세 박자 (다른 버튼은 안 넘어감 · 움직이는 동안 연타해도 안 넘어감)
+  if ((await st()).modal !== 'drill') errs.push('코인 탭을 처음 열 때 연습 창이 안 뜸: ' + (await st()).modal);
+  else {
+    await wait(500); await shot('rt14b0_drill');
+    for (const [i, side] of [[0, 'long'], [1, 'short'], [2, 'long']]) {
+      await page.click('[data-do="drillgo"][data-arg="' + (side === 'long' ? 'short' : 'long') + '"]'); await wait(250);
+      if ((await page.evaluate(() => window.game.state.drill.ph)) !== 'ask') errs.push('연습 ' + (i + 1) + '박자: 다른 버튼이 눌림');
+      await page.click('[data-do="drillgo"][data-arg="' + side + '"]'); await wait(300);
+      await page.click('[data-do="drillskip"]').catch(() => {}); await page.keyboard.press('Space'); await wait(200); // 움직이는 동안 건너뛰기 · Space
+      if ((await page.evaluate(() => (window.game.state.drill || {}).ph)) !== 'move') errs.push('연습 ' + (i + 1) + '박자: 차트가 움직이는 동안 넘어감');
+      await wait(1500);
+      const r = await page.evaluate(() => document.querySelector('.drill-res').textContent);
+      log.push('연습 ' + (i + 1) + '박자: ' + r);
+      if (!(i < 2 ? /\+18,000원/ : /청산/).test(r)) errs.push('연습 ' + (i + 1) + '박자 결과가 다름: ' + r);
+      if (i === 2) await shot('rt14b0_drill_liq');
+      await page.click('#veil [data-do="ok"]'); await wait(400);
+    }
+    await page.click('#veil [data-do="ok"]'); await wait(500);
+    if ((await st()).modal || !(await page.evaluate(() => window.game.meta.seen.coin))) errs.push('연습 마무리 뒤 창이 남거나 본 것으로 안 남음');
+  }
   await page.click('[data-do="long"]'); await wait(600);
   await clear(); // 건너뛴 탓에 밀린 퀘스트 창들
   if (!(await page.evaluate(() => !!window.game.state.raw.lev))) errs.push('롱이 열리지 않음');
@@ -161,17 +181,25 @@ fs.mkdirSync(out, { recursive: true });
   if (await page.evaluate(() => window.game.state.tut)) errs.push('안내를 끝냈는데 다음 판에 또 뜸');
   if (seed !== parseInt('00A5', 36)) errs.push('판 코드로 시작한 씨앗이 다름: ' + seed); log.push('판 코드 SS-00A5 → 씨앗 ' + seed);
   await clear();
-  await page.evaluate(() => { const S = window.game.state.raw; S.cash = 50000000; window.game.render(); window.game.run('house'); }); await wait(600);
+  await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.stats.maxTier = 3; S.cash = 50000000; window.game.render(); window.game.run('house'); }); await wait(600); // 원룸에서 현금으로 내 집
   await page.keyboard.press('Space'); await wait(600); // 확인 창에서 Space 는 늘 "돌아가기"
-  if ((await st()).modal || await page.evaluate(() => window.game.scene) !== 'play') errs.push('계약 확인 창에서 Space 가 돌아가기가 아님');
+  if ((await st()).modal || (await st()).tier !== 3) errs.push('내 집 사는 창에서 Space 가 돌아가기가 아님');
   await page.evaluate(() => window.game.run('house')); await wait(600);
-  await page.keyboard.press('Enter'); await wait(900); await shot('rt14e_results_home'); // Enter 가 "한다"
-  const card = await page.evaluate(() => (document.querySelector('.e-card pre') || {}).textContent || '');
-  if (!/판 코드 SS-00A5/.test(card)) errs.push('결과 카드에 판 코드가 없음: ' + card);
-  await page.click('[data-do="copy"]'); await wait(400);
-  const wins = await page.evaluate(() => window.game.meta.wins); if (wins < 1) errs.push('성공 기록이 남지 않음');
-  await page.keyboard.press('Enter'); await wait(600); await shot('rt14f_title_records');
-  await page.click('[data-do="new"]'); await wait(700); await clear();
+  await page.keyboard.press('Enter'); await wait(150); // Enter 가 "한다" → 1막 끝 창. 뜨자마자의 연타로는 안 넘어간다
+  for (let i = 0; i < 4; i++) { await page.keyboard.press('Space'); await wait(100); }
+  if ((await st()).modal !== 'act1') errs.push('1막 끝 창이 뜨자마자 연타에 넘어감');
+  await wait(900); await shot('rt14e_act1');
+  if ((await st()).modal !== 'act1' || (await st()).tier !== 4) errs.push('내 집을 샀는데 1막 끝 창이 안 뜸: ' + JSON.stringify(await st()));
+  const card = await page.evaluate(() => (document.querySelector('#veil .e-card pre') || {}).textContent || '');
+  if (!/판 코드 SS-00A5/.test(card) || !/1막 끝/.test(card)) errs.push('1막 끝 결과 카드에 판 코드가 없음: ' + card);
+  await page.click('#veil [data-do="copy"]'); await wait(400);
+  if ((await st()).modal !== 'act1') errs.push('복사를 누르니 1막 끝 창이 닫힘');
+  const homes = await page.evaluate(() => window.game.meta.homes); if (homes < 1) errs.push('내 집(1막 끝) 기록이 남지 않음');
+  await wait(300); await page.click('#veil [data-do="ok"]'); await wait(700); await clear(); // "계속한다" → 판이 이어진다
+  if (await page.evaluate(() => window.game.scene) !== 'play' || (await st()).tier !== 4) errs.push('"계속한다" 뒤 판이 이어지지 않음');
+  await page.click('#hud [data-do="quit"]'); await wait(500); await shot('rt14f_title_records');
+  if (!/내 집 최단/.test(await page.textContent('#s-title .rec'))) errs.push('제목 화면 기록에 "내 집 최단"이 없음');
+  await page.click('[data-do="new"]'); await wait(400); await page.click('[data-do="new"]'); await wait(700); await clear(); // 저장이 있어 두 번
   // 작은 창 · 큰 창: 통째로 늘고 주는지
   await page.setViewportSize({ width: 800, height: 450 }); await wait(400); await shot('rt15_small_800x450');
   await page.setViewportSize({ width: 1920, height: 1080 }); await wait(400); await shot('rt16_large_1080p');

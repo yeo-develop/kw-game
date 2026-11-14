@@ -2,7 +2,7 @@
 // 게임이 불러오지 않는 개발용 도구. 첫 판 안내(튜토리얼)를 처음부터 끝까지 따라가 본다. 창 없이 돌고, 단계마다 화면을 찍는다.
 // 보는 것: 단계가 차례로 뜨는가 · 짚은 것만 눌리는가(다른 것을 누르면 이유가 뜨는가) · 처음 하는 알바는 "시작"을 눌러야 시간이 가는가
 //         · 말풍선이 화면 안에 있고 짚은 곳을 가리지 않는가 · 짚은 것을 할 수 없는 상태에서는 막지 않는가(갇히지 않는가)
-//         · 끄면 안 뜨는가 · 주식/코인 설명은 한 번만 뜨는가 · 창 크기가 달라도 같은 자리인가 · 안내를 안 쓰는 점검(?manual=1)에는 안 뜨는가
+//         · 끄면 안 뜨는가 · 주식 설명 · 코인 연습(세 박자)은 한 번만 뜨는가 · 창 크기가 달라도 같은 자리인가 · 안내를 안 쓰는 점검(?manual=1)에는 안 뜨는가
 //         · 실제 저장으로: 이어하기 · 새로 고침 · 끄기/다시 켜기 · 예전 기록
 // node tools/tut.js [게임 폴더] [찍을 폴더]
 const path = require('path'), fs = require('fs');
@@ -58,7 +58,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.step(60);
   let s = await p.st();
   want(s.modal === 'intro' && !s.coach, '첫 창이 떠 있는 동안에는 안내가 없어야 함: ' + JSON.stringify(s));
-  want(/28일 안에 집값/.test(await p.page.textContent('#veil .win')), '첫 창에 목표 한 줄이 없음');
+  { const t = await p.page.textContent('#veil .win'); want(/목표는 한국 최고 부자/.test(t) && /내 집부터/.test(t) && /기한은 없다/.test(t) && !/28일/.test(t), '첫 창에 목표 한 줄(한국 최고 부자 · 내 집부터 · 기한 없음)이 없음'); }
   await p.shot('tut00_intro');
   await p.page.keyboard.press('Space'); await p.step(30);
   s = await p.st(); let b = await p.box();
@@ -155,11 +155,56 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.G(() => { window.game.run('roadmap'); window.game.step(20); window.game.run('ok'); window.game.step(20); window.game.render(); window.game.run('tab', 'stock'); }); await p.step(30); want(!(await p.st()).coach, '주식 설명이 또 뜸');
   await p.G(() => window.game.run('buy', '100000')); await p.step(10); want(await p.G(() => window.game.state.raw.stats.bought > 0), '설명을 닫은 뒤에도 못 삼');
   await p.closeAll();
-  await p.G(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; window.game.render(); window.game.run('tab', 'coin'); }); await p.step(30); await p.closeAll();
-  s = await p.st(); b = await p.box();
-  want(s.coach === 'coin', '코인 탭을 처음 열 때 설명이 안 뜸: ' + JSON.stringify(s)); geometry(b, 'coin'); log.push(b.label + ' — ' + b.text);
-  await p.shot('tut11_coin');
-  await p.page.keyboard.press('Enter'); await p.step(30); want(!(await p.st()).coach, '코인 설명이 Enter 로 닫히지 않음');
+  // 코인: 처음 탭을 열면 설명 대신 연습 창 (진짜 돈 아님) — 박자마다 맞는 버튼만 · 움직이는 동안 안 넘어감 · 결과 숫자 = 규칙의 식 · 판 상태 그대로 · 한 번만 · "연습"으로 다시 · 건너뛰기
+  await p.G(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; window.game.render(); window.__S0 = JSON.stringify(S); window.game.run('tab', 'coin'); }); await p.step(30);
+  s = await p.st();
+  want(s.modal === 'drill' && !s.coach, '코인 탭을 처음 열 때 연습 창이 안 뜸: ' + JSON.stringify(s));
+  const D = () => p.G(() => { const g = window.game, w = document.querySelector('#veil .win.drill'), t = sel => ((w && w.querySelector(sel)) || {}).textContent || '';
+    const sr = document.getElementById('stage').getBoundingClientRect(), r = w ? w.getBoundingClientRect() : null;
+    const small = w ? [...w.querySelectorAll('*')].filter(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 13.99).length : 0;
+    return { modal: g.state.modal, d: g.state.drill, n: t('.drill-n'), ask: t('.drill-ask'), res: t('.drill-res'), now: t('#drillnow'), h3: t('h3'), in: !!r && r.left >= sr.left && r.top >= sr.top && r.right <= sr.right && r.bottom <= sr.bottom, over: w ? w.scrollWidth - w.clientWidth : 0, small,
+      btns: [...document.querySelectorAll('#veil [data-do="drillgo"]')].map(e => e.dataset.arg + (e.disabled ? ':off' : ':on')) }; });
+  const want3 = await p.G(() => { const R = window.Rules, v = (dir, chg) => Math.round(R.levValue({ lev: { dir, lev: 3, put: 100000, margin: 100000, entry: 1000 }, market: { px: { coin: 1000 * (1 + chg) } } })) - 100000; return [v(1, 0.06), v(-1, -0.06), v(1, -0.34)].map(n => (n >= 0 ? '+' : '') + R.won(n)); }); // 규칙의 식으로 셈한 연습 결과
+  const beats = [['long', 'Digit1', 'Digit2', /\+18,000원/, /6% × 3배/], ['short', 'Digit2', 'Digit1', /\+18,000원/, /숏은 내려도 번다/], ['long', 'Digit1', 'Digit2', /청산/, /100,000원이 전부 사라짐.*33% 거꾸로/]];
+  want(want3.join('|') === '+18,000원|+18,000원|−100,000원', '연습의 셈이 규칙(levValue)과 다름: ' + want3.join('|'));
+  for (let i = 0; i < 3; i++) {
+    const [side, ok, no, r1, r2] = beats[i];
+    let d = await D();
+    want(d.d && d.d.beat === i && d.d.ph === 'ask' && d.n === (i + 1) + ' / 3', '연습 ' + (i + 1) + '박자가 아님: ' + JSON.stringify(d));
+    want(d.in && d.over <= 1 && !d.small, '연습 창이 화면 밖 · 넘침 · 작은 글자: ' + JSON.stringify(d));
+    if (!i) await p.shot('tut11_drill_ask');
+    await p.page.keyboard.press(no); await p.step(4); d = await D();
+    want(d.d.ph === 'ask' && /차례/.test(d.ask), (i + 1) + '박자: 다른 버튼(' + no + ')을 눌렀는데 넘어가거나 이유가 없음: ' + JSON.stringify(d));
+    await p.page.click('[data-do="drillgo"][data-arg="' + (side === 'long' ? 'short' : 'long') + '"]'); await p.step(4);
+    want((await D()).d.ph === 'ask', (i + 1) + '박자: 다른 버튼을 마우스로 눌렀는데 넘어감');
+    if (!i) await p.shot('tut11b_drill_why');
+    await p.page.keyboard.press(ok); await p.G(() => window.game.step(10)); d = await D();
+    want(d.d.ph === 'move', (i + 1) + '박자: 맞는 버튼(' + ok + ')을 눌렀는데 차트가 안 움직임: ' + JSON.stringify(d.d));
+    await p.G(() => { const g = window.game; for (const k of ['Space', 'Enter', 'Digit1', 'Digit2', 'Escape']) { g.press(k); g.step(3); } }); d = await D(); // 움직이는 동안 연타
+    want(d.modal === 'drill' && d.d.ph === 'move' && d.d.beat === i, (i + 1) + '박자: 차트가 움직이는 동안 넘어가거나 닫힘: ' + JSON.stringify(d.d));
+    if (!i) await p.shot('tut11c_drill_move');
+    await p.G(() => window.game.step(110)); d = await D();
+    want(d.d.ph === 'show' && r1.test(d.res) && r2.test(d.res), (i + 1) + '박자 결과가 다름: ' + d.res);
+    want(i < 2 ? d.now === '118,000원' : d.now === '0원', (i + 1) + '박자 "지금" 값이 다름: ' + d.now);
+    await p.shot('tut11d_drill_res' + (i + 1));
+    await p.page.keyboard.press('Space'); await p.step(20);
+  }
+  let dd = await D();
+  want(dd.d && dd.d.ph === 'end' && /진짜 돈은 아래에서 건다/.test(dd.h3), '세 박자 뒤 마무리 창이 아님: ' + JSON.stringify(dd));
+  await p.shot('tut11e_drill_end');
+  await p.page.keyboard.press('Space'); await p.step(30);
+  want(!(await p.st()).modal && await p.G(() => window.game.meta.seen.coin === 1), '연습을 마쳤는데 창이 남거나 본 것으로 안 남음');
+  want(await p.G(() => window.__S0 === JSON.stringify(window.game.state.raw)), '연습이 판 상태(돈 · 시세 · 난수)를 바꿈');
+  await p.G(() => { window.game.run('tab', 'stock'); window.game.run('tab', 'coin'); }); await p.step(20);
+  want(!(await p.st()).modal && !(await p.st()).coach, '연습 창이 또 뜸 (한 번만이어야 함)');
+  await p.page.click('#board [data-do="drill"]'); await p.step(20);
+  dd = await D(); want(dd.modal === 'drill' && dd.d.beat === 0, '코인 탭의 "연습" 버튼으로 다시 열리지 않음');
+  await p.page.keyboard.press('Escape'); await p.step(20); want(!(await p.st()).modal, 'Esc 로 건너뛰어지지 않음');
+  await p.page.click('#board [data-do="drill"]'); await p.step(20); await p.page.click('[data-do="drillgo"][data-arg="long"]'); await p.G(() => window.game.step(4)); // 막음을 기다리지 않는 걸음 (움직이는 동안을 보려고)
+  await p.page.click('[data-do="drillskip"]'); await p.G(() => window.game.step(4)); want((await p.st()).modal === 'drill' && (await p.G(() => window.game.state.drill.ph)) === 'move', '차트가 움직이는 동안 "건너뛰기"가 눌림');
+  await p.G(() => window.game.step(120)); await p.page.click('[data-do="drillskip"]'); await p.step(20); want(!(await p.st()).modal, '"건너뛰기" 버튼으로 닫히지 않음');
+  want(await p.G(() => window.__S0 === JSON.stringify(window.game.state.raw)), '연습을 다시 해도 판 상태가 바뀜');
+  log.push('코인 연습 — 세 박자 ' + want3.join(' · '));
   await p.page.close();
 
   // ── 2. 짚은 것을 할 수 없는 상태에서는 막지 않는다 (갇히지 않는다) ──
@@ -270,6 +315,28 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     s = await r.st(); want(s.day === 1 && s.coach === 'job', '예전 기록이 있는 사람이 새 판을 골랐는데 안내가 안 뜸: ' + JSON.stringify(s));
     await r.load('seed=5'); await r.resume(); // 새 판을 고른 직후 새로 고침: 하던 10일째 판이 아니라 새 판이어야 한다
     s = await r.st(); want(s.day === 1 && s.coach === 'job', '새 판을 고른 뒤 새로 고쳤더니 예전 판에 안내가 붙음: ' + JSON.stringify(s));
+    await r.ctx.close();
+  }
+  { // 보기 전에 새로 고친 창 · 끝난 저장: 1막 끝 · 사업 확장 창을 닫기 전에 새로 고치면 이어 할 때 다시 뜨고(닫은 뒤엔 안 뜸), 끝난 판의 저장은 이어하기로 열리지 않는다
+    const r = await real('seed=5&tut=0');
+    await r.fresh();
+    const upto = async want2 => { for (let i = 0; i < 5; i++) { const m = (await r.st()).modal; if (!m || m === want2) return m; await r.page.click(m === 'perk' ? '.pcard' : '#veil [data-do="ok"]'); await r.wait(750); } return (await r.st()).modal; };
+    await r.page.evaluate(() => { const g = window.game, S = g.state.raw; S.tier = 3; S.stats.maxTier = 3; S.movedDay = 1; S.cash = 20000000; S.quest = 11; S.offer = null; S.picks = 0; S.event = null; g.render(); g.run('house'); g.step(30); g.press('Enter'); g.step(40); });
+    want(await upto('act1') === 'act1', '내 집을 샀는데 1막 끝 창이 안 뜸');
+    await r.load(); await r.resume();
+    want(await upto('act1') === 'act1', '1막 끝 창을 닫기 전에 새로 고쳤더니 이어 할 때 다시 안 뜸');
+    await r.page.click('#veil [data-do="ok"]'); await r.wait(750); await upto('');
+    await r.load(); await r.resume();
+    want(!(await r.st()).modal, '본 1막 끝 창이 이어 할 때 또 뜸: ' + (await r.st()).modal);
+    await r.page.evaluate(() => { const g = window.game, S = g.state.raw; S.cash = 900000000; S.offer = null; S.picks = 0; S.event = null; g.render(); g.run('bizup'); g.step(40); g.press('Enter'); g.step(40); });
+    want(await upto('biz') === 'biz', '사업을 키웠는데 사업 확장 창이 안 뜸');
+    await r.load(); await r.resume();
+    want(await upto('biz') === 'biz', '사업 확장 창을 닫기 전에 새로 고쳤더니 이어 할 때 다시 안 뜸');
+    await r.page.click('#veil [data-do="ok"]'); await r.wait(750);
+    await r.page.evaluate(() => { const S = window.game.state.raw; S.ended = { kind: 'top', day: 80, worth: 1, rank: 'B' }; localStorage.setItem('seoul-station-save-v1', window.Rules.save(S)); }); // 예전 버전에서 끝난 판이 저장돼 있는 경우
+    await r.load();
+    want(await r.page.locator('[data-do="continue"]').count() === 0 && !(await r.page.evaluate(() => localStorage.getItem('seoul-station-save-v1'))), '끝난 판의 저장이 제목 화면에 이어하기로 남음');
+    log.push('보기 전에 새로 고친 창(1막 끝 · 사업 확장)은 이어 할 때 다시 뜸 · 끝난 저장은 지움');
     await r.ctx.close();
   }
 
