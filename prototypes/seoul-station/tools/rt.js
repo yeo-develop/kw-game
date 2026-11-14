@@ -55,10 +55,12 @@ fs.mkdirSync(out, { recursive: true });
   log.push('미니게임: ' + title + ' / ' + howto + ' / 버튼: ' + (await mgButtons()).join(' | '));
   for (let i = 0; i < 16; i++) { await wait(560); if (i === 5) await shot('rt04_minigame_mid'); if (await page.locator('.mg-res').count()) break; await page.keyboard.press('Space'); }
   await page.waitForSelector('.mg-res', { timeout: 6000 });
+  const pay0 = await page.evaluate(() => document.getElementById('mgpay').textContent); // 결과가 막 뜬 때: 일당이 아직 굴러가는 중
   await page.keyboard.press('Space'); await wait(150); // 미니게임의 마지막 누름: 결과 창이 바로 닫히면 안 됨
   if ((await st()).modal !== 'mg') errs.push('결과 창이 뜨자마자 닫힘');
   for (let i = 0; i < 12; i++) { await page.keyboard.press('Space'); await wait(150); } // 1.8초 동안 연타
   if ((await st()).modal !== 'mg' || !(await page.locator('.mg-res').count())) errs.push('연타로 결과 창이 넘어감');
+  { const t1 = await page.evaluate(() => document.getElementById('mgpay').textContent), want = await page.evaluate(() => '+' + window.Rules.won(window.game.state.cash)); /* 첫 알바: 일당(+팁) = 지금 현금 */ log.push('일당 굴림: ' + pay0 + ' → ' + t1); if (pay0 === t1 || t1 !== want) errs.push('미니게임 일당이 0 에서 굴러 올라가 일당에서 멈추지 않음: ' + pay0 + ' → ' + t1 + ' (일당 ' + want + ')'); }
   await wait(500); await shot('rt05_minigame_result');
   const res = await page.textContent('.mg-res'); log.push('결과: ' + res.replace(/\s+/g, ' '));
   // 결과가 뜨자마자 Space 를 연타해도 퀘스트 창까지 한꺼번에 닫히지 않아야 함
@@ -69,6 +71,12 @@ fs.mkdirSync(out, { recursive: true });
   if (s.modal !== 'quest') errs.push('퀘스트 완료 창이 떠 있어야 하는데: ' + s.modal);
   await shot('rt06_quest_done');
   await clear();
+  { // 창을 닫은 뒤 위쪽 띠의 현금이 굴러서(약 0.6초) 판 상태와 같아진다
+    const a = await page.evaluate(() => [document.getElementById('cash').textContent, window.Rules.won(window.game.state.cash)]);
+    await wait(900);
+    const b = await page.evaluate(() => [document.getElementById('cash').textContent, window.Rules.won(window.game.state.cash)]);
+    log.push('현금 굴림: ' + a[0] + ' → ' + b[0] + ' (판 ' + b[1] + ')'); if (b[0] !== b[1]) errs.push('굴림이 끝난 뒤 위쪽 띠의 현금이 판과 다름: ' + b.join(' ≠ '));
+  }
   await wait(300); await coach('slots', '첫 알바 뒤'); await shot('rt06b_coach_slots');
   // 화면 버튼(마우스)만으로 미니게임 하기: 상하차
   await page.click('[data-do="job"][data-arg="loading"]', { position: { x: 30, y: 80 } }); await wait(700); await begin(); await wait(300);
@@ -103,8 +111,9 @@ fs.mkdirSync(out, { recursive: true });
   s = await note('2일째 아침');
   if (s.day !== 2) errs.push('2일째가 아님');
   await wait(300); await coach('move', '2일째 아침'); await shot('rt10b_coach_move');
-  // 찜질방으로 옮기기 (사다리 버튼)
-  if (await page.locator('[data-do="move"]').count()) { await page.click('[data-do="move"]'); await wait(600); if ((await st()).modal) await shot('rt11_roof_quest'); await clear(); }
+  // 찜질방으로 옮기기 (판 자리 로드맵의 다음 칸 버튼)
+  if (!(await page.locator('#board .rung.next [data-do="move"]').count())) errs.push('2일째 아침 로드맵에 찜질방 옮기기 버튼이 없음');
+  if (await page.locator('#board [data-do="move"]').count()) { await page.click('#board [data-do="move"]'); await wait(600); if ((await st()).modal) await shot('rt11_roof_quest'); await clear(); }
   s = await note('찜질방 이동'); await wait(100); await coach('goal', '찜질방으로 옮긴 뒤');
   await page.click('#hud [data-do="help"]'); await wait(500); await page.keyboard.press('Space'); await wait(60); // 도움말을 닫으면 안내가 다시 뜬다. 뜨자마자 연타해도 읽기 전에 넘어가지 않는다
   await page.keyboard.press('Space'); await wait(120); await page.keyboard.press('Space'); await wait(100);
@@ -127,7 +136,7 @@ fs.mkdirSync(out, { recursive: true });
   await page.click('#veil [data-do="ok"]'); await wait(400);
   await page.click('#hud [data-do="help"]'); await wait(500); await shot('rt14a_help'); await page.click('#veil [data-do="ok"]'); await wait(400);
   // 코인: "정리하기"를 두 번 눌러도 새 포지션이 열리면 안 됨 (원룸 상태로 건너뛰어 확인)
-  await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.deposit = 5000000; S.cash = 3000000; window.game.run('tab', 'coin'); });
+  await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 8000000; window.game.meta.seen.stock = 1; window.game.render(); window.game.run('tab', 'coin'); });
   await wait(400); await clear(); await wait(300); await coach('coin', '코인 탭을 처음 열 때'); await shot('rt14b0_coach_coin');
   await wait(500); await page.click('[data-do="coachok"]'); await wait(400);
   await page.click('[data-do="long"]'); await wait(600);

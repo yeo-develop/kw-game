@@ -119,12 +119,16 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   s = await p.st(); b = await p.box();
   want(s.day === 2 && s.coach === 'move', '2일째 아침 안내가 "찜질방"이 아님: ' + JSON.stringify(s)); geometry(b, 'move'); log.push('4 ' + b.label + ' — ' + b.text);
   await p.shot('tut06_move');
+  { // 4단계 고리는 로드맵(판 자리)의 다음 칸 옮기기 버튼
+    const r = await p.G(() => { const e = document.querySelector('#board .rung.next [data-do="move"]'); if (!e) return null; const sr = document.getElementById('stage').getBoundingClientRect(), k = 1280 / sr.width, q = e.getBoundingClientRect(); return { x: (q.left - sr.left) * k - 5, y: (q.top - sr.top) * k - 5 }; });
+    want(r && b.rings[0] && Math.abs(b.rings[0].x - r.x) < 2 && Math.abs(b.rings[0].y - r.y) < 2, '4단계 고리가 로드맵의 옮기기 버튼이 아님: ' + JSON.stringify({ r, ring: b.rings[0] }));
+  }
   await p.page.keyboard.press('Digit1'); await p.step(10);
   want((await p.st()).slot === 0 && !(await p.st()).modal, '찜질방을 짚는 동안 다른 것이 눌림');
   await p.page.click('#board [data-do="move"]'); await p.step(30); await p.closeAll();
   s = await p.st(); b = await p.box();
   want(s.tier === 1 && s.coach === 'goal', '옮긴 뒤 안내가 "마무리"가 아님: ' + JSON.stringify(s)); geometry(b, 'goal'); log.push('5 ' + b.label + ' — ' + b.text);
-  want(b.side === 'down' && b.bubble.x + b.bubble.w <= b.board.x, '마무리 말풍선이 사다리(다음 목표인 고시원 카드)를 가림');
+  want(b.side === 'down' && b.bubble.x + b.bubble.w <= b.board.x, '마무리 말풍선이 로드맵(다음 목표인 고시원 카드)을 가림');
   await p.shot('tut07_goal');
   await p.page.keyboard.press('Digit1'); await p.step(10); want(!(await p.st()).modal, '마무리 안내를 읽기 전에 다른 것이 눌림');
   want(/알겠다/.test((await p.box()).why), '읽고 넘기는 안내에서 다른 것을 눌렀을 때 무엇을 누를지 뜨지 않음');
@@ -141,17 +145,17 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.page.click('[data-do="mgstart"]'); await p.step(4); want(!(await p.st()).wait, '"시작" 버튼으로 시작되지 않음');
   await finishMg(p); await p.step(60); await p.closeAll();
   // 주식 · 코인 설명: 처음 그 탭을 열 때 한 번만
-  await p.G(() => { const S = window.game.state.raw; S.tier = 2; S.deposit = 500000; S.cash = 1830000; S.day = 5; S.movedDay = 3; S.quest = 4; window.game.render(); window.game.run('tab', 'stock'); }); await p.step(30); await p.closeAll();
+  await p.G(() => { const S = window.game.state.raw; S.tier = 2; S.cash = 2330000; S.day = 5; S.movedDay = 3; S.quest = 4; window.game.render(); window.game.run('tab', 'stock'); }); await p.step(30); await p.closeAll();
   s = await p.st(); b = await p.box();
   want(s.coach === 'stock', '주식 탭을 처음 열 때 설명이 안 뜸: ' + JSON.stringify(s)); geometry(b, 'stock'); want(b.rings.length === 3, '주식 설명의 고리가 셋이 아님'); log.push(b.label + ' — ' + b.text);
   await p.shot('tut10_stock');
   await p.G(() => window.game.run('buy', '100000')); await p.step(10); want(await p.G(() => window.game.state.raw.stats.bought === 0), '주식 설명을 읽기 전에 사짐');
   await p.page.click('[data-do="coachok"]'); await p.step(30);
   want(!(await p.st()).coach, '주식 설명이 닫히지 않음');
-  await p.G(() => { window.game.run('tab', 'ladder'); window.game.run('tab', 'stock'); }); await p.step(30); want(!(await p.st()).coach, '주식 설명이 또 뜸');
+  await p.G(() => { window.game.run('roadmap'); window.game.step(20); window.game.run('ok'); window.game.step(20); window.game.render(); window.game.run('tab', 'stock'); }); await p.step(30); want(!(await p.st()).coach, '주식 설명이 또 뜸');
   await p.G(() => window.game.run('buy', '100000')); await p.step(10); want(await p.G(() => window.game.state.raw.stats.bought > 0), '설명을 닫은 뒤에도 못 삼');
   await p.closeAll();
-  await p.G(() => { const S = window.game.state.raw; S.tier = 3; S.deposit = 5000000; S.cash = 4200000; S.day = 15; S.movedDay = 12; window.game.render(); window.game.run('tab', 'coin'); }); await p.step(30); await p.closeAll();
+  await p.G(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; window.game.render(); window.game.run('tab', 'coin'); }); await p.step(30); await p.closeAll();
   s = await p.st(); b = await p.box();
   want(s.coach === 'coin', '코인 탭을 처음 열 때 설명이 안 뜸: ' + JSON.stringify(s)); geometry(b, 'coin'); log.push(b.label + ' — ' + b.text);
   await p.shot('tut11_coin');
@@ -257,7 +261,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     const r = await real('seed=5&tut=0', JSON.stringify({ ach: { first_pay: 1 }, runs: 3, wins: 0, bestPct: 0.4 }));
     await r.fresh(); // 안내 없이 하던 판을 하나 만들어 둠 (?tut=0)
     s = await r.st(); want(!s.coach && !s.tut, '?tut=0 인데 안내가 뜸: ' + JSON.stringify(s));
-    await r.page.evaluate(() => { const S = window.game.state.raw; S.day = 10; S.tier = 3; S.deposit = 5000000; S.cash = 900000; window.game.render(); }); await r.quit();
+    await r.page.evaluate(() => { const S = window.game.state.raw; S.day = 10; S.tier = 3; S.cash = 5900000; window.game.render(); }); await r.quit();
     await r.load('seed=5');
     want(/켜짐/.test(await r.page.textContent('[data-do="tuttoggle"]')), '예전 기록으로 열면 안내가 켜져 있어야 함 (본 적이 없으므로)');
     await r.resume();

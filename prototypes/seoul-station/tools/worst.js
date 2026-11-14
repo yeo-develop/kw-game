@@ -23,7 +23,7 @@ fs.mkdirSync(out, { recursive: true });
   for (const tab of ['stock', 'coin', 'coin-open']) {
     await page.evaluate(tab => {
       const S = window.game.state.raw, g = window.game;
-      S.tier = 3; S.deposit = 5000000; S.cash = 123456789; S.hp = 100; S.day = 13; S.slot = 1; S.arrears = 1495000; S.movedDay = 2;
+      S.tier = 3; S.cash = 123456789; S.hp = 100; S.day = 13; S.slot = 1; S.arrears = 1495000; S.movedDay = 2;
       const mk = (id, asset, dir, src, head) => ({ id, day: S.day, asset, dir, src, truth: true, mag: 0.1, head });
       S.market.news = [mk(901, 'buldak', -1, 'official', '화끈식품 대주주 지분 매각설'), mk(902, 'daejang', 1, 'article', '대장전자, 대형 공급 계약'), mk(903, 'coin', 1, 'rumor', '달나라코인, 대형 거래소 상장설')];
       S.market.brief = { day: S.day, madeOn: S.day - 1, items: [{ nid: 901, asset: 'buldak', dir: 1 }, { nid: 902, asset: 'daejang', dir: -1 }, { nid: 903, asset: 'coin', dir: 1 }], ht: { phase: 'gather', soon: true } };
@@ -54,7 +54,7 @@ fs.mkdirSync(out, { recursive: true });
   const page2 = await fresh();
   const fxr = await page2.evaluate(() => {
     const g = window.game, S = g.state.raw, out = {};
-    const drop = () => { S.tier = 2; S.deposit = 500000; S.quest = 99; S.offer = null; S.picks = 0; S.event = null; S.xp = 0; S.slot = 0; S.hp = 50; S.hold.hantang = { units: 1000, cost: 3000000 }; S.market.ht = { phase: 'dump', left: 2 }; g.render(); g.run('tab', 'stock'); g.run('rest'); };
+    const drop = () => { S.tier = 2; S.quest = 99; S.offer = null; S.picks = 0; S.event = null; S.xp = 0; S.slot = 0; S.hp = 50; S.hold.hantang = { units: 1000, cost: 3000000 }; S.market.ht = { phase: 'dump', left: 2 }; g.render(); g.run('tab', 'stock'); g.run('rest'); };
     drop(); out.stamp = !!document.querySelector('.stamp'); out.stampText = (document.querySelector('.stamp') || {}).textContent || ''; out.modal = g.state.modal;
     g.step(40, false); document.querySelectorAll('.stamp').forEach(e => e.remove());
     g.meta.fxOff = true; drop();
@@ -78,7 +78,7 @@ fs.mkdirSync(out, { recursive: true });
   pops.after = await page3.evaluate(() => { const g = window.game; g.press('Space'); g.step(60); const m = g.state.modal; if (m === 'perk') { g.press('Digit1'); g.step(60); } return { then: m, last: g.state.modal }; });
   if (pops.after.then === 'quest' || pops.after.last) pops.bad.push('퀘스트 창 뒤에 창이 더 남음: ' + JSON.stringify(pops.after));
   pops.skip = await page3.evaluate(() => { // 원룸에 늦게 들어간 날: 끝난 것 둘 + 때가 지나 건너뛴 것 둘 → 한 장
-    const g = window.game, S = g.state.raw; S.quest = 7; S.tier = 3; S.deposit = 5000000; S.cash = 4000000; S.day = 23; S.movedDay = 22; S.slot = 0; S.hp = 50; S.offer = null; S.picks = 0; S.event = null; S.xp = 0; g.render(); g.run('rest'); g.step(60);
+    const g = window.game, S = g.state.raw; S.quest = 7; S.tier = 3; S.cash = 9000000; S.day = 23; S.movedDay = 22; S.slot = 0; S.hp = 50; S.offer = null; S.picks = 0; S.event = null; S.xp = 0; g.render(); g.run('rest'); g.step(60);
     return { modal: g.state.modal, done: document.querySelectorAll('.qdone > div:not(.off)').length, off: document.querySelectorAll('.qdone > .off').length, next: (document.querySelector('.nextbox b') || {}).textContent || '' };
   });
   await page3.waitForTimeout(400); await page3.screenshot({ path: path.join(out, 'quest-skip.png') });

@@ -4,7 +4,9 @@
 // 알바 미니게임 4종: 전단지(flyer) · 상하차(loading) · 편의점(store) · 배달(delivery).
 // 약속: window.Minigames = { list, create(id, opts), sprites() }.
 // 결정적: 난수는 opts.rng 만, 시간은 update(dt) 로만 흐른다. 같은 씨앗 + 같은 입력이면 같은 result.
-// 숙련도(level): 판 전체가 (1 + 0.08 x level) 배 빨라진다 = 같은 7초에 더 빨리, 더 많이 온다.
+// 숙련도(level): 판 전체가 (1 + levelSpeed x level) 배 빨라진다 (levelSpeed 기본 0.16) = 같은 7초에 더 빨리, 더 많이 온다.
+// 점점 빨라짐(ramp): 한 판 안에서도 시작 -> 끝으로 갈수록 빨라진다 (ramp 기본 0.4 = 끝에서 약 +40%). 처음 1~2초는 거의 그대로.
+// 빨라져도 등장물이 판정 자리에 머무는 시간은 0.25초 아래로 내려가지 않게 각 게임이 속도 위쪽을 눌러 둔다.
 // 자동 점검용으로 game._state (내부 상태, 읽기만) 를 내놓는다.
 (function () {
   'use strict';
@@ -35,6 +37,21 @@
   function shuffle(a, rng) {
     for (let i = a.length - 1; i > 0; i--) { const j = Math.min(i, Math.floor(rng() * (i + 1))); const t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
+  }
+
+  // ---------- 점점 빨라짐 ----------
+  // 속도 배율이 시작 1 에서 끝(seconds) 1 + r 까지 직선으로 오를 때, 흐른 양 tau(w) 와 그 거꾸로 inv(u). 준비 시간(w < 0)은 배율 1.
+  function makeWarp(r, S) {
+    const tS = S + r * S / 2;
+    return {
+      tau: function (w) { if (w <= 0) return w; const x = Math.min(w, S); return x + r * x * x / (2 * S) + (1 + r) * Math.max(0, w - S); },
+      inv: function (u) { if (u <= 0) return u; if (u >= tS) return S + (u - tS) / (1 + r); return r < 1e-9 ? u : S * (Math.sqrt(1 + 2 * r * u / S) - 1) / r; },
+    };
+  }
+  // 위쪽을 눌러 두는 부드러운 상한: knee 까지는 그대로, 그 위는 cap 에 천천히 다가간다 (cap 을 넘지 않음)
+  function softCap(raw, cap, knee) {
+    const k = cap * knee;
+    return raw <= k ? raw : k + (cap - k) * (1 - Math.exp(-(raw - k) / (cap - k)));
   }
 
   // ---------- 색 도우미 ('#rrggbb' 만 받는다) ----------
@@ -156,10 +173,14 @@
     const font = opts.font || root.FONT || 'sans-serif';
     const seconds = +opts.seconds > 0 ? +opts.seconds : 7;
     const level = clamp(+opts.level || 0, 0, 3);
+    const ramp = opts.ramp == null || !(+opts.ramp >= 0) ? 0.4 : Math.min(+opts.ramp, 1.5);                       // 한 판 안에서 끝에 +ramp 배
+    const levelSpeed = opts.levelSpeed == null || !(+opts.levelSpeed >= 0) ? 0.16 : Math.min(+opts.levelSpeed, 0.4);   // 단계마다 +levelSpeed 배
     const rng = typeof opts.rng === 'function' ? opts.rng : spareRng(1);
     const fx = makeFx(P);
     const env = {
-      P: P, font: font, seconds: seconds, level: level, speed: 1 + 0.08 * level, rng: rng, fx: fx,
+      P: P, font: font, seconds: seconds, level: level, speed: 1 + levelSpeed * level, ramp: ramp, rng: rng, fx: fx,
+      rate: function (wt) { return 1 + ramp * clamp(wt / seconds, 0, 1); },     // 지금 시각의 속도 배율 (1 -> 1 + ramp)
+      warp: function (r) { return makeWarp(r, seconds); },
       pick: function (n) { return Math.min(n - 1, Math.floor(rng() * n)); },
     };
     const impl = make(env);
@@ -354,24 +375,37 @@
   }
 
   function makeFlyer(env) {
-    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed;
-    const GY = 318, ZX = 240, ZH = 46, MX = 112;       // 바닥 · 건네는 자리 가운데 · 꺾쇠 반폭 · 내 자리
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed, rate = env.rate;
+    const GY = 318, ZX = 240, ZH = 60, MX = 112;       // 바닥 · 건네는 자리 가운데 · 꺾쇠 반폭 · 내 자리
     const JH = ZH + 10;                                // 판정 반폭: 몸이 꺾쇠에 걸치면 인정 (눈에 보이는 것보다 박하지 않게)
-    const n = Math.max(3, Math.round(9 * speed * seconds / 7));
-    const busyAt = [], nBusy = Math.max(1, Math.round(n * 0.22));
+    const CAP_WALK = 2 * JH / 0.28, CAP_BUSY = 2 * JH / 0.26;   // 걷는 속도 상한: 판정 자리를 0.28초(바쁜 사람 0.26초)는 지나가게
+    // 등장 시각: 간격이 (속도 x 점점 빨라짐) 에 반비례해 시작 0.72초 -> 끝으로 갈수록 줄어든다
+    const first = 0.8, lastAt = seconds - 0.45, nominal = [];
+    for (let t = first; nominal.length < 3 || t <= lastAt + EPS;) {
+      const g = 0.72 / (speed * rate(t));
+      nominal.push(t + (rng() * 2 - 1) * Math.min(0.11, g * 0.16));
+      t += g;
+    }
+    const n = nominal.length;
+    const busyAt = [], nBusy = n >= 3 ? Math.max(1, Math.round(n * 0.22)) : 0;
     for (let guard = 0; busyAt.length < nBusy && guard < 80; guard++) {  // 첫 사람은 늘 보통 행인, 바쁜 사람끼리 연달아 오지 않음
       const i = 1 + env.pick(n - 1);
       if (busyAt.every(function (b) { return Math.abs(b - i) > 1; })) busyAt.push(i);
     }
-    const first = 0.8, step = (seconds - 0.45 - first) / (n - 1), jit = Math.min(0.11, step * 0.16);
     const people = [];
+    let prevAt = 0, prevStay = 0;
     for (let i = 0; i < n; i++) {
       const busy = busyAt.indexOf(i) >= 0;
-      const at = first + step * i + (rng() * 2 - 1) * jit;                 // 자리 한가운데에 닿는 시각
-      const v = (busy ? 470 + 70 * rng() : 230 + 150 * rng()) * speed;     // 저마다 다른 속도
-      people.push({ busy: busy, at: at, v: v, look: env.pick(3), state: 'walk', x: W + 300, hop: 0 });
+      const raw = (busy ? 470 + 70 * rng() : 230 + 150 * rng()) * speed * rate(nominal[i]);   // 저마다 다른 속도, 뒤로 갈수록 빠름
+      const v = busy ? softCap(raw, CAP_BUSY, 0.9) : softCap(raw, CAP_WALK, 0.8);
+      const stay = 2 * JH / v;                                              // 판정 자리에 머무는 시간
+      const at = i ? Math.max(nominal[i], prevAt + (prevStay + stay) / 2 + 0.06) : nominal[i];   // 자리 한가운데에 닿는 시각 (앞사람과 자리에서 겹치지 않게)
+      if (at > lastAt + EPS && people.length >= 3) break;
+      people.push({ busy: busy, at: at, v: v, stay: stay, look: env.pick(3), state: 'walk', x: W + 300, hop: 0 });
+      prevAt = at; prevStay = stay;
     }
-    const S = { people: people, total: n - busyAt.length, hits: 0, busyHits: 0, empties: 0, misses: 0, zoneX: ZX, zoneHalf: JH, lock: 0, reach: 0, glow: 0, warn: 0, papers: [] };
+    const nKept = people.filter(function (p) { return p.busy; }).length;
+    const S = { people: people, total: Math.max(1, people.length - nKept), hits: 0, busyHits: 0, empties: 0, misses: 0, zoneX: ZX, zoneHalf: JH, lock: 0, reach: 0, glow: 0, warn: 0, papers: [] };
     function inZone() {
       for (const p of people) if (p.state === 'walk' && Math.abs(p.x - ZX) <= JH) return p;
       return null;
@@ -505,13 +539,13 @@
 
   function makeLoading(env) {
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed;
-    const BX = 440, BW = 116, LINE = 250, WIN = 36, TOP = 82, END = 344, GAP = 84, ACC = 0.5;
-    const v0 = 128 * speed;                                   // 벨트 처음 속도. 끝날 때는 1.5배
-    const travel = function (wt) {                            // 벨트가 흐른 거리
-      if (wt <= 0) return v0 * wt;
-      const w = Math.min(wt, seconds);
-      return v0 * (w + ACC * w * w / (2 * seconds)) + v0 * (1 + ACC) * Math.max(0, wt - seconds);
-    };
+    const BX = 440, BW = 116, LINE = 250, WIN = 42, TOP = 82, END = 344, GAP = 90;   // 선 반폭 42 < 상자 간격 90: 선에 늘 상자는 하나만
+    const v0 = 128 * speed;                                   // 벨트 처음 속도. 끝날 때는 (1 + ACC) 배
+    // 벨트는 한 줄로 흐르기만 해서 가속이 덜 느껴진다: ramp 0.4 일 때 예전처럼 1.5배(ACC 0.5)가 되도록 1.25 배로 건다.
+    // 상자가 선에 머무는 시간(2 x WIN / 속도)이 끝에서도 0.27초 아래로 내려가지 않게 ACC 를 누른다.
+    const ACC = Math.max(0, Math.min(env.ramp * 1.25, 2 * WIN / (0.27 * v0) - 1));
+    const wp = env.warp(ACC);
+    const travel = function (wt) { return v0 * wp.tau(wt); };   // 벨트가 흐른 거리
     const d0 = v0 * 0.85;
     const n = Math.max(3, 1 + Math.floor((travel(seconds - 0.45) - d0) / GAP));
     const dirs = [];
@@ -522,7 +556,7 @@
     }
     const boxes = dirs.map(function (dir, i) { return { dir: dir, d: d0 + i * GAP, state: 'belt', x: BX, y: -200, t: 0, x0: 0, y0: 0, kx: 0 }; });
     const DEST = [[196, 226], [684, 226], [BX, 40]];          // 날아가 닿는 곳: 왼쪽 트럭 · 오른쪽 트럭 · 선반
-    const S = { boxes: boxes, total: n, hits: 0, wrongs: 0, misses: 0, empties: 0, lineY: LINE, win: WIN, pile: [0, 0, 0], bounce: [0, 0, 0], push: 0, pushDir: 2, glow: 0, warn: 0, belt: 0 };
+    const S = { boxes: boxes, total: n, acc: ACC, hits: 0, wrongs: 0, misses: 0, empties: 0, lineY: LINE, win: WIN, pile: [0, 0, 0], bounce: [0, 0, 0], push: 0, pushDir: 2, glow: 0, warn: 0, belt: 0 };
     function atLine() {
       for (const b of boxes) if (b.state === 'belt' && Math.abs(b.y - LINE) <= WIN) return b;
       return null;
@@ -696,7 +730,7 @@
   }
 
   function makeStore(env) {
-    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed, font = env.font;
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed, font = env.font, rate = env.rate;
     const par = Math.max(3, Math.round(8 * speed * seconds / 7));     // 만점 기준 개수 (보통 손님 3명 분)
     const TRANS = 0.25, CX = 150, CY = 184, BX0 = 250, BY0 = 32, BH = 128;
     const counts = shuffle([3, 3, 2], rng), customers = [];
@@ -707,10 +741,17 @@
       let look = env.pick(4); if (look === lastLook) look = (look + 1) % 4; lastLook = look;
       customers.push({ items: items, look: look, marks: items.map(function () { return 0; }) });
     }
-    const S = { customers: customers, cur: 0, idx: 0, trans: 0, par: par, hits: 0, wrongs: 0, served: 0, enter: 0, cellPop: [0, 0, 0, 0], cellBad: [0, 0, 0, 0], fly: [], leaving: null, pip: 0 };
+    // 손님 한 명의 기다려 주는 시간: 처음엔 넉넉(물건 3개 3.9초), 속도가 오를수록 줄어든다. 사람이 누를 수 있는 바닥(0.4 + 0.3 x 개수)은 지킨다.
+    const patienceFor = function (k, wt) { return Math.max(0.4 + 0.3 * k, (1.2 + 0.9 * k) / (speed * rate(wt))); };
+    const S = { customers: customers, cur: 0, idx: 0, trans: 0, par: par, allow: 0, patience: 0, allows: [], timeouts: 0, hits: 0, wrongs: 0, served: 0, enter: 0, cellPop: [0, 0, 0, 0], cellBad: [0, 0, 0, 0], fly: [], leaving: null, pip: 0 };
     function cur() { return customers[S.cur % customers.length]; }
     function slot(c, i) { return [BX0 + 58 + i * 88, BY0 + 58]; }
     function cell(i) { return [28 + i * 208 + 112, 298]; }
+    function nextCustomer(c) {      // 이 손님은 가고 다음 손님이 온다
+      S.leaving = { c: c, t: 0, marks: c.marks.slice(), happy: c.marks.every(function (m) { return m === 1; }) };
+      S.cur++; S.idx = 0; S.served++; S.trans = TRANS; S.enter = 0; S.allow = 0; S.patience = 0;
+      const nx = cur(); for (let i = 0; i < nx.marks.length; i++) nx.marks[i] = 0;
+    }
     function drawBubble(ctx, c, k, alpha, idx) {
       const bw = 28 + c.items.length * 88;
       ctx.save(); ctx.globalAlpha = alpha;
@@ -734,12 +775,23 @@
       how: ['손님 말풍선의 물건을 왼쪽부터 차례로, 아래 번호 1~4 로 찍는다', '틀리면 감점 — 마구 누르지 않는다'],
       controls: ITEM_NAMES.map(function (name, i) { return { code: DIGIT_CODES[i], label: name }; }),
       state: S,
-      tick: function (dt, wt) {
+      tick: function (dt, wt, playing) {
         S.enter = S.cur === 0 && S.served === 0 ? clamp((wt + 0.45) / 0.3, 0, 1) : Math.min(1, S.enter + dt / TRANS);
         S.trans = Math.max(0, S.trans - dt); S.pip = decay(S.pip, dt, 0.2);
         if (S.leaving) { S.leaving.t += dt / 0.3; if (S.leaving.t >= 1) S.leaving = null; }
         for (let i = 0; i < 4; i++) { S.cellPop[i] = decay(S.cellPop[i], dt, 0.18); S.cellBad[i] = decay(S.cellBad[i], dt, 0.3); }
         age(S.fly, dt, 0.16);
+        if (playing && S.trans <= EPS) {               // 손님이 기다리는 시간 (막대가 줄어든다). 다 되면 못 한 물건은 그냥 넘어가고 손님이 간다 (벌점 없음)
+          const c = cur();
+          if (S.allow === 0) { S.allow = S.patience = patienceFor(c.items.length, wt); S.allows.push({ wt: wt, allow: S.allow, items: c.items.length }); }
+          S.patience -= dt;
+          if (S.patience <= 0) {
+            const q = slot(c, S.idx);
+            for (let i = S.idx; i < c.items.length; i++) c.marks[i] = 3;
+            S.timeouts++; fx.cross(q[0], q[1], 16); fx.kick(1.5);
+            nextCustomer(c);
+          }
+        }
       },
       press: function (code) {
         const k = DIGIT_CODES.indexOf(code);
@@ -754,11 +806,7 @@
           fx.cross(q[0], q[1], 24); fx.kick(3); fx.flash(P.bad, 0.16);
         }
         S.idx++;
-        if (S.idx >= c.items.length) {  // 이 손님 끝: 다음 손님
-          S.leaving = { c: c, t: 0, marks: c.marks.slice(), happy: c.marks.every(function (m) { return m === 1; }) };
-          S.cur++; S.idx = 0; S.served++; S.trans = TRANS; S.enter = 0;
-          const nx = cur(); for (let i = 0; i < nx.marks.length; i++) nx.marks[i] = 0;
-        }
+        if (S.idx >= c.items.length) nextCustomer(c);   // 이 손님 끝: 다음 손님
       },
       finish: function () {
         return { score: clamp((S.hits - S.wrongs) / S.par, 0, 1), hits: Math.min(S.hits, S.par), total: S.par };   // 틀리면 그 물건을 잃고 1개만큼 더 깎인다 (번호 연타 막기)
@@ -796,6 +844,11 @@
         // 말풍선
         if (lv) drawBubble(ctx, lv.c === c ? { items: c.items, marks: lv.marks } : { items: lv.c.items, marks: lv.marks }, 1, 1 - lv.t, -1);
         if (wt >= 0 && S.trans <= 0.1) drawBubble(ctx, c, pop(1 - S.trans / 0.1), 1, S.idx);
+        if (wt >= 0 && S.trans <= EPS && S.allow > 0) {   // 손님이 기다려 주는 시간: 말풍선 밑 막대
+          const bw = 28 + c.items.length * 88, f = clamp(S.patience / S.allow, 0, 1);
+          box(ctx, BX0, BY0 + BH + 8, bw, 8, 4, P.night3);
+          if (f > 0) box(ctx, BX0, BY0 + BH + 8, Math.max(8, bw * f), 8, 4, f < 0.3 ? P.bad : P.sys);
+        }
         // 진열대에서 말풍선으로 날아가는 물건
         for (const f of S.fly) { const e = easeOut(f.t); drawItem(ctx, P, f.item, lerp(f.x0, f.x1, e), lerp(f.y0, f.y1, e) - 30 * Math.sin(e * Math.PI), lerp(1.2, 0.9, e)); }
       },
@@ -870,8 +923,12 @@
   function makeDelivery(env) {
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed;
     const LANE_W = 108, RX0 = W / 2 - LANE_W * 1.5, RX1 = W / 2 + LANE_W * 1.5, SY = 298;
-    const v = 280 * speed, gap = 0.62 / speed, T0 = 1.05;                   // 길 속도 · 줄 간격(초) · 첫 줄
-    const R = Math.max(3, Math.floor((seconds - 0.37 - T0) / gap) + 1);     // 차가 오는 줄 수
+    const PB = 80;                                                          // 초록 지점을 밟는 폭(앞뒤): 스쿠터와 핀 그림이 닿는 거리
+    const vb = 280 * speed, gap = 0.62 / speed, T0 = 1.05;                  // 길 처음 속도 · 줄 간격 · 첫 줄 (둘 다 '흐른 시간' tau 로 잰다)
+    // 길은 시작 vb -> 끝 vb x (1 + rEff). 초록 지점이 밟는 폭 안에 0.27초는 머물도록 rEff 를 누른다.
+    const rEff = Math.max(0, Math.min(env.ramp, 2 * PB / 0.27 / vb - 1));
+    const wp = env.warp(rEff);
+    const R = Math.max(3, Math.floor((wp.tau(seconds - 0.37) - T0) / gap) + 1);   // 차가 오는 줄 수
     const nPins = Math.max(2, Math.min(R, Math.round(R * 0.6)));
     const laneX = function (l) { return RX0 + LANE_W * (l + 0.5); };
     const CAR_COLORS = [P.stoneLit, P.hood, P.warmDim, P.sysDim];
@@ -917,28 +974,29 @@
       }
     }
     for (const g of pl.pinGaps) pins.push({ lane: pl.L[g], at: T0 + (g - 0.5) * gap, y: -999, got: false, t: 0 });
-    const S = { lane: 1, x: laneX(1), lean: 0, inv: 0, crashes: 0, got: 0, total: nPins, obs: obs, pins: pins, safe: pl.L, rowAt: function (k) { return T0 + k * gap; }, rows: R, tries: tries, pop: 0, edge: 0, edgeDir: 0, road: 0 };
+    const S = { lane: 1, x: laneX(1), lean: 0, inv: 0, crashes: 0, got: 0, total: nPins, obs: obs, pins: pins, safe: pl.L, rowAt: function (k) { return wp.inv(T0 + k * gap); }, rows: R, rEff: rEff, tries: tries, pop: 0, edge: 0, edgeDir: 0, road: 0 };
     return {
       title: '배달', howto: '좌우로 차를 피하고 초록 지점 밟기',
       how: ['방향키로 차선을 바꿔 차를 피한다', '초록 핀이 있는 차선으로 지나가면 배달 완료 — 부딪히면 감점'],
       controls: [{ code: 'ArrowLeft', label: '왼쪽 차선' }, { code: 'ArrowRight', label: '오른쪽 차선' }],
       state: S,
       tick: function (dt, wt, playing) {
-        S.road = wt * v;
+        const u = wp.tau(wt);                                                // 흐른 시간 (점점 빨라짐 반영)
+        S.road = u * vb;
         S.x += (laneX(S.lane) - S.x) * Math.min(1, dt * 26);
         S.lean = Math.abs(laneX(S.lane) - S.x) < 2 ? S.lean * 0.7 : S.lean;
         S.inv = Math.max(0, S.inv - dt); S.pop = decay(S.pop, dt, 0.2); S.edge = decay(S.edge, dt, 0.15);
         for (const o of obs) {
-          o.y = SY - (o.at - wt) * v;
+          o.y = SY - (o.at - u) * vb;
           if (playing && !o.hit && S.inv <= 0 && o.lane === S.lane && Math.abs(o.y - SY) < o.half + 22) {   // 부딪힘
             o.hit = true; S.crashes++; S.inv = 0.5;
             fx.flash(P.bad, 0.3); fx.kick(3); fx.cross(S.x, SY - 52, 18); fx.burst(S.x, SY - 30, P.bad, 7, 210);
           }
         }
         for (const p of pins) {
-          p.y = SY - (p.at - wt) * v;
+          p.y = SY - (p.at - u) * vb;
           if (p.got) p.t += dt / 0.25;
-          else if (playing && p.lane === S.lane && Math.abs(p.y - SY) < 44) {                               // 배달 완료
+          else if (playing && p.lane === S.lane && Math.abs(p.y - SY) < PB) {                               // 배달 완료
             p.got = true; S.got++; S.pop = 1;
             fx.ring(laneX(p.lane), SY, P.good, 14, 60); fx.burst(laneX(p.lane), SY - 10, P.good, 6, 160); fx.float(laneX(p.lane) + 40, SY - 40, '+1', P.gold);
           }

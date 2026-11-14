@@ -14,17 +14,19 @@ const NEED = ['hud', 'me', 'quest', 'today', 'board'];
     await page.goto('file://' + path.join(dir, 'index.html') + '?manual=1&scene=play&seed=5');
     await page.evaluate(() => window.game.step(60)); await page.keyboard.press('Space'); await page.evaluate(() => window.game.step(60));
     for (const state of ['first', 'late']) {
-      if (state === 'late') await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.deposit = 5000000; S.cash = 4200000; S.day = 15; S.movedDay = 12; S.slot = 3; window.game.render(); window.game.run('tab', 'coin'); });
+      if (state === 'late') await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; S.slot = 3; window.game.render(); window.game.run('tab', 'coin'); });
       const z = await page.evaluate(() => {
         const st = document.getElementById('stage').getBoundingClientRect(), k = st.width / 1280;
         return Array.from(document.querySelectorAll('[data-zone]')).map(e => { const r = e.getBoundingClientRect(), zh = e.querySelector('.zh'); return { id: e.dataset.zone, x0: (r.left - st.left) / k, y0: (r.top - st.top) / k, x1: (r.right - st.left) / k, y1: (r.bottom - st.top) / k, head: !!zh, icon: !!(zh && zh.querySelector('svg')), same: getComputedStyle(e).borderTopWidth + '/' + getComputedStyle(e).borderTopStyle }; });
       });
       const tag = w + '×' + h + ' ' + state;
-      if (w === 1280) for (const tab of ['ladder', 'stock', 'coin']) { // 글 대신 들어간 아이콘마다 뜻을 알 길이 있는가: 자기나 바깥 요소의 title, 아니면 바로 옆의 한글 이름
+      if (w === 1280) for (const tab of state === 'first' ? ['roadmap'] : ['stock', 'coin', 'roadmap']) { // 처음: 판 자리의 로드맵 · 나중: 주식 · 코인 탭과 로드맵 창 // 글 대신 들어간 아이콘마다 뜻을 알 길이 있는가: 자기나 바깥 요소의 title, 아니면 바로 옆의 한글 이름
         // 설명(title)이 없으면, 옆에 단위(만 · 원 · 일 …) 말고 이름이 될 한글이 두 글자는 있어야 한다
         const lost = await page.evaluate(tab => {
-          if (window.game.state.raw.tier >= 3 || tab === 'ladder') window.game.run('tab', tab);
-          return Array.from(document.querySelectorAll('#s-play .ic, #s-play .slots span, #s-play .opens span, #s-play .pk')).filter(e => e.getBoundingClientRect().width > 0 && !e.closest('[title]') && (e.parentElement.textContent || '').replace(/[^가-힣]/g, '').replace(/[만원일번주배억칸더]/g, '').length < 2).map(e => (e.closest('[data-zone]') || {}).dataset.zone + ':' + e.parentElement.className);
+          if (window.game.state.modal === 'roadmap') { window.game.run('ok'); window.game.step(20); }
+          if (tab === 'roadmap' && window.game.state.raw.tier >= 2) { window.game.run('roadmap'); window.game.step(20); }
+          else if (tab !== 'roadmap') window.game.run('tab', tab);
+          return Array.from(document.querySelectorAll('#s-play .ic, #s-play .slots span, #s-play .opens span, #s-play .pk, #s-play .wk > *, #veil .ic, #veil .opens span')).filter(e => e.getBoundingClientRect().width > 0 && !e.closest('[title]') && (e.parentElement.textContent || '').replace(/[^가-힣]/g, '').replace(/[만원일번주배억칸더]/g, '').length < 2).map(e => (e.closest('[data-zone]') || {}).dataset.zone + ':' + e.parentElement.className);
         }, tab);
         for (const l of lost) bad.push(tag + ' ' + tab + ': 설명 없는 아이콘 ' + l);
       }

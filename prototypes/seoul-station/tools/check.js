@@ -64,7 +64,13 @@ const LINT = () => {
   await shot('01_title');
   await page.click('[data-do="new"]'); await step(20);
   await shot('02_intro');
-  let guard = 0, mgShot = 0, fxSeen = 0, perks = 0, evts = 0;
+  let guard = 0, mgShot = 0, fxSeen = 0, perks = 0, evts = 0, dens = 0;
+  const rollBad = [];
+  const hudCheck = async tag => { // 숫자 굴림이 끝난 뒤 위쪽 띠의 현금 · 순자산 = 판 상태
+    await step(45);
+    const r = await G(() => { const R = window.Rules, S = window.game.state.raw; return { cash: document.getElementById('cash').textContent, want: R.won(S.cash), worth: document.getElementById('worth').textContent, wantW: R.won(R.worth(S)) }; });
+    if (r.cash !== r.want || r.worth !== r.wantW) rollBad.push(tag + ': 위쪽 띠 ' + r.cash + ' / ' + r.worth + ' ≠ 판 ' + r.want + ' / ' + r.wantW);
+  };
   const M = 10000;
   while (guard++ < 4000) {
     const s = await st();
@@ -79,11 +85,21 @@ const LINT = () => {
         if (i === 12 && mgShot < 4) { const id = await G(() => document.querySelector('.mg-head b').textContent); await shot('mg_' + (++mgShot) + '_' + id.replace(/\s/g, '')); }
       }
       await shot('03_mg_result');
+      await step(40); // 일당은 0 에서 굴러 올라간다 (0.6초)
+      { const t = await G(() => { const e = document.getElementById('mgpay'); return e ? e.textContent : null; }); if (!t || !/^\+[0-9,]+원$/.test(t) || t === '+0원') rollBad.push('미니게임 일당이 굴림 뒤 숫자가 아님: ' + t); }
       await step(30); await G(() => window.game.press('Space')); await step(20);
       continue;
     }
     if (s.modal === 'quest') fxSeen = Math.max(fxSeen, await G(() => window.game.fx.parts));
     if (s.modal === 'perk') { await shot('pop_perk'); await step(20); await G(() => window.game.press('Digit1')); await step(20); perks++; continue; } // 특성: 첫째 카드
+    if (s.modal === 'den') { // 도박장: 가장 작은 판돈으로 홀에 두 판 걸고 나온다 (다섯 판을 채우면 규칙이 닫음)
+      await shot('pop_den');
+      const d = await G(() => { const g = window.game.state; return { fin: !!(g.den && g.den.fin), round: g.raw.den ? g.raw.den.round : 0, cash: g.raw.cash }; });
+      if (d.fin) { await shot('pop_den_done'); await G(() => window.game.press('Space')); await step(30); dens++; continue; }
+      if (d.round >= 2 || d.cash < 10000) { await G(() => window.game.press('Space')); await step(30); continue; }
+      await G(() => window.game.press('Digit1')); await step(4); await G(() => window.game.press('ArrowLeft')); await step(80);
+      await shot('pop_den_roll'); continue;
+    }
     if (s.modal === 'event') { // 돌발 사건: 돈이 되면 첫째, 아니면 둘째 → 결과 확인
       await shot('pop_event'); await step(20);
       await G(() => { const b = document.querySelector('[data-do="ev"][data-arg="a"]'); window.game.press(b && !b.disabled ? 'Digit1' : 'Digit2'); }); await step(25);
@@ -95,21 +111,21 @@ const LINT = () => {
       continue;
     }
     // 창이 없을 때: 화면 점검 한 번씩
-    if (s.day === 1 && s.slot === 0) await shot('04_play_day1');
+    if (s.day === 1 && s.slot === 0) { await shot('04_play_day1'); await hudCheck('1일째'); }
     if (s.tier === 1) await shot('05_sauna');
-    if (s.tier === 2) await shot('06_gosiwon_ladder');
-    // 주거 올리기
-    if (s.tier === 2 && s.worth >= 800 * M && s.cash < 700 * M && style !== 'alba' && !(await G(() => !!document.querySelector('[data-do="move"]')))) { // 원룸 보증금을 만들려고 주식을 정리
-      await G(() => { const g = window.game, S = g.state.raw; for (const a of ['daejang', 'buldak', 'hantang']) if (S.hold[a].units > 0) { g.run('tab', 'stock'); g.run('sel', a); g.run('sell', '1'); } g.run('tab', 'ladder'); });
+    if (s.tier === 2 && !seen.has('06_gosiwon')) { await shot('06_gosiwon'); await G(() => window.game.run('roadmap')); await step(20); await shot('06b_roadmap_modal'); await G(() => window.game.press('Space')); await step(20); await hudCheck('고시원'); continue; } // 투자가 열리면 로드맵은 '나' 구역 머리의 버튼으로 여는 창
+    // 주거 올리기: 다음 단계에 들어갈 수 있으면(순자산 기준 · 밀린 돈을 낼 현금) — 퀘스트 버튼이 있으면 그것을, 없으면 로드맵 창을 연다
+    const mv = await G(() => { const R = window.Rules, S = window.game.state.raw, t = S.tier + 1; return t <= 3 && R.moveInfo(S, t).ok ? t : 0; });
+    if (mv && style !== 'stay' && (mv < 2 || s.cash >= 5 * M)) {
+      const inQuest = await G(t => !!document.querySelector('#quest [data-do="move"][data-arg="' + t + '"]'), mv);
+      if (inQuest) await page.click('#quest [data-do="move"]');
+      else if (mv === 1) await page.click('#board [data-do="move"]');
+      else { await G(() => window.game.run('roadmap')); await step(20); await shot('07_roadmap_move' + mv); await page.click('#veil [data-do="move"]'); }
+      await step(20);
+      if (mv >= 2) { await shot('07_confirm_move' + mv); await G(() => window.game.press('Enter')); await step(20); }
       continue;
     }
-    const mv = await G(() => { const b = document.querySelector('[data-do="move"]'); return b ? Number(b.dataset.arg) : 0; });
-    const reserve = mv === 3 ? 250 * M : mv === 2 ? 5 * M : 0;
-    if (mv && style !== 'stay') {
-      const need = await G(t => { const R = window.Rules, S = window.game.state.raw; return R.moveInfo(S, t).need; }, mv);
-      if (s.cash >= need + reserve) { await page.click('[data-do="move"]'); await step(20); if (mv >= 2) { await shot('07_confirm_move' + mv); await G(() => window.game.press('Enter')); await step(20); } continue; }
-    }
-    if (s.worth >= s.price) { await G(() => window.game.run('tab', 'ladder')); await shot('20_house_ready'); await page.click('[data-do="house"]'); await step(20); await shot('21_confirm_house'); await G(() => window.game.press('Enter')); await step(20); continue; }
+    if (s.worth >= s.price) { await shot('20_house_ready'); await page.click('#hud [data-do="house"]'); await step(20); await shot('21_confirm_house'); await G(() => window.game.press('Enter')); await step(20); continue; } // 순자산이 집값을 넘으면 위쪽 띠의 집값 자리가 "집 계약" 버튼
     // 투자 (공부형: 리포트 · 공시 · 기사를 따름)
     if (s.tier >= 2 && style !== 'alba') {
       await G(({ style, M }) => {
@@ -129,8 +145,8 @@ const LINT = () => {
         if (S.slot > 0) S._traded = 0;
       }, { style, M });
       if ((await st()).modal) continue;
-      if (s.tier === 2) { await G(() => window.game.run('tab', 'stock')); await shot('08_stock'); }
-      if (s.tier === 3) { await G(() => window.game.run('tab', 'coin')); await shot('09_coin'); const lev = await G(() => !!window.game.state.raw.lev); if (lev) await shot('10_coin_position'); }
+      if (s.tier === 2) { await G(() => window.game.run('tab', 'stock')); await shot('08_stock'); const held = await G(() => window.Rules.holdings(window.game.state.raw).total.cost > 0); if (held) { await shot('08b_stock_holding'); await hudCheck('주식을 든 날'); } }
+      if (s.tier === 3) { await G(() => window.game.run('tab', 'coin')); await shot('09_coin'); const lev = await G(() => !!window.game.state.raw.lev); if (lev) { await shot('10_coin_position'); await G(() => window.game.run('tab', 'stock')); await shot('10b_stock_with_coin'); } }
     }
     if (s.slot >= 3) {
       // 고정비 날이면 현금 마련
@@ -140,6 +156,7 @@ const LINT = () => {
       await page.click('[data-do="endday"]'); await step(20);
       if ((await st()).modal === 'confirm') { await shot('13_sleep_confirm'); await page.click('#veil [data-do="ok"]'); await step(20); }
       await shot('12_night_day' + (s.day <= 1 ? 1 : s.day % 7 === 0 ? 'bill' : 'n'));
+      { const t = await G(() => { const R = window.Rules, n = window.game.state.raw.last, a = document.getElementById('nightin'), b = document.getElementById('nightout'); return a && b ? [a.textContent, '+' + R.won(n.labor), b.textContent, '−' + R.won(n.spent)] : null; }); if (!t || t[0] !== t[1] || t[2] !== t[3]) rollBad.push(s.day + '일 밤 정산 합계가 굴림 뒤 값과 다름: ' + JSON.stringify(t)); }
       await G(() => window.game.press('Space')); await step(20);
       continue;
     }
@@ -154,9 +171,68 @@ const LINT = () => {
   const end = await st();
   await step(20);
   await shot('30_results_' + (end.ended ? end.ended.kind : 'none'));
+  // ── 일부러 만든 화면: 판이 우연히 안 지나간 곳도 한 번씩 (같은 넘침 · 작은 글자 점검) ──
+  const forced = [];
+  const fresh = async () => { await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=play&seed=' + seed); await step(60); await G(() => window.game.press('Space')); await step(40); };
+  await fresh();
+  await G(() => { const S = window.game.state.raw; S.day = 2; S.cash = 40000; S.quest = 2; window.game.render(); }); await step(10); await shot('40_roadmap_board_next'); // 찜질방 옮기기 버튼이 켜진 로드맵 판
+  if (!(await G(() => !!document.querySelector('#board .rung.next [data-do="move"]') && !!document.querySelector('#quest [data-do="move"]')))) forced.push('로드맵 판 · 상태창에 찜질방 옮기기 버튼이 없음');
+  if (await G(() => /보증금/.test(document.getElementById('s-play').textContent))) forced.push('화면에 "보증금"이 남아 있음');
+  await G(() => { const S = window.game.state.raw; S.tier = 1; S.quest = 3; S.cash = 120000; S.day = 6; window.game.render(); }); await step(10); await shot('41_roadmap_board_short'); // 고시원 기준에 못 미침: 이유 · 막대
+  if (!(await G(() => { const b = document.querySelector('#quest [data-do="why"]'); return !!b && /모자랍니다/.test(b.dataset.arg); }))) forced.push('상태창의 옮기기 버튼이 못 할 때 이유(moveInfo.why)를 안 줌');
+  if (!(await G(() => /가져가지 않음/.test(document.querySelector('#board .rung.next').textContent)))) forced.push('로드맵 고시원 칸에 "가져가지 않음"이 없음');
+  // 긴 숫자 · 주간 띠 · 알림 줄(일요일: 오늘 밤 고정비 + 내일 아침 집값) · 보유 줄 + 합계 + 코인
+  await G(() => { const g = window.game, S = g.state.raw; S.tier = 3; S.quest = 11; S.day = 21; S.movedDay = 15; S.cash = 37980000; S.combo = 10; S.arrears = 8000000; S.hold.hantang = { units: 1000, cost: 11000000 }; S.hold.daejang = { units: 20, cost: 1000000 }; S.offer = null; S.picks = 0; g.render(); g.run('tab', 'coin'); g.run('lev', '5'); g.run('share', '0.25'); g.run('long'); g.step(40); g.run('tab', 'stock'); });
+  await step(60); await shot('42_long_numbers_stock'); await hudCheck('긴 숫자');
+  const f42 = await G(() => ({ notes: [...document.querySelectorAll('#quest .note')].map(e => e.className + ':' + e.textContent), wk: document.querySelectorAll('#hud .wk > *').length, bill: !!document.querySelector('#hud .wk .bill.now'), rows: [...document.querySelectorAll('#board .arow .mine')].map(e => e.textContent), sum: (document.querySelector('#board .hsum') || {}).textContent || '', lv: !!document.querySelector('#board .hsum .lv'), house: !!document.querySelector('#hud [data-do="house"]') }));
+  if (f42.wk !== 7 || !f42.bill) forced.push('주간 띠가 일곱 칸이 아니거나 일요일 고정비 칸이 오늘로 안 보임: ' + JSON.stringify(f42));
+  if (!f42.notes.some(n => /today/.test(n) && /오늘 밤 고정비/.test(n)) || !f42.notes.some(n => /tomorrow/.test(n) && /내일 아침 집값/.test(n))) forced.push('일요일 알림 줄이 다름: ' + f42.notes.join(' | '));
+  if (f42.rows.length !== 3 || !/없음/.test(f42.rows[1]) || !/%/.test(f42.rows[2]) || !f42.lv || !/보유/.test(f42.sum)) forced.push('보유 줄 · 합계가 다름: ' + JSON.stringify(f42));
+  if (f42.house) forced.push('순자산이 집값보다 작은데 위쪽 띠에 집 계약 버튼');
+  await G(() => { const S = window.game.state.raw; S.day = 20; window.game.render(); }); await step(10);
+  if (!(await G(() => [...document.querySelectorAll('#quest .note')].some(e => /tomorrow/.test(e.className) && /내일 밤 고정비/.test(e.textContent))))) forced.push('토요일에 "내일 밤 고정비" 알림이 없음');
+  await G(() => { const S = window.game.state.raw; S.day = 17; window.game.render(); }); await step(10);
+  if (await G(() => document.querySelectorAll('#quest .note').length)) forced.push('고정비 · 집값 인상 이틀 전인데 알림이 뜸');
+  await G(() => { const S = window.game.state.raw; S.cash = 90000000; window.game.render(); }); await step(60); await shot('43_house_button'); await hudCheck('집 계약');
+  if (!(await G(() => !!document.querySelector('#hud [data-do="house"]') && !!document.querySelector('#quest [data-do="house"]')))) forced.push('순자산이 집값을 넘었는데 위쪽 띠 · 상태창에 집 계약 버튼이 없음');
+  await G(() => window.game.run('roadmap')); await step(20); await shot('44_roadmap_modal_late');
+  if (!(await G(() => !!document.querySelector('#veil .rung [data-do="house"]')))) forced.push('로드맵 창에 집 계약 버튼이 없음');
+  await G(() => window.game.press('Space')); await step(20);
+  // 도박장 다섯 판: 판돈 → 홀/짝 → 구름 → 결과 → (이기면 따블) → 다섯 판이면 합계를 보여 주고 닫힘
+  await fresh();
+  await G(() => { const g = window.game, S = g.state.raw; S.tier = 2; S.day = 9; S.movedDay = 8; S.cash = 2000000; S.quest = 99; S.offer = null; S.picks = 0; S.xp = 0; S.event = 'den'; g.render(); g.run('rest'); g.step(40); g.press('Digit1'); g.step(40); g.press('Space'); g.step(40); });
+  if ((await st()).modal !== 'den') forced.push('친구의 전화에서 "간다"를 골랐는데 도박장 창이 안 뜸');
+  await shot('45_den_open');
+  if (!(await G(() => /1\.9배 · 자릿세 5%/.test(document.querySelector('.win.den').textContent)))) forced.push('도박장 창에 "맞히면 1.9배 · 자릿세 5%"가 없음');
+  let rounds = 0, doubled = 0;
+  const raw = n => G(n => window.game.step(n), n); // 막음을 기다리지 않는 걸음 (구르는 동안을 보려고)
+  for (let i = 0; i < 8 && (await st()).modal === 'den'; i++) {
+    const d = await G(() => window.game.state.den);
+    if (d.fin) break;
+    const can = await G(() => !!document.querySelector('[data-do="dendouble"]'));
+    if (can && !doubled) { await G(() => window.game.press('Enter')); doubled++; }
+    else { await G(k => window.game.press(k), 'Digit' + (1 + (i % 3))); await raw(2); await G(k => window.game.press(k), i % 2 ? 'ArrowRight' : 'ArrowLeft'); }
+    await raw(10);
+    const mid = await G(() => window.game.state.den);
+    if (!mid || !mid.rolling) { forced.push('도박장: 걸었는데 주사위가 구르지 않음 (' + i + ')'); break; }
+    await G(() => { window.game.press('Space'); window.game.press('Enter'); }); await raw(4); // 구르는 동안의 연타는 버린다
+    if (i === 0) await shot('46_den_rolling');
+    await raw(90);
+    const after = await G(() => window.game.state.den);
+    if (!after || after.rolling || !after.res) { forced.push('도박장: 굴린 뒤 결과가 없음 (' + i + ')'); break; }
+    rounds++;
+    if (i === 0) await shot('47_den_result_' + (after.res.win ? 'win' : 'lose'));
+  }
+  const fin = await G(() => window.game.state.den);
+  if (!fin || !fin.fin || fin.fin.rounds !== 5 || rounds !== 5) forced.push('도박장 다섯 판 뒤 합계가 안 뜸: ' + JSON.stringify({ rounds, fin }));
+  else if (await G(() => !!window.game.state.raw.den)) forced.push('다섯 판 뒤에도 규칙의 도박장이 열려 있음');
+  await shot('48_den_done');
+  await G(() => window.game.press('Space')); await step(40);
+  if ((await st()).modal) forced.push('도박장 합계 창이 닫히지 않음: ' + (await st()).modal);
+  await hudCheck('도박장 뒤');
   await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=figures'); await page.screenshot({ path: path.join(out, 'figures.png') });
   const zones = await G(() => document.querySelectorAll('[data-zone]').length);
-  console.log(JSON.stringify({ seed, style, loops: guard, end: end.ended, shots: shots.length, perks, events: evts, fxAfterQuest: fxSeen, errors: errs.slice(0, 8), lint }, null, 1));
-  if (errs.length || Object.keys(lint).length || !fxSeen || !evts || !perks) process.exitCode = 1; // 오류 · 넘침이 있거나, 폭죽 · 사건 · 특성 창을 한 번도 못 봤으면 실패
+  console.log(JSON.stringify({ seed, style, loops: guard, end: end.ended, shots: shots.length, perks, events: evts, dens, fxAfterQuest: fxSeen, errors: errs.slice(0, 8), roll: rollBad, forced, lint }, null, 1));
+  if (errs.length || Object.keys(lint).length || rollBad.length || forced.length || !fxSeen || !evts || !perks) process.exitCode = 1; // 오류 · 넘침이 있거나, 폭죽 · 사건 · 특성 창을 한 번도 못 봤으면 실패
   await browser.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

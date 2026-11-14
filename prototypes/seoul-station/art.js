@@ -316,7 +316,7 @@
     return svg(460, 300, [sceneStation, sceneSauna, sceneGosi, sceneOneroom][t](PHASE[key], key), 'slice', SCENE_NAME[t]);
   }
 
-  // ───────── 사다리 카드 썸네일 (160×100) ─────────
+  // ───────── 로드맵 카드 썸네일 (160×100) ─────────
   const THUMB_NAME = ['서울역', '찜질방', '고시원', '원룸', '내 집'];
   function thumb(tier) {
     const t = Math.max(0, Math.min(4, Math.round(Number(tier) || 0))), a = c => c, N = PHASE.night;
@@ -515,7 +515,24 @@
     swap: '<path d="M4 8.5h15M15.5 5 19 8.5 15.5 12M20 15.5H5M8.5 12 5 15.5 8.5 19"/>',
     umbrella: '<path d="M3 12.5a9 9 0 0 1 18 0zM12 12.5V19a2 2 0 0 1-4 0M12 3.5v-1"/>',
     cat: `<path d="M4.5 4l4.3 3.3c1-.4 2-.6 3.2-.6s2.2.2 3.2.6L19.5 4v9c0 4-3.3 7.5-7.5 7.5S4.5 17 4.5 13z"/><path stroke-width="2.6" d="M9 12.5h.01M15 12.5h.01"/><path ${FS} stroke-width="1" d="M11 15.3h2l-1 1.3z"/>`,
+    // ── 로드맵 (서울역에서 내 집까지): 접힌 지도 위의 길
+    map: `<path d="M3.5 6.5 9 4l6 2.5 5.5-2.5v13.5L15 20l-6-2.5-5.5 2.5z"/><path d="M9 4v13.5M15 6.5V20"/>`,
   };
+
+  // ───────── 도박장: 주사위 (48×48) · 주사위 컵 (64×64) ─────────
+  const PIPS = { 1: [[24, 22]], 2: [[14, 12], [34, 32]], 3: [[14, 12], [24, 22], [34, 32]], 4: [[14, 12], [34, 12], [14, 32], [34, 32]],
+    5: [[14, 12], [34, 12], [24, 22], [14, 32], [34, 32]], 6: [[14, 12], [34, 12], [14, 22], [34, 22], [14, 32], [34, 32]] };
+  function die(v) {
+    const k = Math.max(1, Math.min(6, Math.round(Number(v) || 1))), face = mix(P.text, P.lamp, .35), side = mix(P.lamp, P.stoneLit, .55);
+    let b = E(24, 45, 18, 2.6, P.night0, op(.5)) + R(4, 7, 40, 38, side, 8) + R(4, 3, 40, 38, face, 8) + R(8, 6, 32, 4, mix(face, P.text, .6), 2, op(.6));
+    for (const p of PIPS[k]) b += E(p[0], p[1], k === 1 ? 5.4 : 3.9, k === 1 ? 5.4 : 3.9, k === 1 ? P.up : P.ink);
+    return svg(48, 48, b, 'meet', '주사위 ' + k);
+  }
+  function cup() { // 엎어 둔 가죽 컵 (흔들 때 쓰는 것)
+    const body = mix(P.warmDim, P.night2, .35), sh = mix(P.warmDim, P.night0, .6), rim = mix(P.warm, P.warmDim, .4);
+    const b = E(32, 60, 24, 3, P.night0, op(.5)) + PG('14,58 50,58 44,10 20,10', body) + PG('36,58 50,58 44,10 38,10', sh) + R(11, 52, 42, 7, rim, 3) + R(18, 7, 28, 6, rim, 3) + R(20, 22, 24, 2.5, sh) + R(19, 38, 26, 2.5, sh);
+    return svg(64, 64, b, 'meet', '주사위 컵');
+  }
   // 아이콘 이름 전부 (도움말 화면 · 점검용)
   function icons() { return Object.keys(ICON); }
   function icon(name) {
@@ -591,11 +608,13 @@
     const out = [];
     ['flyer', 'loading', 'store', 'delivery'].forEach(id => out.push({ name: JOB_NAME[id], svg: job(id) }));
     ['rest', 'study'].forEach(id => out.push({ name: ACT_NAME[id], svg: act(id) }));
-    THUMB_NAME.forEach((nm, i) => out.push({ name: nm + ' (사다리)', svg: thumb(i) }));
+    THUMB_NAME.forEach((nm, i) => out.push({ name: nm + ' (로드맵)', svg: thumb(i) }));
     ['daejang', 'buldak', 'hantang', 'coin'].forEach(id => out.push({ name: ASSET_NAME[id], svg: asset(id) }));
+    [1, 6].forEach(k => out.push({ name: '주사위 ' + k, svg: die(k) }));
+    out.push({ name: '주사위 컵', svg: cup() });
     SCENE_NAME.forEach((nm, i) => out.push({ name: nm + ' (밤)', svg: scene(i, 'night') }));
     return out;
   }
 
-  window.Art = { scene, thumb, job, act, asset, icon, icons, title, ending, figures };
+  window.Art = { scene, thumb, job, act, asset, icon, icons, title, ending, figures, die, cup };
 })();
