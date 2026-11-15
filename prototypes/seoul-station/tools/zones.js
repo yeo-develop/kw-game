@@ -1,6 +1,6 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. play 화면의 구역 다섯 개가 서로 겹치지 않고, 화면 안에 있고, 간격이 8px 이상이고,
-// 구역마다 아이콘이 붙은 머리줄이 있는지, 창 크기가 달라도 같은 비율인지 본다.
+// 구역마다 아이콘(벡터 svg 또는 픽셀 img)이 붙은 머리줄이 있는지, 창 크기가 달라도 같은 비율인지 본다.
 // node tools/zones.js [게임 폴더]
 const path = require('path');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
@@ -17,7 +17,7 @@ const NEED = ['hud', 'me', 'quest', 'today', 'board'];
       if (state === 'late') await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; S.slot = 3; window.game.render(); window.game.run('tab', 'coin'); });
       const z = await page.evaluate(() => {
         const st = document.getElementById('stage').getBoundingClientRect(), k = st.width / 1280;
-        return Array.from(document.querySelectorAll('[data-zone]')).map(e => { const r = e.getBoundingClientRect(), zh = e.querySelector('.zh'); return { id: e.dataset.zone, x0: (r.left - st.left) / k, y0: (r.top - st.top) / k, x1: (r.right - st.left) / k, y1: (r.bottom - st.top) / k, head: !!zh, icon: !!(zh && zh.querySelector('svg')), same: getComputedStyle(e).borderTopWidth + '/' + getComputedStyle(e).borderTopStyle }; });
+        return Array.from(document.querySelectorAll('[data-zone]')).map(e => { const r = e.getBoundingClientRect(), zh = e.querySelector('.zh'); return { id: e.dataset.zone, x0: (r.left - st.left) / k, y0: (r.top - st.top) / k, x1: (r.right - st.left) / k, y1: (r.bottom - st.top) / k, head: !!zh, icon: !!(zh && zh.querySelector('svg, img')), same: getComputedStyle(e).borderTopWidth + '/' + getComputedStyle(e).borderTopStyle }; });
       });
       const tag = w + '×' + h + ' ' + state;
       if (w === 1280) for (const tab of state === 'first' ? ['roadmap'] : ['stock', 'coin', 'roadmap']) { // 처음: 판 자리의 로드맵 · 나중: 주식 · 코인 탭과 로드맵 창 // 글 대신 들어간 아이콘마다 뜻을 알 길이 있는가: 자기나 바깥 요소의 title, 아니면 바로 옆의 한글 이름
