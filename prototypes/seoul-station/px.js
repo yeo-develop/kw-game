@@ -55,6 +55,8 @@
       'fr-blu': { fill: 'c', hi: 'w', lo: 'd', out: 'B' },
       'fr-felt': { fill: 'g', hi: 'h', lo: 'G', out: 'G' },
       'fr-feltr': { fill: 'r', hi: 'P', lo: 'R', out: 'R' },
+      'fr-feltc': { fill: 'c', hi: 'w', lo: 'y', out: 'O' }, // 도박장 판: 고르는 중 · 굴리는 중 (크림 · 노랑 — 이긴 초록과 다르게)
+      'fr-syss': { u: 2, fill: 'S', hi: 'w', lo: 's', out: 'B' }, // 상태창 하늘 틀의 6px 판 (창 안의 "다음 퀘스트" 상자)
       'fr-well': { u: 2, fill: 'C', hi: 'd', lo: 'w' },
       'fr-chip': { u: 2, fill: 'w', hi: 'w', lo: 'L' },
       'fr-chipy': { u: 2, fill: 'y', hi: 'Y', lo: 'o' },

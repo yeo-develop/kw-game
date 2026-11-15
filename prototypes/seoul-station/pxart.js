@@ -613,7 +613,7 @@
         P(g, ix, hz, iw, iy + ih - hz, sc); for (let yy = hz + 2; yy < iy + ih; yy += 2) dither(g, ix, yy, iw, 1, key === 'night' ? 'nite1' : 'w', yy & 2 ? 1 : 0);
       }
       if (!isLit(key) && iw > 6) { P(g, ix + iw - 4, iy + 1, 1, 1, 'w'); P(g, ix + iw - 5, iy + 2, 1, 1, 'w'); P(g, ix + iw - 6, iy + 3, 1, 1, 'w'); }
-      if (o.cross !== false) { const cx = x + Math.floor(w / 2) - 1; P(g, cx, y + 1, 2, h - 2, fr); P(g, cx - 1 < x ? x : cx - 1, y + 1, 0, 0, fr); if (h > 18) P(g, x + 1, y + Math.floor(h / 2) - 1, w - 2, 2, fr); }
+      if (o.cross !== false) { const cx = x + Math.floor(w / 2) - 1; P(g, cx, y + 1, 2, h - 2, fr); if (h > 18) P(g, x + 1, y + Math.floor(h / 2) - 1, w - 2, 2, fr); }
       if (o.sill) { box(g, x - 2, y + h - 1, w + 4, 3, fr); }
       if (o.curtain) {
         const c = o.curtain, cw = Math.max(4, Math.floor(w / 5));
@@ -682,7 +682,7 @@
       home: { b: 'G', l: 'g', w: 'h' },
       suit: { b: 'k', l: 'E', E: 'k' },
     };
-    function drawKey(g, x, y) { map(g, x, y, ['.kkk...', 'kyYyk..', 'kykykkk', 'kyyyyOk', '.kkk.k.'].map(r => r)); }
+    function drawKey(g, x, y) { map(g, x, y, ['.kkk...', 'kyYyk..', 'kykykkk', 'kyyyyOk', '.kkk.k.']); }
 
     // 김 (위로 오르는 점 두 줄)
     function steam(g, x, y, k) { map(g, x, y, ['.k..k', 'k..k.', '.k..k', 'k..k.'].map(r => r.replace(/k/g, k || 'L'))); }
@@ -776,7 +776,6 @@
       drawHeroTop(g, hx, hy, 'calm');
       box(g, 2, 49, 48, 6, 'w'); P(g, 3, 50, 46, 1, 'L'); P(g, 4, 55, 2, 3, 'k'); P(g, 46, 55, 2, 3, 'k');
       drawHeroLegs(g, hx, hy);
-      // 슬리퍼
       // 상태창
       drawStatusWin(g, 64, 14, 22, 14, lit ? 'l' : 'w');
     }
@@ -878,13 +877,13 @@
     Old.scene = safe('scene', (tier, phase) => {
       const t = Math.max(0, Math.round(Number(tier) || 0));
       if (t > 4) return null; // 5~8 은 pxhomes.js (없으면 예전 그림)
-      const key = PHASES[phase] ? phase : 'day';
+      const key = Object.prototype.hasOwnProperty.call(PHASES, phase) ? phase : 'day'; // 'constructor' 같은 이름이 들어와도 낮으로
       const alt = t === 0 ? SCENE_ALT[key] : SCENE_NAME[t];
-      return img('scene' + t + '_' + key, 128, 72, alt, g => { MAP = null; SCENES[t](g, key); MAP = null; });
+      return img('scene' + t + '_' + key, 128, 72, alt, g => { MAP = null; try { SCENES[t](g, key); } finally { MAP = null; } });
     });
     Old.thumb = safe('thumb', (tier, gray) => {
       const t = Math.max(0, Math.min(9, Math.round(Number(tier) || 0)));
-      return img('thumb' + t + (gray ? 'g' : ''), 32, 32, THUMB_NAME[t] + (gray ? ' (잠김)' : ''), g => { MAP = gray ? GRAY : null; BUILD[t](g); MAP = null; });
+      return img('thumb' + t + (gray ? 'g' : ''), 32, 32, THUMB_NAME[t] + (gray ? ' (잠김)' : ''), g => { MAP = gray ? GRAY : null; try { BUILD[t](g); } finally { MAP = null; } }); // 그리다 오류가 나도 회색 표가 다음 그림에 남지 않게
     });
     Old.job = safe('job', id => JOB[id] ? img('job_' + id, 32, 32, JOB_NAME[id], JOB[id]) : null);
     Old.act = safe('act', id => ACT[id] ? img('act_' + id, 32, 32, ACT_NAME[id], ACT[id]) : null);

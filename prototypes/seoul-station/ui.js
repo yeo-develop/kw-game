@@ -28,7 +28,7 @@
   const PX = window.PX || {};
 
   let scene = 'title', S = null; // S = 규칙의 상태 (window.game.state 가 요약해서 보여 줌)
-  const ui = { tab: 'stock', sel: 'daejang', lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, fresh: {}, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [] };
+  const ui = { tab: 'stock', sel: 'daejang', lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, fresh: {}, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
 
   // 판 밖에 남는 것: 업적 · 기록 · 설정 (판 저장과 따로)
   function loadMeta() {
@@ -72,11 +72,12 @@
   const BY = { study: '리포트', tip: '귀띔', chat: '리딩방' }; // 리포트를 어디서 얻었나
 
   // ── 화면 맞춤: 1280×720 을 창에 맞춰 통째로 ──
-  // 창이 더 크면 점 하나가 화면의 점(기기 픽셀) 정수 개가 되는 배율까지만 키운다(1.5배 같은 배율은 점이 뭉개짐). 남는 테두리는 같은 바둑판, 무대는 가운데.
-  // 창이 더 작으면 그대로 줄인다(정수 배로는 1보다 작게 못 줄임).
+  // 창이 무대보다 크면(f ≥ 1) 점 하나가 화면의 점(기기 픽셀) 정수 개가 되는 배율로 내려 맞춘다: n = floor(f × dpr), k = n / dpr.
+  // 기기 배율이 1.25 · 1.5 인 화면(윈도우 125% 등)에서는 k 가 1보다 작아질 수 있다 — 점이 고른 것이 먼저(예: dpr 1.25 · f 1.3 → n 1 → k 0.8).
+  // n 이 1도 안 되면(f × dpr < 1) 그대로 f. 창이 더 작으면(f < 1) 그대로 줄인다. 남는 테두리는 같은 바둑판, 무대는 가운데.
   function fit() {
     const f = Math.min(innerWidth / 1280, innerHeight / 720), dpr = window.devicePixelRatio || 1;
-    const k = f >= 1 ? Math.max(1, Math.floor(f * dpr + 1e-6) / dpr) : f;
+    const n = Math.floor(f * dpr + 1e-6), k = f >= 1 ? Math.max(1, n / dpr) : f; // 창이 커지는데 무대가 작아지는 일은 없게: 1배 아래로는 내려 맞추지 않는다
     const snap = v => Math.round(v * dpr) / dpr, x = snap((innerWidth - 1280 * k) / 2), y = snap((innerHeight - 720 * k) / 2);
     stage.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
     const bs = document.body && document.body.style;
@@ -394,17 +395,24 @@
   }
   function done() { drain(); render(); if (!S.ended && !(ui.modal && ui.modal.type === 'mg')) saveNow(); } // 행동 하나마다 저장 (새로 고쳐서 되돌리기 없음)
   const busy = () => !!(ui.modal || ui.queue.length || (S && scene === 'play' && !S.ended && (S.offer || S.event || S.den))); // 창이 떠 있거나 곧 뜰 참
+  // 알림은 모두 한 줄(높이 28px). 장면 칸의 위쪽 가장자리에 쌓이므로, 한 번에 보이는 수는 주인공 얼굴을 가리지 않는 만큼(renderMe 가 ui.toastCap 을 잰다: 둘 또는 하나)
+  const toastCap = () => (scene === 'play' ? ui.toastCap || 2 : 2);
+  const TOAST_W = 43; // 한 줄에 들어가는 글 폭(둥근모꼴 칸 수, 1칸 = 8px): 알림 380px − 틀 12 − 안쪽 4 − 아이콘 16 − 틈 4
+  const plain = h => String(h).replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  const fitLine = list => list.find(h => wid(plain(h)) <= TOAST_W) || list[list.length - 1]; // 한 줄에 드는 첫 글 (뒤로 갈수록 짧게 줄인 것)
+  const cwon = n => (n < 0 ? '−' : '') + (Math.abs(n) >= 1e8 ? eok(Math.abs(n)) : Math.abs(n) >= 1e5 ? Math.round(Math.abs(n) / 1e4).toLocaleString('en-US') + '만' : num(Math.abs(n))); // 알림이 넘칠 때만 쓰는 줄인 금액 (152만 · 12억)
+  const csign = n => (n >= 0 ? '+' : '') + cwon(n);
   function toast(html, kind, life, day) {
-    const box = $('toasts');
+    const box = $('toasts'), cap = toastCap();
     for (const o of box.children) if (o._key === html) { o._life = life || 240; return; } // 같은 말은 쌓지 않고 시간만 다시 잰다
     const big = /gap/.test(kind || ''); // 밤사이 · 거래량 알림은 업적 알림보다 먼저: 떠 있던 보통 알림 하나를 줄 뒤로 돌려보내고 그 자리에
     if (day == null) day = S ? S.day : 0; // 언제 생긴 알림인지 (줄에서 오래 기다렸으면 버림)
-    if (big && !busy() && box.children.length >= 2) { const o = [...box.children].find(x => !/gap|deny/.test(x._kind)); if (o) { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } }
-    if (kind !== 'deny' && kind !== 'tip' && (busy() || box.children.length >= 2)) { if (!ui.toastQ.some(q => q[0] === html)) ui.toastQ[big ? 'unshift' : 'push']([html, kind, life, day]); return; } // 거절 이유 · 누른 것의 뜻(tip)은 바로. 알림은 한 번에 둘까지, 창이 떠 있으면 창이 닫힌 뒤에 (창 글을 가리지 않게 · 사건 창 뒤에서 사라지지 않게). 거절 이유는 바로
+    if (big && !busy() && box.children.length >= cap) { const o = [...box.children].find(x => !/gap|deny/.test(x._kind)); if (o) { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } }
+    if (kind !== 'deny' && kind !== 'tip' && (busy() || box.children.length >= cap)) { if (!ui.toastQ.some(q => q[0] === html)) ui.toastQ[big ? 'unshift' : 'push']([html, kind, life, day]); return; } // 거절 이유 · 누른 것의 뜻(tip)은 바로. 알림은 한 번에 cap 개까지, 창이 떠 있으면 창이 닫힌 뒤에 (창 글을 가리지 않게 · 사건 창 뒤에서 사라지지 않게)
     const d = document.createElement('div');
     d.className = 'toast ' + (kind || ''); d.innerHTML = html; d._key = html; d._life = life || 240; d._kind = kind || ''; d._day = day;
     box.appendChild(d);
-    while (box.children.length > 2) { const o = box.firstChild; if (o._kind !== 'deny' && o._kind !== 'tip') ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 한 번에 둘까지 (장면 그림의 위쪽 1/3 만 덮음). 밀려난 보통 알림은 줄 앞으로 (사라지지 않게)
+    while (box.children.length > cap) { const o = box.firstChild; if (o._kind !== 'deny' && o._kind !== 'tip') ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 밀려난 보통 알림은 줄 앞으로 (사라지지 않게 — 밤사이 알림은 매매 알림이 지나간 뒤 다시 뜬다)
   }
   function deny(why) { sfx.deny(); if (why) toast(I('warn') + '<span>' + esc(why) + '</span>', 'deny', 150); }
 
@@ -454,14 +462,14 @@
       const e = evs[i];
       events.push(e);
       if (e.t === 'money' && e.amt > 0 && e.label !== '사업 매출') flies.push(['+' + won(e.amt), 'gold', null]);
-      else if (e.t === 'auto') flies.push(['매출 +' + won(e.amt), 'gold', null]); // 쉬기 · 공부 칸에도 들어온 사업 매출
+      else if (e.t === 'auto') flies.push(['매출 +' + won(e.amt), 'gold', autoFrom()]); // 쉬기 · 공부 칸에도 들어온 사업 매출: 카드 줄 위(오늘 칸 머리줄)에서 떠오름 (카드 이름을 가리지 않게)
       else if (e.t === 'gap') gapToast(e);
       else if (e.t === 'act1') { ui.queue.push({ type: 'act1', e }); S.unseen = (S.unseen || []).filter(x => x.type !== 'act1').concat([{ type: 'act1', e }]); meta.homes = (meta.homes || 0) + 1; if (!meta.act1Best || e.day < meta.act1Best) { meta.act1Best = e.day; meta.act1Rank = e.rank; } saveMeta(); }
       else if (e.t === 'biz') { ui.queue.push({ type: 'biz', e }); S.unseen = (S.unseen || []).filter(x => x.type !== 'biz').concat([{ type: 'biz', e }]); } // 창을 닫기 전에 새로 고쳐도 다시 뜨게 (판 저장에 남김)
-      else if (e.t === 'ht_alert') toast(I('warn') + '<div title="진짜면 급등, 아니면 털고 폭락 — 알림만으로는 모릅니다"><span>한탕바이오 거래량 급증</span><b>누군가 사 모으는 중</b></div>', 'gap up', 480); // 짧게 (알림 둘이 쌓여도 체력 막대를 가리지 않게)
-      else if (e.t === 'trade' && e.side === 'sell') toast(I('sell') + '<div title="' + esc(e.name) + ' 팔기 — 받은 돈 ' + won(e.amt) + ' · 손익 ' + sign(e.pnl) + '"><span>' + esc(e.name) + ' 팔기 ' + won(e.amt) + '</span><b class="' + cls(e.pnl) + '">손익 ' + sign(e.pnl) + '</b></div>', '', 300); // 한 줄로 (전부는 title)
-      else if (e.t === 'trade') { const fee = Math.round(e.amt * tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1)); toast(I('cart') + '<div title="' + esc(e.name) + ' 사기 — ' + won(e.amt) + (fee ? '. 수수료 ' + won(fee) + ' 때문에 산 직후엔 그만큼 −' : '. 수수료 없음') + '"><span>' + esc(e.name) + ' 사기 ' + won(e.amt) + '</span><b>' + (fee ? '수수료 ' + won(fee) + '만큼 −' : '수수료 없음') + '</b></div>', 'tip', 260); } // 한 줄로 (뜻 전부는 title)
-      else if (e.t === 'repay') toast(I('check') + '<div><span>미리 갚음 ' + won(e.amt) + '</span><b>대출 잔액 ' + won(e.balance) + '</b></div>', '', 240);
+      else if (e.t === 'ht_alert') toast(I('warn') + '<div><span class="lab">한탕바이오 거래량 급증</span> · <b>누가 사 모으는 중</b></div>', 'gap up', 480); // 알림은 모두 한 줄 · 줄인 글만으로 뜻이 통하게 (#toasts 는 누름을 통과시켜 title 이 안 뜬다)
+      else if (e.t === 'trade' && e.side === 'sell') { const t = (a, p) => '<div><span class="lab">' + esc(e.name) + ' 팔기</span> ' + a + ' · <b class="' + cls(e.pnl) + '">손익 ' + p + '</b></div>'; toast(I('sell') + fitLine([t(num(e.amt), sign(e.pnl)), t(cwon(e.amt), csign(e.pnl))]), '', 300); }
+      else if (e.t === 'trade') { const fee = Math.round(e.amt * tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1)), t = (a, f) => '<div><span class="lab">' + esc(e.name) + ' 사기</span> ' + a + ' · <b>' + (fee ? '수수료 −' + f : '수수료 없음') + '</b></div>'; toast(I('cart') + fitLine([t(num(e.amt), num(fee)), t(cwon(e.amt), num(fee)), t(cwon(e.amt), cwon(fee))]), 'tip', 260); } // "대장전자 사기 1,980,000 · 수수료 −5,940" (말이 끊기지 않게)
+      else if (e.t === 'repay') { const t = (a, b) => '<div><span class="lab">미리 갚음</span> ' + a + ' · <b>잔액 ' + b + '</b></div>'; toast(I('check') + fitLine([t(num(e.amt), num(e.balance)), t(cwon(e.amt), cwon(e.balance))]), '', 240); }
       else if (e.t === 'foreclose') ui.queue.push({ type: 'foreclose', e });
       else if (e.t === 'tick') { for (const id in e.chg) ui.flash[id] = e.chg[id]; if (!heldShock) stamps(e.chg); }
       else if (e.t === 'shock') ui.queue.push({ type: 'shock', e, still: liqNow }); // 속보 띠: 다른 창과 같은 줄에 서서 하나씩
@@ -481,12 +489,18 @@
       else if (e.t === 'deny') deny(e.why);
       else if (e.t === 'sys') { ui.say = e; ui.sayT = 420; ping(); }
       else if (e.t === 'ending') ui.ending = true;
-      else if (e.t === 'ach') { ui.newAch.push(e.id); if (!meta.ach[e.id]) { meta.ach[e.id] = 1; saveMeta(); } toast(I(e.icon) + '<div><span>업적</span><b>' + esc(e.name) + '</b></div>', '', 300); sfx.ding(); }
+      else if (e.t === 'ach') { ui.newAch.push(e.id); if (!meta.ach[e.id]) { meta.ach[e.id] = 1; saveMeta(); } toast(I(e.icon) + '<div><span class="lab">업적</span> <b>' + esc(e.name) + '</b></div>', '', 300); sfx.ding(); } // 규칙(achTick)이 판마다 한 번만 낸다 (S.ach 에 남아 이어하기 · 새로 고침 뒤에도 다시 안 냄)
     }
     if (quests.done.length) ui.queue.splice(quests.at, 0, { type: 'quest', done: quests.done, skipped: quests.skipped, next: quests.next });
-    else for (const q of quests.skipped) toast(I('skip') + '<div><span>때가 지나 건너뛴 퀘스트</span><b>' + esc(q.title) + '</b></div>', '', 300);
+    else for (const q of quests.skipped) toast(I('skip') + fitLine(['<div><span class="lab">때가 지나 건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>', '<div><span class="lab">건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>']), '', 300);
     if (!ui.modal && !ui.queue.length && !S.offer && !S.event && !ui.ending) for (const f of flies) fly(f[0], f[1], f[2]); // 창이 뜰 참이면 창 위에 겹치므로 내지 않음 (숫자는 위쪽 띠에서 굴러감)
     pump();
+  }
+  function autoFrom() { // 사업 매출이 떠오를 자리: 쉬기 · 공부 카드(오른쪽 끝) 위, 오늘 칸 머리줄 높이 — 카드 이름을 가리지 않게 (키보드로 골라도 같은 자리)
+    const c = document.querySelector('#today .card.auto'), sr = stage.getBoundingClientRect();
+    if (!c || !sr.width) return { x: 1100, y: 118 };
+    const q = c.getBoundingClientRect(), k = 1280 / sr.width;
+    return { x: (q.left + q.width / 2 - sr.left) * k, y: 118 };
   }
   function pump() { // 뜰 창이 남았으면 하나씩: 알림 → 특성 고르기 → 돌발 사건 → 엔딩
     if (ui.modal) return;
@@ -556,7 +570,7 @@
     else res = '<span class="dim">판돈을 고르고</span><b class="big">홀일까, 짝일까</b>';
     const lack = !fin && !v.bets.some(b => b.ok);
     box.innerHTML = '<div class="den-top"><div><h2>' + I('dice', '', 's') + '도박장</h2><h3>홀짝 — 주사위 둘의 합</h3></div><div class="den-rule" title="맞히면 판돈의 ' + tune.den_pay + '배를 돌려받습니다. 반반 게임이라 자릿세만큼 손해 보는 셈입니다">맞히면 ' + tune.den_pay + '배 · 자릿세 ' + edge + '%</div></div>' +
-      '<div class="den-table' + (r && !r.win ? ' lose' : '') + '"><span class="den-cup">' + art('cup') + '</span><div class="den-dice' + (!rolling && !r && !fin ? ' covered' : '') + '"></div><div class="den-res">' + res + '</div></div>' +
+      '<div class="den-table' + (r ? (r.win ? '' : ' lose') : ' calm') + '"><span class="den-cup">' + art('cup') + '</span><div class="den-dice' + (!rolling && !r && !fin ? ' covered' : '') + '"></div><div class="den-res">' + res + '</div></div>' +
       '<div class="den-stats"><span title="연속으로 맞힌 판">' + I('fire', '', 's') + '연승 <b>' + v.streak + '</b></span><span title="한 번 가면 ' + v.max + '판까지">' + I('dice', '', 's') + '<b>' + v.round + ' / ' + v.max + '</b>판</span><span title="이번에 도박장에서 번(잃은) 돈">' + I('cash', '', 's') + '오늘 손익 <b class="' + cls(v.net) + '">' + sign(v.net) + '</b></span></div>' +
       (fin ? '<div class="den-fin">' + I('door') + '<span>' + (fin.rounds >= v.max ? v.max + '판을 다 했습니다. 문이 닫힙니다.' : '그만하고 나옵니다.') + ' ' + fin.rounds + '판 · 합계 <b class="' + cls(fin.net) + '">' + sign(fin.net) + '</b></span></div>' +
         '<div class="foot"><button class="btn main" data-do="ok">나간다 <span class="key">Space</span></button></div>'
@@ -686,9 +700,11 @@
     if (!R.unlocked(S, 'stock')) return;
     const ids = Object.keys(e.pct || {}).filter(id => id !== 'coin' || R.unlocked(S, 'coin'));
     if (!ids.length) return;
-    const parts = ids.map(id => '<span class="' + cls(e.pct[id]) + '">' + R.ASSETS.find(a => a.id === id).name + ' ' + pct(e.pct[id]) + '</span>').join(' · ');
-    const held = Math.abs(e.delta || 0) >= 1;
-    toast(I(held ? (e.delta > 0 ? 'up' : 'down') : 'news') + '<div title="아침 소식이 장 전에 먼저 값에 들어갔습니다 (소식 칸에도 그날 내내 남음)"><span>밤사이 이미 값에 들어간 소식</span><b>' + parts + '</b>' + (held ? '<b class="pl ' + cls(e.delta) + '">내 손익 ' + sign(e.delta) + '</b>' : '') + '</div>', 'gap ' + (held ? cls(e.delta) : 'calm'), held ? 480 : 300);
+    // 한 줄: "밤사이 화끈식품 −5.7% 외 1 · 내 손익 +1,521,830". 앞에 세우는 종목은 내가 가진 것 가운데 가장 크게 움직인 것. 넘치면 "외 N" → 금액 순으로 줄임 ("내 손익"은 끝까지 남김)
+    const held = Math.abs(e.delta || 0) >= 1, mine = id => (id === 'coin' ? !!S.lev : !!(S.hold[id] && S.hold[id].units > 0));
+    const order = ids.slice().sort((a, b) => (mine(b) - mine(a)) || Math.abs(e.pct[b]) - Math.abs(e.pct[a])), top = order[0], more = order.length - 1;
+    const line = (m, p) => '<div><span class="lab">밤사이</span> <b class="' + cls(e.pct[top]) + '">' + R.ASSETS.find(a => a.id === top).name + ' ' + pct(e.pct[top]) + '</b>' + (m && more ? '<span class="lab"> 외 ' + more + '</span>' : '') + (held ? ' · <b class="pl ' + cls(e.delta) + '">내 손익 ' + p + '</b>' : '') + '</div>';
+    toast(I(held ? (e.delta > 0 ? 'up' : 'down') : 'news') + fitLine([line(1, sign(e.delta)), line(0, sign(e.delta)), line(1, csign(e.delta)), line(0, csign(e.delta))]), 'gap ' + (held ? cls(e.delta) : 'calm'), held ? 480 : 300);
   }
   const clearFlies = () => { for (const e of $('fx').querySelectorAll('.fly')) e.remove(); }; // 떠오르던 숫자가 새로 뜬 창 위에 겹치지 않게
   function openModal(m) {
@@ -904,15 +920,11 @@
           : '다음 목표: ' + g.name + ' ' + won(g.price) + ' — ' + (g.tier === 4 ? '현금으로만' : '대출을 최대(' + won(g.loanMax) + ')로 끼면') + ' 현금 ' + won(g.need) + '이 있으면 삽니다 (살던 집을 판 돈 포함). 막대는 지금 현금';
     return '<div class="goal" title="' + t + '">' + I(ic) + '<span class="gn">' + g.name + '</span><span class="gp">' + shortWon(g.price) + '</span><div class="bar"><div style="width:' + (g.pct * 100).toFixed(1) + '%"></div></div><b>' + Math.floor(g.pct * 100) + '%</b></div>';
   }
-  function hudFit() { // 긴 숫자(최대 35,000,000,000원)일수록 위쪽 띠의 숫자를 작게 (한글 이름표는 14px 그대로)
-    const g = R.goalView(S), n = Math.max(won(S.cash).length, won(R.worth(S)).length, won(ui.cash).length, won(ui.worth).length) + (g.canBuy ? 0 : shortWon(g.price).length / 2) + (S.combo ? 2 : 0);
-    return n > 23 ? ' k3' : n > 19 ? ' k2' : n > 16 ? ' k1' : ''; // 글자 크기는 16px 하나라, 길면 이름표(현금 · 순자산)를 빼고 아이콘 + 숫자로 (뜻은 title)
-  }
   function renderHud() {
     const wk = R.week(S);
     $('hud').innerHTML =
       '<div class="zh" title="' + wk.week + '주차 ' + wk.dow + '일 — 판을 시작하고 ' + S.day + '일째 (기한 없음)">' + I('calendar') + '<b>' + S.day + '일째</b>' + weekStrip(wk) + '</div>' +
-      '<div class="slots">' + SLOT_IC.map((n, i) => '<span class="' + (i < S.slot ? 'done' : i === S.slot ? 'now' : '') + '" title="' + SLOTS[i] + (i === S.slot ? ' — 지금' : i < S.slot ? ' — 지남' : '') + '">' + art('icon', n) + '<i>' + SLOTS[i] + '</i></span>').join('') + '</div>' + // 지금 칸만 글자까지, 나머지는 아이콘만 (뜻은 title)
+      '<div class="slots">' + SLOT_IC.map((n, i) => '<span class="' + (i < S.slot ? 'done' : i === S.slot ? 'now' : '') + '" title="' + SLOTS[i] + (i === S.slot ? ' — 지금' : i < S.slot ? ' — 지남' : '') + '">' + art('icon', n) + '<i>' + SLOTS[i] + '</i></span>').join('') + (S.slot >= 3 ? '<span class="now" title="밤 — 세 칸을 다 썼습니다. 하루 마치기로 잠듭니다">' + art('icon', 'zzz') + '<i>밤</i></span>' : '') + '</div>' + // 지금 칸만 글자까지, 나머지는 아이콘만 (뜻은 title). 세 칸을 다 쓴 밤에는 "밤" 칩이 켜짐
       (S.combo ? '<div class="money gold" title="콤보 ' + S.combo + ' — 다음 알바 일당 +' + Math.round((tune.combo_bonus + tune.perk_streak * R.perk(S, 'streak')) * S.combo * 100) + '%. 직접 해서 잘함 이상이면 쌓이고, 실수하거나 대충 하면 끊깁니다"><span class="ic" style="color:var(--O)">' + art('icon', 'fire') + '</span><b>' + S.combo + '</b></div>' : '') +
       '<div class="money" title="현금">' + I('cash') + '<i>현금</i><b id="cash">' + won(ui.cash) + '</b></div>' +
       '<div class="money" title="순자산 = 현금 + 투자한 돈 + 집(산 값) − 대출 − 밀린 돈">' + I('wallet') + '<i>순자산</i><b id="worth">' + won(ui.worth) + '</b></div>' +
@@ -924,13 +936,13 @@
       '<button class="btn sq" data-do="quit" title="제목 화면으로 (지금까지는 저장됨)">' + I('home') + '</button></div>';
     fitHud();
   }
-  function fitHud() { // 어림(hudFit)으로 시작해, 그래도 다음 목표 알약이 넘치면 한 단계씩 더 줄인다. 잴 때는 굴러가는 숫자 대신 도착할 숫자(더 긴 쪽)를 넣고 잰다
+  function fitHud() { // 넘치지 않을 때까지 한 단계씩 줄인다 (index.html 의 #hud.k1~k4: "현금" · "순자산" 이름은 끝까지, 마지막은 목표 알약에 …). 잴 때는 굴러가는 숫자 대신 도착할 숫자(더 긴 쪽)를 넣고 잰다
     const hud = $('hud'), goal = hud.querySelector('#hud > .goal'), cash = $('cash'), worth = $('worth');
     const keep = [cash && cash.textContent, worth && worth.textContent], longer = (a, b) => (won(a).length >= won(b).length ? won(a) : won(b));
     if (cash) cash.textContent = longer(S.cash, ui.cash); if (worth) worth.textContent = longer(R.worth(S), ui.worth);
     const over = () => hud.scrollWidth > hud.clientWidth + 0.5 || (goal && goal.scrollWidth > goal.clientWidth + 0.5);
     const steps = ['', ' k1', ' k2', ' k3', ' k4'];
-    for (let i = Math.max(0, steps.indexOf(hudFit())); i < steps.length; i++) { hud.className = 'zone' + steps[i]; if (!over()) break; }
+    for (let i = 0; i < steps.length; i++) { hud.className = 'zone' + steps[i]; if (!over()) break; }
     if (cash) cash.textContent = keep[0]; if (worth) worth.textContent = keep[1];
   }
 
@@ -958,6 +970,10 @@
     // 그림 칸: 줄이 없으면 216px(128×72 를 3배) 전부. 사업 · 대출 줄이 하나 붙을 때마다 34px 낮아지고, 그림은 3배 그대로 가운데를 맞춰 위아래가 잘린다.
     // 보이는 높이와 위치를 3의 배수로 맞춰 맨 윗줄 · 아랫줄 점이 반만 보이지 않게 한다. 줄이 둘이면 49줄(y 11~59)이 보여 그림의 약속(y 12~59)이 다 들어간다.
     const vis = Math.min(72, Math.floor((216 - 34 * rows) / 3)), sh = vis * 3 + 12, sy = -3 * Math.floor((72 - vis) / 2);
+    // 알림은 그림 칸 위쪽 가장자리(안쪽 위 +2px)에 한 줄(28px)씩 쌓인다. 주인공 얼굴(그림 상자 위 + 9점: 더듬이 · 머리카락 아래)이 가려지지 않는 만큼만: 둘(+60px까지) 또는 하나
+    const sb = window.PxArt && window.PxArt.SCENE_BOX && window.PxArt.SCENE_BOX[S.tier], faceTop = sb ? sy + (sb.hero[1] + 9) * 3 : 216;
+    ui.toastCap = faceTop >= 60 ? 2 : 1;
+    if ($('toasts').children.length > ui.toastCap) { const o = $('toasts').firstChild; if (o._kind !== 'deny' && o._kind !== 'tip') ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 칸이 낮아진 순간 넘친 것은 줄로
     $('me').innerHTML =
       '<div class="zh">' + I('door', '지금 사는 곳') + '<span class="place">' + R.HOMES[S.tier].name + '</span>' +
       '<span class="who chip hot" title="' + esc(S.name + ' · 칭호 ' + S.title) + '">' + esc(S.title) + '</span>' + // 칭호만 (이름까지 붙이면 잘림)
@@ -1022,13 +1038,16 @@
       '</div>';
     fitQuest();
   }
-  function fitQuest() { // 상태창은 위에서부터 쌓고 알림 줄이 맨 아래. 다 안 들어가면 시스템 한마디를 한 줄로, 그래도 넘치면 설명 줄을 하나씩 줄인다 (줄인 글은 … · 전부는 title)
+  function fitQuest() { // 상태창은 위에서부터 쌓고 알림 줄이 맨 아래. 자리가 있으면 설명 · 시스템 한마디를 다 보인다(줄 수 제한 없음).
+    // 넘칠 때만: 시스템 한마디를 한 줄씩 → 설명을 한 줄씩 줄이고(줄인 글은 … · 전부는 title), 둘 다 한 줄인데도 넘치면 시스템 한마디를 숨긴다(맨 아래 고정비 알림이 잘리지 않게)
     const box = $('quest'), d = box.querySelector('.q-desc'), s = box.querySelector('.q-say');
     const set = (el, n) => { if (el) { el.style.webkitLineClamp = String(n); el.style.maxHeight = (n * 20 + (el === s ? 12 : 0)) + 'px'; } };
-    const need = (el, max) => { if (!el) return 0; set(el, 99); return Math.max(1, Math.min(max, Math.round((el.offsetHeight - (el === s ? 12 : 0)) / 20))); };
-    let dn = need(d, 4), sn = need(s, 2);
+    const need = el => { if (!el) return 0; set(el, 99); return Math.max(1, Math.round((el.offsetHeight - (el === s ? 12 : 0)) / 20)); };
+    const over = () => box.scrollHeight > box.clientHeight + 0.5;
+    let dn = need(d), sn = need(s);
     set(d, dn); set(s, sn);
-    while (box.scrollHeight > box.clientHeight + 0.5 && (sn > 1 || dn > 1)) { if (sn > 1) sn--; else dn--; set(d, dn); set(s, sn); }
+    while (over() && (sn > 1 || dn > 1)) { if (sn > 1) sn--; else dn--; set(d, dn); set(s, sn); }
+    if (over() && s) s.style.display = 'none';
   }
 
   // ── 구역 today: 지금 칸에서 고를 것 ──
@@ -1074,7 +1093,7 @@
         if (draw) { const [c, g] = P.mk(32, 32); P.setMap(P.GRAY); try { draw(g); } finally { P.setMap(null); } grayCache[key] = '<img class="px" alt="잠김" src="' + c.toDataURL() + '" width="32" height="32">'; }
       } catch (e) { grayCache[key] = ''; }
     }
-    return grayCache[key] || art(kind, id);
+    return grayCache[key] || '<span class="old-off">' + art(kind, id) + '</span>'; // 회색판을 못 만들면(pxart.js 가 안 불림) 예전처럼 흐리게 — 잠긴 카드가 열린 카드와 똑같아 보이지 않게
   }
 
   // ── 구역 board: 투자가 열리기 전에는 로드맵, 열린 뒤에는 주식 / 코인 ──
@@ -1289,8 +1308,8 @@
           '<div class="s"><span title="일당 × 등급 배율">' + won(j.base) + ' ×' + j.mult + '</span>' + (j.comboMult > 1 ? '<span class="gold" title="콤보 보너스: 잘함 이상이 이어진 만큼 일당에 얹힘">콤보 보너스 +' + Math.round((j.comboMult - 1) * 100) + '%</span>' : '') + (j.extra > 1 ? '<span class="gold" title="대타">' + I('swap', '', 's') + '×' + j.extra + '</span>' : '') +
           (m.res.tip ? '<span class="gold" title="팁">' + I('gift', '', 's') + '+' + won(m.res.tip.amt) + '</span>' : '') + '<span title="쓴 체력">' + I('hp', '', 's') + '−' + j.hp + '</span>' +
           (j.combo > 0 ? '<span class="gold" title="콤보: 잘함 이상이면 쌓입니다">' + I('fire', '', 's') + '콤보 ' + j.combo + '</span>' : j.comboWas > 0 ? '<span class="bad" title="콤보가 끊겼습니다">' + I('fire', '', 's') + '콤보 끊김</span>' : '') + '</div>' +
-          (w ? '<div class="w ' + cls(w.delta) + '" title="일하는 동안 내 투자가 움직인 만큼">' + I('chart', '', 's') + '일하는 동안 ' + sign(w.delta) + ' (' + pct(w.pct) + ')</div>' : '') + okBtn() + '</div>';
-        ctl.innerHTML = '';
+          (w ? '<div class="w ' + cls(w.delta) + '" title="일하는 동안 내 투자가 움직인 만큼">' + I('chart', '', 's') + '일하는 동안 ' + sign(w.delta) + ' (' + pct(w.pct) + ')</div>' : '') + '</div>';
+        ctl.innerHTML = '<button class="btn main" data-do="ok">확인 <span class="key">Space</span></button>'; // 확인 버튼은 조작 버튼이 있던 자리에 (창 높이 그대로 · 결과판 아래가 비지 않게)
       }
       drawMg();
       return;
@@ -1561,8 +1580,8 @@
     }
     const box = $('toasts');
     for (let i = box.children.length - 1; i >= 0; i--) if (--box.children[i]._life <= 0) box.children[i].remove();
-    while (ui.toastQ.length && S && S.day - (ui.toastQ[0][3] || S.day) > 1) ui.toastQ.shift(); // 이틀 넘게 기다린 알림은 버림 (한참 뒤 날짜에 옛 알림이 뜨지 않게 — 업적은 업적 창에 남아 있음)
-    if (ui.toastQ.length && box.children.length < 2 && !busy()) { const q = ui.toastQ.shift(); toast(q[0], q[1], q[2], q[3]); } // 미뤄 둔 알림을 차례로
+    if (ui.toastQ.length && S) ui.toastQ = ui.toastQ.filter(q => q[3] == null || S.day - q[3] <= 1); // 이틀 넘게 기다린 알림은 버림 — 줄 전체에서 (앞에 새 알림이 끼어도 뒤의 낡은 것이 남지 않게). 업적은 업적 창에 남아 있음
+    if (ui.toastQ.length && box.children.length < toastCap() && !busy()) { const q = ui.toastQ.shift(); toast(q[0], q[1], q[2], q[3]); } // 미뤄 둔 알림을 차례로
     stepFx();
     if (ui.coachDirty) { ui.coachDirty = false; try { renderCoach(); } catch (e) { $('coach').className = 'hide'; } } // 화면이 다시 그려진 뒤에 자리를 잰다 (안내의 오류가 판을 멈추지 않게)
   }

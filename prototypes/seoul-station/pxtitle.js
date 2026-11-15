@@ -426,7 +426,7 @@
     function img(key, alt, draw) {
       if (!cache[key]) {
         const [c, g] = mk(W, H);
-        A.setMap(null); draw(g); A.setMap(null);
+        A.setMap(null); try { draw(g); } finally { A.setMap(null); } // 그리다 오류가 나도 색 표가 남지 않게
         cache[key] = `<img class="px" alt="${alt}" src="${c.toDataURL()}" width="${W}" height="${H}">`;
       }
       return cache[key];

@@ -137,19 +137,25 @@
     const w = Math.max(1, Math.round(c.width * s)), h = Math.max(1, Math.round(c.height * s));
     g.drawImage(c, Math.round(x - c.ax * s), Math.round(y - c.ay * s), w, h);
   }
-  let ROT = null;
+  let ROT = null, ROTPAL = null;
+  const ROTNEAR = {}; // 색(rgb 한 덩어리) → 가장 가까운 PX 색의 번호 (한 번 찾은 것은 다시 찾지 않음)
   function putRot(g, c, x, y, rot, s) { // 돌리고 키운 그림을 작은 판에 그린 뒤 반투명 가장자리를 잘라(있다/없다) 찍는다
-    if (!ROT) ROT = mkc(64, 64);
-    const rg = ROT[1];
+    if (!ROT) { const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64; const cg = cv.getContext('2d', { willReadFrequently: true }); cg.imageSmoothingEnabled = false; ROT = [cv, cg]; } // 매 프레임 getImageData 로 읽으므로 읽기 빠른 판
+    if (!ROTPAL) { const t = pxt(); ROTPAL = Object.keys(t).map(function (k) { return rgb(t[k]); }); } // 색 표는 한 번만
+    const rg = ROT[1], pal = ROTPAL;
     rg.setTransform(1, 0, 0, 1, 0, 0); rg.clearRect(0, 0, 64, 64);
     rg.translate(32, 32); rg.rotate(rot || 0); rg.scale(s || 1, s || 1); rg.drawImage(c, -c.ax, -c.ay); rg.setTransform(1, 0, 0, 1, 0, 0);
     const id = rg.getImageData(0, 0, 64, 64), d = id.data;
-    const pal = Object.keys(pxt()).map(function (k) { return rgb(pxt()[k]); });
     for (let i = 0; i < d.length; i += 4) {
       if (d[i + 3] < 128) { d[i + 3] = 0; continue; }
       d[i + 3] = 255;
-      let best = 0, bd = 1e9;   // 가장 가까운 PX 색으로
-      for (let j = 0; j < pal.length; j++) { const q = pal[j], dd = (q[0] - d[i]) * (q[0] - d[i]) + (q[1] - d[i + 1]) * (q[1] - d[i + 1]) + (q[2] - d[i + 2]) * (q[2] - d[i + 2]); if (dd < bd) { bd = dd; best = j; } }
+      const key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+      let best = ROTNEAR[key];
+      if (best === undefined) { // 가장 가까운 PX 색으로
+        let bd = 1e9; best = 0;
+        for (let j = 0; j < pal.length; j++) { const q = pal[j], dd = (q[0] - d[i]) * (q[0] - d[i]) + (q[1] - d[i + 1]) * (q[1] - d[i + 1]) + (q[2] - d[i + 2]) * (q[2] - d[i + 2]); if (dd < bd) { bd = dd; best = j; } }
+        ROTNEAR[key] = best;
+      }
       d[i] = pal[best][0]; d[i + 1] = pal[best][1]; d[i + 2] = pal[best][2];
     }
     rg.putImageData(id, 0, 0);
@@ -160,7 +166,8 @@
   const PAT = {};
   function bayer(g, n) {
     if (!PAT[n]) { const m = mkc(4, 4); for (let i = 0; i < 16; i++) if (BAYER[i] < n) fr(m[1], i % 4, i >> 2, 1, 1, '#000000'); PAT[n] = m[0]; }
-    return g.createPattern(PAT[n], 'repeat');
+    if (PAT[n].ctx !== g) { PAT[n].ctx = g; PAT[n].pat = g.createPattern(PAT[n], 'repeat'); } // 무늬는 그 판(점무늬 층)마다 한 번만 만든다
+    return PAT[n].pat;
   }
   let LAYER = null;
   function faded(g, a, fn) { // fn(layer ctx) 로 그린 것을 점무늬 a 만큼만 g 에 옮긴다

@@ -253,22 +253,31 @@
       const hz = 31; // 수평선
       sky(g, L0, peak, R0 - L0, hz - peak, key);
       if (key === 'night') stars(g, L0, peak, R0 - L0, 22, 77, 26);
-      const orb = { morning: [30, 25, 4], day: [44, 15, 3], evening: [40, 26, 5], night: [44, 16, 4] }[key];
+      const orb = { morning: [30, 25, 4], day: [44, 15, 3], evening: [49, 27, 5], night: [49, 17, 4] }[key]; // 저녁 · 밤: 해 · 달을 창살 사이 · 데이베드 위로 (물에 비친 기둥이 창살 · 주인공에 안 가리게. 저녁 해는 수평선에 반쯤 잠김)
       if (key === 'night') moon(g, orb[0], orb[1], 'nite0'); else sun(g, orb[0], orb[1], orb[2], key);
       if (key === 'morning' || key === 'day') { drawCloud(g, 44, 16, 'w', key === 'day' ? 'S' : 'p'); }
       if (key === 'evening') drawCloud(g, 30, 18, 'dusk', 'duskHi');
-      // 먼 섬
-      map(g, 12, hz - 5, ['......kkk.........', '...kkkGGGkk.......', '.kkGGGGGGGGkkk....', 'kGGGGGGGGGGGGGkkkk'].map(r => key === 'night' ? r.replace(/G/g, 'B').replace(/k/g, 'nite0') : r));
-      // 바다
-      const sea = key === 'night' ? 'B' : key === 'evening' ? HC.seaDk : HC.sea, seaSh = key === 'night' ? 'nite0' : HC.seaDk;
-      P(g, L0, hz, R0 - L0, bot - hz, sea); P(g, L0, hz, R0 - L0, 1, key === 'night' ? 'nite0' : 'B');
-      dither(g, L0, bot - 4, R0 - L0, 4, seaSh, 0);
-      for (const [wx, wy] of [[14, 37], [40, 40], [62, 36], [104, 41], [20, 44], [80, 45]]) P(g, wx, wy, 5, 1, key === 'night' ? 'nite1' : 'S');
-      const refl = key === 'day' ? 'w' : 'Y'; // 물에 비친 해/달: 아래로 갈수록 좁아지는 반짝이는 점무늬 기둥
+      // 먼 섬 (밤에는 하늘보다 어두운 그림자)
+      map(g, 12, hz - 5, ['......kkk.........', '...kkkGGGkk.......', '.kkGGGGGGGGkkk....', 'kGGGGGGGGGGGGGkkkk'].map(r => key === 'night' ? r.replace(/[Gk]/g, 'nite0') : r));
+      const night = key === 'night', eve = key === 'evening', refl = key === 'day' ? 'w' : 'Y'; // 물에 비친 해/달: 아래로 갈수록 좁아지는 반짝이는 점무늬 기둥
       const RF = [[[-5, 4], [1, 5]], [[-3, 3], [2, 2]], [[-4, 2], [0, 3]], [[-2, 2], [3, 1]], [[-1, 3]], [[-3, 1], [1, 1]], [[0, 1]]]; // [x 어긋남, 길이]
-      RF.forEach((row, i) => row.forEach(([dx2, len]) => P(g, orb[0] + dx2, hz + 2 + i * 2, len, 1, i % 2 && key !== 'day' ? 'y' : refl)));
-      // 모래톱
-      P(g, L0, bot - 2, R0 - L0, 2, key === 'night' ? 'd' : 'Y'); dither(g, L0, bot - 3, R0 - L0, 1, key === 'night' ? 'd' : 'Y', 1);
+      if (!night && !eve) { // 아침 · 낮: 밝은 바다 · 모래톱
+        P(g, L0, hz, R0 - L0, bot - hz, HC.sea); P(g, L0, hz, R0 - L0, 1, 'B');
+        dither(g, L0, bot - 4, R0 - L0, 4, HC.seaDk, 0);
+        for (const [wx, wy] of [[14, 37], [40, 40], [62, 36], [104, 41], [20, 44], [80, 45]]) P(g, wx, wy, 5, 1, 'S');
+        RF.forEach((row, i) => row.forEach(([dx2, len]) => P(g, orb[0] + dx2, hz + 2 + i * 2, len, 1, i % 2 && key !== 'day' ? 'y' : refl)));
+        P(g, L0, bot - 2, R0 - L0, 2, 'Y'); dither(g, L0, bot - 3, R0 - L0, 1, 'Y', 1);
+      } else { // 저녁 · 밤: 바다는 하늘(아래가 밝음)보다 어둡게, 수평선은 빛나는 한 줄, 물에 비친 해 · 달빛 기둥, 밝은 모래 띠 + 물거품 → 아파트 창밖(도시 불빛)과 다르게 바닷가로 읽힌다
+        P(g, L0, hz, R0 - L0, bot - hz, night ? 'nite0' : HC.seaDk);
+        P(g, L0, hz, R0 - L0, 1, night ? 'l' : 'y'); dither(g, L0, hz - 1, R0 - L0, 1, night ? 's' : 'Y', 0);
+        dither(g, L0, bot - 7, R0 - L0, 2, night ? 'nite1' : 'B', 0);
+        for (const [wx, wy] of [[14, 37], [40, 40], [62, 36], [104, 41], [20, 44], [80, 45], [96, 35], [50, 43]]) P(g, wx, wy, 5, 1, night ? 'nite1' : 'l');
+        RF.forEach((row, i) => row.forEach(([dx2, len]) => P(g, orb[0] + dx2, hz + 2 + i * 2, len + 1, 1, i % 2 ? 'y' : refl)));
+        if (night) for (let i = 0; i < 6; i++) P(g, orb[0] - 6 + ((i * 5) % 13), hz + 1 + i * 2, 1, 1, 'w'); // 달빛 반짝임
+        const sand = night ? 'd' : 'y';
+        P(g, L0, bot - 3, R0 - L0, 3, sand); dither(g, L0, bot - 4, R0 - L0, 1, sand, 1);
+        for (let x = L0; x < R0; x += 4) P(g, x + ((x >> 2) & 1), bot - 4, 2, 1, night ? 'S' : 'w'); // 밀려온 물거품
+      }
       // 박공 밖 = 벽(통나무)
       for (let y = peak; y < eave; y++) for (let x = L0; x < R0; x++) if (!inside(x, y)) P(g, x, y, 1, 1, (x - 2) % 6 === 0 ? 'n' : 'N');
       glass(g, 66, peak + 4, key);

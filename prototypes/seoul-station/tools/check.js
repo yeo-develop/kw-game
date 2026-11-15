@@ -13,7 +13,7 @@ const LINT = () => {
   let n;
   while ((n = w.nextNode())) {
     const t = n.textContent.trim(); if (!t) continue;
-    const el = n.parentElement; if (el.closest('.hide') || el.closest('#fx') || el.closest('#toasts') || el.closest('.stamp')) continue;
+    const el = n.parentElement; if (el.closest('.hide') || el.closest('#fx') || el.closest('.stamp')) continue; // 알림(#toasts)도 본다: 한 줄 알림 안에서 글이 잘리면 잡는다 (떠오르는 숫자 · 도장은 지나가는 효과라 뺌)
     const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue;
     const r = document.createRange(); r.selectNodeContents(n);
     const rs = [...r.getClientRects()].filter(b => b.width > 0.5 && b.height > 0.5); if (!rs.length) continue;
@@ -386,6 +386,12 @@ const LINT = () => {
   if (!(await G(() => [...document.querySelectorAll('#board .nitem .gp')].some(e => /밤사이 \+7%/.test(e.textContent))))) forced.push('소식 칸에 그날 내내 남는 "밤사이 +N%"가 없음');
   { const t = await G(() => [...document.querySelectorAll('#toasts .toast.gap')].map(e => e.className + ':' + e.textContent).join(' | '));
     if (!/밤사이/.test(t) || !/화끈식품 \+7\.3%/.test(t) || !/내 손익 \+/.test(t) || !/gap up/.test(t)) forced.push('아침에 밤사이 갭 알림(종목 · 비율 · 내 손익)이 눈에 띄게 안 뜸: ' + t); }
+  { // 알림은 모두 한 줄(28px)이고, "내 손익"이 알림 안에 다 보이고, 알림이 주인공 얼굴(SCENE_BOX 의 주인공 상자 위 + 9점 아래)을 덮지 않는다
+    const a = await G(() => { const sc = document.querySelector('#me .scene'), img = sc && sc.querySelector('img'), sb = window.PxArt && window.PxArt.SCENE_BOX && window.PxArt.SCENE_BOX[window.game.state.tier];
+      const face = img && sb ? img.getBoundingClientRect().top + (sb.hero[1] + 9) * 3 : 9999, hx0 = img && sb ? img.getBoundingClientRect().left + sb.hero[0] * 3 : 0, hx1 = img && sb ? img.getBoundingClientRect().left + sb.hero[2] * 3 : 0;
+      return [...document.querySelectorAll('#toasts .toast')].map(e => { const r = e.getBoundingClientRect(), pl = e.querySelector('.pl'), q = pl && pl.getBoundingClientRect(), box = e.firstElementChild && e.lastElementChild.getBoundingClientRect();
+        return { t: e.textContent, h: r.height, face: r.bottom > face + 0.5 && r.right > hx0 && r.left < hx1, pl: !pl || (q.right <= box.right + 0.5 && q.width > 0) }; }); });
+    for (const x of a) { if (x.h !== 28) forced.push('알림이 한 줄(28px)이 아님: ' + JSON.stringify(x)); if (x.face) forced.push('알림이 주인공 얼굴을 덮음: ' + JSON.stringify(x)); if (!x.pl) forced.push('밤사이 알림의 "내 손익"이 잘림: ' + JSON.stringify(x)); } }
   await page.waitForTimeout(300); await page.screenshot({ path: path.join(out, '58_gap.png') }); shots.push('58_gap');
   await closeAll();
   // F. 압류: 아파트에서 지난주에 한 번 밀린 채 일요일 밤 현금이 없음 → 확인 창 → 정산 → 압류 창(숫자)
