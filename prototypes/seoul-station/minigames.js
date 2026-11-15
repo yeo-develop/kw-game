@@ -8,12 +8,14 @@
 // 점점 빨라짐(ramp): 한 판 안에서도 시작 -> 끝으로 갈수록 빨라진다 (ramp 기본 0.4 = 끝에서 약 +40%). 처음 1~2초는 거의 그대로.
 // 빨라져도 등장물이 판정 자리에 머무는 시간은 0.25초 아래로 내려가지 않게 각 게임이 속도 위쪽을 눌러 둔다.
 // 자동 점검용으로 game._state (내부 상태, 읽기만) 를 내놓는다.
+// 그림 (2026-11-16~): 밝은 낮의 픽셀 그림. 낮은 해상도 화면(294×127, 논리 1/3)에 PX 색으로 점을 찍고 정수 배로 키워 찍는다.
+// 글자는 둥근모꼴(opts.font) 16 · 32 · 64px. 색 역할표 window.MGPAL 을 내놓는다(ui.js 가 opts.pal 로 넘김).
 (function () {
   'use strict';
   const root = typeof window !== 'undefined' ? window : globalThis;
   const W = 880, H = 380;            // 논리 크기
   const READY = 0.8, OUTRO = 0.5;    // 준비 · 마무리 길이(초)
-  const TAU = Math.PI * 2, EPS = 1e-9;
+  const EPS = 1e-9;
 
   // palette.js 가 안 불렸을 때만 쓰는 예비 색 (같은 값)
   const SPARE_PAL = {
@@ -61,53 +63,156 @@
     if (!v) { const n = parseInt(c.slice(1), 16); v = rgbCache[c] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
     return v;
   }
-  function mix(a, b, t) { const x = rgb(a), y = rgb(b); return 'rgb(' + Math.round(lerp(x[0], y[0], t)) + ',' + Math.round(lerp(x[1], y[1], t)) + ',' + Math.round(lerp(x[2], y[2], t)) + ')'; }
-  function fade(c, a) { const x = rgb(c); return 'rgba(' + x[0] + ',' + x[1] + ',' + x[2] + ',' + a + ')'; }
 
-  // ---------- 도형 도우미 ----------
-  function rrect(ctx, x, y, w, h, r) {
-    r = Math.max(0, Math.min(r, w / 2, h / 2));
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
+  // ---------- 픽셀 그리기 도구 (그리기만 쓴다. 판정 · 시간 · 난수와 상관없음) ----------
+  // 낮은 해상도 화면(LW×LH)에 PX 색으로 점을 찍고, 받은 캔버스에 정수 배(논리 3배 = 실제 6배)로 키워 찍는다.
+  // 좌표: 논리(880×380) → 낮은 해상도는 L(v) = round(v / 3). 그림에는 rng 를 쓰지 않는다.
+  const SC = 3, LW = 294, LH = 127;   // 294 x 3 = 882, 127 x 3 = 381: 오른쪽 · 아래 끝 한 줄 조금은 캔버스 밖으로 잘린다
+  const SPARE_PX = { // palette.js 의 PX 가 없을 때만 (같은 값)
+    k: '#2b1d2e', w: '#ffffff', c: '#fff4d6', C: '#f6e3b4', d: '#e3c58c', b: '#3b6fd8', B: '#23449a', l: '#6fa0f0',
+    s: '#8fd3ff', S: '#c4ecff', q: '#b0e0f8', o: '#f28a2e', O: '#c45a1a', y: '#ffd23f', Y: '#fff09a',
+    g: '#5cc04a', G: '#2f8a3a', h: '#a6e36b', r: '#e8505b', R: '#a8323f', e: '#9aa0b0', E: '#5c6274', L: '#d4d8e0',
+    n: '#8a5a3a', N: '#c08a5a', H: '#4a3328', p: '#ffd0a8', P: '#e8a27c',
+  };
+  let PXT = null;
+  function pxt() { if (!PXT) { const t = root.PX; PXT = t && t.k && t.w && t.b ? t : SPARE_PX; } return PXT; }
+  function pc(k) { return pxt()[k] || k; }                 // 'k' 같은 PX 글자 또는 '#rrggbb'
+  function L(v) { return Math.round(v / SC); }             // 논리 좌표 -> 낮은 해상도 점
+  function fr(g, x, y, w, h, k) { g.fillStyle = pc(k); g.fillRect(x, y, w, h); }
+  function OB(g, x, y, w, h, f, o) { fr(g, x, y, w, h, o || 'k'); if (w > 2 && h > 2) fr(g, x + 1, y + 1, w - 2, h - 2, f); }   // 외곽선 상자
+  function SB(g, x, y, w, h, f, o) { // 모서리 한 점을 깎은 외곽선 상자 (픽셀 틀 느낌)
+    fr(g, x + 1, y, w - 2, h, o || 'k'); fr(g, x, y + 1, w, h - 2, o || 'k');
+    if (w > 2 && h > 2) fr(g, x + 1, y + 1, w - 2, h - 2, f);
   }
-  function box(ctx, x, y, w, h, r, c) { ctx.fillStyle = c; rrect(ctx, x, y, w, h, r); ctx.fill(); }
-  function disc(ctx, x, y, r, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
-  function oval(ctx, x, y, rx, ry, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.fill(); }
-  function poly(ctx, pts, c) {
-    ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
-    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
-    ctx.closePath(); ctx.fill();
+  function ell(g, cx, cy, rx, ry, k) { // 점으로 채운 타원 (가운데 cx, cy 는 반 점 단위 가능)
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+      const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+      if (dx * dx + dy * dy <= 1) fr(g, x, y, 1, 1, k);
+    }
   }
-  function roundPoly(ctx, pts, r) { // 꼭짓점을 둥글린 다각형 길 (채우기는 부르는 쪽에서)
-    const n = pts.length / 2;
-    ctx.beginPath();
-    ctx.moveTo((pts[0] + pts[2 * n - 2]) / 2, (pts[1] + pts[2 * n - 1]) / 2);
-    for (let i = 0; i < n; i++) { const j = (i + 1) % n; ctx.arcTo(pts[2 * i], pts[2 * i + 1], pts[2 * j], pts[2 * j + 1], r); }
-    ctx.closePath();
+  function ring(g, cx, cy, r, k, t) { // 점으로 된 고리 (두께 t)
+    const r2o = (r + 0.5) * (r + 0.5), r2i = Math.max(0, r - t + 0.5) * Math.max(0, r - t + 0.5);
+    for (let y = -r - 1; y <= r + 1; y++) for (let x = -r - 1; x <= r + 1; x++) {
+      const d = x * x + y * y; if (d <= r2o && d > r2i) fr(g, cx + x, cy + y, 1, 1, k);
+    }
   }
-  function line(ctx, x1, y1, x2, y2, w, c) {
-    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  function seg(g, x0, y0, x1, y1, k, t) { // 브레젠험 선, t×t 붓
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1); t = t || 1;
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+    for (;;) { fr(g, x0 - (t >> 1), y0 - (t >> 1), t, t, k); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
   }
-  function crossMark(ctx, x, y, r, w, c) { line(ctx, x - r, y - r, x + r, y + r, w, c); line(ctx, x + r, y - r, x - r, y + r, w, c); }
-  function checkMark(ctx, x, y, r, w, c) {
-    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x - r * 0.3, y + r * 0.7); ctx.lineTo(x + r, y - r * 0.7); ctx.stroke();
+  function rows(g, ox, oy, list, map) { // 글자 줄 그림 ('.' 은 투명, map 으로 역할 글자를 색으로)
+    for (let y = 0; y < list.length; y++) for (let x = 0; x < list[y].length; x++) {
+      const ch = list[y][x]; if (ch !== '.') fr(g, ox + x, oy + y, 1, 1, (map && map[ch]) || ch);
+    }
   }
-  function brackets(ctx, x, y, w, h, len, lw, c) { // 네 모서리 꺾쇠
-    ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const c4 = [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]];
-    for (const k of c4) { ctx.beginPath(); ctx.moveTo(k[0] + k[2] * len, k[1]); ctx.lineTo(k[0], k[1]); ctx.lineTo(k[0], k[1] + k[3] * len); ctx.stroke(); }
+  function mkc(w, h) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false; return [c, g];
   }
-  // 도형으로 그린 굵은 화살표. dir: 0 왼쪽 · 1 오른쪽 · 2 위
-  function arrowShape(ctx, cx, cy, size, dir, c) {
-    const s = size / 2;
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(dir === 0 ? Math.PI : dir === 1 ? 0 : -Math.PI / 2);
-    poly(ctx, [s, 0, 0, -0.92 * s, 0, -0.36 * s, -s, -0.36 * s, -s, 0.36 * s, 0, 0.36 * s, 0, 0.92 * s], c);
-    ctx.restore();
+  function outline(c, k) { // 불투명한 점 둘레(바깥 한 칸)에 외곽선. 반투명 점은 없앤다
+    const g = c.getContext('2d'), w = c.width, h = c.height, id = g.getImageData(0, 0, w, h), d = id.data, a = new Uint8Array(w * h), col = rgb(pc(k || 'k'));
+    for (let i = 0; i < w * h; i++) { a[i] = d[i * 4 + 3] >= 128 ? 1 : 0; d[i * 4 + 3] = a[i] ? 255 : 0; }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (a[i] || !((x > 0 && a[i - 1]) || (x < w - 1 && a[i + 1]) || (y > 0 && a[i - w]) || (y < h - 1 && a[i + w]))) continue;
+      d[i * 4] = col[0]; d[i * 4 + 1] = col[1]; d[i * 4 + 2] = col[2]; d[i * 4 + 3] = 255;
+    }
+    g.putImageData(id, 0, 0);
+    return c;
+  }
+  const SPR = {};
+  // 등장물 하나를 낮은 해상도 캔버스에 한 번 찍어 둔다. ax, ay = 놓는 기준점(그림 안의 점)
+  function spr(key, w, h, ax, ay, fn, noLine) {
+    let c = SPR[key];
+    if (!c) { const m = mkc(w, h); fn(m[1]); if (!noLine) outline(m[0]); c = SPR[key] = m[0]; c.ax = ax; c.ay = ay; }
+    return c;
+  }
+  function flipped(c) { // 좌우 뒤집은 판 (한 번 만들어 둔다)
+    if (!c.flip) { const m = mkc(c.width, c.height); m[1].translate(c.width, 0); m[1].scale(-1, 1); m[1].drawImage(c, 0, 0); c.flip = m[0]; c.flip.ax = c.width - 1 - c.ax; c.flip.ay = c.ay; c.flip.flip = c; }
+    return c.flip;
+  }
+  function put(g, c, x, y, s) { // 기준점을 (x, y) 에. s 는 크기(가까운 점으로 키우거나 줄임)
+    if (s == null || s === 1) { g.drawImage(c, Math.round(x - c.ax), Math.round(y - c.ay)); return; }
+    const w = Math.max(1, Math.round(c.width * s)), h = Math.max(1, Math.round(c.height * s));
+    g.drawImage(c, Math.round(x - c.ax * s), Math.round(y - c.ay * s), w, h);
+  }
+  let ROT = null;
+  function putRot(g, c, x, y, rot, s) { // 돌리고 키운 그림을 작은 판에 그린 뒤 반투명 가장자리를 잘라(있다/없다) 찍는다
+    if (!ROT) ROT = mkc(64, 64);
+    const rg = ROT[1];
+    rg.setTransform(1, 0, 0, 1, 0, 0); rg.clearRect(0, 0, 64, 64);
+    rg.translate(32, 32); rg.rotate(rot || 0); rg.scale(s || 1, s || 1); rg.drawImage(c, -c.ax, -c.ay); rg.setTransform(1, 0, 0, 1, 0, 0);
+    const id = rg.getImageData(0, 0, 64, 64), d = id.data;
+    const pal = Object.keys(pxt()).map(function (k) { return rgb(pxt()[k]); });
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 128) { d[i + 3] = 0; continue; }
+      d[i + 3] = 255;
+      let best = 0, bd = 1e9;   // 가장 가까운 PX 색으로
+      for (let j = 0; j < pal.length; j++) { const q = pal[j], dd = (q[0] - d[i]) * (q[0] - d[i]) + (q[1] - d[i + 1]) * (q[1] - d[i + 1]) + (q[2] - d[i + 2]) * (q[2] - d[i + 2]); if (dd < bd) { bd = dd; best = j; } }
+      d[i] = pal[best][0]; d[i + 1] = pal[best][1]; d[i + 2] = pal[best][2];
+    }
+    rg.putImageData(id, 0, 0);
+    g.drawImage(ROT[0], Math.round(x) - 32, Math.round(y) - 32);
+  }
+  // 반투명 대신 점무늬(4×4 바이어)로 사라지게: 0 이면 안 보임, 1 이면 그대로
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const PAT = {};
+  function bayer(g, n) {
+    if (!PAT[n]) { const m = mkc(4, 4); for (let i = 0; i < 16; i++) if (BAYER[i] < n) fr(m[1], i % 4, i >> 2, 1, 1, '#000000'); PAT[n] = m[0]; }
+    return g.createPattern(PAT[n], 'repeat');
+  }
+  let LAYER = null;
+  function faded(g, a, fn) { // fn(layer ctx) 로 그린 것을 점무늬 a 만큼만 g 에 옮긴다
+    const n = Math.round(clamp(a, 0, 1) * 16);
+    if (n <= 0) return;
+    if (n >= 16) { fn(g); return; }
+    if (!LAYER) LAYER = mkc(LW, LH);
+    const lg = LAYER[1], t = g.getTransform();   // 낮은 해상도 화면에서만 부른다 (흔들림 이동을 그대로 따라감)
+    lg.setTransform(1, 0, 0, 1, 0, 0); lg.clearRect(0, 0, LW, LH);
+    lg.setTransform(t); fn(lg); lg.setTransform(1, 0, 0, 1, 0, 0);
+    lg.globalCompositeOperation = 'destination-in'; lg.fillStyle = bayer(lg, n); lg.fillRect(0, 0, LW, LH);
+    lg.globalCompositeOperation = 'source-over';
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(LAYER[0], 0, 0); g.restore();
+  }
+  function dots(g, x, y, w, h, k, a) { faded(g, a, function (lg) { fr(lg, x, y, w, h, k); }); }   // 점무늬 덮개 (a 만큼)
+  // 방향 딱지 색: 왼쪽 파랑 · 오른쪽 주황 · 위 초록 (상자 · 트럭 · 선반이 같은 색)
+  const DIRK = ['b', 'o', 'g'];
+  const ARROW = [
+    ['...w...', '..ww...', '.wwwwww', 'wwwwwww', '.wwwwww', '..ww...', '...w...'],
+    ['...w...', '...ww..', 'wwwwww.', 'wwwwwww', 'wwwwww.', '...ww..', '...w...'],
+    ['...w...', '..www..', '.wwwww.', 'wwwwwww', '..www..', '..www..', '..www..'],
+  ];
+  function sticker(g, x, y, size, dir) { // 가운데 (x, y), 색 바탕 + 흰 화살표(그림자 한 칸)
+    const x0 = Math.round(x - size / 2), y0 = Math.round(y - size / 2);
+    SB(g, x0, y0, size, size, DIRK[dir]);
+    fr(g, x0 + 1, y0 + size - 2, size - 2, 1, dir === 0 ? 'B' : dir === 1 ? 'O' : 'G');
+    const a = ARROW[dir], s = size >= 14 ? 2 : 1, ax = Math.round(x - 3.5 * s), ay = Math.round(y - 3.5 * s) - (size >= 14 ? 1 : 0);
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) if (a[j][i] === 'w') fr(g, ax + i * s + 1, ay + j * s + 1, s, s, 'k');
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) if (a[j][i] === 'w') fr(g, ax + i * s, ay + j * s, s, s, 'w');
+  }
+  function xMark(g, cx, cy, r) { // 빨간 가위표 (외곽선)
+    cx = Math.round(cx); cy = Math.round(cy); r = Math.max(2, Math.round(r));
+    for (let i = -r; i <= r; i++) { fr(g, cx + i - 1, cy + i - 1, 4, 4, 'k'); fr(g, cx + i - 1, cy - i - 1, 4, 4, 'k'); }
+    for (let i = -r; i <= r; i++) { fr(g, cx + i, cy + i, 2, 2, 'r'); fr(g, cx + i, cy - i, 2, 2, 'r'); }
+  }
+  function vMark(g, cx, cy, r) { // 초록 맞음 표시
+    cx = Math.round(cx); cy = Math.round(cy); r = Math.max(3, Math.round(r));
+    const pts = []; const a = Math.round(r * 0.5);
+    for (let i = 0; i <= a; i++) pts.push([cx - r + i, cy + i - 1]);
+    for (let i = 0; i <= r + a; i++) pts.push([cx - r + a + i, cy + a - 1 - Math.round(i * (r + a - 1) / (r + a))]);
+    for (const p of pts) fr(g, p[0] - 1, p[1] - 1, 4, 4, 'k');
+    for (const p of pts) fr(g, p[0], p[1], 2, 2, 'g');
+  }
+  function veil(g, x, y, w, h, k) { for (let j = 0; j < h; j++) for (let i = (j & 1); i < w; i += 2) fr(g, x + i, y + j, 1, 1, k); }   // 바둑판 점 덮개 (겹쳐 부를 수 있음)
+  function corners(g, x0, y0, x1, y1, n, k, t) { // 네 모서리 꺾쇠 (x1, y1 은 바로 다음 칸). 외곽선 + 색, 두께 t
+    for (let pass = 0; pass < 2; pass++) {
+      const c = pass ? k : 'k', e = pass ? 0 : 1;
+      for (const q of [[x0, y0, 1, 1], [x1 - t, y0, -1, 1], [x0, y1 - t, 1, -1], [x1 - t, y1 - t, -1, -1]]) {
+        fr(g, (q[2] > 0 ? q[0] : q[0] + t - n) - e, q[1] - e, n + 2 * e, t + 2 * e, c);
+        fr(g, q[0] - e, (q[3] > 0 ? q[1] : q[1] + t - n) - e, t + 2 * e, n + 2 * e, c);
+      }
+    }
   }
 
   // ---------- 손맛: 번쩍 · 튀는 숫자 · 조각 · 가위표 · 약한 흔들림 ----------
@@ -134,40 +239,49 @@
       for (const b of bits) { b.x += b.vx * dt; b.y += b.vy * dt; b.vy += 520 * dt; }
     };
     fx.offset = function () { return fx.shake > 0 ? [Math.sin(fx.clock * 90) * fx.shake, Math.cos(fx.clock * 70) * fx.shake * 0.6] : [0, 0]; };
-    fx.draw = function (ctx, font) {
+    // 효과 색: 받은 pal(예전 PAL 이든 MGPAL 이든)의 역할 색을 PX 점 색으로
+    const TONE = {}; TONE[P.text] = 'w'; TONE[P.up] = 'r'; TONE[P.bad] = 'r'; TONE[P.good] = 'g'; TONE[P.gold] = 'y';
+    fx.tone = function (c) { return TONE[c] || c; };
+    const blink = function (t, from) { return t < from || Math.floor(t * 24) % 2 === 0; };   // 끝무렵엔 깜빡이다 사라짐 (반투명 대신)
+    fx.drawPx = function (g) { // 낮은 해상도 화면에: 고리 · 조각 · 가위표
       for (const r of rings) {
-        ctx.globalAlpha = 1 - r.t; ctx.strokeStyle = r.color; ctx.lineWidth = 5 * (1 - r.t) + 1;
-        ctx.beginPath(); ctx.arc(r.x, r.y, lerp(r.r0, r.r1, easeOut(r.t)), 0, TAU); ctx.stroke();
+        const rr = L(lerp(r.r0, r.r1, easeOut(r.t))), cx = L(r.x), cy = L(r.y);
+        if (r.t < 0.55) { ring(g, cx, cy, rr + 1, 'k', 4); ring(g, cx, cy, rr, fx.tone(r.color), 2); }
+        else if (blink(r.t, 0.75)) ring(g, cx, cy, rr, fx.tone(r.color), 1);
       }
       for (const b of bits) {
-        const s = 7 * (1 - b.t * 0.5);
-        ctx.globalAlpha = 1 - b.t; ctx.fillStyle = b.color;
-        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.t * 6); ctx.fillRect(-s / 2, -s / 2, s, s); ctx.restore();
+        if (!blink(b.t, 0.7)) continue;
+        const s = b.t < 0.5 ? 3 : 2, x = L(b.x), y = L(b.y);
+        fr(g, x - 1, y - 1, s + 2, s + 2, 'k'); fr(g, x, y, s, s, fx.tone(b.color));
       }
-      for (const m of marks) {
-        ctx.globalAlpha = m.t < 0.6 ? 1 : 1 - (m.t - 0.6) / 0.4;
-        crossMark(ctx, m.x, m.y, m.r * pop(m.t * 4), Math.max(4, m.r * 0.36), P.bad);
-      }
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (const m of marks) if (blink(m.t, 0.6)) xMark(g, L(m.x), L(m.y), L(m.r * pop(m.t * 4)) + 1);
+    };
+    fx.drawText = function (ctx, font, ox, oy) { // 실제 크기 화면에: 튀는 숫자 (둥근모꼴 32px)
       for (const f of floats) {
-        const y = f.y - 34 * easeOut(f.t * 1.6), size = Math.round(24 * (1 + 0.5 * bump(f.t * 5)));
-        ctx.globalAlpha = f.t < 0.6 ? 1 : 1 - (f.t - 0.6) / 0.4;
-        ctx.font = '800 ' + size + 'px ' + font;
-        ctx.fillStyle = P.ink; ctx.fillText(f.text, f.x + 2, y + 2);
-        ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, y);
+        if (!blink(f.t, 0.6)) continue;
+        ptext(ctx, font, f.text, f.x + ox, f.y - 34 * easeOut(f.t * 1.6) - 8 * bump(f.t * 5) + oy, 32, fx.tone(f.color));
       }
-      ctx.globalAlpha = 1;
     };
     return fx;
   }
 
   // ---------- 공통 틀: 준비 0.8초, 본 게임 seconds 초, 마무리 0.5초 ----------
-  function bigText(ctx, P, font, text, size, color, y) {
-    y = y == null ? H / 2 : y;
-    ctx.font = '800 ' + Math.round(size) + 'px ' + font;
-    ctx.fillStyle = P.ink; ctx.fillText(text, W / 2 + 3, y + 4);
-    ctx.fillStyle = color; ctx.fillText(text, W / 2, y);
+  // 둥근모꼴 글자: 크기는 16 · 32 · 64 만, 점 단위 외곽선(크기 / 16) + 아래 그림자. 반 점에 걸치지 않게 자리를 정수로
+  function ptext(ctx, font, text, cx, cy, size, color) {
+    ctx.font = size + 'px ' + font; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const o = size / 16, w = ctx.measureText(text).width;
+    const x = Math.round((cx - w / 2) / o) * o, y = Math.round((cy - size / 2) / o) * o;
+    ctx.fillStyle = pc('k');
+    for (let dy = -1; dy <= 2; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) ctx.fillText(text, x + dx * o, y + dy * o);
+    ctx.fillStyle = pc(color); ctx.fillText(text, x, y);
   }
+  function band(g, cy, half) { // 가로 띠: 파랑 + 외곽선 + 밝은 줄
+    if (half <= 0) return;
+    fr(g, 0, cy - half - 1, LW, half * 2 + 2, 'k');
+    fr(g, 0, cy - half, LW, half * 2, 'b');
+    fr(g, 0, cy - half, LW, 1, 'l'); fr(g, 0, cy + half - 1, LW, 1, 'B');
+  }
+  let FB = null;   // 낮은 해상도 화면 (한 번에 한 판만 그린다)
   function build(opts, make) {
     opts = opts || {};
     const P = opts.pal || root.PAL || SPARE_PAL;
@@ -205,34 +319,53 @@
       },
       press: function (code) { if (phase === 'play' && !game.done) impl.press(code); },
       draw: function (ctx) {
+        if (typeof document === 'undefined') return;
         const wt = t - READY, o = fx.offset();
-        ctx.save();
-        ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
-        ctx.fillStyle = P.night0; ctx.fillRect(0, 0, W, H);
-        ctx.save(); ctx.translate(o[0], o[1]);
-        impl.draw(ctx, wt);
-        fx.draw(ctx, font);
-        ctx.restore();
-        if (fx.flashA > 0) { ctx.fillStyle = fade(fx.flashC, Math.min(0.3, fx.flashA)); ctx.fillRect(0, 0, W, H); }
-        // 남은 시간: 위쪽 얇은 막대
-        const left = clamp(1 - wt / seconds, 0, 1);
-        box(ctx, 16, 7, W - 32, 8, 4, P.night3);
-        if (left > 0) box(ctx, 16, 7, Math.max(8, (W - 32) * left), 8, 4, left < 0.25 ? P.gold : P.sys);
-        // 준비 · 시작 · 끝
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (!FB) FB = mkc(LW, LH);
+        const g = FB[1], ox = Math.round(o[0] / SC), oy = Math.round(o[1] / SC);   // 흔들림도 점 단위로
+        g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.imageSmoothingEnabled = false;
+        fr(g, 0, 0, LW, LH, 'k');
+        g.save(); g.translate(ox, oy);
+        impl.draw(g, wt);
+        fx.drawPx(g);
+        g.restore();
+        if (fx.flashA > 0) { // 번쩍: 테두리 + 점무늬
+          const a = Math.min(0.3, fx.flashA), c = fx.tone(fx.flashC);
+          const t3 = a > 0.15 ? 4 : 2;
+          fr(g, 0, 0, LW, t3, c); fr(g, 0, LH - t3, LW, t3, c); fr(g, 0, 0, t3, LH, c); fr(g, LW - t3, 0, t3, LH, c);
+        }
+        // 남은 시간: 위쪽 외곽선 막대 (파랑, 4분의 1 아래는 노랑)
+        const left = clamp(1 - wt / seconds, 0, 1), bw = LW - 14, fw = left > 0 ? Math.max(2, Math.round(bw * left)) : 0;
+        OB(g, 6, 2, bw + 2, 6, 'L');
+        if (fw) { fr(g, 7, 3, fw, 4, left < 0.25 ? 'y' : 'b'); fr(g, 7, 3, fw, 1, left < 0.25 ? 'Y' : 'l'); }
+        // 준비 · 시작 · 끝 (띠는 점으로, 글자는 실제 크기로 나중에)
+        let say = null;
         if (phase === 'ready' && !game.idle) {   // idle = 하는 법을 읽는 동안: 띠 없이 첫 장면만
-          ctx.fillStyle = fade(P.night0, 0.66); ctx.fillRect(0, H / 2 - 58, W, 116);
-          ctx.fillStyle = P.sys; ctx.fillRect(0, H / 2 - 58, W, 3); ctx.fillRect(0, H / 2 + 55, W, 3);
-          bigText(ctx, P, font, '준비', 68 * Math.max(0.3, pop(t / 0.18)), P.text);
+          const k = Math.max(0.3, pop(t / 0.18));
+          band(g, L(H / 2), Math.round(18 * Math.min(1, k)));
+          say = ['준비', k > 0.7 ? 64 : 32, 'w', H / 2];
         } else if (phase === 'play' && wt < 0.45) {
-          ctx.globalAlpha = 1 - wt / 0.45;
-          bigText(ctx, P, font, '시작!', 68 * (1 + wt * 0.6), P.gold, impl.startY); // startY: 첫 장면의 중요한 것(편의점 첫 손님 말풍선)을 가리지 않는 높이
-          ctx.globalAlpha = 1;
+          if (wt < 0.3 || Math.floor(wt * 24) % 2 === 0) say = ['시작!', 64, 'y', (impl.startY || H / 2) - Math.round(wt * 30)]; // startY: 첫 장면의 중요한 것(편의점 첫 손님 말풍선)을 가리지 않는 높이
         } else if (phase === 'end') {
           const k = clamp(endT / 0.15, 0, 1);
-          ctx.fillStyle = fade(P.night0, 0.5 * k); ctx.fillRect(0, 0, W, H);
-          bigText(ctx, P, font, '끝!', 68 * Math.max(0.3, pop(k)), P.text);
+          dots(g, 0, 0, LW, LH, 'k', 0.3 * k);
+          band(g, L(H / 2), Math.round(18 * Math.min(1, Math.max(0.3, pop(k)))));
+          say = ['끝!', k > 0.5 ? 64 : 32, 'w', H / 2];
         }
+        // 낮은 해상도 화면을 정수 배로 키워 찍는다 (변환을 풀고 실제 점 크기로)
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+        ctx.imageSmoothingEnabled = false;
+        const m = ctx.getTransform ? ctx.getTransform() : null;
+        if (m && m.b === 0 && m.c === 0 && m.a > 0 && m.d > 0) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.drawImage(FB[0], Math.round(m.e), Math.round(m.f), Math.round(LW * SC * m.a), Math.round(LH * SC * m.d));
+          ctx.setTransform(m);
+        } else ctx.drawImage(FB[0], 0, 0, LW * SC, LH * SC);
+        // 글자: 판 위의 글(번호 등) → 튀는 숫자 → 준비 · 시작 · 끝
+        if (impl.text) impl.text(ctx, wt, ox * SC, oy * SC);
+        fx.drawText(ctx, font, ox * SC, oy * SC);
+        if (say) ptext(ctx, font, say[0], W / 2, say[3], say[1], say[2]);
         ctx.restore();
       },
     };
@@ -242,137 +375,189 @@
   // =====================================================================
   // 1. 전단지 돌리기 — 옆에서 본 거리. 걷는 사람이 "건네는 자리"에 겹칠 때 Space
   // =====================================================================
-  function drawFlyerSheet(ctx, P, x, y, s, rot) { // 전단지 한 장 (가운데 기준)
-    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s);
-    box(ctx, -13, -18, 26, 36, 3, P.text);
-    box(ctx, -13, -18, 26, 11, 3, P.warm);
-    poly(ctx, [13, 8, 13, 18, 3, 18], P.lamp);          // 접힌 귀
-    ctx.fillStyle = P.dim; ctx.fillRect(-8, -3, 16, 3); ctx.fillRect(-8, 3, 16, 3); ctx.fillRect(-8, 9, 9, 3);
-    ctx.restore();
-  }
-  // 걷는 행인 (왼쪽을 봄). x, y = 발 가운데. o: { look 0~2, phase 걸음, flyer 받았는지, hop }
-  function drawWalker(ctx, P, x, y, s, o) {
-    o = o || {};
-    const look = o.look || 0, sw = Math.sin(o.phase == null ? 0.9 : o.phase) * 0.5;
-    const coat = [P.hood, P.warmDim, P.sysDim][look];
-    const coatSh = [P.hoodShade, mix(P.warmDim, P.ink, 0.32), mix(P.sysDim, P.ink, 0.32)][look];
-    const hipY = -46, shY = -90;
-    const foot = function (a) { return [-Math.sin(a) * 44, hipY + Math.cos(a) * 44]; };
-    const hand = function (a) { return [-2 - Math.sin(a) * 30, shY + Math.cos(a) * 30]; };
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    oval(ctx, 0, 3, 30, 6, fade(P.ink, 0.4));
-    ctx.translate(0, -(o.hop || 0));
-    // 뒤쪽 다리 · 팔
-    let f = foot(-sw), h = hand(sw);
-    line(ctx, 3, hipY, f[0] + 3, f[1] - 7, 16, mix(P.pants, P.ink, 0.3)); box(ctx, f[0] - 12, f[1] - 9, 22, 10, 4, mix(P.shoe, P.ink, 0.35));
-    line(ctx, 2, shY, h[0] + 4, h[1], 12, coatSh);
-    if (look === 2) box(ctx, 10, -102, 26, 46, 9, P.stoneLit);                 // 배낭
-    if (look === 1) box(ctx, 0, -148, 28, 66, 13, P.hair);                     // 긴 머리
-    // 앞쪽 다리
-    f = foot(sw);
-    line(ctx, -3, hipY, f[0] - 3, f[1] - 7, 16, P.pants); box(ctx, f[0] - 17, f[1] - 9, 22, 10, 4, P.shoe);
-    // 몸
-    if (look === 0) {          // 패딩
-      box(ctx, -22, -104, 44, 64, 16, coat);
-      ctx.fillStyle = coatSh; ctx.fillRect(-22, -86, 44, 3); ctx.fillRect(-22, -70, 44, 3);
-    } else if (look === 1) {   // 긴 코트 + 목도리
-      box(ctx, -19, -104, 38, 30, 12, coat);
-      poly(ctx, [-18, -92, 18, -92, 27, -34, -27, -34], coat);
-      box(ctx, -18, -109, 36, 12, 5, P.lamp); box(ctx, 6, -104, 11, 28, 4, P.lamp);
-    } else {                   // 점퍼
-      box(ctx, -21, -104, 42, 62, 14, coat);
-      ctx.fillStyle = coatSh; ctx.fillRect(-9, -100, 3, 54);
+  // ---------- 주인공: 장면(pxart.js)과 같은 2등신 후드티 (22×31). PxArt 가 없으면 같은 점 그림 사본을 쓴다 ----------
+  const HERO_SPARE = [
+    '......kkkkkkkkkk......', '....kkHHHHHHHHHHkk....', '...kHHHHHHHHHHHHHHk...', '..kHHHHHHHHHHHHHHHHk..', '..kHHHHHHHHHHHHHHHHk..',
+    '.kHHHHHHHHHHHHHHHHHHk.', '.kHHHpHHHHHHHHHHpHHHk.', '.kHHppppHHHHHHppppHHk.', '.kHppppppppppppppppHk.', '.kppppppppppppppppppk.',
+    '.kppppkkkppppkkkppppk.', '.kpppppPppppppPpppppk.', '.kprrpppppppppppprrpk.', '..kpppppppkkpppppppk..', '...kkppppppppppppkk...',
+    '..kbbkkkppppppkkkbbk..', '.kbllllbkkkkkkbllllbk.', '.kbllllllllllllllllbk.', '.kblllllwllllwlllllbk.', '.kblllllwllllwlllllbk.',
+    'kbllbllllllllllllbllbk', 'kbllbllbbbbbbbbllbllbk', 'kbllbllbllllllbllbllbk', 'kpppkbbbbbbbbbbbbkpppk', '.kkk.kEEEEEEEEEEk.kkk.',
+    '...kEEEEEEEEEEEEEEk...', '...kEEEEEEkkEEEEEEk...', '....kEEEEk..kEEEEk....', '....kEEEEk..kEEEEk....', '...kwwwwwk..kwwwwwk...',
+    '...kkkkkkk..kkkkkkk...',
+  ];
+  function heroRows(face, armOut) {
+    const H0 = root.PxArt && Array.isArray(root.PxArt.HERO) && root.PxArt.HERO.length === 31 ? root.PxArt.HERO : HERO_SPARE;
+    const r = H0.slice();
+    if (face === 'open') { r[10] = '.kpppkwkppppppkwkpppk.'; r[11] = '.kpppkkkPppppPkkkpppk.'; }
+    if (armOut) { // 오른쪽(화면 오른쪽) 팔을 어깨 높이로 내민다: 늘어진 팔은 지운다
+      for (const y of [20, 21, 22]) r[y] = r[y].slice(0, 17) + 'bk...';
+      r[23] = r[23].slice(0, 17) + 'k....'; r[24] = r[24].slice(0, 17) + '.....';
     }
-    // 앞쪽 팔 (전단지를 받으면 들고 간다)
-    h = hand(o.flyer ? 1.15 : -sw);
-    line(ctx, -2, shY, h[0], h[1], 12, coatSh); disc(ctx, h[0], h[1], 6.5, P.skin);
-    if (o.flyer) drawFlyerSheet(ctx, P, h[0] - 9, h[1] - 10, 0.85, -0.25);
-    // 머리
-    disc(ctx, 0, -128, 26, P.hair); disc(ctx, -5, -125, 22.5, P.skin); oval(ctx, -17, -127, 2.6, 3.8, P.ink);
-    if (look === 0) {          // 비니 + 방울
-      ctx.fillStyle = P.warm; ctx.beginPath(); ctx.arc(-1, -131, 27, Math.PI, 0); ctx.closePath(); ctx.fill();
-      box(ctx, -29, -136, 56, 9, 4, mix(P.warm, P.ink, 0.25)); disc(ctx, -1, -161, 7, P.lamp);
-    } else if (look === 2) {   // 챙 모자
-      ctx.fillStyle = P.stoneLit; ctx.beginPath(); ctx.arc(-1, -132, 26.5, Math.PI, 0); ctx.closePath(); ctx.fill();
-      box(ctx, -46, -137, 34, 7, 3, P.stoneLit);
-    }
-    ctx.restore();
+    return r;
   }
-  // 서류 가방 들고 뛰는 "바쁜 사람" (왼쪽으로). 앞으로 기운 몸 + 가방 + 날리는 넥타이 + 속도선
-  function drawRunner(ctx, P, x, y, s, o) {
-    o = o || {};
-    const sw = Math.sin(o.phase == null ? 1.2 : o.phase) * 0.95;
-    const suit = o.angry ? mix(P.stoneLit, P.bad, 0.5) : P.stoneLit, suitSh = mix(P.stoneLit, P.ink, 0.35);
-    const hipY = -46;
-    const foot = function (a) { return [4 - Math.sin(a) * 46, hipY + Math.cos(a) * 46 * (a < 0 ? 0.68 : 1)]; };
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    oval(ctx, 0, 3, 34, 6, fade(P.ink, 0.4));
-    line(ctx, 46, -120, 86, -120, 4, fade(P.dim, 0.55)); line(ctx, 54, -90, 108, -90, 4, fade(P.dim, 0.4)); line(ctx, 46, -60, 80, -60, 4, fade(P.dim, 0.55));
-    let f = foot(-sw);
-    line(ctx, 6, hipY, f[0], f[1] - 7, 15, suitSh); box(ctx, f[0] - 10, f[1] - 9, 22, 10, 4, P.hair);
-    f = foot(sw);
-    line(ctx, 2, hipY, f[0], f[1] - 7, 15, mix(P.stoneLit, P.ink, 0.18)); box(ctx, f[0] - 16, f[1] - 9, 22, 10, 4, P.hair);
-    ctx.translate(4, hipY); ctx.rotate(-0.3); ctx.translate(-4, -hipY);   // 윗몸을 앞으로 기울임
-    line(ctx, 4, -92, 4 + Math.sin(sw) * 26 + 12, -92 + 24, 12, suitSh);   // 뒤쪽 팔
-    box(ctx, -19, -104, 40, 62, 7, suit);
-    poly(ctx, [-19, -101, -3, -101, -19, -76], P.text);                   // 셔츠 깃
-    poly(ctx, [-13, -100, 20, -113, 25, -103, -10, -91], P.bad);          // 뒤로 날리는 넥타이
-    const a = -sw * 0.7 + 0.35, hx = -2 - Math.sin(a) * 32, hy = -90 + Math.cos(a) * 32;
-    line(ctx, -2, -90, hx, hy, 12, suitSh); disc(ctx, hx, hy, 6, P.skin);
-    ctx.strokeStyle = mix(P.bad, P.ink, 0.4); ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(hx, hy + 7, 8, Math.PI, 0); ctx.stroke();
-    box(ctx, hx - 21, hy + 6, 42, 29, 4, P.bad);                           // 서류 가방
-    ctx.fillStyle = mix(P.bad, P.ink, 0.4); ctx.fillRect(hx - 21, hy + 16, 42, 4); ctx.fillRect(hx - 3, hy + 13, 6, 10);
-    disc(ctx, 0, -128, 25, P.hair); disc(ctx, -6, -125, 22, P.skin);
-    box(ctx, -22, -155, 40, 16, 7, P.hair);                                // 넘긴 머리
-    oval(ctx, -18, -128, 2.6, 3.8, P.ink); oval(ctx, -19, -113, 4, 3, P.ink);
-    poly(ctx, [24, -150, 33, -155, 37, -149, 32, -145], P.sys); poly(ctx, [34, -134, 43, -138, 46, -132, 41, -129], P.sys); // 땀
-    ctx.restore();
+  function heroAt(g, x, y, face, armOut) { // (x, y) = 머리 왼쪽 위 (삐침 머리는 y-3 까지)
+    fr(g, x + 11, y - 2, 1, 2, 'k'); fr(g, x + 12, y - 3, 2, 1, 'k'); fr(g, x + 10, y - 1, 1, 1, 'k');
+    rows(g, x, y, heroRows(face, armOut));
   }
-  // 나: 후드티, 오른쪽을 보고 전단지를 내민다. o: { reach 0~1, droop 0~1, empty }
-  function drawFlyerMe(ctx, P, x, y, s, o) {
-    o = o || {};
-    const hx = 50 + (o.reach || 0) * 28, hy = -92 + (o.droop || 0) * 16;
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    oval(ctx, 0, 3, 34, 7, fade(P.ink, 0.4));
-    line(ctx, -9, -46, -10, -13, 17, P.pants); line(ctx, 9, -46, 10, -13, 17, P.pants);
-    box(ctx, -20, -10, 24, 11, 4, P.shoe); box(ctx, 0, -10, 26, 11, 4, P.shoe);
-    disc(ctx, -5, -128, 31, P.hoodShade);                                  // 후드
-    box(ctx, -25, -106, 50, 66, 17, P.hood);
-    box(ctx, -13, -66, 28, 15, 7, P.hoodShade);                            // 앞주머니
-    box(ctx, -36, -86, 24, 34, 3, P.lamp); box(ctx, -33, -90, 24, 34, 3, P.text); box(ctx, -33, -90, 24, 9, 3, P.warm); // 전단지 묶음
-    line(ctx, -14, -92, -22, -64, 13, P.hoodShade); disc(ctx, -23, -62, 7, P.skin);
-    disc(ctx, 3, -126, 23.5, P.skin);
-    ctx.fillStyle = P.hair; ctx.beginPath(); ctx.arc(3, -126, 23.5, Math.PI * 0.95, Math.PI * 1.7); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = P.hood; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(1, -127, 27, Math.PI * 0.62, Math.PI * 1.6); ctx.stroke();
-    oval(ctx, 15, -126, 2.8, 4, P.ink);
-    line(ctx, 12, -92, hx, hy, 14, P.hood); box(ctx, hx - 5, hy - 8, 9, 16, 3, P.hoodShade); disc(ctx, hx + 7, hy, 7.5, P.skin);
-    if (!o.empty) drawFlyerSheet(ctx, P, hx + 17, hy - 13, 1, 0.12);
-    ctx.restore();
+  // 전단지 한 장 (외곽선 포함 9×11, 가운데 기준)
+  function sheetSprite() {
+    return spr('sheet', 9, 11, 4, 5, function (g) {
+      rows(g, 1, 1, ['ooooooo', 'ooOOooo', 'wwwwwww', 'wLLLLLw', 'wwwwwww', 'wLLLLww', 'wwwwwww', 'wLLLwYY', 'wwwwwY.']);
+    });
   }
-  function drawLamp(ctx, P, x, y, s) { // 가로등. x, y = 기둥 발 (등은 왼쪽으로 68 나와 있음)
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    disc(ctx, -68, -250, 34, fade(P.lamp, 0.07)); disc(ctx, -68, -250, 18, fade(P.lamp, 0.12));
-    box(ctx, -4, -262, 8, 262, 3, P.stone); box(ctx, -9, -16, 18, 16, 4, P.stoneLit);
-    box(ctx, -72, -262, 76, 7, 3, P.stone); box(ctx, -88, -268, 40, 13, 6, P.stoneLit);
-    box(ctx, -83, -256, 30, 7, 3, P.lamp);
-    ctx.restore();
+  function sheetSmall() { return spr('sheet-s', 6, 7, 3, 6, function (g) { rows(g, 1, 1, ['oooo', 'wwww', 'wLLw', 'wwww', 'wwww']); }); }
+  // 나: 전단지 묶음을 왼손에, 오른손은 내밀기. reach 0~1, droop(헛손질 뒤 잠깐), empty(방금 건넴)
+  function meSprite(reach, droop, empty) {
+    const n = reach > 0.15 ? 2 + Math.round(reach * 6) : 0, key = 'me' + n + (droop ? 'd' : '') + (empty ? 'e' : '');
+    return spr(key, 42, 40, 13, 36, function (g) {
+      const X = 2, Y = 5;
+      heroAt(g, X, Y, droop ? 'calm' : 'open', n > 0);
+      if (n > 0) {
+        fr(g, X + 20, Y + 16, n + 1, 1, 'k'); fr(g, X + 20, Y + 17, n, 2, 'l'); fr(g, X + 20, Y + 19, n, 1, 'b'); fr(g, X + 20, Y + 20, n + 1, 1, 'k');
+        OB(g, X + 20 + n, Y + 15, 5, 6, 'p');
+        if (!empty) rows(g, X + 19 + n, Y + 5, ['kkkkkkkk', 'kooooook', 'kwwwwwwk', 'kwLLLLwk', 'kwwwwwwk', 'kwLLLwwk', 'kwwwwwwk', 'kwwwwwwk', 'kwwwwwwk', 'kkkkkkkk']);
+      } else if (!empty && !droop) rows(g, X + 17, Y + 17, ['kkkkkk', 'kooook', 'kwwwwk', 'kwLLwk', 'kwwwwk', 'kkkkkk']);
+      // 왼손의 전단지 묶음
+      rows(g, X - 2, Y + 17, ['.kkkkkk', 'kkoooook', 'kowwwwwk', 'kowLLLwk', 'kowwwwwk', 'kowLLwwk', 'kowwwwwk', 'kkwwwwwk', '.kkkkkkk']);
+    }, true);
   }
-  function streetBack(ctx, P, gy) { // 밤거리 배경 (좁은 밝기 범위)
-    const g = ctx.createLinearGradient(0, 0, 0, gy);
-    g.addColorStop(0, P.night0); g.addColorStop(1, P.night1);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, gy);
-    const far = [[0, 124, 150], [128, 96, 112], [228, 150, 176], [398, 116, 126], [520, 170, 196], [698, 104, 142], [806, 80, 180]];
-    for (let i = 0; i < far.length; i++) {
-      const b = far[i], top = gy - 12 - b[2];
-      ctx.fillStyle = i % 2 ? P.night2 : mix(P.night1, P.night2, 0.6); ctx.fillRect(b[0], top, b[1], b[2]);
-      for (let r = 0; r * 30 + 34 < b[2]; r++) for (let c = 0; c * 26 + 30 < b[1]; c++) {
-        const lit = (i * 7 + r * 5 + c * 3) % 6 === 0;
-        ctx.fillStyle = lit ? fade(P.warmDim, 0.5) : P.night3; ctx.fillRect(b[0] + 12 + c * 26, top + 14 + r * 30, 12, 14);
+  // 걷는 행인 (왼쪽을 봄, 24×38, 기준 = 발 가운데). look 0 비니 · 1 긴 머리 · 2 모자와 배낭, frame 0~3 걸음, got 전단지를 받아 듦
+  const WALK_LOOK = [
+    { hair: 'H', coat: 'g', shade: 'G', pants: 'b', back: 'B', shoe: 'w' },
+    { hair: 'n', coat: 'r', shade: 'R', pants: 'E', back: 'k', shoe: 'H' },
+    { hair: 'H', coat: 'y', shade: 'o', pants: 'n', back: 'H', shoe: 'w' },
+  ];
+  function walkerSprite(look, frame, got) {
+    return spr('walk' + look + frame + (got ? 'g' : ''), 26, 40, 13, 36, function (g) {
+      const K = WALK_LOOK[look], st = [[-3, 2], [0, 0], [2, -3], [0, 0]][frame], arm = [2, 0, -2, 0][frame], X = 1, Y = 1;
+      if (look === 1) fr(g, X + 14, Y + 8, 6, 15, K.hair);                       // 긴 머리 (등 뒤)
+      // 다리: 뒤쪽은 어둡게
+      fr(g, X + 12 + st[1], Y + 27, 3, 6, K.back); fr(g, X + 11 + st[1], Y + 32, 4, 2, 'k');
+      fr(g, X + 9 + st[0], Y + 27, 3, 6, K.pants); fr(g, X + 8 + st[0], Y + 32, 4, 2, K.shoe);
+      // 몸
+      fr(g, X + 7, Y + 17, 10, 11, K.coat); fr(g, X + 15, Y + 18, 2, 10, K.shade); fr(g, X + 7, Y + 27, 10, 1, K.shade);
+      if (look === 0) { fr(g, X + 7, Y + 21, 8, 1, K.shade); fr(g, X + 7, Y + 24, 8, 1, K.shade); }
+      if (look === 1) { fr(g, X + 7, Y + 16, 10, 3, 'Y'); fr(g, X + 13, Y + 18, 3, 5, 'Y'); fr(g, X + 13, Y + 22, 3, 1, 'o'); }   // 목도리
+      if (look === 2) { fr(g, X + 16, Y + 17, 5, 10, 'E'); fr(g, X + 17, Y + 18, 3, 2, 'e'); fr(g, X + 10, Y + 17, 2, 5, 'E'); }    // 배낭 + 멜빵
+      // 머리
+      ell(g, X + 12, Y + 10, 8.6, 8.2, 'p');
+      for (let y = Y; y < Y + 19; y++) for (let x = X + 2; x < X + 22; x++) {
+        const dx = (x + 0.5 - X - 12) / 8.6, dy = (y + 0.5 - Y - 10) / 8.2;
+        if (dx * dx + dy * dy > 1) continue;
+        const ry = y - Y, rx = x - X;
+        if (ry < 6 || (rx > 13 && ry < 14) || rx > 16) fr(g, x, y, 1, 1, K.hair);
       }
-    }
-    ctx.fillStyle = P.ground; ctx.fillRect(0, gy - 12, W, H - gy + 12);
-    ctx.fillStyle = P.stone; ctx.fillRect(0, gy - 12, W, 3);
-    ctx.fillStyle = P.night2; for (let x = 40; x < W; x += 96) ctx.fillRect(x, gy + 18, 54, 3);
+      fr(g, X + 14, Y + 10, 2, 3, 'p'); fr(g, X + 15, Y + 11, 1, 1, 'P');           // 귀
+      fr(g, X + 5, Y + 9, 1, 2, 'k'); fr(g, X + 9, Y + 9, 1, 2, 'k');               // 눈
+      fr(g, X + 4, Y + 12, 2, 1, 'r'); fr(g, X + 9, Y + 12, 2, 1, 'r');             // 볼
+      if (look === 0) { // 비니 + 방울
+        for (let y = Y; y < Y + 8; y++) for (let x = X + 2; x < X + 22; x++) {
+          const dx = (x + 0.5 - X - 12) / 8.6, dy = (y + 0.5 - Y - 10) / 8.2;
+          if (dx * dx + dy * dy <= 1.02) fr(g, x, y, 1, 1, y - Y >= 6 ? 'O' : 'o');
+        }
+        ell(g, X + 12, Y + 1, 2.2, 2, 'Y');
+      } else if (look === 2) { // 챙 모자 (앞으로 챙)
+        for (let y = Y; y < Y + 6; y++) for (let x = X + 2; x < X + 22; x++) {
+          const dx = (x + 0.5 - X - 12) / 8.6, dy = (y + 0.5 - Y - 10) / 8.2;
+          if (dx * dx + dy * dy <= 1.02) fr(g, x, y, 1, 1, 'b');
+        }
+        fr(g, X, Y + 5, 9, 2, 'B');
+      }
+      // 앞쪽 팔
+      if (got) { fr(g, X + 3, Y + 18, 7, 3, K.coat); fr(g, X + 1, Y + 16, 3, 3, 'p'); rows(g, X - 1, Y + 9, ['oooo', 'wwww', 'wLLw', 'wwww', 'wwww', 'wwww']); }
+      else { fr(g, X + 9 + arm, Y + 18, 3, 7, K.shade); fr(g, X + 9 + arm, Y + 25, 3, 2, 'p'); }
+    });
+  }
+  // 서류 가방 들고 뛰는 "바쁜 사람" (왼쪽으로, 앞으로 기운 몸). frame 0/1, angry = 내밀었더니 화남
+  function runnerSprite(frame, angry) {
+    return spr('run' + frame + (angry ? 'a' : ''), 34, 40, 16, 36, function (g) {
+      const X = 2, Y = 1, sk = angry ? 'P' : 'p';
+      // 다리 (넓은 보폭)
+      const a = frame ? [[14, 27, 8, 33], [16, 27, 23, 31]] : [[14, 27, 6, 32], [16, 27, 22, 33]];
+      seg(g, X + a[1][0], Y + a[1][1], X + a[1][2], Y + a[1][3], 'k', 3); fr(g, X + a[1][2] - 1, Y + a[1][3], 4, 2, 'k');
+      seg(g, X + a[0][0], Y + a[0][1], X + a[0][2], Y + a[0][3], 'E', 3); fr(g, X + a[0][2] - 3, Y + a[0][3], 5, 2, 'H');
+      // 기운 몸 (정장)
+      for (let y = 0; y < 12; y++) fr(g, X + 8 + Math.round((11 - y) * -0.35) + 3, Y + 16 + y, 10, 1, 'e');
+      for (let y = 0; y < 12; y++) fr(g, X + 16 + Math.round((11 - y) * -0.35) + 3, Y + 16 + y, 2, 1, 'E');
+      fr(g, X + 8, Y + 16, 4, 4, 'w'); fr(g, X + 9, Y + 17, 2, 5, 'r');                  // 셔츠 깃 + 넥타이
+      seg(g, X + 11, Y + 17, X + 22, Y + 13, 'r', 2);                                  // 뒤로 날리는 넥타이
+      seg(g, X + 17, Y + 18, X + 23, Y + 23, 'E', 3);                                  // 뒤쪽 팔
+      // 머리 (앞으로)
+      ell(g, X + 9, Y + 9, 8.2, 7.8, sk);
+      for (let y = Y; y < Y + 18; y++) for (let x = X; x < X + 19; x++) {
+        const dx = (x + 0.5 - X - 9) / 8.2, dy = (y + 0.5 - Y - 9) / 7.8;
+        if (dx * dx + dy * dy <= 1 && (y - Y < 5 || (x - X > 11 && y - Y < 12) || x - X > 14)) fr(g, x, y, 1, 1, 'H');
+      }
+      fr(g, X + 3, Y + 9, 2, 1, 'k'); fr(g, X + 7, Y + 9, 2, 1, 'k');                     // 찌푸린 눈
+      fr(g, X + 3, Y + 13, 3, 2, 'k');                                                  // 헉헉 입
+      fr(g, X + 11, Y + 10, 2, 3, sk);
+      // 앞팔 + 서류 가방
+      seg(g, X + 8, Y + 19, X + 4, Y + 23, 'e', 3);
+      fr(g, X + 2, Y + 22, 3, 2, 'p');
+      fr(g, X, Y + 24, 9, 7, 'n'); fr(g, X, Y + 26, 9, 1, 'H'); fr(g, X + 3, Y + 23, 3, 1, 'H');
+      if (angry) { fr(g, X + 15, Y - 0, 1, 3, 'r'); fr(g, X + 14, Y + 1, 3, 1, 'r'); fr(g, X + 18, Y + 2, 1, 3, 'r'); fr(g, X + 17, Y + 3, 3, 1, 'r'); }
+      else { fr(g, X + 19, Y + 5, 2, 3, 's'); fr(g, X + 21, Y + 10, 2, 2, 's'); }        // 땀
+    });
+  }
+  // 낮의 거리 (한 번 찍어 둔다): 하늘 · 먼 빌딩 · 가게 다섯 · 보도. gy = 발 닿는 줄
+  function streetSprite(gy) {
+    return spr('street', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, LH, 's'); fr(g, 0, 34, LW, 26, 'q');
+      for (let x = 0; x < LW; x += 2) fr(g, x + ((x >> 1) & 1), 33, 1, 1, 'q');
+      // 구름
+      for (const c of [[34, 14, 13], [150, 9, 10], [236, 18, 15]]) {
+        ell(g, c[0], c[1], c[2], 4, 'w'); ell(g, c[0] - c[2] * 0.4, c[1] - 2, c[2] * 0.45, 4, 'w'); ell(g, c[0] + c[2] * 0.3, c[1] - 3, c[2] * 0.4, 4, 'w');
+        fr(g, c[0] - c[2] + 2, c[1] + 2, c[2] * 2 - 4, 1, 'S');
+      }
+      // 먼 빌딩 (흐린 하늘색)
+      for (const b of [[96, 16, 26], [126, 28, 18], [196, 8, 22], [252, 22, 30]]) {
+        fr(g, b[0], b[1], b[2], 70, 'S');
+        for (let y = b[1] + 4; y < 80; y += 6) for (let x = b[0] + 3; x < b[0] + b[2] - 3; x += 5) fr(g, x, y, 3, 3, 'q');
+      }
+      // 가게 다섯: [x, w, 지붕 y, 벽, 차양 색, 간판 그림]
+      const shops = [[0, 60, 38, 'c', 'r', 0], [60, 58, 46, 'L', 'g', 1], [118, 60, 32, 'Y', 'b', 2], [178, 58, 44, 'C', 'o', 3], [236, 58, 36, 'S', 'g', 1]];
+      for (const s of shops) {
+        const x = s[0], w = s[1], top = s[2], base = gy - 9;
+        OB(g, x, top, w + 1, base - top + 1, s[3]);
+        fr(g, x + 1, top + 1, w - 1, 2, 'd'); fr(g, x + 1, top + 3, w - 1, 1, 'k');                        // 처마
+        for (let wx = x + 6; wx + 9 < x + w; wx += 14) { OB(g, wx, top + 7, 9, 9, 'S'); fr(g, wx + 1, top + 8, 2, 2, 'w'); fr(g, wx + 4, top + 7, 1, 9, 'k'); }
+        // 간판 (글 없이 그림만)
+        const sy = top + 19;
+        SB(g, x + 10, sy, w - 19, 9, 'w');
+        const cx = x + Math.floor(w / 2);
+        if (s[5] === 0) { OB(g, cx - 3, sy + 2, 6, 6, 'o'); fr(g, cx + 3, sy + 3, 2, 3, 'k'); }               // 컵
+        else if (s[5] === 1) { ell(g, cx, sy + 4.5, 3.5, 3, 'r'); fr(g, cx - 1, sy + 1, 2, 2, 'g'); }            // 꽃
+        else if (s[5] === 2) { OB(g, cx - 5, sy + 2, 10, 6, 'N'); fr(g, cx - 3, sy + 3, 1, 1, 'd'); fr(g, cx + 1, sy + 3, 1, 1, 'd'); } // 빵
+        else { OB(g, cx - 4, sy + 2, 8, 6, 'b'); fr(g, cx - 2, sy + 4, 4, 1, 'w'); }                        // 책
+        // 차양 (줄무늬 + 물결 끝)
+        const ay = sy + 11;
+        fr(g, x + 1, ay - 1, w - 1, 1, 'k');
+        for (let i = 0; i < w - 1; i++) fr(g, x + 1 + i, ay, 1, 6, (Math.floor(i / 4) & 1) ? 'w' : s[4]);
+        for (let i = 0; i < w - 1; i++) if ((i & 3) < 2) fr(g, x + 1 + i, ay + 6, 1, 1, (Math.floor(i / 4) & 1) ? 'w' : s[4]);
+        for (let i = 0; i < w - 1; i++) fr(g, x + 1 + i, ay + ((i & 3) < 2 ? 7 : 6), 1, 1, 'k');
+        // 진열창 + 문
+        const wy = ay + 9;
+        if (wy < base - 4) {
+          OB(g, x + 4, wy, w - 22, base - wy, 'S'); fr(g, x + 6, wy + 2, 3, 1, 'w'); fr(g, x + 6, wy + 3, 1, 2, 'w');
+          OB(g, x + w - 15, wy - 1, 11, base - wy + 2, 'n'); fr(g, x + w - 13, wy + 1, 7, base - wy - 4, 'N'); fr(g, x + w - 7, wy + 7, 1, 2, 'y');
+        }
+      }
+      // 보도 (벽돌 무늬)
+      const top = gy - 9;
+      fr(g, 0, top, LW, LH - top, 'C'); fr(g, 0, top, LW, 1, 'k'); fr(g, 0, top + 1, LW, 1, 'd');
+      const lines = [top + 4, top + 9, top + 15, top + 22, top + 30];
+      for (let i = 0; i < lines.length; i++) {
+        fr(g, 0, lines[i], LW, 1, 'd');
+        const prev = i ? lines[i - 1] : top + 1, step = 14 + i * 4;
+        for (let x = (i & 1) * (step >> 1); x < LW; x += step) fr(g, x, prev + 1, 1, lines[i] - prev - 1, 'd');
+      }
+      // 가로등 (낮이라 꺼짐) — 건네는 자리 오른쪽
+      const lx = 233;
+      fr(g, lx, 40, 2, gy - 41, 'E'); fr(g, lx, 40, 1, gy - 41, 'k'); fr(g, lx - 1, gy - 3, 4, 2, 'k');
+      fr(g, lx - 2, 39, 6, 1, 'k'); OB(g, lx - 3, 33, 8, 6, 'L'); fr(g, lx - 2, 34, 6, 1, 'w'); fr(g, lx - 1, 32, 4, 1, 'k');
+      // 화분 나무 (오른쪽 끝)
+      ell(g, 280, gy - 22, 8, 8, 'g'); ell(g, 278, gy - 24, 4, 4, 'h'); OB(g, 276, gy - 12, 9, 9, 'n'); fr(g, 279, gy - 15, 3, 3, 'n');
+    }, true);
   }
 
   function makeFlyer(env) {
@@ -446,27 +631,36 @@
         return { score: clamp((S.hits - S.busyHits - 0.5 * S.empties) / S.total, 0, 1), hits: S.hits, total: S.total, // detail: 결과 창의 한 줄 내역
           detail: '건넨 전단지 ' + S.hits + ' / ' + S.total + (S.busyHits ? ' · 뛰는 사람에게 ' + S.busyHits + '번' : '') + (S.empties ? ' · 헛손질 ' + S.empties + '번' : '') };
       },
-      draw: function (ctx) {
-        streetBack(ctx, P, GY);
-        // 가로등 불빛이 떨어지는 곳 = 건네는 자리
-        poly(ctx, [ZX - 15, 60, ZX + 15, 60, ZX + 66, GY + 8, ZX - 66, GY + 8], fade(P.lamp, 0.08));
-        oval(ctx, ZX, GY + 6, 66, 10, fade(P.warm, 0.2));
-        drawLamp(ctx, P, ZX + 68, GY - 10, 1);
+      draw: function (g) {
+        const gy = L(GY), zx = L(ZX), zh = L(ZH);
+        g.drawImage(streetSprite(gy), 0, 0);
+        // 건네는 자리: 보도 위 노란 자리 + 네 모서리 꺾쇠 (사람이 들어오면 굵고 노랗게)
         const here = inZone();
-        const zc = S.warn > 0.05 ? P.bad : S.glow > 0.05 ? P.gold : here ? P.text : P.sys;
-        const grow = 4 * bump(Math.max(S.glow, S.warn));
-        ctx.globalAlpha = here || S.glow > 0.05 || S.warn > 0.05 ? 1 : 0.75;
-        brackets(ctx, ZX - ZH - grow, GY - 172 - grow, ZH * 2 + grow * 2, 182 + grow * 2, 18, here ? 6 : 4, zc);
-        ctx.globalAlpha = 1;
-        // 행인: 보통 사람 먼저, 바쁜 사람이 위
+        const zc = S.warn > 0.05 ? 'r' : S.glow > 0.05 ? 'g' : here ? 'y' : 'b';
+        const grow = Math.round(2 * bump(Math.max(S.glow, S.warn)));
+        for (let y = -3; y <= 3; y++) for (let x = -zh; x <= zh; x++) {
+          const d = (x * x) / (zh * zh) + (y * y) / 12;
+          if (d <= 1 && (here || S.glow > 0.05 || ((x + y) & 1) === 0)) fr(g, zx + x, gy + y, 1, 1, S.glow > 0.05 ? 'h' : 'Y');
+        }
+        corners(g, zx - zh - grow, gy - 46 - grow, zx + zh + 1 + grow, gy + 5 + grow, 7, zc, here || S.glow > 0.05 || S.warn > 0.05 ? 3 : 2);
+        // 행인: 그림자 → 보통 사람 → 바쁜 사람이 위
+        for (const p of people) if (p.x > -90 && p.x < W + 110) ell(g, L(p.x), gy, 7, 1.6, 'd');
         for (let pass = 0; pass < 2; pass++) for (const p of people) {
           if (p.busy !== (pass === 1) || p.x < -90 || p.x > W + 110) continue;
-          if (p.busy) drawRunner(ctx, P, p.x, GY, 1, { phase: p.x / 22, angry: p.state === 'angry' });
-          else drawWalker(ctx, P, p.x, GY, 1, { look: p.look, phase: p.x / 15, flyer: p.state === 'got', hop: 12 * bump(p.hop) });
+          const x = L(p.x);
+          if (p.busy) {
+            for (const s of [[13, 27, 7], [17, 20, 9], [13, 12, 6]]) fr(g, x + s[0], gy - s[1], s[2], 1, 'E');   // 속도선
+            put(g, runnerSprite(((Math.floor(p.x / 22 / (Math.PI / 2)) % 2) + 2) % 2, p.state === 'angry'), x, gy);
+          } else put(g, walkerSprite(p.look, ((Math.floor(p.x / 15 / (Math.PI / 2)) % 4) + 4) % 4, p.state === 'got'), x, gy - L(12 * bump(p.hop)));
         }
         const out = S.reach > 0 ? Math.sin(Math.PI * S.reach * S.reach) : 0;   // 누른 뒤 0.06초에 가장 길게
-        drawFlyerMe(ctx, P, MX, GY, 1, { reach: out, droop: S.lock > 0 ? 0.6 : 0, empty: S.glow > 0.45 });
-        for (const q of S.papers) if (q.t < 0.9) { ctx.globalAlpha = 1 - q.t / 0.9; drawFlyerSheet(ctx, P, q.x, q.y, 0.9, q.t * 7); ctx.globalAlpha = 1; }
+        ell(g, L(MX), gy, 8, 1.6, 'd');
+        put(g, meSprite(out, S.lock > 0, S.glow > 0.45), L(MX), gy);
+        for (const q of S.papers) if (q.t < 0.9) {   // 떨어지는 전단지: 90도씩 돌며 점무늬로 사라짐
+          faded(g, 1 - q.t / 0.9, function (lg) {
+            lg.save(); lg.translate(L(q.x), L(q.y)); lg.rotate(Math.round(q.t * 7 / (Math.PI / 2)) * Math.PI / 2); lg.drawImage(sheetSprite(), -4, -5); lg.restore();
+          });
+        }
       },
     };
   }
@@ -475,68 +669,88 @@
   // 2. 상하차 — 컨베이어로 내려오는 상자를 분류선에서 표시된 방향키로 보낸다
   // =====================================================================
   const DIR_CODES = ['ArrowLeft', 'ArrowRight', 'ArrowUp'];
-  function dirColor(P, d) { return d === 0 ? P.sys : d === 1 ? P.up : P.text; }   // 왼쪽 청록 · 오른쪽 빨강 · 위 흰색
-  function drawSticker(ctx, P, x, y, size, dir) { // 방향 딱지: 색 바탕 + 도형 화살표
-    box(ctx, x - size / 2, y - size / 2, size, size, size * 0.2, dirColor(P, dir));
-    arrowShape(ctx, x, y, size * 0.68, dir, P.ink);
+  // 상자 (25×22, 가운데 기준): 윗면 · 옆면 · 앞면 + 방향 딱지. bad = 떨어뜨린 상자(붉게)
+  function crateSprite(dir, bad) {
+    return spr('crate' + dir + (bad ? 'b' : ''), 25, 23, 12, 11, function (g) {
+      const f = bad ? 'r' : 'N', sh = bad ? 'R' : 'n', tp = bad ? 'P' : 'd';
+      for (let j = 0; j < 4; j++) fr(g, 4 - j, 1 + j, 19, 1, tp);                    // 윗면
+      for (let x = 20; x <= 22; x++) fr(g, x, 4 - (x - 19), 1, 15, sh);              // 옆면
+      fr(g, 1, 5, 19, 15, f); fr(g, 1, 5, 19, 1, sh); fr(g, 1, 18, 19, 2, sh);         // 앞면
+      for (let j = 0; j < 4; j++) fr(g, 11 - j, 1 + j, 2, 1, 'Y');                   // 테이프
+      fr(g, 9, 5, 2, 2, 'Y');
+      sticker(g, 10, 12, 12, dir);
+    });
   }
-  // 상자 (가운데 기준, 앞면 + 윗면 + 옆면). o: { rot, bad, plain 딱지 없음 }
-  function drawCrate(ctx, P, x, y, s, dir, o) {
-    o = o || {};
-    const front = o.bad ? mix(P.warmDim, P.bad, 0.5) : P.warmDim;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0); ctx.scale(s, s);
-    poly(ctx, [25, -19, 33, -29, 33, 17, 25, 27], mix(P.warmDim, P.ink, 0.4));       // 옆면
-    poly(ctx, [-33, -19, -25, -29, 33, -29, 25, -19], mix(P.warm, P.lamp, 0.4));      // 윗면
-    poly(ctx, [-8, -19, 0, -29, 8, -29, 0, -19], P.lamp);                             // 테이프
-    box(ctx, -33, -19, 58, 46, 3, front);                                             // 앞면
-    ctx.fillStyle = mix(P.warmDim, P.ink, 0.22); ctx.fillRect(-33, 21, 58, 6);
-    if (!o.plain) drawSticker(ctx, P, -4, 1, 36, dir);
-    ctx.restore();
+  function crateSmall() { // 쌓인 상자 (13×11)
+    return spr('crate-s', 13, 11, 0, 0, function (g) { fr(g, 2, 1, 10, 2, 'd'); fr(g, 1, 3, 10, 6, 'N'); fr(g, 1, 8, 10, 1, 'n'); fr(g, 11, 2, 1, 7, 'n'); fr(g, 5, 1, 2, 3, 'Y'); });
   }
-  // 트럭 (옆에서 봄, 가운데 기준). 기본은 머리가 왼쪽 · 짐칸 뒤(오른쪽)가 열림. o: { flip, dir, pile, squash }
-  function drawTruck(ctx, P, x, y, s, o) {
-    o = o || {};
-    const dir = o.dir || 0, f = o.flip ? -1 : 1, sq = (o.squash || 0) * 4;
-    const cab = dir === 0 ? P.sysDim : mix(P.up, P.night2, 0.45);
-    ctx.save(); ctx.translate(x, y); ctx.scale(s * f, s);
-    oval(ctx, 0, 70, 130, 8, fade(P.ink, 0.45));
-    ctx.fillStyle = P.night0; ctx.beginPath(); ctx.arc(-84, 50, 21, 0, TAU); ctx.arc(76, 50, 21, 0, TAU); ctx.fill();   // 바퀴
-    disc(ctx, -84, 50, 9, P.stoneLit); disc(ctx, 76, 50, 9, P.stoneLit); disc(ctx, -84, 50, 3, P.dim); disc(ctx, 76, 50, 3, P.dim);
-    ctx.translate(0, sq);
-    box(ctx, -122, 34, 248, 10, 3, P.night3);                                         // 차대
-    box(ctx, -40, -80, 168, 118, 8, P.stone);                                         // 짐칸
-    box(ctx, -40, -80, 168, 13, 6, P.stoneLit);
-    box(ctx, 44, -60, 84, 96, 4, P.night0);                                           // 열린 안쪽
-    for (let i = 0; i < Math.min(o.pile || 0, 6); i++) drawCrate(ctx, P, 68 + (i % 2) * 36, 20 - Math.floor(i / 2) * 29, 0.56, dir, { plain: true });
-    box(ctx, 124, -80, 8, 64, 3, P.stoneLit);                                         // 젖혀 둔 문
-    box(ctx, -128, -36, 92, 74, 14, cab);                                             // 운전석
-    poly(ctx, [-116, -26, -62, -26, -62, 4, -122, 4], P.night0);                      // 창
-    line(ctx, -104, -18, -92, -2, 4, fade(P.text, 0.25));
-    box(ctx, -130, 12, 10, 14, 3, P.lamp); box(ctx, -132, 30, 98, 9, 4, P.stoneLit);  // 전조등 · 범퍼
-    ctx.restore();
-    drawSticker(ctx, P, x + f * 2 * s, y + (sq - 24) * s, 46 * s, dir);               // 방향 표지 (뒤집히지 않게 따로)
+  // 트럭 (옆에서 봄, 92×54). 머리가 왼쪽 · 짐칸 뒤(오른쪽)가 열림. 기준 = 가운데
+  function truckSprite(dir) {
+    return spr('truck' + dir, 93, 54, 46, 27, function (g) {
+      const cab = dir === 0 ? 'b' : 'o', cabSh = dir === 0 ? 'B' : 'O';
+      fr(g, 2, 38, 88, 3, 'E'); fr(g, 2, 38, 88, 1, 'e');                           // 차대
+      OB(g, 30, 2, 60, 37, 'w'); fr(g, 31, 3, 58, 1, 'L');                         // 짐칸
+      for (let x = 34; x < 56; x += 5) fr(g, x, 5, 1, 32, 'L');
+      OB(g, 57, 6, 31, 31, 'E'); fr(g, 58, 7, 29, 2, 'k'); fr(g, 58, 33, 29, 3, 'e'); // 열린 안쪽
+      OB(g, 88, 4, 4, 27, 'L');                                                    // 젖혀 둔 문
+      SB(g, 2, 14, 30, 25, cab); fr(g, 3, 36, 28, 2, cabSh);                       // 운전석
+      OB(g, 5, 17, 14, 10, 'S'); fr(g, 7, 19, 2, 1, 'w'); fr(g, 7, 20, 1, 2, 'w');  // 창
+      fr(g, 21, 18, 1, 16, cabSh); fr(g, 23, 25, 3, 1, cabSh);                       // 문 · 손잡이
+      OB(g, 1, 29, 4, 5, 'Y');                                                     // 전조등
+      OB(g, 0, 34, 33, 4, 'L');                                                    // 범퍼
+      for (const cx of [18, 72]) { ell(g, cx, 45, 6, 6, 'k'); ell(g, cx, 45, 3.6, 3.6, 'E'); fr(g, cx - 1, 44, 2, 2, 'L'); }   // 바퀴
+    }, true);
   }
-  // 선반 (가운데 기준). 위 방향 상자가 쌓인다
-  function drawShelf(ctx, P, x, y, s, o) {
-    o = o || {};
-    ctx.save(); ctx.translate(x, y + (o.squash || 0) * 3); ctx.scale(s, s);
-    box(ctx, -112, -26, 8, 54, 2, P.stoneLit); box(ctx, 104, -26, 8, 54, 2, P.stoneLit);
-    poly(ctx, [-108, -22, 108, 22, 108, 26, -108, -18], P.stone);                     // 버팀대
-    box(ctx, -116, 16, 232, 8, 3, P.stoneLit); box(ctx, -116, -30, 232, 6, 3, P.stone);
-    for (let i = 0; i < Math.min(o.pile || 0, 5); i++) drawCrate(ctx, P, -72 + i * 37, 1, 0.52, 2, { plain: true });
-    ctx.restore();
-    drawSticker(ctx, P, x - 146 * s, y, 40 * s, 2);
+  // 선반 (80×20, 가운데 기준). 위 방향 상자가 아래 판에 쌓인다
+  function shelfSprite() {
+    return spr('shelf', 82, 22, 41, 10, function (g) {
+      fr(g, 4, 1, 3, 20, 'e'); fr(g, 75, 1, 3, 20, 'e'); fr(g, 4, 1, 1, 20, 'L'); fr(g, 75, 1, 1, 20, 'L');
+      fr(g, 1, 1, 80, 3, 'n'); fr(g, 1, 1, 80, 1, 'N');
+      fr(g, 1, 16, 80, 4, 'N'); fr(g, 1, 19, 80, 1, 'n');
+    });
   }
-  // 작업 장갑 낀 내 손 (가운데 기준, 소매는 아래로). flip 이면 엄지가 왼쪽
-  function drawGlove(ctx, P, x, y, s, flip, sleeve) {
-    ctx.save(); ctx.translate(x, y); ctx.scale(s * (flip ? -1 : 1), s);
-    box(ctx, -13, 24, 26, sleeve || 150, 8, P.hood);                                  // 소매
-    box(ctx, -16, 12, 32, 16, 5, P.warm);                                             // 손목 띠
-    box(ctx, -15, -12, 30, 30, 9, P.lamp);                                            // 손바닥
-    for (let i = 0; i < 3; i++) box(ctx, -15 + i * 10.5, -26, 9, 22, 4.5, P.lamp);    // 손가락
-    ctx.save(); ctx.translate(14, 0); ctx.rotate(0.6); box(ctx, -4, -14, 10, 20, 5, P.lamp); ctx.restore(); // 엄지
-    ctx.fillStyle = mix(P.lamp, P.warmDim, 0.5); ctx.fillRect(-9, 2, 18, 3);
-    ctx.restore();
+  // 작업 장갑 낀 내 손 (16×46, 기준 = 손바닥 가운데). 소매는 주인공의 하늘색 후드
+  function gloveSprite() {
+    return spr('glove', 17, 47, 8, 12, function (g) {
+      fr(g, 2, 2, 3, 8, 'Y'); fr(g, 5, 1, 3, 9, 'Y'); fr(g, 8, 2, 3, 8, 'Y');
+      fr(g, 2, 8, 10, 10, 'Y'); fr(g, 2, 15, 10, 3, 'y'); fr(g, 5, 3, 1, 6, 'y'); fr(g, 8, 3, 1, 6, 'y');
+      fr(g, 12, 9, 3, 6, 'Y'); fr(g, 12, 13, 3, 2, 'y');
+      fr(g, 1, 18, 12, 4, 'o'); fr(g, 1, 21, 12, 1, 'O');
+      fr(g, 3, 22, 9, 25, 'l'); fr(g, 9, 22, 3, 25, 'b');
+    });
+  }
+  // 창고 (한 번 찍어 둔다): 밝은 벽 · 양쪽 하역문(밖은 낮) · 바닥 · 벨트 틀
+  function warehouseSprite(bx0, bx1, top, end) {
+    return spr('warehouse', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, 101, 'L');
+      for (const y of [18, 38, 58, 78]) fr(g, 0, y, LW, 1, 'e');
+      for (let x = 2; x < LW; x += 4) for (const y of [18, 38, 58, 78]) fr(g, x, y + 1, 1, 1, 'w');
+      // 하역문 둘 (밖: 하늘 · 먼 빌딩 · 땅)
+      for (const o of [[6, 94], [194, 94]]) {
+        const x = o[0], w = o[1];
+        fr(g, x - 3, 28, w + 6, 74, 'k');
+        for (let y = 29; y < 101; y++) { fr(g, x - 2, y, 2, 1, ((y >> 2) & 1) ? 'y' : 'k'); fr(g, x + w, y, 2, 1, ((y >> 2) & 1) ? 'y' : 'k'); }
+        fr(g, x, 29, w, 72, 's'); fr(g, x, 60, w, 20, 'q');
+        for (let i = 0; i < 5; i++) { const bx = x + 4 + i * 19, bh = 10 + ((i * 7) % 4) * 5; fr(g, bx, 80 - bh, 14, bh, 'S'); for (let wy = 82 - bh; wy < 78; wy += 4) fr(g, bx + 3, wy, 8, 1, 'q'); }
+        fr(g, x, 80, w, 21, 'e'); fr(g, x, 80, w, 1, 'E');
+        fr(g, x, 29, w, 6, 'E'); for (let i = 0; i < 3; i++) fr(g, x, 30 + i * 2, w, 1, 'e');   // 말아 올린 셔터
+      }
+      // 기둥
+      for (const x of [0, 102, 186, 288]) { fr(g, x, 0, 6, 101, 'e'); fr(g, x + 4, 0, 2, 101, 'E'); fr(g, x + 1, 0, 1, 101, 'L'); }
+      // 바닥 + 안전선
+      fr(g, 0, 101, LW, LH - 101, 'e'); fr(g, 0, 101, LW, 1, 'k');
+      for (let x = 0; x < LW; x++) fr(g, x, 102, 1, 2, (((x + 0) >> 2) & 1) ? 'y' : 'k');
+      for (const y of [112, 122]) fr(g, 0, y, LW, 1, 'E');
+      for (let x = 20; x < LW; x += 48) { fr(g, x, 104, 1, 8, 'E'); fr(g, x + 24, 113, 1, 9, 'E'); }
+      // 벨트가 나오는 벽 구멍
+      fr(g, bx0 - 6, top - 7, bx1 - bx0 + 13, 8, 'k'); fr(g, bx0 - 5, top - 6, bx1 - bx0 + 11, 6, 'E');
+      for (let x = bx0 - 4; x < bx1 + 4; x += 4) fr(g, x, top - 6, 3, 6, 'H');
+      // 벨트 틀 (다리 · 옆 난간 · 끝 롤러)
+      for (const x of [bx0 - 2, bx1 - 1]) { fr(g, x, end, 3, 103 - end, 'E'); fr(g, x, end, 1, 103 - end, 'k'); }
+      fr(g, bx0 - 4, top - 1, 4, end - top + 3, 'k'); fr(g, bx0 - 3, top - 1, 2, end - top + 2, 'L');
+      fr(g, bx1, top - 1, 4, end - top + 3, 'k'); fr(g, bx1 + 1, top - 1, 2, end - top + 2, 'L');
+      OB(g, bx0 - 4, end - 2, bx1 - bx0 + 8, 5, 'L'); fr(g, bx0 - 3, end + 1, bx1 - bx0 + 6, 1, 'e');
+    }, true);
   }
 
   function makeLoading(env) {
@@ -605,47 +819,61 @@
         return { score: clamp((S.hits - 0.34 * S.empties) / S.total, 0, 1), hits: S.hits, total: S.total,
           detail: '실은 상자 ' + S.hits + ' / ' + S.total + (S.wrongs ? ' · 떨어뜨림 ' + S.wrongs + '번' : '') + (S.empties ? ' · 헛누름 ' + S.empties + '번' : '') };
       },
-      draw: function (ctx) {
-        // 창고 벽과 바닥
-        ctx.fillStyle = P.night1; ctx.fillRect(0, 0, W, 302);
-        ctx.fillStyle = P.night2; for (let x = 30; x < W; x += 170) ctx.fillRect(x, 0, 6, 302);
-        ctx.fillStyle = P.ground; ctx.fillRect(0, 302, W, H - 302);
-        ctx.fillStyle = P.stone; ctx.fillRect(0, 302, W, 3);
-        // 벨트
-        box(ctx, BX - BW / 2 - 9, TOP - 10, BW + 18, END - TOP + 10, 6, P.stone);
-        ctx.fillStyle = P.night2; ctx.fillRect(BX - BW / 2, TOP - 10, BW, END - TOP + 4);
-        ctx.fillStyle = P.night3;
-        for (let y = TOP - 10 + ((S.belt % 26) + 26) % 26; y < END - 8; y += 26) ctx.fillRect(BX - BW / 2, y, BW, 4);
-        box(ctx, BX - BW / 2 - 9, END - 10, BW + 18, 14, 7, P.stoneLit);
-        // 분류선
+      draw: function (g) {
+        const bx0 = L(BX - BW / 2), bx1 = L(BX + BW / 2), top = L(TOP), end = L(END), ly = L(LINE), win = L(WIN), cx = L(BX);
+        g.drawImage(warehouseSprite(bx0, bx1, top, end), 0, 0);
+        // 벨트: 고무 바닥 + 흐르는 마디
+        fr(g, bx0, top - 1, bx1 - bx0, end - top + 1, 'E');
+        const sh = Math.round(((S.belt % 27) + 27) % 27 / SC);
+        for (let y = top - 1 + sh; y < end - 1; y += 9) { fr(g, bx0, y, bx1 - bx0, 1, 'e'); fr(g, bx0, y + 1, bx1 - bx0, 1, 'k'); }
+        // 분류선: 노란 줄 + 양옆 세모, 선 둘레(판정 폭)는 점무늬
         const here = atLine();
-        const lc = S.warn > 0.05 ? P.bad : S.glow > 0.05 ? P.good : here ? P.gold : P.sys;
-        ctx.fillStyle = fade(lc, here ? 0.2 : 0.1); ctx.fillRect(BX - BW / 2, LINE - WIN, BW, WIN * 2);
-        ctx.fillStyle = lc; for (let x = BX - BW / 2 + 4; x < BX + BW / 2 - 8; x += 22) ctx.fillRect(x, LINE - 2, 14, 4);
-        poly(ctx, [BX - BW / 2 - 26, LINE - 12, BX - BW / 2 - 10, LINE, BX - BW / 2 - 26, LINE + 12], lc);
-        poly(ctx, [BX + BW / 2 + 26, LINE - 12, BX + BW / 2 + 10, LINE, BX + BW / 2 + 26, LINE + 12], lc);
+        const lc = S.warn > 0.05 ? 'r' : S.glow > 0.05 ? 'g' : here ? 'y' : 'w';
+        dots(g, bx0, ly - win, bx1 - bx0, win * 2 + 1, here || S.glow > 0.05 || S.warn > 0.05 ? lc : 'Y', here ? 0.25 : 0.12);
+        for (let x = bx0 + 1; x < bx1 - 1; x += 6) { fr(g, x - 1, ly - 2, 6, 4, 'k'); }
+        for (let x = bx0 + 1; x < bx1 - 1; x += 6) { fr(g, x, ly - 1, 4, 2, lc); }
+        for (let j = -4; j <= 4; j++) {
+          const n = 5 - Math.abs(j);
+          fr(g, bx0 - 6 - n - 1, ly + j - 1, n + 2, 3, 'k'); fr(g, bx1 + 5, ly + j - 1, n + 2, 3, 'k');
+        }
+        for (let j = -3; j <= 3; j++) { const n = 4 - Math.abs(j); fr(g, bx0 - 6 - n, ly + j, n, 1, lc); fr(g, bx1 + 6, ly + j, n, 1, lc); }
         // 벨트 위 상자 (먼 것부터)
         for (let i = boxes.length - 1; i >= 0; i--) {
-          const b = boxes[i];
-          if (b.state === 'belt' && b.y > TOP - 60) drawCrate(ctx, P, b.x + 4, b.y, b === here ? 1.08 : 1, b.dir);
-          else if (b.state === 'lost' || b.state === 'wrong') { ctx.globalAlpha = 1 - b.t; drawCrate(ctx, P, b.x + 4, b.y, 1 - b.t * 0.3, b.dir, { rot: b.t * (b.kx || 0.6) * 1.6, bad: true }); ctx.globalAlpha = 1; }
+          const b = boxes[i], x = L(b.x + 4), y = L(b.y);
+          if (b.state === 'belt' && b.y > TOP - 60) {
+            g.save(); g.beginPath(); g.rect(0, top - 1, LW, LH); g.clip();   // 벽 구멍에서 나오는 것처럼
+            put(g, crateSprite(b.dir), x, y);
+            g.restore();
+            if (b === here) corners(g, x - 15, y - 14, x + 15, y + 14, 5, lc === 'w' ? 'y' : lc, 2);
+          } else if (b.state === 'lost' || b.state === 'wrong') {
+            faded(g, 1 - b.t, function (lg) { putRot(lg, crateSprite(b.dir, true), x, y, b.t * (b.kx || 0.6) * 1.6, 1 - b.t * 0.3); });
+          }
         }
-        // 벨트가 나오는 벽 구멍 + 선반
-        ctx.fillStyle = P.night1; ctx.fillRect(BX - BW / 2 - 30, 0, BW + 60, TOP - 12);
-        box(ctx, BX - BW / 2 - 14, TOP - 18, BW + 28, 18, 5, P.night0);
-        ctx.fillStyle = P.stone; for (let x = BX - BW / 2 - 6; x < BX + BW / 2; x += 18) ctx.fillRect(x, TOP - 14, 12, 16);
-        drawShelf(ctx, P, BX, 40, 1, { pile: S.pile[2], squash: bump(S.bounce[2]) });
-        drawTruck(ctx, P, 166, 232, 1, { dir: 0, pile: S.pile[0], squash: bump(S.bounce[0]) });
-        drawTruck(ctx, P, 714, 232, 1, { dir: 1, flip: true, pile: S.pile[1], squash: bump(S.bounce[1]) });
+        // 선반 + 위 딱지
+        const sy = L(40) + 4 + (S.bounce[2] > 0.3 ? 1 : 0);
+        put(g, shelfSprite(), cx, sy);
+        for (let i = 0; i < Math.min(S.pile[2], 5); i++) g.drawImage(crateSmall(), cx - 34 + i * 14, sy - 4);
+        sticker(g, cx - 51, L(40) + 6, 15, 2);
+        // 트럭 둘 (+ 쌓인 상자, 딱지는 뒤집지 않음)
+        for (let d = 0; d < 2; d++) {
+          const tx = L(d ? 714 : 166), ty = L(232) + (S.bounce[d] > 0.3 ? 1 : 0), spr0 = truckSprite(d), tl = tx - 46, tt = ty - 27;
+          put(g, d ? flipped(spr0) : spr0, tx, ty);
+          for (let i = 0; i < Math.min(S.pile[d], 6); i++) {
+            const col = i % 2, row = Math.floor(i / 2);
+            g.drawImage(crateSmall(), d ? tl + 20 - col * 13 : tl + 60 + col * 13, tt + 25 - row * 9);
+          }
+          sticker(g, d ? tl + 48 : tl + 44, tt + 20, 17, d);
+        }
         // 내 손: 누른 쪽으로 밀어낸다
         const k = bump(S.push), px = (S.pushDir === 0 ? -1 : S.pushDir === 1 ? 1 : 0) * 18 * k, py = (S.pushDir === 2 ? -20 : 0) * k;
-        drawGlove(ctx, P, BX - BW / 2 - 40 + px, LINE + 36 + py, 1, false);
-        drawGlove(ctx, P, BX + BW / 2 + 40 + px, LINE + 36 + py, 1, true);
+        put(g, gloveSprite(), L(BX - BW / 2 - 40 + px), L(LINE + 36 + py));
+        put(g, flipped(gloveSprite()), L(BX + BW / 2 + 40 + px), L(LINE + 36 + py));
         // 날아가는 상자 (포물선)
         for (const b of boxes) if (b.state === 'fly') {
           const e = easeOut(b.t), d = DEST[b.dir];
           const arc = Math.sin(e * Math.PI);                 // 위로 가는 상자는 벨트 옆으로 돌아서 간다 (내려오는 상자를 안 가리게)
-          drawCrate(ctx, P, lerp(b.x0, d[0], e) + (b.dir === 2 ? 104 * arc : 0), lerp(b.y0, d[1], e) - (b.dir === 2 ? 0 : 46 * arc), lerp(1.12, 0.56, e), b.dir, { rot: (b.dir === 0 ? -1 : 1) * e * 0.5 });
+          const x = L(lerp(b.x0, d[0], e) + (b.dir === 2 ? 104 * arc : 0)), y = L(lerp(b.y0, d[1], e) - (b.dir === 2 ? 0 : 46 * arc)), s = lerp(1.12, 0.56, e);
+          putRot(g, crateSprite(b.dir), x, y, (b.dir === 0 ? -1 : 1) * e * 0.5, s);
         }
       },
     };
@@ -656,80 +884,109 @@
   // =====================================================================
   const ITEM_NAMES = ['삼각김밥', '컵라면', '캔커피', '우유'];
   const DIGIT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4'];
-  function drawItem(ctx, P, id, x, y, s) { // 물건 그림 (가운데 기준, 높이 70쯤). 넷 다 윤곽이 다르다
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    if (id === 0) {            // 삼각김밥: 둥근 세모 + 김
-      roundPoly(ctx, [0, -34, 36, 28, -36, 28], 10); ctx.fillStyle = P.text; ctx.fill();
-      ctx.save(); ctx.clip(); ctx.fillStyle = P.hair; ctx.fillRect(-40, 4, 80, 30); ctx.restore();
-      box(ctx, -9, -14, 18, 9, 4, P.warm);
-    } else if (id === 1) {     // 컵라면: 위가 넓은 컵 + 뚜껑 + 김
-      roundPoly(ctx, [-27, -18, 27, -18, 20, 33, -20, 33], 5); ctx.fillStyle = P.up; ctx.fill();
-      poly(ctx, [-25.4, -5, 25.4, -5, 23, 12, -23, 12], P.text);
-      box(ctx, -8, 0, 16, 7, 3, P.up);
-      box(ctx, -31, -27, 62, 11, 5, P.lamp); poly(ctx, [16, -27, 35, -39, 31, -22], P.lamp);
-      ctx.strokeStyle = fade(P.text, 0.55); ctx.lineWidth = 3; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(-12, -33); ctx.quadraticCurveTo(-18, -39, -12, -45); ctx.moveTo(2, -33); ctx.quadraticCurveTo(-4, -39, 2, -45); ctx.stroke();
-    } else if (id === 2) {     // 캔커피: 좁고 긴 캔 + 금색 띠
-      box(ctx, -17, -34, 34, 68, 7, P.warmDim);
-      box(ctx, -17, -34, 34, 10, 5, P.dim); box(ctx, -17, 26, 34, 8, 4, P.dim); box(ctx, -5, -39, 10, 6, 2, P.stoneLit);
-      ctx.fillStyle = P.gold; ctx.fillRect(-17, -14, 34, 30);
-      ctx.save(); ctx.translate(0, 1); ctx.rotate(0.5); oval(ctx, 0, 0, 6.5, 10, P.hair); ctx.fillStyle = P.gold; ctx.fillRect(-1, -9, 2, 18); ctx.restore();
-    } else {                   // 우유: 지붕 달린 종이갑 + 파란 물결
-      box(ctx, -23, -12, 46, 48, 4, P.text);
-      poly(ctx, [-23, -12, 23, -12, 13, -30, -13, -30], mix(P.text, P.down, 0.3));
-      box(ctx, -13, -40, 26, 11, 2, P.text);
-      ctx.fillStyle = P.down; ctx.beginPath(); ctx.moveTo(-23, 8); ctx.quadraticCurveTo(-11, -4, 0, 8); ctx.quadraticCurveTo(11, 20, 23, 8); ctx.lineTo(23, 30); ctx.lineTo(-23, 30); ctx.closePath(); ctx.fill();
-      poly(ctx, [0, -8, 6, 2, 0, 7, -6, 2], P.down);
-    }
-    ctx.restore();
+  // 물건 그림 (26×27, 가운데 기준). 넷 다 윤곽 · 색이 다르다
+  function itemSprite(id) {
+    return spr('item' + id, 26, 27, 13, 13, function (g) {
+      if (id === 0) {            // 삼각김밥: 흰 세모 + 아래 김 + 주황 딱지
+        for (let j = 0; j < 19; j++) {
+          const half = Math.min(11, 1.5 + j * 0.55), x0 = Math.round(13 - half), w = Math.round(half * 2);
+          const cut = j === 18 ? 1 : 0;
+          fr(g, x0 + cut, 4 + j, w - cut * 2, 1, j >= 12 ? 'G' : 'w');
+          if (j < 12) fr(g, x0 + w - 2, 4 + j, 2, 1, 'L');
+        }
+        fr(g, 6, 16, 14, 1, 'g');
+        fr(g, 10, 9, 6, 3, 'o'); fr(g, 10, 11, 6, 1, 'O');
+      } else if (id === 1) {     // 컵라면: 위가 넓은 빨간 컵 + 흰 띠 + 뚜껑 + 김
+        for (let j = 0; j < 15; j++) { const half = 9 - j * 0.2, x0 = Math.round(13 - half); fr(g, x0, 9 + j, Math.round(half * 2), 1, j >= 4 && j <= 8 ? 'w' : 'r'); fr(g, x0 + Math.round(half * 2) - 2, 9 + j, 2, 1, j >= 4 && j <= 8 ? 'L' : 'R'); }
+        fr(g, 11, 14, 4, 3, 'r');
+        fr(g, 3, 6, 20, 3, 'Y'); fr(g, 3, 8, 20, 1, 'y'); fr(g, 19, 3, 4, 3, 'Y');
+      } else if (id === 2) {     // 캔커피: 좁고 긴 갈색 캔 + 노란 띠 + 콩
+        fr(g, 8, 1, 10, 2, 'L'); fr(g, 7, 3, 12, 20, 'n'); fr(g, 16, 3, 3, 20, 'H'); fr(g, 7, 23, 12, 2, 'e');
+        fr(g, 7, 9, 12, 8, 'y'); fr(g, 16, 9, 3, 8, 'o');
+        ell(g, 12, 13, 2.5, 3.2, 'H'); fr(g, 12, 11, 1, 4, 'y');
+        fr(g, 9, 4, 1, 4, 'N');
+      } else {                   // 우유: 지붕 달린 흰 종이갑 + 파란 물결
+        fr(g, 9, 1, 8, 3, 'w');
+        for (let j = 0; j < 6; j++) fr(g, 9 - j, 4 + j, 8 + j * 2, 1, j & 1 ? 'S' : 'w');
+        fr(g, 4, 10, 18, 15, 'w'); fr(g, 19, 10, 3, 15, 'L');
+        for (let x = 4; x < 22; x++) { const top = 16 + (((x >> 2) & 1) ? 1 : 0); fr(g, x, top, 1, 25 - top, x >= 19 ? 'B' : 'b'); }
+        fr(g, 11, 12, 3, 1, 'b'); fr(g, 12, 11, 1, 3, 'b');
+      }
+    });
   }
-  // 손님 윗몸. x = 가운데, y = 계산대 윗선. o: { look 0~3, mood 0 보통 · 1 웃음 · 2 시무룩 }
-  function drawCustomer(ctx, P, x, y, s, o) {
-    o = o || {};
-    const look = o.look || 0, mood = o.mood || 0;
-    const jacket = [P.hood, P.stoneLit, P.warmDim, P.sysDim][look];
-    const shade = mix(jacket, P.ink, 0.3);
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    if (look === 0) disc(ctx, 0, -106, 45, P.hoodShade);                               // 후드
-    if (look === 2) for (let i = 0; i < 7; i++) disc(ctx, -36 + i * 12, -134 + Math.abs(i - 3) * 7, 15, P.dim);   // 뽀글 머리
-    box(ctx, -54, -66, 108, 90, 28, jacket);                                           // 어깨
-    box(ctx, -13, -80, 26, 26, 8, P.skinShade);
-    if (look === 0) { line(ctx, -9, -58, -11, -34, 4, P.text); line(ctx, 9, -58, 11, -34, 4, P.text); }
-    else if (look === 1) { poly(ctx, [-20, -66, 20, -66, 0, -30], P.text); poly(ctx, [-6, -62, 6, -62, 4, -22, 0, -16, -4, -22], P.up); }
-    else if (look === 2) { poly(ctx, [-16, -66, 16, -66, 0, -20], P.lamp); disc(ctx, 0, -12, 4, shade); }
-    else { ctx.fillStyle = shade; ctx.fillRect(-3, -64, 6, 64); box(ctx, -40, -50, 26, 16, 4, P.gold); }
-    disc(ctx, 0, -110, 36, P.skin);                                                    // 얼굴
-    if (look === 0) { ctx.fillStyle = P.hair; ctx.beginPath(); ctx.arc(0, -110, 36, Math.PI * 1.08, Math.PI * 1.92); ctx.closePath(); ctx.fill(); }
-    else if (look === 1) {     // 가르마 + 안경
-      ctx.fillStyle = P.hair; ctx.beginPath(); ctx.arc(0, -110, 36.5, Math.PI * 0.98, Math.PI * 1.86); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = P.ink; ctx.lineWidth = 3; rrect(ctx, -25, -116, 20, 15, 5); ctx.stroke(); rrect(ctx, 5, -116, 20, 15, 5); ctx.stroke(); line(ctx, -5, -110, 5, -110, 3, P.ink);
-    } else if (look === 2) { for (let i = 0; i < 5; i++) disc(ctx, -26 + i * 13, -138 + Math.abs(i - 2) * 4, 12, P.dim); }
-    else {                     // 챙 모자
-      ctx.fillStyle = P.gold; ctx.beginPath(); ctx.arc(0, -116, 37, Math.PI, 0); ctx.closePath(); ctx.fill();
-      box(ctx, -42, -122, 84, 10, 5, mix(P.gold, P.ink, 0.25));
-    }
-    oval(ctx, -13, -106, 3.4, 4.6, P.ink); oval(ctx, 13, -106, 3.4, 4.6, P.ink);
-    ctx.strokeStyle = P.ink; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath();
-    if (mood === 1) ctx.arc(0, -96, 9, Math.PI * 0.15, Math.PI * 0.85);
-    else if (mood === 2) ctx.arc(0, -82, 9, Math.PI * 1.2, Math.PI * 1.8);
-    else { ctx.moveTo(-6, -90); ctx.lineTo(6, -90); }
-    ctx.stroke();
-    ctx.restore();
+  // 손님 윗몸 (44×60, 기준 = 가운데 · 계산대 윗선). look 0 학생 · 1 직장인 · 2 할머니 · 3 모자, mood 0 보통 · 1 웃음 · 2 시무룩
+  function customerSprite(look, mood) {
+    return spr('cust' + look + mood, 46, 62, 23, 50, function (g) {
+      const X = 1, Y = 1, jacket = ['g', 'E', 'N', 'b'][look], shade = ['G', 'k', 'n', 'B'][look];
+      if (look === 0) ell(g, X + 22, Y + 24, 17, 15, 'G');                              // 후드
+      if (look === 2) for (let i = 0; i < 7; i++) ell(g, X + 8 + i * 4.6, Y + 7 + Math.abs(i - 3) * 1.5, 4.2, 4.2, 'L');   // 뽀글 머리
+      // 어깨
+      fr(g, X + 4, Y + 40, 36, 20, jacket); fr(g, X + 2, Y + 44, 40, 16, jacket); fr(g, X + 36, Y + 42, 4, 18, shade);
+      fr(g, X + 18, Y + 34, 8, 8, 'P');                                                   // 목
+      if (look === 0) { fr(g, X + 17, Y + 42, 1, 9, 'w'); fr(g, X + 26, Y + 42, 1, 9, 'w'); fr(g, X + 16, Y + 51, 2, 2, 'w'); fr(g, X + 26, Y + 51, 2, 2, 'w'); }
+      else if (look === 1) { for (let j = 0; j < 9; j++) fr(g, X + 15 + j, Y + 40 + j, 14 - j * 2, 1, 'w'); fr(g, X + 21, Y + 41, 3, 12, 'r'); fr(g, X + 20, Y + 53, 5, 2, 'r'); }
+      else if (look === 2) { fr(g, X + 15, Y + 40, 14, 3, 'w'); fr(g, X + 21, Y + 48, 3, 3, 'y'); }
+      else { fr(g, X + 21, Y + 41, 2, 19, shade); OB(g, X + 8, Y + 47, 8, 5, 'y'); }
+      // 얼굴
+      ell(g, X + 22, Y + 22, 14, 13.5, 'p');
+      for (let y = Y + 8; y < Y + 36; y++) for (let x = X + 7; x < X + 37; x++) {
+        const dx = (x + 0.5 - X - 22) / 14, dy = (y + 0.5 - Y - 22) / 13.5;
+        if (dx * dx + dy * dy > 1) continue;
+        const ry = y - Y, rx = x - X;
+        if (look === 0 && (ry < 15 || ((rx < 11 || rx > 33) && ry < 22))) fr(g, x, y, 1, 1, 'H');
+        else if (look === 1 && (ry < 14 || (rx < 10 && ry < 21) || (rx > 34 && ry < 21) || (rx > 18 && ry < 16))) fr(g, x, y, 1, 1, 'H');
+        else if (look === 2 && ry < 13) fr(g, x, y, 1, 1, 'L');
+        else if (look === 3 && ry < 16) fr(g, x, y, 1, 1, 'y');
+      }
+      if (look === 1) fr(g, X + 18, Y + 9, 1, 6, 'p');                                   // 가르마
+      if (look === 3) { fr(g, X + 6, Y + 15, 32, 3, 'o'); fr(g, X + 20, Y + 9, 4, 3, 'o'); }   // 모자 챙 · 단추
+      fr(g, X + 7, Y + 22, 2, 4, 'p'); fr(g, X + 35, Y + 22, 2, 4, 'p');                   // 귀
+      // 눈 · 볼 · 입
+      fr(g, X + 15, Y + 22, 2, 3, 'k'); fr(g, X + 27, Y + 22, 2, 3, 'k');
+      if (look === 1) { OB(g, X + 12, Y + 20, 8, 7, 'k'); fr(g, X + 13, Y + 21, 6, 5, 'p'); OB(g, X + 24, Y + 20, 8, 7, 'k'); fr(g, X + 25, Y + 21, 6, 5, 'p'); fr(g, X + 20, Y + 22, 4, 1, 'k'); fr(g, X + 15, Y + 22, 2, 3, 'k'); fr(g, X + 27, Y + 22, 2, 3, 'k'); }
+      fr(g, X + 12, Y + 27, 3, 2, 'r'); fr(g, X + 29, Y + 27, 3, 2, 'r');
+      if (mood === 1) { fr(g, X + 19, Y + 29, 1, 1, 'k'); fr(g, X + 20, Y + 30, 4, 1, 'k'); fr(g, X + 24, Y + 29, 1, 1, 'k'); }
+      else if (mood === 2) { fr(g, X + 19, Y + 31, 1, 1, 'k'); fr(g, X + 20, Y + 30, 4, 1, 'k'); fr(g, X + 24, Y + 31, 1, 1, 'k'); fr(g, X + 29, Y + 19, 3, 1, 'k'); fr(g, X + 12, Y + 19, 3, 1, 'k'); }
+      else fr(g, X + 20, Y + 30, 4, 1, 'k');
+    });
   }
-  // 계산대 화면: 칸 수 = 만점 기준, 맞힌 만큼 금색으로 찬다 (가운데 기준)
-  function drawRegister(ctx, P, x, y, s, o) {
-    o = o || {};
-    const par = o.par || 8, filled = o.filled || 0, cols = Math.ceil(par / 2), size = 22, gap = 9;
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    box(ctx, -20, 40, 40, 30, 4, P.stone); box(ctx, -60, 62, 120, 14, 6, P.stoneLit);
-    box(ctx, -92, -56, 184, 106, 12, P.stone); box(ctx, -84, -48, 168, 90, 8, P.sysDeep);
-    const x0 = -(cols * size + (cols - 1) * gap) / 2;
-    for (let i = 0; i < par; i++) {
-      const px = x0 + (i % cols) * (size + gap), py = -30 + Math.floor(i / cols) * 34;
-      const on = i < filled, k = on && i === filled - 1 ? 1 + 0.35 * (o.pop || 0) : 1;
-      box(ctx, px + size / 2 - size * k / 2, py + size / 2 - size * k / 2, size * k, size * k, 5, on ? P.gold : fade(P.sys, 0.22));
-    }
-    ctx.restore();
+  // 계산대 화면 틀 (64×46, 기준 = 화면 가운데). 칸은 그릴 때 채운다
+  function registerSprite() {
+    return spr('register', 64, 46, 32, 17, function (g) {
+      fr(g, 28, 34, 8, 6, 'E'); fr(g, 28, 34, 2, 6, 'e');
+      OB(g, 16, 39, 32, 5, 'L');
+      OB(g, 1, 1, 62, 34, 'e'); fr(g, 2, 2, 60, 1, 'L');
+      OB(g, 4, 4, 56, 28, 'B');
+    }, true);
+  }
+  // 편의점 안 (한 번 찍어 둔다): 벽 · 창 · 뒤 진열장 · 계산대 · 바닥. cy = 계산대 윗줄
+  function storeSprite(cy) {
+    return spr('store', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, cy, 'S'); fr(g, 0, 0, LW, 3, 'w'); fr(g, 0, 3, LW, 1, 'L');
+      // 창 (바깥은 낮의 거리)
+      OB(g, 6, 8, 36, 50, 'w'); fr(g, 8, 10, 32, 46, 's'); fr(g, 8, 40, 32, 16, 'q');
+      fr(g, 12, 24, 10, 26, 'S'); fr(g, 26, 30, 12, 20, 'S'); for (let y = 27; y < 48; y += 4) { fr(g, 14, y, 6, 1, 'q'); fr(g, 28, y + 3, 8, 1, 'q'); }
+      ell(g, 16, 52, 8, 5, 'g'); ell(g, 32, 53, 7, 4, 'g'); fr(g, 8, 54, 32, 2, 'G');
+      fr(g, 23, 10, 2, 46, 'w'); fr(g, 23, 10, 1, 46, 'L');
+      seg(g, 11, 20, 17, 14, 'w', 1); seg(g, 11, 24, 21, 14, 'w', 1);
+      // 뒤 진열장 (상표 없는 상품들)
+      const prod = ['r', 'y', 'g', 'b', 'o', 'w', 'N', 'l'];
+      for (let u = 0; u < 5; u++) {
+        const x = 98 + u * 39;
+        OB(g, x, 8, 38, cy - 7, 'L'); fr(g, x + 1, 9, 36, 2, 'w');
+        for (let r = 0; r < 3; r++) {
+          const by = 22 + r * 14;
+          fr(g, x + 1, by, 36, 2, 'e'); fr(g, x + 1, by + 2, 36, 1, 'E');
+          for (let j = 0; j < 6; j++) { const h = 5 + ((u + r * 2 + j) % 3) * 2, c = prod[(u * 3 + r * 5 + j * 7) % prod.length]; OB(g, x + 2 + j * 6, by - h, 6, h, c); fr(g, x + 3 + j * 6, by - h + 1, 1, 1, 'w'); }
+        }
+      }
+      // 계산대
+      fr(g, 0, cy - 1, LW, 1, 'k'); fr(g, 0, cy, LW, 3, 'N'); fr(g, 0, cy, LW, 1, 'd'); fr(g, 0, cy + 3, LW, 1, 'k');
+      fr(g, 0, cy + 4, LW, 9, 'n'); for (let x = 30; x < LW; x += 60) fr(g, x, cy + 4, 1, 9, 'H'); fr(g, 0, cy + 13, LW, 1, 'k');
+      // 바닥 (바둑판 타일)
+      fr(g, 0, cy + 14, LW, LH - cy - 14, 'C');
+      for (let y = cy + 14; y < LH; y += 8) for (let x = ((y - cy - 14) >> 3 & 1) * 8; x < LW; x += 16) fr(g, x, y, 8, 8, 'c');
+    }, true);
   }
 
   function makeStore(env) {
@@ -755,23 +1012,31 @@
       S.cur++; S.idx = 0; S.served++; S.trans = TRANS; S.enter = 0; S.allow = 0; S.patience = 0;
       const nx = cur(); for (let i = 0; i < nx.marks.length; i++) nx.marks[i] = 0;
     }
-    function drawBubble(ctx, c, k, alpha, idx) {
-      const bw = 28 + c.items.length * 88;
-      ctx.save(); ctx.globalAlpha = alpha;
-      ctx.translate(BX0, BY0 + BH - 30); ctx.scale(k, k); ctx.translate(-BX0, -(BY0 + BH - 30));
-      poly(ctx, [BX0 + 8, BY0 + BH - 56, BX0 - 30, BY0 + BH - 30, BX0 + 8, BY0 + BH - 18], P.text);
-      box(ctx, BX0, BY0, bw, BH, 24, P.text); box(ctx, BX0 + 4, BY0 + 4, bw - 8, BH - 8, 20, P.night2);
-      poly(ctx, [BX0 + 8, BY0 + BH - 50, BX0 - 20, BY0 + BH - 30, BX0 + 8, BY0 + BH - 24], P.night2);
-      for (let i = 0; i < c.items.length; i++) {
-        const p = slot(c, i), m = c.marks[i], now = i === idx;
-        if (now) { box(ctx, p[0] - 40, BY0 + 12, 80, BH - 24, 14, fade(P.gold, 0.16)); box(ctx, p[0] - 24, BY0 + BH - 22, 48, 6, 3, P.gold); }
-        ctx.globalAlpha = alpha * (m ? 0.3 : 1);
-        drawItem(ctx, P, c.items[i], p[0], p[1] - (now ? 3 + 3 * Math.sin(env.fx.clock * 9) : 0), now ? 1.05 : 0.92);
-        ctx.globalAlpha = alpha;
-        if (m === 1) checkMark(ctx, p[0], p[1], 20, 9, P.good);
-        if (m === 2) crossMark(ctx, p[0], p[1], 17, 9, P.bad);
+    function drawBubble(g, c, k, alpha, idx) { // 말풍선: 흰 픽셀 틀 + 손님 쪽 꼬리, 지금 찍을 물건은 노란 칸 + 밑줄
+      const bx = L(BX0), by = L(BY0), bh = L(BH), bw = L(28 + c.items.length * 88);
+      const body = function (lg) {
+        SB(lg, bx, by, bw, bh, 'w');
+        rows(lg, bx - 9, by + bh - 17, ['......kkkk', '....kkwwww', '..kkwwwwww', 'kkwwwwwwww', '.kkkkwwwww', '.....kkkkk']);
+        fr(lg, bx + 1, by + bh - 2, bw - 2, 1, 'L');
+        for (let i = 0; i < c.items.length; i++) {
+          const p = slot(c, i), m = c.marks[i], now = i === idx, x = L(p[0]), y = L(p[1]);
+          if (now) { fr(lg, x - 13, by + 3, 27, bh - 6, 'Y'); fr(lg, x - 9, by + bh - 6, 19, 2, 'o'); }
+          if (m) { put(lg, itemSprite(c.items[i]), x, y); veil(lg, x - 13, y - 13, 26, 27, 'w'); }   // 끝난 물건은 흐리게(점무늬)
+          else put(lg, itemSprite(c.items[i]), x, y - (now ? Math.round(1 + Math.sin(env.fx.clock * 9)) : 0));
+          if (m === 1) vMark(lg, x, y + 1, 6);
+          if (m === 2) xMark(lg, x, y, 5);
+        }
+      };
+      if (k >= 0.999 && alpha >= 0.999) { body(g); return; }
+      if (k < 0.999) { // 튀어나오기: 꼬리 쪽을 기준으로 작게 → 크게 (가까운 점으로)
+        if (!drawBubble.m) drawBubble.m = mkc(LW, LH);
+        const m = drawBubble.m, ax = bx - 9, ay = by + bh - 12;
+        m[1].clearRect(0, 0, LW, LH); body(m[1]);
+        const s = Math.max(0.2, k);
+        g.drawImage(m[0], Math.round(ax - ax * s), Math.round(ay - ay * s), Math.round(LW * s), Math.round(LH * s));
+        return;
       }
-      ctx.restore();
+      faded(g, alpha, body);
     }
     return {
       title: '편의점 계산', howto: '말풍선 순서대로 번호 1~4', startY: 258,   // "시작!"은 말풍선 · 손님 아래 (번호 칸 위쪽)
@@ -815,46 +1080,54 @@
         return { score: clamp((S.hits - S.wrongs) / S.par, 0, 1), hits: Math.min(S.hits, S.par), total: S.par,
           detail: '찍은 물건 ' + Math.min(S.hits, S.par) + ' / ' + S.par + (S.wrongs ? ' · 잘못 찍음 ' + S.wrongs + '번' : '') + (S.timeouts ? ' · 그냥 간 손님 ' + S.timeouts + '명' : '') };   // 틀리면 그 물건을 잃고 1개만큼 더 깎인다 (번호 연타 막기)
       },
-      draw: function (ctx, wt) {
-        // 가게 안: 뒷벽 · 뒤쪽 진열장
-        ctx.fillStyle = P.night1; ctx.fillRect(0, 0, W, CY);
-        box(ctx, 22, 26, 96, CY - 26, 6, P.night0); ctx.fillStyle = fade(P.warm, 0.1); ctx.fillRect(30, 34, 80, 60);
-        for (let i = 0; i < 5; i++) {
-          const x = 300 + i * 118;
-          box(ctx, x, 28, 104, CY - 28, 4, P.night2);
-          for (let r = 0; r < 3; r++) {
-            ctx.fillStyle = P.night3; ctx.fillRect(x + 6, 70 + r * 42, 92, 4);
-            for (let j = 0; j < 5; j++) ctx.fillRect(x + 10 + j * 18, 70 + r * 42 - 14 - ((i + r + j) % 3) * 5, 12, 14 + ((i + r + j) % 3) * 5);
-          }
-        }
-        // 손님 (나가는 손님은 왼쪽으로, 새 손님은 오른쪽에서)
+      draw: function (g, wt) {
+        const cy = L(CY);
+        g.drawImage(storeSprite(cy), 0, 0);
+        // 손님 (나가는 손님은 왼쪽으로, 새 손님은 오른쪽에서) — 계산대 아래는 가린다
         const c = cur(), lv = S.leaving;
-        if (lv) { ctx.globalAlpha = 1 - lv.t; drawCustomer(ctx, P, CX - 170 * easeOut(lv.t), CY, 1, { look: lv.c.look, mood: lv.happy ? 1 : 2 }); ctx.globalAlpha = 1; }
-        ctx.globalAlpha = S.enter; drawCustomer(ctx, P, CX + 150 * (1 - easeOut(S.enter)), CY, 1, { look: c.look, mood: 0 }); ctx.globalAlpha = 1;
-        // 계산대
-        ctx.fillStyle = P.stoneLit; ctx.fillRect(0, CY, W, 12);
-        ctx.fillStyle = P.stone; ctx.fillRect(0, CY + 12, W, 22);
-        drawRegister(ctx, P, 754, 106, 1, { par: S.par, filled: Math.min(S.hits, S.par), pop: bump(S.pip) });
-        // 진열대 4칸 + 번호
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        g.save(); g.beginPath(); g.rect(0, 0, LW, cy - 1); g.clip();
+        if (lv) put(g, customerSprite(lv.c.look, lv.happy ? 1 : 2), L(CX - 170 * easeOut(lv.t)), cy);   // 반투명 대신 미끄러져 나가고 들어옴
+        if (S.enter > 0.05) put(g, customerSprite(c.look, 0), L(CX + 150 * (1 - easeOut(S.enter))), cy);
+        g.restore();
+        // 계산대 화면: 칸 수 = 만점 기준, 맞힌 만큼 노랗게
+        const rx = L(754), ry = L(106), par = S.par, filled = Math.min(S.hits, S.par), cols = Math.ceil(par / 2), pp = bump(S.pip);
+        put(g, registerSprite(), rx, ry);
+        const x0 = rx - Math.floor((cols * 6 + (cols - 1) * 2) / 2);
+        for (let i = 0; i < par; i++) {
+          const px = x0 + (i % cols) * 8, py = ry - 9 + Math.floor(i / cols) * 9, on = i < filled, big = on && i === filled - 1 && pp > 0.3 ? 1 : 0;
+          OB(g, px - big, py - big, 6 + big * 2, 6 + big * 2, on ? 'y' : 'b', on ? 'k' : 'B');
+          if (on) fr(g, px + 1 - big, py + 1 - big, 4 + big * 2, 1, 'Y');
+        }
+        // 진열대 4칸 (번호 글자는 text 에서)
         for (let i = 0; i < 4; i++) {
-          const x = 28 + i * 208, q = cell(i), k = bump(S.cellPop[i]);
-          box(ctx, x, 240, 200, 130, 14, P.stone); box(ctx, x, 228, 200, 128, 14, S.cellBad[i] > 0 ? mix(P.night2, P.bad, 0.45 * S.cellBad[i]) : P.night2);
-          if (k > 0) { ctx.strokeStyle = fade(P.good, k); ctx.lineWidth = 5; rrect(ctx, x + 3, 231, 194, 122, 12); ctx.stroke(); }
-          drawItem(ctx, P, i, q[0] + (S.cellBad[i] > 0 ? Math.sin(S.cellBad[i] * 40) * 4 : 0), q[1] - 8 * k, 1.2 * (1 + 0.16 * k));
-          box(ctx, x + 12, 240, 40, 40, 10, P.text);
-          ctx.font = '800 28px ' + font; ctx.fillStyle = P.ink; ctx.fillText(String(i + 1), x + 32, 262);
+          const x = L(28 + i * 208), q = cell(i), k = bump(S.cellPop[i]), bad = S.cellBad[i] > 0;
+          fr(g, x + 2, 79, 67, 45, 'd');
+          SB(g, x, 76, 67, 45, bad ? 'P' : 'w');
+          fr(g, x + 1, 77, 65, 2, bad ? 'r' : 'L');
+          if (bad) veil(g, x + 2, 80, 63, 39, 'r');
+          if (k > 0.05) { fr(g, x + 1, 77, 65, 2, 'g'); fr(g, x + 1, 117, 65, 2, 'g'); fr(g, x + 1, 77, 2, 42, 'g'); fr(g, x + 64, 77, 2, 42, 'g'); }
+          const ix = L(q[0] + (bad ? Math.sin(S.cellBad[i] * 40) * 4 : 0)), iy = L(q[1] - 8 * k);
+          ell(g, ix, 111, 10, 2, 'L');
+          put(g, itemSprite(i), ix, iy);
+          SB(g, x + 4, 81, 13, 13, 'Y');
         }
         // 말풍선
-        if (lv) drawBubble(ctx, lv.c === c ? { items: c.items, marks: lv.marks } : { items: lv.c.items, marks: lv.marks }, 1, 1 - lv.t, -1);
-        if (wt >= 0 && S.trans <= 0.1) drawBubble(ctx, c, pop(1 - S.trans / 0.1), 1, S.idx);
+        if (lv && lv.t < 0.55) drawBubble(g, lv.c === c ? { items: c.items, marks: lv.marks } : { items: lv.c.items, marks: lv.marks }, 1, 1, -1);   // 나간 손님 말풍선은 잠깐 남았다가 사라짐
+        if (wt >= 0 && S.trans <= 0.1) drawBubble(g, c, pop(1 - S.trans / 0.1), 1, S.idx);
         if (wt >= 0 && S.trans <= EPS && S.allow > 0) {   // 손님이 기다려 주는 시간: 말풍선 밑 막대
-          const bw = 28 + c.items.length * 88, f = clamp(S.patience / S.allow, 0, 1);
-          box(ctx, BX0, BY0 + BH + 8, bw, 8, 4, P.night3);
-          if (f > 0) box(ctx, BX0, BY0 + BH + 8, Math.max(8, bw * f), 8, 4, f < 0.3 ? P.bad : P.sys);
+          const bw = L(28 + c.items.length * 88), f = clamp(S.patience / S.allow, 0, 1), bx = L(BX0), by = L(BY0 + BH) + 3;
+          OB(g, bx, by, bw, 5, 'L');
+          if (f > 0) { fr(g, bx + 1, by + 1, Math.max(1, Math.round((bw - 2) * f)), 3, f < 0.3 ? 'r' : 'b'); fr(g, bx + 1, by + 1, Math.max(1, Math.round((bw - 2) * f)), 1, f < 0.3 ? 'P' : 'l'); }
         }
         // 진열대에서 말풍선으로 날아가는 물건
-        for (const f of S.fly) { const e = easeOut(f.t); drawItem(ctx, P, f.item, lerp(f.x0, f.x1, e), lerp(f.y0, f.y1, e) - 30 * Math.sin(e * Math.PI), lerp(1.2, 0.9, e)); }
+        for (const f of S.fly) { const e = easeOut(f.t); put(g, itemSprite(f.item), L(lerp(f.x0, f.x1, e)), L(lerp(f.y0, f.y1, e) - 30 * Math.sin(e * Math.PI))); }
+      },
+      text: function (ctx, wt, ox, oy) { // 진열대 번호 (둥근모꼴 32px, 노란 딱지 위)
+        ctx.font = '32px ' + font; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = pc('k');
+        for (let i = 0; i < 4; i++) {
+          const s = String(i + 1), w = ctx.measureText(s).width, bx = (L(28 + i * 208) + 4) * SC + ox, by = 81 * SC + oy;
+          ctx.fillText(s, Math.round((bx + (13 * SC - w) / 2) / 2) * 2, by + 4);
+        }
       },
     };
   }
@@ -863,65 +1136,75 @@
   // 4. 배달 — 위에서 본 3차선. 좌우로 차를 피하고 초록 "배달 완료 지점"을 밟는다
   // =====================================================================
   // 내 스쿠터 (위에서 봄, 가운데 기준, 위쪽이 앞). o: { lean -1~1, pop 0~1 }
-  function drawScooter(ctx, P, x, y, s, o) {
-    o = o || {};
-    const k = 1 + 0.14 * (o.pop || 0);
-    ctx.save(); ctx.translate(x, y); ctx.rotate((o.lean || 0) * 0.24); ctx.scale(s, s);
-    poly(ctx, [-7, -32, 7, -32, 30, -104, -30, -104], fade(P.lamp, 0.13));              // 전조등 빛
-    oval(ctx, 4, 6, 20, 38, fade(P.ink, 0.4));
-    box(ctx, -4, -38, 8, 18, 4, P.ink); box(ctx, -4, 26, 8, 14, 4, P.ink);              // 바퀴
-    box(ctx, -10, -26, 20, 56, 9, P.text);                                              // 차체
-    box(ctx, -20, -25, 40, 6, 3, P.stoneLit); disc(ctx, -21, -24, 4.5, P.dim); disc(ctx, 21, -24, 4.5, P.dim);   // 핸들 · 거울
-    box(ctx, -5, -32, 10, 7, 3, P.lamp);
-    line(ctx, -13, -8, -18, -21, 7, P.hood); line(ctx, 13, -8, 18, -21, 7, P.hood);     // 팔
-    box(ctx, -17, -13, 34, 19, 9, P.hood);                                              // 어깨
-    disc(ctx, 0, -7, 11.5, P.text); box(ctx, -8, -17, 16, 6, 3, P.sys);                 // 헬멧 · 가리개
-    ctx.save(); ctx.translate(0, 21); ctx.scale(k, k);
-    box(ctx, -16, -13, 32, 27, 6, P.warm); box(ctx, -16, -13, 32, 9, 5, P.lamp);        // 배달통
-    ctx.fillStyle = P.warmDim; ctx.fillRect(-2, -4, 4, 18);
-    ctx.restore();
-    ctx.restore();
+  // 승용차 (위에서 봄, 20×32, 가운데 기준, 앞이 위). 몸 색 넷: 흰 · 빨강 · 노랑 · 초록
+  const CAR_BODY = [['L', 'e'], ['r', 'R'], ['y', 'o'], ['g', 'G']];
+  function carSprite(ci) {
+    return spr('car' + ci, 21, 33, 10, 16, function (g) {
+      const b = CAR_BODY[ci][0], sh = CAR_BODY[ci][1];
+      for (const y of [6, 21]) { fr(g, 1, y, 2, 6, 'k'); fr(g, 18, y, 2, 6, 'k'); }   // 바퀴
+      fr(g, 4, 1, 13, 31, b); fr(g, 3, 2, 15, 29, b); fr(g, 15, 2, 3, 29, sh);
+      fr(g, 1, 10, 2, 2, b); fr(g, 18, 10, 2, 2, b);                                  // 거울
+      fr(g, 5, 9, 11, 4, 'S'); fr(g, 6, 8, 9, 1, 'S'); fr(g, 6, 10, 2, 1, 'w');        // 앞유리
+      fr(g, 5, 13, 11, 8, b); fr(g, 5, 13, 11, 1, sh); fr(g, 6, 14, 3, 1, 'w');         // 지붕
+      fr(g, 5, 21, 11, 3, 'S'); fr(g, 5, 21, 11, 1, sh);                              // 뒷유리
+      fr(g, 4, 1, 3, 2, 'Y'); fr(g, 14, 1, 3, 2, 'Y');                                // 전조등
+      fr(g, 4, 30, 3, 2, ci === 1 ? 'R' : 'r'); fr(g, 14, 30, 3, 2, ci === 1 ? 'R' : 'r');   // 꼬리등
+    });
   }
-  // 승용차 (위에서 봄, 가운데 기준, 길이 84). 꼬리등이 아래쪽
-  function drawCar(ctx, P, x, y, s, color) {
-    const body = color || P.stoneLit;
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    box(ctx, -23, -37, 54, 84, 15, fade(P.ink, 0.4));
-    ctx.fillStyle = P.ink; ctx.fillRect(-31, -29, 8, 18); ctx.fillRect(23, -29, 8, 18); ctx.fillRect(-31, 12, 8, 18); ctx.fillRect(23, 12, 8, 18);   // 바퀴
-    box(ctx, -27, -42, 54, 84, 15, body);
-    box(ctx, -33, -17, 7, 7, 2, body); box(ctx, 26, -17, 7, 7, 2, body);                // 거울
-    poly(ctx, [-20, -20, 20, -20, 16, -6, -16, -6], P.night0);                          // 앞유리
-    box(ctx, -16, -6, 32, 27, 5, mix(body, P.text, 0.18));                              // 지붕
-    poly(ctx, [-16, 21, 16, 21, 19, 30, -19, 30], P.night0);                            // 뒷유리
-    box(ctx, -23, -42, 12, 5, 2, P.lamp); box(ctx, 11, -42, 12, 5, 2, P.lamp);
-    box(ctx, -24, 36, 13, 6, 3, P.up); box(ctx, 11, 36, 13, 6, 3, P.up);                // 꼬리등
-    ctx.restore();
+  // 버스 (위에서 봄, 26×54). 길고 넓은 몸 + 지붕 냉방기
+  function busSprite() {
+    return spr('bus', 29, 55, 14, 27, function (g) {
+      for (const y of [6, 36, 44]) { fr(g, 2, y, 2, 6, 'k'); fr(g, 25, y, 2, 6, 'k'); }
+      fr(g, 4, 1, 21, 53, 'b'); fr(g, 22, 1, 3, 53, 'B');
+      fr(g, 1, 3, 3, 3, 'b'); fr(g, 25, 3, 3, 3, 'b');                                // 거울
+      fr(g, 5, 2, 19, 5, 'S'); fr(g, 6, 3, 3, 1, 'w');                                // 앞유리
+      fr(g, 6, 9, 17, 41, 'l'); fr(g, 6, 9, 17, 1, 'B');
+      OB(g, 8, 12, 13, 10, 'L'); fr(g, 10, 14, 9, 1, 'e'); fr(g, 10, 17, 9, 1, 'e');   // 냉방기 둘
+      OB(g, 8, 36, 13, 10, 'L'); fr(g, 10, 38, 9, 1, 'e'); fr(g, 10, 41, 9, 1, 'e');
+      OB(g, 11, 26, 7, 6, 'b');                                                     // 환기구
+      fr(g, 5, 52, 4, 2, 'r'); fr(g, 20, 52, 4, 2, 'r');
+    });
   }
-  // 버스 (위에서 봄, 길이 150). 길고 넓은 몸 + 튀어나온 거울 + 지붕 냉방기
-  function drawBus(ctx, P, x, y, s) {
-    const body = mix(P.down, P.night2, 0.3), roof = mix(P.down, P.text, 0.3), deep = mix(P.down, P.night0, 0.55);
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    box(ctx, -29, -70, 66, 150, 12, fade(P.ink, 0.4));
-    ctx.fillStyle = P.ink; for (const wy of [-52, 22, 44]) { ctx.fillRect(-37, wy, 8, 18); ctx.fillRect(29, wy, 8, 18); }
-    box(ctx, -33, -75, 66, 150, 12, body);
-    box(ctx, -45, -70, 13, 8, 3, body); box(ctx, 32, -70, 13, 8, 3, body);              // 거울(귀)
-    box(ctx, -27, -70, 54, 15, 5, P.night0);                                            // 앞유리
-    box(ctx, -25, -50, 50, 114, 8, deep);
-    box(ctx, -17, -40, 34, 28, 5, roof); box(ctx, -17, 22, 34, 28, 5, roof);            // 냉방기 둘
-    box(ctx, -9, -6, 18, 20, 3, body);                                                  // 환기구
-    box(ctx, -29, 68, 15, 6, 3, P.up); box(ctx, 14, 68, 15, 6, 3, P.up);
-    ctx.restore();
+  // 내 스쿠터 (위에서 봄, 18×30, 앞이 위). lean -1 · 0 · 1, big = 배달통이 튐 (배달 완료 직후)
+  function scooterSprite(lean, big) {
+    return spr('scoot' + lean + (big ? 'b' : ''), 21, 32, 10, 15, function (g) {
+      const X = 1, Y = 1, d = lean;
+      fr(g, X + 8, Y, 3, 5, 'k'); fr(g, X + 8, Y + 25, 3, 5, 'k');                    // 바퀴
+      fr(g, X + 7, Y + 3, 5, 22, 'w'); fr(g, X + 11, Y + 3, 1, 22, 'L');              // 차체
+      fr(g, X + 8, Y + 2, 3, 1, 'Y');                                                // 전조등
+      fr(g, X + 2, Y + 6 + (d > 0 ? 1 : 0), 7, 2, 'E'); fr(g, X + 10, Y + 6 + (d < 0 ? 1 : 0), 7, 2, 'E');   // 핸들
+      fr(g, X + 1, Y + 5, 2, 2, 'e'); fr(g, X + 16, Y + 5, 2, 2, 'e');                // 거울
+      const bw = big ? 14 : 12, bh = big ? 11 : 9;                                   // 배달통
+      fr(g, X + 9 - (bw >> 1) + 1, Y + 17, bw, bh, 'o'); fr(g, X + 9 - (bw >> 1) + 1, Y + 17, bw, 3, 'Y'); fr(g, X + 9, Y + 17, 2, bh, 'O');
+      fr(g, X + 4 + d, Y + 8, 3, 4, 'l'); fr(g, X + 12 + d, Y + 8, 3, 4, 'l');         // 팔
+      fr(g, X + 4 + d, Y + 11, 11, 6, 'l'); fr(g, X + 12 + d, Y + 11, 3, 6, 'b');     // 어깨 (하늘색 후드)
+      ell(g, X + 9.5 + d, Y + 11, 4.2, 4.2, 'w'); fr(g, X + 7 + d, Y + 7, 5, 2, 'b'); fr(g, X + 11 + d, Y + 10, 2, 3, 'L');   // 헬멧 · 가리개
+    });
   }
-  // 배달 완료 지점 (초록 핀 + 바닥 고리). o: { pulse 0~1 }
-  function drawPin(ctx, P, x, y, s, o) {
-    o = o || {};
-    const bob = 4 * (o.pulse || 0);
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    ctx.strokeStyle = fade(P.good, 0.6); ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 14, 32 + bob, 13 + bob * 0.4, 0, 0, TAU); ctx.stroke();
-    oval(ctx, 0, 14, 16, 6.5, fade(P.good, 0.45));
-    ctx.fillStyle = P.good; ctx.beginPath(); ctx.arc(0, -18 - bob, 16, Math.PI * 5 / 6, Math.PI / 6); ctx.lineTo(0, 12 - bob); ctx.closePath(); ctx.fill();
-    poly(ctx, [-7, -15 - bob, 0, -24 - bob, 7, -15 - bob, 7, -9 - bob, -7, -9 - bob], P.ink);   // 핀 안의 집
-    ctx.restore();
+  // 배달 완료 지점 (초록 핀, 16×20, 기준 = 뾰족한 끝)
+  function pinSprite() {
+    return spr('pin', 17, 21, 8, 18, function (g) {
+      ell(g, 8.5, 7.5, 6.6, 6.6, 'g');
+      for (let j = 0; j < 6; j++) fr(g, 4 + Math.round(j * 0.7), 12 + j, 9 - Math.round(j * 1.4), 1, 'g');
+      fr(g, 11, 4, 2, 9, 'G');
+      fr(g, 6, 6, 5, 4, 'w'); fr(g, 7, 5, 3, 1, 'w'); fr(g, 8, 4, 1, 1, 'w'); fr(g, 8, 8, 1, 2, 'G');   // 핀 안의 집
+    });
+  }
+  // 길가 (64줄짜리 조각, 위아래로 이어 붙임): 잔디 · 지붕 · 나무
+  function blockSprite(side) {
+    return spr('block' + side, 92, 64, 0, 0, function (g) {
+      fr(g, 0, 0, 92, 64, 'h');
+      for (let y = 0; y < 64; y += 2) for (let x = (y >> 1) & 1 ? 1 : 0; x < 92; x += 6) fr(g, x, y, 1, 1, 'g');
+      const roofs = side ? [[30, 4, 40, 26, 'o', 'O'], [6, 36, 30, 22, 'b', 'B']] : [[8, 6, 44, 24, 'r', 'R'], [40, 38, 34, 20, 'N', 'n']];
+      for (const r of roofs) {
+        OB(g, r[0], r[1], r[2], r[3], r[4]); fr(g, r[0] + 1, r[1] + (r[3] >> 1), r[2] - 2, 1, r[5]);
+        for (let x = r[0] + 3; x < r[0] + r[2] - 3; x += 4) fr(g, x, r[1] + 2, 1, (r[3] >> 1) - 3, r[5]);
+        OB(g, r[0] + r[2] - 11, r[1] + r[3] - 9, 7, 6, 'L');
+      }
+      const trees = side ? [[14, 14], [78, 44], [52, 56]] : [[70, 14], [20, 48], [84, 56]];
+      for (const t of trees) { ell(g, t[0] + 2, t[1] + 2, 6, 5, 'G'); ell(g, t[0], t[1], 6, 6, 'g'); ell(g, t[0] - 2, t[1] - 2, 2.5, 2.5, 'h'); }
+      fr(g, side ? 0 : 89, 0, 3, 64, 'C');
+    }, true);
   }
 
   function makeDelivery(env) {
@@ -1018,35 +1301,37 @@
         return { score: clamp(0.5 + 0.5 * S.got / S.total - 0.25 * S.crashes, 0, 1), hits: S.got, total: S.total, crashes: S.crashes,
           detail: '배달 ' + S.got + ' / ' + S.total + '건 · 충돌 ' + S.crashes + '번' };
       },
-      draw: function (ctx) {
-        const off = S.road;
-        // 길 밖: 보도 · 지붕 · 가로등 (어둡게, 길과 함께 흐름)
-        ctx.fillStyle = P.night1; ctx.fillRect(RX0 - 44, 0, 44, H); ctx.fillRect(RX1, 0, 44, H);
-        for (let idx = Math.floor((off - H) / 190); idx <= Math.floor(off / 190) + 1; idx++) {
-          const y = off - idx * 190, h = ((idx * 53) % 5 + 5) % 5;
-          box(ctx, 18, y + 12, RX0 - 80, 150 - h * 6, 6, h % 2 ? P.night1 : P.night2); box(ctx, 40 + h * 9, y + 34, 46, 30, 4, P.night3);
-          box(ctx, RX1 + 62, y + 60, W - RX1 - 80, 150 - (4 - h) * 6, 6, h % 2 ? P.night2 : P.night1); box(ctx, RX1 + 96 + h * 12, y + 86, 40, 34, 4, P.night3);
-          disc(ctx, RX0 - 22, y + 40, 30, fade(P.lamp, 0.07)); disc(ctx, RX0 - 22, y + 40, 5, P.warm);
-          disc(ctx, RX1 + 22, y + 135, 30, fade(P.lamp, 0.07)); disc(ctx, RX1 + 22, y + 135, 5, P.warm);
-        }
+      draw: function (g) {
+        const ro = Math.round(S.road / SC), r0 = L(RX0), r1 = L(RX1), lw = L(LANE_W);
+        // 길 밖: 잔디 · 지붕 · 나무 (길과 함께 흐름) + 보도
+        for (let y = ((ro % 64) + 64) % 64 - 64; y < LH; y += 64) { g.drawImage(blockSprite(0), r0 - 104, y); g.drawImage(blockSprite(1), r1 + 12, y); }
+        fr(g, r0 - 12, 0, 10, LH, 'C'); fr(g, r1 + 3, 0, 10, LH, 'C');
+        for (let y = ((ro % 8) + 8) % 8 - 8; y < LH; y += 8) { fr(g, r0 - 12, y, 10, 1, 'd'); fr(g, r1 + 3, y, 10, 1, 'd'); }
+        fr(g, r0 - 13, 0, 1, LH, 'k'); fr(g, r1 + 13, 0, 1, LH, 'k');
         // 길 · 차선
-        ctx.fillStyle = P.ground; ctx.fillRect(RX0, 0, RX1 - RX0, H);
-        ctx.fillStyle = P.stoneLit; ctx.fillRect(RX0 - 4, 0, 4, H); ctx.fillRect(RX1, 0, 4, H);
-        ctx.fillStyle = P.stone;
-        for (let y = ((off % 80) + 80) % 80 - 80; y < H; y += 80) { ctx.fillRect(RX0 + LANE_W - 3, y, 6, 36); ctx.fillRect(RX0 + LANE_W * 2 - 3, y, 6, 36); }
+        fr(g, r0 - 2, 0, r1 - r0 + 5, LH, 'L'); fr(g, r0 - 1, 0, 1, LH, 'k'); fr(g, r1 + 1, 0, 1, LH, 'k');
+        fr(g, r0, 0, r1 - r0 + 1, LH, 'e');
+        for (let y = ((ro % 27) + 27) % 27 - 27; y < LH; y += 27) { fr(g, r0 + lw - 1, y, 2, 12, 'w'); fr(g, r0 + lw * 2 - 1, y, 2, 12, 'w'); }
         // 배달 완료 지점 · 차
         for (const p of pins) {
           if (p.y < -60 || p.y > H + 60 || p.t >= 1) continue;
-          if (p.got) { ctx.globalAlpha = 1 - p.t; drawPin(ctx, P, laneX(p.lane), p.y - 30 * p.t, 1 + 0.5 * p.t, {}); ctx.globalAlpha = 1; }
-          else drawPin(ctx, P, laneX(p.lane), p.y, 1, { pulse: 0.5 + 0.5 * Math.sin(fx.clock * 8) });
+          const x = L(laneX(p.lane)), y = L(p.y);
+          if (p.got) faded(g, 1 - p.t, function (lg) { put(lg, pinSprite(), x, L(p.y - 30 * p.t), 1 + 0.5 * p.t); });
+          else {
+            const pu = Math.round(2 * (0.5 + 0.5 * Math.sin(fx.clock * 8)));
+            ell(g, x, y + 4, 9 + pu, 3 + (pu >> 1), 'G'); ell(g, x, y + 4, 8 + pu, 2 + (pu >> 1), 'h');
+            put(g, pinSprite(), x, y + 4 - pu);
+          }
         }
         for (const o of obs) {
           if (o.y < -110 || o.y > H + 110) continue;
-          if (o.bus) drawBus(ctx, P, laneX(o.lane), o.y, 1); else drawCar(ctx, P, laneX(o.lane), o.y, 1, o.color);
-          if (o.hit && S.inv > 0.25) { ctx.fillStyle = fade(P.bad, 0.45); rrect(ctx, laneX(o.lane) - 30, o.y - o.half, 60, o.half * 2, 14); ctx.fill(); }
+          const x = L(laneX(o.lane)), y = L(o.y);
+          put(g, o.bus ? busSprite() : carSprite(Math.max(0, CAR_COLORS.indexOf(o.color))), x, y);
+          if (o.hit && S.inv > 0.25) dots(g, x - 11, y - L(o.half), 22, L(o.half) * 2, 'r', 0.5);
         }
         // 내 스쿠터 (부딪힌 뒤 0.5초는 깜빡임)
-        if (S.inv <= 0 || Math.floor((0.5 - S.inv) * 14) % 2 === 0) drawScooter(ctx, P, S.x + S.edgeDir * 7 * bump(S.edge), SY, 1.15, { lean: S.lean * clamp(Math.abs(laneX(S.lane) - S.x) / 40, 0, 1), pop: bump(S.pop) });
+        const lean = S.lean * clamp(Math.abs(laneX(S.lane) - S.x) / 40, 0, 1);
+        if (S.inv <= 0 || Math.floor((0.5 - S.inv) * 14) % 2 === 0) put(g, scooterSprite(lean > 0.3 ? 1 : lean < -0.3 ? -1 : 0, bump(S.pop) > 0.4), L(S.x + S.edgeDir * 7 * bump(S.edge)), L(SY));
       },
     };
   }
@@ -1055,44 +1340,61 @@
   // 내놓기
   // =====================================================================
   const MAKERS = { flyer: makeFlyer, loading: makeLoading, store: makeStore, delivery: makeDelivery };
+  // 미니게임 색: 예전 PAL 과 같은 역할 이름, 값은 PX(밝은 낮의 픽셀 색). ui.js 가 opts.pal 로 넘긴다.
+  // 그림은 PX 를 직접 쓰고, pal 은 효과 색(맞음 · 틀림 · 금빛 · 흰 글)의 역할을 알아보는 데만 쓴다 — 예전 PAL 이 와도 같은 그림.
+  root.MGPAL = (function () {
+    const X = pxt();
+    return {
+      night0: X.s, night1: X.S, night2: X.q, night3: X.L, ground: X.C, stone: X.e, stoneLit: X.L,
+      warm: X.o, warmDim: X.O, lamp: X.Y, sys: X.b, sysDim: X.B, sysDeep: X.B,
+      text: X.w, dim: X.e, ink: X.k, up: X.r, down: X.b, gold: X.y, good: X.g, bad: X.r,
+      skin: X.p, skinShade: X.P, hair: X.H, hood: X.l, hoodShade: X.b, pants: X.E, shoe: X.w,
+      sky: X.s, panel: X.c, line: X.k,   // 새 이름: 하늘 · 크림 패널 · 외곽선
+    };
+  })();
   root.Minigames = {
     list: ['flyer', 'loading', 'store', 'delivery'],
     create: function (id, opts) {
       if (!MAKERS[id]) throw new Error('Minigames.create: 모르는 미니게임 "' + id + '"');
       return build(opts, MAKERS[id]);
     },
-    // 미니게임에 나오는 모든 등장물. draw(ctx, x, y, s): x, y = 그림 가운데, s = 배율 (1 = 게임 안 크기)
+    // 미니게임에 나오는 모든 등장물. draw(ctx, x, y, s): x, y = 그림 가운데, s = 배율 (1 = 게임 안 크기 = 점 하나가 논리 3px)
     sprites: function () {
-      const P = root.PAL || SPARE_PAL;
-      const S = function (name, draw) { return { name: name, draw: draw }; };
+      const S = function (name, make) {
+        return { name: name, draw: function (c, x, y, s) {
+          const im = make(), k = SC * (s || 1);
+          c.imageSmoothingEnabled = false;
+          c.drawImage(im, Math.round(x - im.width * k / 2), Math.round(y - im.height * k / 2), Math.round(im.width * k), Math.round(im.height * k));
+        } };
+      };
+      const fig = function (key, w, h, fn) { return function () { return spr('fig-' + key, w, h, 0, 0, fn, true); }; };
       return [
-        S('나 (전단지 알바)', function (c, x, y, s) { drawFlyerMe(c, P, x - 10 * s, y + 78 * s, s, {}); }),
-        S('행인 (비니)', function (c, x, y, s) { drawWalker(c, P, x, y + 82 * s, s, { look: 0 }); }),
-        S('행인 (긴 머리)', function (c, x, y, s) { drawWalker(c, P, x, y + 76 * s, s, { look: 1 }); }),
-        S('행인 (모자와 배낭)', function (c, x, y, s) { drawWalker(c, P, x, y + 78 * s, s, { look: 2 }); }),
-        S('바쁜 사람', function (c, x, y, s) { drawRunner(c, P, x - 10 * s, y + 78 * s, s, {}); }),
-        S('전단지', function (c, x, y, s) { drawFlyerSheet(c, P, x, y, s, 0); }),
-        S('가로등', function (c, x, y, s) { drawLamp(c, P, x + 42 * s, y + 134 * s, s); }),
-        S('상자 (왼쪽)', function (c, x, y, s) { drawCrate(c, P, x, y, s, 0); }),
-        S('상자 (오른쪽)', function (c, x, y, s) { drawCrate(c, P, x, y, s, 1); }),
-        S('상자 (위)', function (c, x, y, s) { drawCrate(c, P, x, y, s, 2); }),
-        S('왼쪽 트럭', function (c, x, y, s) { drawTruck(c, P, x, y, s, { dir: 0, pile: 3 }); }),
-        S('오른쪽 트럭', function (c, x, y, s) { drawTruck(c, P, x, y, s, { dir: 1, flip: true, pile: 3 }); }),
-        S('선반', function (c, x, y, s) { drawShelf(c, P, x + 16 * s, y, s, { pile: 3 }); }),
-        S('작업 장갑', function (c, x, y, s) { drawGlove(c, P, x, y - 14 * s, s, false, 44); }),
-        S('손님 (학생)', function (c, x, y, s) { drawCustomer(c, P, x, y + 64 * s, s, { look: 0 }); }),
-        S('손님 (직장인)', function (c, x, y, s) { drawCustomer(c, P, x, y + 64 * s, s, { look: 1 }); }),
-        S('손님 (할머니)', function (c, x, y, s) { drawCustomer(c, P, x, y + 64 * s, s, { look: 2, mood: 1 }); }),
-        S('손님 (모자)', function (c, x, y, s) { drawCustomer(c, P, x, y + 64 * s, s, { look: 3 }); }),
-        S('삼각김밥', function (c, x, y, s) { drawItem(c, P, 0, x, y, s); }),
-        S('컵라면', function (c, x, y, s) { drawItem(c, P, 1, x, y, s); }),
-        S('캔커피', function (c, x, y, s) { drawItem(c, P, 2, x, y, s); }),
-        S('우유', function (c, x, y, s) { drawItem(c, P, 3, x, y, s); }),
-        S('계산대 화면', function (c, x, y, s) { drawRegister(c, P, x, y - 10 * s, s, { par: 8, filled: 3 }); }),
-        S('내 스쿠터', function (c, x, y, s) { drawScooter(c, P, x, y + 30 * s, s * 1.15, {}); }),
-        S('승용차', function (c, x, y, s) { drawCar(c, P, x, y, s, P.stoneLit); }),
-        S('버스', function (c, x, y, s) { drawBus(c, P, x, y, s); }),
-        S('배달 완료 지점', function (c, x, y, s) { drawPin(c, P, x, y + 6 * s, s, {}); }),
+        S('나 (전단지 알바)', function () { return meSprite(1, false, false); }),
+        S('행인 (비니)', function () { return walkerSprite(0, 0, false); }),
+        S('행인 (긴 머리)', function () { return walkerSprite(1, 0, false); }),
+        S('행인 (모자와 배낭)', function () { return walkerSprite(2, 0, false); }),
+        S('바쁜 사람', function () { return runnerSprite(0, false); }),
+        S('전단지', sheetSprite),
+        S('상자 (왼쪽)', function () { return crateSprite(0); }),
+        S('상자 (오른쪽)', function () { return crateSprite(1); }),
+        S('상자 (위)', function () { return crateSprite(2); }),
+        S('왼쪽 트럭', fig('truck0', 93, 54, function (g) { g.drawImage(truckSprite(0), 0, 0); sticker(g, 44, 20, 17, 0); })),
+        S('오른쪽 트럭', fig('truck1', 93, 54, function (g) { g.drawImage(flipped(truckSprite(1)), 0, 0); sticker(g, 48, 20, 17, 1); })),
+        S('선반', fig('shelf', 100, 22, function (g) { g.drawImage(shelfSprite(), 18, 0); sticker(g, 8, 10, 15, 2); })),
+        S('작업 장갑', gloveSprite),
+        S('손님 (학생)', function () { return customerSprite(0, 0); }),
+        S('손님 (직장인)', function () { return customerSprite(1, 0); }),
+        S('손님 (할머니)', function () { return customerSprite(2, 1); }),
+        S('손님 (모자)', function () { return customerSprite(3, 0); }),
+        S('삼각김밥', function () { return itemSprite(0); }),
+        S('컵라면', function () { return itemSprite(1); }),
+        S('캔커피', function () { return itemSprite(2); }),
+        S('우유', function () { return itemSprite(3); }),
+        S('계산대 화면', registerSprite),
+        S('내 스쿠터', function () { return scooterSprite(0, false); }),
+        S('승용차', function () { return carSprite(0); }),
+        S('버스', busSprite),
+        S('배달 완료 지점', pinSprite),
       ];
     },
   };

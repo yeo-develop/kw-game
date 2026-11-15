@@ -25,7 +25,7 @@
   const $ = id => document.getElementById(id);
   const stage = $('stage');
   // 화면 색은 px.js 가 :root 에 --k · --c … (window.PX) 로 넣는다. PAL(예전 밤 색)은 벡터 그림 · 미니게임 몫
-  const PX = window.PX || {}, PXFONT = window.PXFONT || FONT;
+  const PX = window.PX || {};
 
   let scene = 'title', S = null; // S = 규칙의 상태 (window.game.state 가 요약해서 보여 줌)
   const ui = { tab: 'stock', sel: 'daejang', lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, fresh: {}, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [] };
@@ -61,7 +61,6 @@
   const cls = v => (v > 0 ? 'up' : v < 0 ? 'down' : 'dim');
   const arrow = (v, title) => '<span class="' + cls(v) + '">' + I(v > 0 ? 'up' : 'down', title || (v > 0 ? '오름' : '내림'), 's') + '</span>';
   const wid = t => [...String(t)].reduce((w, ch) => w + (ch.charCodeAt(0) > 0x2e7f ? 2 : 1), 0); // 둥근모꼴의 폭: 한글 등은 2칸, 영문 · 숫자 · 기호는 1칸 (16px 글자에서 1칸 = 8px)
-  const fitW = (t, n) => { t = String(t); if (wid(t) <= n) return t; let o = '', w = 0; for (const ch of t) { const d = ch.charCodeAt(0) > 0x2e7f ? 2 : 1; if (w + d > n - 1) break; o += ch; w += d; } return o.replace(/\s+$/, '') + '…'; }; // 칸에 맞춰 줄임 (전부는 title)
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const r1k = n => Math.round(n / 1000) * 1000;
@@ -69,12 +68,19 @@
   const jo = (w, a, b) => ((w.charCodeAt(w.length - 1) - 0xAC00) % 28 ? a : b); // 받침이 있으면 a
   const eok = n => { const v = n / 1e8; return (v >= 10 ? Math.floor(v) : Math.floor(v * 10) / 10) + '억'; }; // 1억 이상 금액의 단위 길잡이 (숫자 표기는 그대로, 옆에 작게)
   const eokTag = n => (n >= 1e8 ? ' <i class="u">' + eok(n) + '</i>' : '');
+  const shortWon = n => (n >= 1e8 ? eok(n) : num(n)); // 좁은 칸의 금액: 1억이 넘으면 "350억"처럼 (전부는 title)
   const BY = { study: '리포트', tip: '귀띔', chat: '리딩방' }; // 리포트를 어디서 얻었나
 
   // ── 화면 맞춤: 1280×720 을 창에 맞춰 통째로 ──
+  // 창이 더 크면 점 하나가 화면의 점(기기 픽셀) 정수 개가 되는 배율까지만 키운다(1.5배 같은 배율은 점이 뭉개짐). 남는 테두리는 같은 바둑판, 무대는 가운데.
+  // 창이 더 작으면 그대로 줄인다(정수 배로는 1보다 작게 못 줄임).
   function fit() {
-    const k = Math.min(innerWidth / 1280, innerHeight / 720);
-    stage.style.transform = 'translate(' + Math.round((innerWidth - 1280 * k) / 2) + 'px,' + Math.round((innerHeight - 720 * k) / 2) + 'px) scale(' + k + ')';
+    const f = Math.min(innerWidth / 1280, innerHeight / 720), dpr = window.devicePixelRatio || 1;
+    const k = f >= 1 ? Math.max(1, Math.floor(f * dpr + 1e-6) / dpr) : f;
+    const snap = v => Math.round(v * dpr) / dpr, x = snap((innerWidth - 1280 * k) / 2), y = snap((innerHeight - 720 * k) / 2);
+    stage.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
+    const bs = document.body && document.body.style;
+    if (bs) { bs.backgroundSize = 48 * k + 'px ' + 48 * k + 'px'; bs.backgroundPosition = x + 'px ' + y + 'px'; } // 테두리의 바둑판이 무대의 바둑판과 이어지게
   }
   addEventListener('resize', fit); fit();
 
@@ -388,16 +394,17 @@
   }
   function done() { drain(); render(); if (!S.ended && !(ui.modal && ui.modal.type === 'mg')) saveNow(); } // 행동 하나마다 저장 (새로 고쳐서 되돌리기 없음)
   const busy = () => !!(ui.modal || ui.queue.length || (S && scene === 'play' && !S.ended && (S.offer || S.event || S.den))); // 창이 떠 있거나 곧 뜰 참
-  function toast(html, kind, life) {
+  function toast(html, kind, life, day) {
     const box = $('toasts');
     for (const o of box.children) if (o._key === html) { o._life = life || 240; return; } // 같은 말은 쌓지 않고 시간만 다시 잰다
     const big = /gap/.test(kind || ''); // 밤사이 · 거래량 알림은 업적 알림보다 먼저: 떠 있던 보통 알림 하나를 줄 뒤로 돌려보내고 그 자리에
-    if (big && !busy() && box.children.length >= 2) { const o = [...box.children].find(x => !/gap|deny/.test(x._kind)); if (o) { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life)]); o.remove(); } }
-    if (kind !== 'deny' && kind !== 'tip' && (busy() || box.children.length >= 2)) { if (!ui.toastQ.some(q => q[0] === html)) ui.toastQ[big ? 'unshift' : 'push']([html, kind, life]); return; } // 거절 이유 · 누른 것의 뜻(tip)은 바로. 알림은 한 번에 둘까지, 창이 떠 있으면 창이 닫힌 뒤에 (창 글을 가리지 않게 · 사건 창 뒤에서 사라지지 않게). 거절 이유는 바로
+    if (day == null) day = S ? S.day : 0; // 언제 생긴 알림인지 (줄에서 오래 기다렸으면 버림)
+    if (big && !busy() && box.children.length >= 2) { const o = [...box.children].find(x => !/gap|deny/.test(x._kind)); if (o) { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } }
+    if (kind !== 'deny' && kind !== 'tip' && (busy() || box.children.length >= 2)) { if (!ui.toastQ.some(q => q[0] === html)) ui.toastQ[big ? 'unshift' : 'push']([html, kind, life, day]); return; } // 거절 이유 · 누른 것의 뜻(tip)은 바로. 알림은 한 번에 둘까지, 창이 떠 있으면 창이 닫힌 뒤에 (창 글을 가리지 않게 · 사건 창 뒤에서 사라지지 않게). 거절 이유는 바로
     const d = document.createElement('div');
-    d.className = 'toast ' + (kind || ''); d.innerHTML = html; d._key = html; d._life = life || 240; d._kind = kind || '';
+    d.className = 'toast ' + (kind || ''); d.innerHTML = html; d._key = html; d._life = life || 240; d._kind = kind || ''; d._day = day;
     box.appendChild(d);
-    while (box.children.length > 3) { const o = box.firstChild; if (o._kind !== 'deny' && o._kind !== 'tip') ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life)]); o.remove(); } // 밀려난 보통 알림은 줄 앞으로 (사라지지 않게)
+    while (box.children.length > 2) { const o = box.firstChild; if (o._kind !== 'deny' && o._kind !== 'tip') ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 한 번에 둘까지 (장면 그림의 위쪽 1/3 만 덮음). 밀려난 보통 알림은 줄 앞으로 (사라지지 않게)
   }
   function deny(why) { sfx.deny(); if (why) toast(I('warn') + '<span>' + esc(why) + '</span>', 'deny', 150); }
 
@@ -452,8 +459,8 @@
       else if (e.t === 'act1') { ui.queue.push({ type: 'act1', e }); S.unseen = (S.unseen || []).filter(x => x.type !== 'act1').concat([{ type: 'act1', e }]); meta.homes = (meta.homes || 0) + 1; if (!meta.act1Best || e.day < meta.act1Best) { meta.act1Best = e.day; meta.act1Rank = e.rank; } saveMeta(); }
       else if (e.t === 'biz') { ui.queue.push({ type: 'biz', e }); S.unseen = (S.unseen || []).filter(x => x.type !== 'biz').concat([{ type: 'biz', e }]); } // 창을 닫기 전에 새로 고쳐도 다시 뜨게 (판 저장에 남김)
       else if (e.t === 'ht_alert') toast(I('warn') + '<div title="진짜면 급등, 아니면 털고 폭락 — 알림만으로는 모릅니다"><span>한탕바이오 거래량 급증</span><b>누군가 사 모으는 중</b></div>', 'gap up', 480); // 짧게 (알림 둘이 쌓여도 체력 막대를 가리지 않게)
-      else if (e.t === 'trade' && e.side === 'sell') toast(I('sell') + '<div><span>' + esc(e.name) + ' 팔기 — 받은 돈 ' + won(e.amt) + '</span><b class="' + cls(e.pnl) + '">손익 ' + sign(e.pnl) + '</b></div>', '', 300);
-      else if (e.t === 'trade') { const fee = Math.round(e.amt * tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1)); toast(I('cart') + '<div><span>' + esc(e.name) + ' 사기 — ' + won(e.amt) + '</span><b>' + (fee ? '수수료 ' + won(fee) + ' 때문에 산 직후엔 그만큼 −' : '수수료 없음') + '</b></div>', 'tip', 260); }
+      else if (e.t === 'trade' && e.side === 'sell') toast(I('sell') + '<div title="' + esc(e.name) + ' 팔기 — 받은 돈 ' + won(e.amt) + ' · 손익 ' + sign(e.pnl) + '"><span>' + esc(e.name) + ' 팔기 ' + won(e.amt) + '</span><b class="' + cls(e.pnl) + '">손익 ' + sign(e.pnl) + '</b></div>', '', 300); // 한 줄로 (전부는 title)
+      else if (e.t === 'trade') { const fee = Math.round(e.amt * tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1)); toast(I('cart') + '<div title="' + esc(e.name) + ' 사기 — ' + won(e.amt) + (fee ? '. 수수료 ' + won(fee) + ' 때문에 산 직후엔 그만큼 −' : '. 수수료 없음') + '"><span>' + esc(e.name) + ' 사기 ' + won(e.amt) + '</span><b>' + (fee ? '수수료 ' + won(fee) + '만큼 −' : '수수료 없음') + '</b></div>', 'tip', 260); } // 한 줄로 (뜻 전부는 title)
       else if (e.t === 'repay') toast(I('check') + '<div><span>미리 갚음 ' + won(e.amt) + '</span><b>대출 잔액 ' + won(e.balance) + '</b></div>', '', 240);
       else if (e.t === 'foreclose') ui.queue.push({ type: 'foreclose', e });
       else if (e.t === 'tick') { for (const id in e.chg) ui.flash[id] = e.chg[id]; if (!heldShock) stamps(e.chg); }
@@ -535,7 +542,7 @@
     const box = document.querySelector('.den-dice');
     if (!box) return;
     if (box.classList.contains('covered')) { box.innerHTML = '<span class="cover">' + art('cup') + '</span>'; return; } // 굴리기 전: 컵이 덮고 있다 (지난 결과로 읽히지 않게)
-    box.innerHTML = m.face.map(k => '<span class="die"' + (tumbling ? ' style="transform:translateY(' + Math.round(fr() * -14) + 'px) rotate(' + Math.round(fr() * 50 - 25) + 'deg)"' : '') + '>' + art('die', k) + '</span>').join('');
+    box.innerHTML = m.face.map(k => '<span class="die"' + (tumbling ? ' style="transform:translateY(' + -2 * Math.floor(fr() * 8) + 'px) rotate(' + 90 * Math.floor(fr() * 4) + 'deg)"' : '') + '>' + art('die', k) + '</span>').join(''); // 픽셀 그림은 비스듬히 돌리면 계단이 깨져서 직각으로만
   }
   function renderDen() {
     const m = ui.modal, box = $('denbody');
@@ -549,7 +556,7 @@
     else res = '<span class="dim">판돈을 고르고</span><b class="big">홀일까, 짝일까</b>';
     const lack = !fin && !v.bets.some(b => b.ok);
     box.innerHTML = '<div class="den-top"><div><h2>' + I('dice', '', 's') + '도박장</h2><h3>홀짝 — 주사위 둘의 합</h3></div><div class="den-rule" title="맞히면 판돈의 ' + tune.den_pay + '배를 돌려받습니다. 반반 게임이라 자릿세만큼 손해 보는 셈입니다">맞히면 ' + tune.den_pay + '배 · 자릿세 ' + edge + '%</div></div>' +
-      '<div class="den-table"><span class="den-cup">' + art('cup') + '</span><div class="den-dice' + (!rolling && !r && !fin ? ' covered' : '') + '"></div><div class="den-res">' + res + '</div></div>' +
+      '<div class="den-table' + (r && !r.win ? ' lose' : '') + '"><span class="den-cup">' + art('cup') + '</span><div class="den-dice' + (!rolling && !r && !fin ? ' covered' : '') + '"></div><div class="den-res">' + res + '</div></div>' +
       '<div class="den-stats"><span title="연속으로 맞힌 판">' + I('fire', '', 's') + '연승 <b>' + v.streak + '</b></span><span title="한 번 가면 ' + v.max + '판까지">' + I('dice', '', 's') + '<b>' + v.round + ' / ' + v.max + '</b>판</span><span title="이번에 도박장에서 번(잃은) 돈">' + I('cash', '', 's') + '오늘 손익 <b class="' + cls(v.net) + '">' + sign(v.net) + '</b></span></div>' +
       (fin ? '<div class="den-fin">' + I('door') + '<span>' + (fin.rounds >= v.max ? v.max + '판을 다 했습니다. 문이 닫힙니다.' : '그만하고 나옵니다.') + ' ' + fin.rounds + '판 · 합계 <b class="' + cls(fin.net) + '">' + sign(fin.net) + '</b></span></div>' +
         '<div class="foot"><button class="btn main" data-do="ok">나간다 <span class="key">Space</span></button></div>'
@@ -650,14 +657,22 @@
     const lo = DRILL_PX * 0.6, hi = DRILL_PX * 1.12, X = i => 16 + (Wc - 140) * i / (n - 1), Y = v => Hc - 14 - (Hc - 28) * (v - lo) / (hi - lo);
     const last = h[h.length - 1], up = last >= DRILL_PX;
     pxLine(c, h.map((v, i) => [X(i), Y(v)]), Hc, up ? PX.r : PX.b, up ? PX.R : PX.B, true);
-    c.font = '32px ' + PXFONT; c.textBaseline = 'middle';
-    const lines = m.pos ? [[DRILL_PX, PX.O, '진입'], [R.levLiq(m.pos), PX.R, '청산']] : [[DRILL_PX, PX.E, '지금']];
+    const lines = m.pos ? [[DRILL_PX, PX.O, '진입'], [R.levLiq(m.pos), PX.R, '청산']] : [[DRILL_PX, PX.E, '지금']], labs = [];
     for (const l of lines) {
       if (l[0] < lo || l[0] > hi) continue; // 숏의 청산선은 위로 멀어 차트 밖
       const y = Y(l[0]);
       pxDash(c, y, 16, Wc - 116, l[1]);
-      c.fillStyle = l[1]; c.fillText(l[2], Wc - 104, y);
+      labs.push([Math.round((Wc - 104) / 2), clamp(Math.round(y / 2) - 10, 0, Hc / 2 - 20), l[1], l[2], 'ln']);
     }
+    chartLabels(cv, labs);
+  }
+  function chartLabels(cv, labs) { // 차트 위 글자: 캔버스 옆에 16px 글자로 (점 글꼴이 또렷하게). labs = [[x, y, 색, 글, 종류]] (화면 px)
+    const box = cv.parentElement, ln = labs.filter(l => l[4] === 'ln').sort((a, b) => a[1] - b[1]), H = box.clientHeight;
+    for (let i = 1; i < ln.length; i++) ln[i][1] = Math.max(ln[i][1], ln[i - 1][1] + 16); // 선 이름(진입 · 청산 · 산 값)이 가까우면 한 줄씩 벌림
+    const over = ln.length ? ln[ln.length - 1][1] + 16 - H : 0;
+    if (over > 0) for (const l of ln) l[1] = Math.max(0, l[1] - over); // 아래로 넘치면 함께 올림
+    for (const e of box.querySelectorAll('.cl')) e.remove();
+    for (const [x, y, k, t, kind] of labs) { const s = document.createElement('span'); s.className = 'cl ' + kind; s.style.left = x + 'px'; s.style.top = y + 'px'; s.style.color = k; s.textContent = t; box.appendChild(s); }
   }
   function finish() {
     ui.ending = false; hold(45); clearSave();
@@ -678,7 +693,7 @@
   const clearFlies = () => { for (const e of $('fx').querySelectorAll('.fly')) e.remove(); }; // 떠오르던 숫자가 새로 뜬 창 위에 겹치지 않게
   function openModal(m) {
     clearFlies();
-    for (const o of [...$('toasts').children].reverse()) if (o._kind !== 'deny') { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life)]); o.remove(); } // 떠 있던 알림은 창이 닫힌 뒤에 다시 (창 글 위로 올라오지 않게)
+    for (const o of [...$('toasts').children].reverse()) if (o._kind !== 'deny') { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 떠 있던 알림은 창이 닫힌 뒤에 다시 (창 글 위로 올라오지 않게)
     ui.modal = m; hold(GUARD[m.type] || 18); $('veil').classList.add('arming'); // 0.3~0.6초: 연달아 누른 것이 새 창을 닫지 않게 (그동안 버튼이 흐림)
     if (m.type === 'quest') { sfx.ding(); burst(640, 330, 28, 2.2); }
     else if (m.type === 'perk') { sfx.level(); burst(640, 300, 70, 2.8); }
@@ -715,7 +730,7 @@
   function fly(text, color, from) { // 번 자리에서 떠서 위쪽 띠의 현금 칸으로
     const d = document.createElement('div'), o = from || ui.from || { x: 640, y: 200 }, n = ui.flyN++ % 4;
     d.className = 'fly ' + color; d.textContent = text; d.style.animationDelay = (n * 0.1) + 's'; // 여러 개면 줄을 달리하고 조금씩 늦게
-    const x = clamp(o.x - 40, 20, 1180), y = clamp(o.y - 30 + n * 34, 70, 660);
+    const x = clamp(o.x - 40, 20, 1260 - wid(text) * 16), y = clamp(o.y - 30 + n * 34, 70, 660); // 32px 글자: 영문 · 숫자 한 칸 16px (오른쪽 끝에서 잘리지 않게)
     d.style.left = x + 'px'; d.style.top = y + 'px';
     d.style.setProperty('--dx', (780 - x) + 'px'); d.style.setProperty('--dy', (30 - y) + 'px');
     $('fx').appendChild(d);
@@ -749,13 +764,19 @@
     const g = { w: 880, h: 380, title: '타이밍', howto: '막대가 가운데일 때 Space', controls: [{ code: 'Space', label: '누르기' }], done: false, result: null, t: 0, hits: 0, tries: 0 };
     g.update = dt => { g.t += dt; if (g.t > opts.seconds + 0.8) { g.done = true; g.result = { score: clamp(g.hits / 5, 0, 1), hits: g.hits, total: 5 }; } };
     g.press = () => { if (g.t < 0.8 || g.tries >= 5) return; g.tries++; if (Math.abs(Math.sin(g.t * 3)) < 0.3) g.hits++; };
-    g.draw = c => { c.fillStyle = PAL.night0; c.fillRect(0, 0, 880, 380); c.fillStyle = PAL.night3; c.fillRect(140, 170, 600, 40); c.fillStyle = PAL.good; c.fillRect(390, 170, 100, 40); c.fillStyle = PAL.gold; c.fillRect(436 + Math.sin(g.t * 3) * 290, 150, 8, 80); };
+    g.draw = c => { // 밝은 크림 바탕 · 어두운 외곽선 · 굵은 점 (4px 칸에 맞춤)
+      const q = v => Math.round(v / 4) * 4, x = q(436 + Math.sin(g.t * 3) * 290);
+      c.fillStyle = PX.c || '#fff4d6'; c.fillRect(0, 0, 880, 380);
+      c.fillStyle = PX.k || '#2b1d2e'; c.fillRect(136, 166, 608, 48); c.fillStyle = PX.L || '#d4d8e0'; c.fillRect(140, 170, 600, 40);
+      c.fillStyle = PX.g || '#5cc04a'; c.fillRect(392, 170, 96, 40);
+      c.fillStyle = PX.k || '#2b1d2e'; c.fillRect(x - 4, 146, 16, 88); c.fillStyle = PX.o || '#f28a2e'; c.fillRect(x, 150, 8, 80);
+    };
     return g;
   }
   function startJob(id) {
     const a = R.acts(S).find(x => x.id === id);
     if (!a || !a.ok) { deny(a ? a.why : ''); return; }
-    const opts = { rng: () => R.rnd2(S), level: a.lv, seconds: tune.mg_seconds, pal: PAL, font: FONT, ramp: tune.mg_ramp, levelSpeed: tune.mg_level_speed };
+    const opts = { rng: () => R.rnd2(S), level: a.lv, seconds: tune.mg_seconds, pal: window.MGPAL || PAL, font: window.PXFONT || FONT, ramp: tune.mg_ramp, levelSpeed: tune.mg_level_speed };
     let mg = null;
     try { mg = window.Minigames ? window.Minigames.create(id, opts) : null; } catch (e) { mg = null; }
     if (!mg) mg = fallbackGame(opts);
@@ -825,13 +846,13 @@
   function renderCoach() {
     const box = $('coach'), c = coachNow();
     if (!c) { ui.coach = ''; box.className = 'hide'; box.innerHTML = ''; return; }
-    const sr = stage.getBoundingClientRect(), k = 1280 / sr.width, px = v => v.toFixed(1);
+    const sr = stage.getBoundingClientRect(), k = 1280 / sr.width, px = v => String(Math.round(v)); // 반 픽셀에 걸리지 않게 정수로
     const rect = sel => { const e = document.querySelector(sel), r = e && e.getBoundingClientRect(); return r && r.width ? { x: (r.left - sr.left) * k - 5, y: (r.top - sr.top) * k - 5, w: r.width * k + 10, h: r.height * k + 10 } : null; };
     const rings = c.ring.map(rect).filter(Boolean), holes = rings.concat((c.lit || []).map(rect).filter(Boolean));
     const fresh = ui.coach !== c.id;
     box.className = ''; // 숨긴 채로는 말풍선의 크기를 잴 수 없다
-    const dk = PX.k || '#2b1d2e'; // 짚지 않은 곳은 점 무늬로 덮는다 (반투명 막 대신)
-    box.innerHTML = '<svg viewBox="0 0 1280 720"><defs><pattern id="cdith" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="' + dk + '"/><rect x="2" y="2" width="2" height="2" fill="' + dk + '"/></pattern><mask id="cmask"><rect width="1280" height="720" fill="#fff"/>' + holes.map(r => '<rect x="' + Math.round(r.x) + '" y="' + Math.round(r.y) + '" width="' + Math.round(r.w) + '" height="' + Math.round(r.h) + '" fill="#000"/>').join('') + '</mask></defs><rect width="1280" height="720" fill="url(#cdith)" mask="url(#cmask)"/></svg>' +
+    const dk = PX.k || '#2b1d2e'; // 짚지 않은 곳은 창 뒤와 같은 한 겹(PX.k · 불투명도 0.6)으로 덮는다 (점 무늬는 늘이고 줄이면 지글거림)
+    box.innerHTML = '<svg viewBox="0 0 1280 720"><defs><mask id="cmask"><rect width="1280" height="720" fill="#fff"/>' + holes.map(r => '<rect x="' + Math.round(r.x) + '" y="' + Math.round(r.y) + '" width="' + Math.round(r.w) + '" height="' + Math.round(r.h) + '" fill="#000"/>').join('') + '</mask></defs><rect width="1280" height="720" fill="' + dk + '" fill-opacity="0.6" mask="url(#cmask)"/></svg>' +
       rings.map((r, i) => '<div class="ring" style="left:' + px(r.x) + 'px;top:' + px(r.y) + 'px;width:' + px(r.w) + 'px;height:' + px(r.h) + 'px">' + (c.num ? '<u>' + (i + 1) + '</u>' : '') + '</div>').join('') +
       '<div class="bubble' + (fresh ? ' in' : '') + '"><em><span class="lab">' + (c.n ? '안내 ' + c.n + ' / 5' : c.lab) + '</span><span class="no">' + (c.ok ? '읽었으면 "' + c.ok + '"를 누릅니다' : '지금은 노란 고리 안만 눌립니다') + '</span></em><div class="tx">' + c.html() + '</div>' + // no = 다른 것을 눌렀을 때 이름표 자리에 뜨는 이유
       (c.n || c.ok ? '<div class="foot">' + (c.n ? '<button data-do="coachoff" title="안내를 끄고 혼자 해 봅니다. 제목 화면에서 다시 켤 수 있습니다">안내 끄기</button>' : '<span></span>') + (c.ok ? '<button class="btn main small" data-do="coachok">' + c.ok + ' <span class="key">Space</span></button>' : '') + '</div>' : '') + '</div>';
@@ -881,15 +902,14 @@
       : g.tier <= 1 ? '다음 목표: ' + g.name + ' — 현금 ' + won(g.price) + '이면 들어갑니다'
         : g.tier <= 3 ? '다음 목표: ' + g.name + ' — 순자산 ' + won(g.price) + '이면 들어갑니다 (돈을 가져가지 않음)'
           : '다음 목표: ' + g.name + ' ' + won(g.price) + ' — ' + (g.tier === 4 ? '현금으로만' : '대출을 최대(' + won(g.loanMax) + ')로 끼면') + ' 현금 ' + won(g.need) + '이 있으면 삽니다 (살던 집을 판 돈 포함). 막대는 지금 현금';
-    return '<div class="goal" title="' + t + '">' + I(ic) + '<span class="gn">' + g.name + '</span><span class="gp">' + num(g.price) + '</span>' + eokTag(g.price) + '<div class="bar"><div style="width:' + (g.pct * 100).toFixed(1) + '%"></div></div><b>' + Math.floor(g.pct * 100) + '%</b></div>';
+    return '<div class="goal" title="' + t + '">' + I(ic) + '<span class="gn">' + g.name + '</span><span class="gp">' + shortWon(g.price) + '</span><div class="bar"><div style="width:' + (g.pct * 100).toFixed(1) + '%"></div></div><b>' + Math.floor(g.pct * 100) + '%</b></div>';
   }
   function hudFit() { // 긴 숫자(최대 35,000,000,000원)일수록 위쪽 띠의 숫자를 작게 (한글 이름표는 14px 그대로)
-    const g = R.goalView(S), n = Math.max(won(S.cash).length, won(R.worth(S)).length, won(ui.cash).length, won(ui.worth).length) + (g.canBuy ? 0 : num(g.price).length / 2 + (g.price >= 1e8 ? 2 : 0)) + (S.combo ? 2 : 0);
+    const g = R.goalView(S), n = Math.max(won(S.cash).length, won(R.worth(S)).length, won(ui.cash).length, won(ui.worth).length) + (g.canBuy ? 0 : shortWon(g.price).length / 2) + (S.combo ? 2 : 0);
     return n > 23 ? ' k3' : n > 19 ? ' k2' : n > 16 ? ' k1' : ''; // 글자 크기는 16px 하나라, 길면 이름표(현금 · 순자산)를 빼고 아이콘 + 숫자로 (뜻은 title)
   }
   function renderHud() {
     const wk = R.week(S);
-    $('hud').className = 'zone' + hudFit();
     $('hud').innerHTML =
       '<div class="zh" title="' + wk.week + '주차 ' + wk.dow + '일 — 판을 시작하고 ' + S.day + '일째 (기한 없음)">' + I('calendar') + '<b>' + S.day + '일째</b>' + weekStrip(wk) + '</div>' +
       '<div class="slots">' + SLOT_IC.map((n, i) => '<span class="' + (i < S.slot ? 'done' : i === S.slot ? 'now' : '') + '" title="' + SLOTS[i] + (i === S.slot ? ' — 지금' : i < S.slot ? ' — 지남' : '') + '">' + art('icon', n) + '<i>' + SLOTS[i] + '</i></span>').join('') + '</div>' + // 지금 칸만 글자까지, 나머지는 아이콘만 (뜻은 title)
@@ -902,6 +922,16 @@
       '<button class="btn sq" data-do="help" title="도움말">' + I('help') + '</button>' +
       '<button class="btn sq" data-do="mute" title="소리 (M)">' + I(ui.mute ? 'mute' : 'sound') + '</button>' +
       '<button class="btn sq" data-do="quit" title="제목 화면으로 (지금까지는 저장됨)">' + I('home') + '</button></div>';
+    fitHud();
+  }
+  function fitHud() { // 어림(hudFit)으로 시작해, 그래도 다음 목표 알약이 넘치면 한 단계씩 더 줄인다. 잴 때는 굴러가는 숫자 대신 도착할 숫자(더 긴 쪽)를 넣고 잰다
+    const hud = $('hud'), goal = hud.querySelector('#hud > .goal'), cash = $('cash'), worth = $('worth');
+    const keep = [cash && cash.textContent, worth && worth.textContent], longer = (a, b) => (won(a).length >= won(b).length ? won(a) : won(b));
+    if (cash) cash.textContent = longer(S.cash, ui.cash); if (worth) worth.textContent = longer(R.worth(S), ui.worth);
+    const over = () => hud.scrollWidth > hud.clientWidth + 0.5 || (goal && goal.scrollWidth > goal.clientWidth + 0.5);
+    const steps = ['', ' k1', ' k2', ' k3', ' k4'];
+    for (let i = Math.max(0, steps.indexOf(hudFit())); i < steps.length; i++) { hud.className = 'zone' + steps[i]; if (!over()) break; }
+    if (cash) cash.textContent = keep[0]; if (worth) worth.textContent = keep[1];
   }
 
   // ── 구역 me: 사는 곳 · 체력 · 레벨 · 특성 ──
@@ -919,22 +949,37 @@
     const l = R.loanView(S);
     if (!l) return '';
     const b = R.bill(S), due = b ? b.loan : l.weekly, part = !!(b && b.days < 7); // 이사한 주는 산 날만큼: "이번 일요일 N (6일치)"로 한 주 전체 원리금과 다른 까닭을 보임
-    return '<div class="me-row loan" title="주담대 잔액 ' + won(l.balance) + ' — 일요일 밤마다 고정비와 함께 원리금이 나갑니다. 두 번 연속 못 내면 압류되어 한 단계 아래로">' + I('bill') + '<span class="lab">대출</span><b>' + num(l.balance) + '</b>' +
+    return '<div class="me-row loan" title="주담대 잔액 ' + won(l.balance) + ' — 일요일 밤마다 고정비와 함께 원리금이 나갑니다. 두 번 연속 못 내면 압류되어 한 단계 아래로">' + I('bill') + '<span class="lab">대출</span><b>' + shortWon(l.balance) + '</b>' +
       '<span class="dim" title="이번 일요일 원리금 ' + won(due) + (part ? ' (' + b.days + '일치 — 이사한 주는 산 날만큼)' : '') + ' (이자 ' + won(b ? b.interest : l.interest) + ' + 원금 ' + won(b ? b.principal : l.principal) + ') · 한 주 전체로는 ' + won(l.weekly) + ' · 남은 ' + l.left + '회">' + (part ? '이번 ' + num(due) + ' (' + b.days + '일치)' : '주 ' + num(due) + ' · ' + l.left + '회') + '</span>' +
       '<button class="chip go r" data-do="repay" title="미리 갚기 — 칸을 쓰지 않습니다. 잔액이 줄면 다음 주 이자가 줍니다">갚기</button></div>';
   }
   function renderMe() {
     const x = R.xpView(S), mx = R.hpMax(S), low = S.hp < 25, perks = R.perksView(S), extra = bizRow() + loanRow(), rows = (extra.match(/class="me-row/g) || []).length;
-    const sh = 224 - 34 * rows; // 그림 칸(틀 포함). 줄이 붙으면 낮아지고, 그림은 3배(384×216) 그대로 가운데를 맞춰 위아래가 잘린다
+    // 그림 칸: 줄이 없으면 216px(128×72 를 3배) 전부. 사업 · 대출 줄이 하나 붙을 때마다 34px 낮아지고, 그림은 3배 그대로 가운데를 맞춰 위아래가 잘린다.
+    // 보이는 높이와 위치를 3의 배수로 맞춰 맨 윗줄 · 아랫줄 점이 반만 보이지 않게 한다. 줄이 둘이면 49줄(y 11~59)이 보여 그림의 약속(y 12~59)이 다 들어간다.
+    const vis = Math.min(72, Math.floor((216 - 34 * rows) / 3)), sh = vis * 3 + 12, sy = -3 * Math.floor((72 - vis) / 2);
     $('me').innerHTML =
       '<div class="zh">' + I('door', '지금 사는 곳') + '<span class="place">' + R.HOMES[S.tier].name + '</span>' +
       '<span class="who chip hot" title="' + esc(S.name + ' · 칭호 ' + S.title) + '">' + esc(S.title) + '</span>' + // 칭호만 (이름까지 붙이면 잘림)
       '<span class="r lvb" title="레벨 ' + x.lv + ' — 경험치 ' + x.xp + ' / ' + x.need + '. 오르면 특성을 하나 고릅니다">' + I('star', '', 's') + 'Lv.' + x.lv + '<i class="xpbar"><i style="width:' + (x.xp / x.need * 100).toFixed(0) + '%"></i></i></span></div>' +
-      '<div class="scene" style="height:' + sh + 'px;--sy:' + Math.round((sh - 12 - 216) / 2) + 'px">' + art('scene', S.tier, PHASE[Math.min(3, S.slot)]) + '</div>' +
+      '<div class="scene" style="height:' + sh + 'px;--sy:' + sy + 'px">' + art('scene', S.tier, PHASE[Math.min(3, S.slot)]) + '</div>' +
       '<div class="me-row hp' + (low ? ' low' : '') + '" title="체력 — 알바 · 공부에 쓰고, 쉬거나 자면 돌아옵니다">' + I('hp') + '<div class="bar"><div style="width:' + (S.hp / mx * 100).toFixed(0) + '%"></div></div><b>' + Math.round(S.hp) + ' / ' + mx + '</b></div>' + extra +
-      '<div class="perks' + (perks.length > 10 ? ' many' : '') + '">' + (perks.length ? perks.map(p => { const t = esc(p.name + (p.n > 1 ? ' ×' + p.n : '') + (p.aug ? ' (양날)' : '') + ' — ' + p.desc + (p.aug ? '. 대신: ' + p.con : '') + (p.excl ? '. ' + p.excl : '')); return '<span class="pk' + (p.n > 1 ? ' x' + p.n : '') + (p.aug ? ' aug' : '') + '" data-do="tip" data-arg="' + t + '" title="' + t + '">' + art('icon', p.icon) + '</span>'; }).join('')
-        : '<span class="none" title="레벨이 오르면 특성이 여기에 쌓입니다">' + I('star', '', 's') + I('plus', '', 's') + '</span>') +
-      (R.unlocked(S, 'stock') ? '<button class="chip go mapbtn" data-do="roadmap" title="로드맵 — 서울역에서 한국 최고 부자까지 열 단계, 다음 단계로 옮기기 · 사기">' + I('map', '', 's') + '<span class="t">로드맵</span></button>' : '') + '</div>'; // 투자가 열리기 전에는 판 자리가 로드맵
+      '<div class="perks' + (perks.length > 10 ? ' many' : '') + '"><span class="pl" title="레벨이 오를 때 고른 특성">특성</span><span class="pks">' + (perks.length ? perks.map(p => '<span class="pk' + (p.n > 1 ? ' x' + p.n : '') + (p.aug ? ' aug' : '') + '" data-do="tip" data-arg="' + perkTip(p) + '" title="' + perkTip(p) + '">' + art('icon', p.icon) + '</span>').join('')
+        : '<span class="none" title="레벨이 오르면 특성이 여기에 쌓입니다">' + I('star', '', 's') + I('plus', '', 's') + '</span>') + '</span>' +
+      (R.unlocked(S, 'stock') ? '<button class="chip go mapbtn" data-do="roadmap" title="로드맵 — 서울역에서 한국 최고 부자까지 열 단계, 다음 단계로 옮기기 · 사기">' + I('map', '', 's') + '<span class="t">로드맵</span></button>' : '') + '</div>'; // 투자가 열리기 전에는 판 자리가 로드맵. 로드맵 단추는 특성 칸 밖이라 특성이 많아도 밀려나지 않음
+    fitPerks($('me').querySelector('.pks'), perks);
+  }
+  const perkTip = p => esc(p.name + (p.n > 1 ? ' ×' + p.n : '') + (p.aug ? ' (양날)' : '') + ' — ' + p.desc + (p.aug ? '. 대신: ' + p.con : '') + (p.excl ? '. ' + p.excl : ''));
+  function fitPerks(box, perks) { // 특성 아이콘이 칸을 넘으면 뒤에서부터 접고 "+n" (누르면 접힌 것의 이름)
+    if (!box || !perks.length || box.scrollWidth <= box.clientWidth) return;
+    const pk = [...box.querySelectorAll('.pk')], more = document.createElement('span');
+    more.className = 'more'; more.dataset.do = 'tip'; box.appendChild(more);
+    let n = 0;
+    while (n < pk.length - 1 && (n === 0 || box.scrollWidth > box.clientWidth)) {
+      pk[pk.length - 1 - n].style.display = 'none'; n++;
+      const hid = perks.slice(perks.length - n).map(p => p.name + (p.n > 1 ? ' ×' + p.n : '')).join(' · ');
+      more.textContent = '+' + n; more.title = '특성 ' + n + '개 더: ' + hid; more.dataset.arg = '특성 더: ' + hid;
+    }
   }
 
   // ── 구역 quest: 상태창 (지금 퀘스트 하나 · 시스템의 한마디 · 다가오는 것) ──
@@ -967,15 +1012,23 @@
     const go = questGo(q), notes = R.notices(S);
     const news = R.unlocked(S, 'stock') ? R.todayNews(S).filter(n => n.asset !== 'coin' || R.unlocked(S, 'coin')).length : 0;
     $('quest').innerHTML =
-      '<div class="zh">' + I('quest') + '<span>상태창</span>' + (q ? '<span class="r">퀘스트 ' + q.n + ' / ' + q.of + '</span>' : '') + '</div>' +
-      (q ? '<div class="q-in"><div class="q-title">' + esc(q.title) + '</div><div class="q-desc' + (wid(q.desc) > 88 ? ' long' : '') + '" title="' + esc(q.desc) + '">' + esc(fitW(q.desc, 126)) + '</div>' + // 두 줄 (길면 세 줄까지, 넘치면 … · 전부는 title)
+      '<div class="zh">' + I('quest') + '<span>상태창</span>' + (q || news ? '<span class="r">' + (news ? '<span class="nw" title="오늘 소식 ' + news + '건 — 오른쪽 주식 탭의 소식 칸">' + I('news', '', 's') + news + '건</span>' : '') + (q ? '퀘스트 ' + q.n + ' / ' + q.of : '') + '</span>' : '') + '</div>' + // 오늘 소식 수는 머리줄에 (아래 알림 줄이 한 줄로 들게)
+      (q ? '<div class="q-in"><div class="q-title">' + esc(q.title) + '</div><div class="q-desc" title="' + esc(q.desc) + '">' + esc(q.desc) + '</div>' + // 줄 수는 fitQuest 가 (네 줄까지, 넘치면 … · 전부는 title)
         '<div class="q-prog"><div class="bar"><div style="width:' + (q.pct * 100).toFixed(1) + '%"></div></div><b>' + progText(q) + '</b></div>' +
-        '<div class="q-row"><span class="rw" title="끝내면 받는 것: ' + esc(q.reward) + '">' + I('gift', '', 's') + esc(fitW(q.reward, Math.floor((382 - (go ? wid(go.replace(/<[^>]*>/g, '')) * 8 + 44 : 0) - (q.near ? 86 : 0) - 34) / 8))) + '</span>' + (q.near ? '<span class="near">거의 다 됨</span>' : '') + go + '</div></div>' : '<div class="q-in"><div class="q-title">모든 퀘스트 완료</div></div>') +
-      (say ? '<div class="q-say ' + (q && wid(q.desc) > 88 ? 'short ' : '') + (say.tone || '') + (ui.sayT > 400 ? ' in' : ui.sayT === 0 ? ' old' : '') + '" title="' + esc(say.text) + '">' + esc(fitW(say.text, q && wid(q.desc) > 88 ? 36 : 80)) + '</div>' : '') + // 앞에 "[시스템] " (9칸)이 붙는다
+        '<div class="q-row"><span class="rw" title="끝내면 받는 것: ' + esc(q.reward) + '">' + I('gift', '', 's') + '<span>' + esc(q.reward) + '</span></span>' + (q.near ? '<span class="near">거의 다 됨</span>' : '') + go + '</div></div>' : '<div class="q-in"><div class="q-title">모든 퀘스트 완료</div></div>') + // 보상이 길면 버튼이 다음 줄로 (보상 글은 자르지 않음)
+      (say ? '<div class="q-say ' + (say.tone || '') + (ui.sayT > 400 ? ' in' : ui.sayT === 0 ? ' old' : '') + '" title="' + esc(say.text) + '">' + esc(say.text) + '</div>' : '') + // 앞에 "[시스템] " 이 붙는다. 줄 수는 fitQuest 가
       '<div class="q-due">' + // 알림 줄: 고정비(+ 원리금)는 전날(차분하게)과 당일(눈에 띄게)에만
       notes.map(n => '<span class="note plain ' + n.kind + ' ' + n.when + '" title="고정비(대출이 있으면 원리금도)는 일요일 밤에 현금에서 나갑니다. 두 번 연속 못 내면 한 단계 아래로">' + I('bill', '', 's') + esc(n.text) + '</span>').join('') +
-      (news ? '<span class="note plain" title="오늘 소식 ' + news + '건 — 오른쪽 주식 탭의 소식 칸">' + I('news', '', 's') + '오늘 소식 ' + news + '건</span>' : '') + // 단추가 아닌 모양 (누르는 것이 아님)
       '</div>';
+    fitQuest();
+  }
+  function fitQuest() { // 상태창은 위에서부터 쌓고 알림 줄이 맨 아래. 다 안 들어가면 시스템 한마디를 한 줄로, 그래도 넘치면 설명 줄을 하나씩 줄인다 (줄인 글은 … · 전부는 title)
+    const box = $('quest'), d = box.querySelector('.q-desc'), s = box.querySelector('.q-say');
+    const set = (el, n) => { if (el) { el.style.webkitLineClamp = String(n); el.style.maxHeight = (n * 20 + (el === s ? 12 : 0)) + 'px'; } };
+    const need = (el, max) => { if (!el) return 0; set(el, 99); return Math.max(1, Math.min(max, Math.round((el.offsetHeight - (el === s ? 12 : 0)) / 20))); };
+    let dn = need(d, 4), sn = need(s, 2);
+    set(d, dn); set(s, sn);
+    while (box.scrollHeight > box.clientHeight + 0.5 && (sn > 1 || dn > 1)) { if (sn > 1) sn--; else dn--; set(d, dn); set(s, sn); }
   }
 
   // ── 구역 today: 지금 칸에서 고를 것 ──
@@ -990,7 +1043,8 @@
     }
     const first = (coachNow() || {}).id === 'job'; // 안내가 첫 알바를 짚는 동안은 "대충"을 감춘다 (미니게임을 한 번은 해 보게)
     const list = R.acts(S), q = R.questView(S) || {}, jobs = list.filter(a => a.kind === 'job' && a.ok);
-    const rec = q.id === 'first_job' ? 'flyer' : q.id === 'study' ? 'study' : !jobs.length && list.some(a => a.kind === 'rest' && a.ok) ? 'rest' : ''; // 상태창 추천: 퀘스트가 바로 가리키는 카드, 일할 체력이 없으면 쉬기 (그 밖에는 없음)
+    const want = q.id === 'first_job' ? 'flyer' : q.id === 'study' ? 'study' : '';
+    const rec = want && list.some(a => a.id === want && a.ok) ? want : !jobs.length && list.some(a => a.kind === 'rest' && a.ok) ? 'rest' : ''; // 상태창 추천: 퀘스트가 바로 가리키는 카드(할 수 있을 때), 아니면 일할 체력이 없을 때 쉬기 (그 밖에는 없음)
     const tag = a => (a.id === rec && a.ok ? '<span class="tag chip hot" title="지금 퀘스트(또는 체력)로 보아 상태창이 권하는 것">' + I('quest', '', 's') + '<span class="tl">상태창 </span>추천</span>' : '');
     const autoLine = a => (a.auto ? '<span class="auto" title="' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + ' 사업 매출 ' + won(a.auto) + '이 들어옵니다 (직원이 일함)"><i>' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + '</i><b>+' + num(a.auto) + '</b></span>' : '');
     $('today').innerHTML = head + '<div class="cards' + (list.length >= 5 ? ' n5' : '') + '">' + list.map((a, i) => {
@@ -998,15 +1052,29 @@
       if (a.kind === 'job') {
         const lv = '<span class="lv" title="숙련도: 직접 한 횟수가 ' + tune.skill_n1 + ' · ' + tune.skill_n2 + ' · ' + tune.skill_n3 + '번이 되면 일당이 ' + Math.round(tune.skill_bonus * 100) + '%씩 오릅니다">' + [1, 2, 3].map(n => '<s class="' + (a.lv >= n ? 'on' : '') + '"></s>').join('') + '</span>';
         const long = num(a.pay).length > 8 ? ' long' : ''; // 사업이 커져 일당이 길면 일당 · 체력을 두 줄로
-        return '<div class="card ' + (a.ok ? 'go' : 'off') + long + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + esc(a.name + ' — ' + a.note + (a.bizMult > 1 ? ' (사업 ×' + num(a.bizMult) + ')' : '')) + '">' + k + lv + tag(a) + '<span class="pic">' + art('job', a.id) + '</span><span class="nm">' + a.name + '</span>' +
+        return '<div class="card ' + (a.ok ? 'go' : 'off') + long + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + esc(a.name + ' — ' + a.note + (a.bizMult > 1 ? ' (사업 ×' + num(a.bizMult) + ')' : '')) + '">' + k + lv + tag(a) + '<span class="pic">' + pic('job', a.id, !a.ok) + '</span><span class="nm">' + a.name + '</span>' +
           '<span class="st"><span class="pay" title="일당 ' + won(a.pay) + (a.bizMult > 1 ? ' — 사업 ×' + num(a.bizMult) + ' 포함' : '') + '">' + I('coin', '', 's') + num(a.pay) + '</span><span class="' + (a.ok ? 'cost' : 'lack') + '" title="드는 체력' + (a.ok ? '' : ' — 모자랍니다') + '">' + I('hp', '', 's') + '−' + a.hp + '</span></span>' +
           (a.ok && !first ? '<button class="skip" data-do="skip" data-arg="' + a.id + '" title="대충: 미니게임 없이 일당의 ' + Math.round(R.skipMult(S) * 100) + '%만 받고 넘어갑니다. 숙련도와 콤보는 오르지 않습니다">대충 ×' + R.skipMult(S).toFixed(1) + '</button>' : '') + '</div>';
       }
       const st = a.kind === 'rest' ? (a.ok ? '<span class="gain">' + I('hp', '', 's') + '+' + (-a.hp) + '</span>' : '<span class="lack">' + I('lock', '', 's') + esc(a.why.split(':')[0]) + '</span>') // 일중독(양날): 할 수 있는 알바가 있으면 못 쉼
         : a.ok ? '<span class="' + (a.hp > S.hp ? 'lack' : 'cost') + '" title="드는 체력">' + I('hp', '', 's') + '−' + a.hp + '</span><span class="sys" title="고른 종목의 내일 소식">' + I('news', '', 's') + '내일</span>' : '<span class="lack">' + I('check', '', 's') + (/읽었/.test(a.why) ? '읽음' : '체력') + '</span>';
-      return '<div class="card ' + (a.ok ? 'go' : 'off') + (a.auto ? ' auto' : '') + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + (a.kind === 'rest' ? '쉬기 — 체력을 채웁니다' : '공부 — 체력 ' + a.hp + '과 한 칸을 써서, 고른 종목 하나의 내일 소식이 오르는 쪽인지 내리는 쪽인지 리포트를 봅니다 (' + R.accText(R.studyAcc(S)) + ')') + '">' + k + tag(a) + '<span class="pic">' + art('act', a.id) + '</span><span class="nm">' + a.name + '</span>' +
+      return '<div class="card ' + (a.ok ? 'go' : 'off') + (a.auto ? ' auto' : '') + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + (a.kind === 'rest' ? '쉬기 — 체력을 채웁니다' : '공부 — 체력 ' + a.hp + '과 한 칸을 써서, 고른 종목 하나의 내일 소식이 오르는 쪽인지 내리는 쪽인지 리포트를 봅니다 (' + R.accText(R.studyAcc(S)) + ')') + '">' + k + tag(a) + '<span class="pic">' + pic('act', a.id, !a.ok) + '</span><span class="nm">' + a.name + '</span>' +
         '<span class="st">' + st + '</span>' + autoLine(a) + '</div>';
     }).join('') + '</div>';
+  }
+
+  const grayCache = {};
+  function pic(kind, id, off) { // 카드 그림. 잠긴 카드는 팔레트 안의 회색판(pxart.js 의 GRAY 표로 다시 그림 — 반투명으로 흐리지 않음). 픽셀 그림이 없으면 보통 그림
+    if (!off) return art(kind, id);
+    const key = kind + ':' + id;
+    if (grayCache[key] == null) {
+      grayCache[key] = '';
+      try {
+        const P = window.PxArt, draw = P && P.GRAY && (kind === 'job' ? P.JOB : P.ACT)[id];
+        if (draw) { const [c, g] = P.mk(32, 32); P.setMap(P.GRAY); try { draw(g); } finally { P.setMap(null); } grayCache[key] = '<img class="px" alt="잠김" src="' + c.toDataURL() + '" width="32" height="32">'; }
+      } catch (e) { grayCache[key] = ''; }
+    }
+    return grayCache[key] || art(kind, id);
   }
 
   // ── 구역 board: 투자가 열리기 전에는 로드맵, 열린 뒤에는 주식 / 코인 ──
@@ -1064,12 +1132,13 @@
       } else if (next) {
         const g = R.goalView(S);
         foot = g.canBuy ? '<button class="btn warm" data-do="top">' + I('crown') + '선언</button>' : bar(g.pct) + why('wallet', g.price - g.have, '순자산이 ' + won(g.price - g.have) + ' 더 있어야 선언합니다');
-      } else foot = '<div class="why" title="앞 단계부터">' + I('lock', '', 's') + '</div>';
+      } else foot = ''; // 아직 먼 단계: 자물쇠는 그림 칸 모서리에 (칸 아래에 따로 두면 아랫줄 것처럼 보임)
       const all = rows(t), show = full || here || next ? all : past ? null : all.slice(0, 1);
       const cond = next && t >= 5 && t <= 8 ? row('cash', '사는 조건: 대출을 최대로 끼면 지금 현금 ' + won(R.homeInfo(S, t).down) + ' (살던 집을 판 돈 포함)', (full ? '현금 ' : '') + num(R.homeInfo(S, t).down) + '부터', 'need') : ''; // 다음 집의 사는 조건
       const big = t >= 4 ? (t === 9 ? tune.top_worth : R.homePrice(S, t)) : 0; // 1억이 넘는 값은 그림 위에 "100억" 길잡이 (자리를 더 쓰지 않게)
       const flag = here ? '<span class="flag here chip" title="지금 사는 곳">지금 여기</span>' : next ? '<span class="flag chip hot" title="다음 목표">다음 목표</span>' : '';
-      return '<div class="rung ' + (here ? 'here' : past ? 'past' : next ? 'next' : 'far') + '" style="--r:' + (t < 5 ? 1 : 2) + ';--c:' + (t < 5 ? t + 1 : 10 - t) + '"><div class="th">' + flag + art('thumb', t, !(here || past || next)) + (big >= 1e8 ? '<span class="eok" title="' + won(big) + '">' + eok(big) + '</span>' : '') + '</div>' + // 윗줄 1→5, 아랫줄은 오른쪽부터 6→10 (S자 길). 아직 먼 단계는 회색 그림
+      const far = !(here || past || next);
+      return '<div class="rung ' + (here ? 'here' : past ? 'past' : next ? 'next' : 'far') + '" style="--gr:' + (t < 5 ? 1 : 2) + ';--gc:' + (t < 5 ? t + 1 : 10 - t) + '"><div class="th">' + flag + art('thumb', t, far) + (far ? '<span class="lk" title="앞 단계부터 — 아직 잠김">' + art('icon', 'lock') + '</span>' : '') + (big >= 1e8 ? '<span class="eok" title="' + won(big) + '">' + eok(big) + '</span>' : '') + '</div>' + // 윗줄 1→5, 아랫줄은 오른쪽부터 6→10 (S자 길). 아직 먼 단계는 회색 그림 + 모서리 자물쇠
         (show ? '<div class="opens">' + opens(t) + '</div>' : '') + '<div class="in"><div class="nm">' + h.name + '</div>' +
         (show ? '<div class="rows">' + (cond ? [all[0], cond] : show).join('') + '</div>' : '') + '<div class="foot">' + foot + '</div></div></div>';
     }).join('') + '</div>';
@@ -1169,20 +1238,20 @@
     for (const l of lines) if (l[0] > lo * 0.7 && l[0] < hi * 1.3) { lo = Math.min(lo, l[0]); hi = Math.max(hi, l[0]); }
     const pad = (hi - lo) * 0.12 || 1; lo -= pad; hi += pad;
     const X = i => 16 + (Wc - 120) * i / (n - 1), Y = v => Hc - 14 - (Hc - 28) * (v - lo) / (hi - lo);
-    const real = S.market.tick - 17; // 판이 시작된 뒤의 틱 수
-    c.font = '32px ' + PXFONT; c.textBaseline = 'top';
-    for (let i = 0; i < n; i++) { // 하루의 경계선
+    const real = S.market.tick - 17, labs = []; // 판이 시작된 뒤의 틱 수
+    let lastX = -99;
+    for (let i = 0; i < n; i++) { // 하루의 경계선 (날짜 글자는 64px 넘게 떨어진 것만 — 빽빽하면 선 위에 겹쳐서)
       const r = real - (n - 1 - i);
-      if (r >= 0 && r % 3 === 0) { c.fillStyle = PX.d; c.fillRect(Math.round(X(i) / 2) * 2, 0, 2, Hc); if (((r / 3) % 2 === 0 || n < 30) && X(i) < Wc - 190) { c.fillStyle = PX.e; c.fillText((r / 3 + 1) + '일', Math.round(X(i) / 2) * 2 + 6, 4); } } // 오른쪽 끝은 선 이름(진입 · 청산 · 산 값) 자리
+      if (r >= 0 && r % 3 === 0) { const x = Math.round(X(i) / 2) * 2; c.fillStyle = PX.d; c.fillRect(x, 0, 2, Hc); if (x / 2 - lastX >= 64 && X(i) < Wc - 190) { lastX = x / 2; labs.push([x / 2 + 3, 0, '', (r / 3 + 1) + '일', 'day']); } } // 오른쪽 끝은 선 이름(진입 · 청산 · 산 값) 자리
     }
     const up = h[n - 1] >= h[Math.max(0, n - 1 - Math.max(1, Math.min(3, S.slot)))], col = up ? PX.r : PX.b, dark = up ? PX.R : PX.B;
     pxLine(c, h.map((v, i) => [X(i), Y(v)]), Hc, col, dark); // 계단진 선 + 아래 칠 (한 점 = 2px)
-    c.textBaseline = 'middle';
     for (const l of lines) {
       const y = clamp(Y(l[0]), 14, Hc - 14);
       pxDash(c, y, 16, Wc - 104, l[1]);
-      c.fillStyle = l[1]; c.fillText(l[2], Wc - 96, y);
+      labs.push([Math.round((Wc - 96) / 2), clamp(Math.round(y / 2) - 8, 0, Hc / 2 - 16), l[1], l[2], 'ln']);
     }
+    chartLabels(cv, labs);
   }
 
   // ── 겹쳐 뜨는 창 ──
@@ -1227,12 +1296,12 @@
       return;
     }
     if (m.type === 'den') { // 틀은 한 번만 만들고(뜨는 연출이 판마다 다시 돌지 않게) 속만 바꾼다
-      if (!v.querySelector('.win.den')) v.innerHTML = '<div class="frame corner"><div class="win den"><div class="sweep"></div><div id="denbody"></div></div></div>';
+      if (!v.querySelector('.win.den')) v.innerHTML = '<div class="frame corner"><div class="win den"><div id="denbody"></div></div></div>';
       renderDen();
       return;
     }
     if (m.type === 'drill') { // 도박장처럼 틀은 한 번만 (차트가 움직이는 동안 창이 다시 뜨지 않게)
-      if (!v.querySelector('.win.drill')) v.innerHTML = '<div class="frame corner"><div class="win drill"><div class="sweep"></div><div id="drillbody"></div></div></div>';
+      if (!v.querySelector('.win.drill')) v.innerHTML = '<div class="frame corner"><div class="win drill"><div id="drillbody"></div></div></div>';
       renderDrill();
       return;
     }
@@ -1242,44 +1311,44 @@
       requestAnimationFrame(() => roadDraw(v)); roadDraw(v);
     } else if (m.type === 'intro') {
       const road = [0, 1, 2, 3, 4, 9]; // 첫 창의 한 줄: 원룸 · 내 집까지 보이고, 그 뒤는 줄여서 끝(한국 최고 부자)만
-      v.innerHTML = '<div class="win pop corner"><div class="sweep"></div><h2>' + I('quest', '', 's') + '시스템</h2><h3>상태창이 열렸습니다</h3><p>' + esc(S.name) + ' 님, 각성을 축하합니다. 현금 0원. 주소 없음. 이 창은 당신에게만 보입니다.</p>' +
+      v.innerHTML = '<div class="win pop corner"><h2>' + I('quest', '', 's') + '시스템</h2><h3>상태창이 열렸습니다</h3><p>' + esc(S.name) + ' 님, 각성을 축하합니다. 현금 0원. 주소 없음. 이 창은 당신에게만 보입니다.</p>' +
         '<div class="rewardbox" title="이 판의 목표 — 기한은 없습니다">' + I('crown') + '<span>목표는 <b class="gold">한국 최고 부자</b>. 먼저 현금 ' + won(R.homePrice(S, 4)) + '으로 내 집부터. 기한은 없다.</span></div>' +
           '<div class="introroad" title="로드맵: 퀘스트를 따라 한 칸씩 올라갑니다. 내 집 뒤로 아파트 · 주택 · 별장 · 호텔이 있습니다">' + road.map((t, i) => (i ? '<span class="arr' + (t === 9 ? ' far' : '') + '">' + I('up', '', 's') + '</span>' : '') + '<span class="st' + (t === 0 ? ' here' : '') + '"><span class="th">' + art('thumb', t) + '</span><i>' + (t === 9 ? '최고 부자' : R.HOMES[t].name) + '</i></span>').join('') + '</div>' + nextBox(m.next) + okBtn('시작') + '</div>';
     } else if (m.type === 'shock') { // 속보: 머리글 · 종목 · 몇 %. 든 종목이면 내 손익을 크게
       const e = m.e, a = R.ASSETS.find(x => x.id === e.asset), tone = e.held ? cls(e.delta) || 'dim' : 'calm';
-      v.innerHTML = '<div class="win shock ' + tone + ' corner"><div class="sweep"></div><div class="sh-tag">' + I('news') + '<b>속보</b></div>' +
+      v.innerHTML = '<div class="win shock ' + tone + ' corner"><div class="sh-tag">' + I('news') + '<b>속보</b></div>' +
         '<div class="sh-body"><b class="sh-head">' + esc(e.head) + '</b><span class="sh-asset"><span class="em">' + art('asset', e.asset) + '</span>' + esc(e.name) + ' <b class="' + cls(e.pct) + '">' + pct(e.pct, 0) + '</b><i>예고 없이 터진 소식 — 공부로도 안 보입니다</i></span></div>' +
         (e.held ? '<div class="sh-pl"><i>' + (a && a.kind === 'coin' ? '내 코인 포지션' : '내 ' + esc(e.name)) + '</i><b class="' + cls(e.delta) + '">' + sign(e.delta) + '</b></div>'
           : '<div class="sh-pl calm"><i>내 손익</i><span>든 것 없음</span></div>') + okBtn() + '</div>';
     } else if (m.type === 'quest') {
       const one = m.done.length + m.skipped.length === 1, q0 = m.done[0];
-      v.innerHTML = '<div class="win pop corner"><div class="sweep"></div><h2>' + I('check', '', 's') + '퀘스트 완료' + (m.done.length > 1 ? ' ×' + m.done.length : '') + '</h2>' +
+      v.innerHTML = '<div class="win pop corner"><h2>' + I('check', '', 's') + '퀘스트 완료' + (m.done.length > 1 ? ' ×' + m.done.length : '') + '</h2>' +
         (one ? '<h3>' + esc(q0.title) + '</h3><div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(q0.reward) + '</b></div>'
           : '<div class="qdone">' + m.done.map(q => '<div>' + I('check', '', 's') + '<b>' + esc(q.title) + '</b><span class="gold">' + I('gift', '', 's') + esc(q.reward) + '</span></div>').join('') +
             m.skipped.map(q => '<div class="off">' + I('skip', '', 's') + '<b>' + esc(q.title) + '</b><span>때가 지나 건너뜀</span></div>').join('') + '</div>') + nextBox(m.next) + okBtn() + '</div>';
     } else if (m.type === 'perk') {
       const cards = R.offerView(S) || [];
-      v.innerHTML = '<div class="win lvup corner"><div class="sweep"></div><h2>' + I('star', '', 's') + 'LEVEL UP</h2><h3>Lv.' + (S.lv - S.picks + 1) + ' — 특성을 하나 고르세요</h3><div class="pcards">' + cards.map((p, i) =>
+      v.innerHTML = '<div class="win lvup corner"><h2>' + I('star', '', 's') + '레벨 업</h2><h3>Lv.' + (S.lv - S.picks + 1) + ' — 특성을 하나 고르세요</h3><div class="pcards">' + cards.map((p, i) =>
         '<button class="pcard' + (p.aug ? ' aug' : '') + '" data-do="perk" data-arg="' + p.id + '"' + (p.aug ? ' title="양날 특성: 크게 얻는 대신 못 하게 되는 것이 있습니다"' : '') + '><span class="key">' + (i + 1) + '</span>' + (p.aug ? '<em class="edge">양날</em>' : '') + I(p.icon) + '<b>' + p.name + '</b>' +
         (p.aug ? '<span class="gain">' + esc(p.desc) + '</span><em class="con">대신: ' + esc(p.con) + '</em>' : '<span>' + p.desc + '</span>') + (p.excl ? '<em class="excl">' + I('lock', '', 's') + esc(p.excl) + '</em>' : '') + '<i class="have" title="같은 특성을 겹쳐 고를 수 있는 횟수">보유 ' + p.n + ' / ' + p.max + '</i></button>').join('') + '</div></div>';
     } else if (m.type === 'event') {
       const e = m.view, cost = c => (c.cost ? '<span class="cost" title="고르면 드는 돈">' + I('cash', '', 's') + '−' + won(c.cost) + '</span>' : '');
-      v.innerHTML = '<div class="win evt corner"><div class="sweep"></div><div class="evt-top">' + I(e.icon) + '<div><h2>' + I('dice', '', 's') + '돌발</h2><h3>' + esc(e.title) + '</h3></div></div><p>' + esc(m.done || e.text) + '</p>' +
+      v.innerHTML = '<div class="win evt corner"><div class="evt-top">' + I(e.icon) + '<div><h2>' + I('dice', '', 's') + '돌발</h2><h3>' + esc(e.title) + '</h3></div></div><p>' + esc(m.done || e.text) + '</p>' +
         (m.done ? evFx(m.fx) + okBtn() : '<div class="evt-btns"><button class="btn" data-do="ev" data-arg="a"' + (e.a.ok ? '' : ' disabled') + '><span class="key">1</span>' + esc(e.a.label) + cost(e.a) + '</button><button class="btn" data-do="ev" data-arg="b"><span class="key">2</span>' + esc(e.b.label) + cost(e.b) + '</button></div>') + '</div>';
     } else if (m.type === 'tier') {
       const e = m.e, row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
-      v.innerHTML = '<div class="win pop corner"><div class="sweep"></div><h2>' + I('door', '', 's') + '주거 변경</h2><h3>' + esc(e.name) + '</h3><div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(e.unlock || '') + '</b> 열림</div>' +
+      v.innerHTML = '<div class="win pop corner"><h2>' + I('door', '', 's') + '주거 변경</h2><h3>' + esc(e.name) + '</h3><div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(e.unlock || '') + '</b> 열림</div>' +
         (e.price ? '<div class="crows">' + row('key', '값 <b>' + won(e.price) + '</b>' + (e.sold ? ' <span class="dim">살던 집 ' + won(e.sold) + '에 팔림</span>' : '')) +
           (e.loan ? row('bill', '주담대 <b>' + won(e.loan) + '</b> — 일요일 밤마다 고정비와 함께 <b class="gold">' + won(R.weekCost(S, e.to) + loanWeekly(e.loan)) + '</b>', 'gold') : row('check', '대출 없음 — 일요일 밤 고정비 <b>' + won(R.weekCost(S, e.to)) + '</b>만', 'good')) + '</div>' : '') + okBtn() + '</div>';
     } else if (m.type === 'act1') { // 1막 끝: 내 집을 처음 산 순간. 등급 · 결과 카드 복사 · 계속한다
       const a = S.act1 || { day: m.e.day, rank: m.e.rank };
-      v.innerHTML = '<div class="win act1 corner"><div class="sweep"></div><h2>' + I('key', '', 's') + '1막 끝</h2><h3>내 집 마련</h3><div class="rank" title="며칠째에 샀는지로 정해지는 등급 (' + tune.act1_s + '일까지 S · ' + tune.act1_a + '일까지 A · ' + tune.act1_b + '일까지 B)">' + a.rank + '</div>' +
+      v.innerHTML = '<div class="win act1 corner"><h2>' + I('key', '', 's') + '1막 끝</h2><h3>내 집 마련</h3><div class="rank" title="며칠째에 샀는지로 정해지는 등급 (' + tune.act1_s + '일까지 S · ' + tune.act1_a + '일까지 A · ' + tune.act1_b + '일까지 B)">' + a.rank + '</div>' +
         '<p>' + esc(S.name) + ' 님은 <b class="gold">' + a.day + '일째</b>에 내 집을 샀습니다. 서울역 벤치는 다음 사람에게 양보합니다. 이제 월세 대신 관리비 · 세금만 나가고, <b>가게</b>를 차릴 수 있습니다.</p>' +
         '<div class="e-card"><pre>' + esc(R.resultCard(S, 'act1')) + '</pre><button class="btn" data-do="copy" title="1막 결과 카드를 복사해 붙여 넣을 수 있습니다">' + I('copy') + '복사</button></div>' +
         '<p class="next2">등급: S ' + tune.act1_s + '일 · A ' + tune.act1_a + '일 · B ' + tune.act1_b + '일 안, 그 뒤는 C. 다음은 아파트 → 주택 → 별장 → 호텔, 그리고 <b class="gold">한국 최고 부자</b>.</p>' + okBtn('계속한다') + '</div>';
     } else if (m.type === 'biz') {
       const e = m.e, v2 = R.bizView(S), auto = v2.eff ? Math.round(tune['biz_auto_' + v2.eff] * 100) : 0;
-      v.innerHTML = '<div class="win pop corner"><div class="sweep"></div><h2>' + I('rocket', '', 's') + '사업 확장</h2><h3>' + esc(e.name) + '</h3><div class="rewardbox">' + I('coin') + '<span>같은 알바를 해도 일당 <b class="gold">×' + num(e.mult) + '</b>' + (auto ? ' · 쉬기 · 공부 칸에도 가장 많이 주는 알바 일당의 ' + auto + '%' : '') + '</span></div>' +
+      v.innerHTML = '<div class="win pop corner"><h2>' + I('rocket', '', 's') + '사업 확장</h2><h3>' + esc(e.name) + '</h3><div class="rewardbox">' + I('coin') + '<span>같은 알바를 해도 일당 <b class="gold">×' + num(e.mult) + '</b>' + (auto ? ' · 쉬기 · 공부 칸에도 가장 많이 주는 알바 일당의 ' + auto + '%' : '') + '</span></div>' +
         (v2.eff < v2.lv ? '<p class="bad">지금 사는 곳에서는 ' + v2.effName + '(×' + num(v2.effMult) + ')까지만 반영됩니다.</p>' : '') + okBtn() + '</div>';
     } else if (m.type === 'foreclose') { // 압류: 무슨 일이 일어났는지 숫자로
       const e = m.e, row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
@@ -1337,7 +1406,8 @@
     if (w && w.classList.contains('corner')) { const f = document.createElement('div'); f.className = 'frame corner'; w.classList.remove('corner'); v.replaceChild(f, w); f.appendChild(w); }
   }
   function nightHtml(n) {
-    const rows = (list, sgn) => (list.length ? list.map(r => '<div class="n-row"><span>' + esc(r.label) + '</span><span class="' + (sgn > 0 ? 'gold' : '') + '">' + (sgn > 0 ? '+' : '−') + won(r.amt) + '</span></div>').join('') : '<div class="n-row none"><span>없음</span><span></span></div>');
+    const keep = t => esc(t).replace(/\([^)]*\)/g, m => m.replace(/ /g, '\u00a0')); // 괄호 덧붙임은 한 덩어리로 (줄이 바뀌면 통째로 다음 줄에 — 금액 바로 옆에서 끊기지 않게)
+    const rows = (list, sgn) => (list.length ? list.map(r => '<div class="n-row"><span>' + keep(r.label) + '</span><span class="' + (sgn > 0 ? 'gold' : '') + '">' + (sgn > 0 ? '+' : '−') + won(r.amt) + '</span></div>').join('') : '<div class="n-row none"><span>없음</span><span></span></div>');
     const reps = (n.reports || []).map(r => { const nm = BY[r.by] || '리포트', way = d => (d > 0 ? '오르는' : '내리는') + ' 쪽'; // 리포트 채점: 소식의 하루가 끝난 밤에 한 줄씩
       return '<div class="' + (r.right ? 'good' : 'bad') + '">' + I('book', '', 's') + '<b>' + nm + ' ' + (r.right ? '맞음' : '틀림') + '</b> — ' + esc(r.name) + (r.asset === 'hantang' ? ' 매집, 리포트는 ' + (r.said > 0 ? '진짜' : '털기') + ' 쪽 · 실제는 ' + (r.real > 0 ? '진짜' : '털기') : ', 리포트는 ' + way(r.said) + ' · 실제 소식은 ' + way(r.real)) + '</div>'; }).join('');
     const d = n.worthEnd - n.worthStart;
@@ -1358,7 +1428,7 @@
   }
   function optsHtml(m) { // 집 사기(대출 고르기) · 미리 갚기: 고를 것 한 줄씩, 숫자 키로 고르고 Enter
     const row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
-    const opt = (o, i, body) => '<button class="opt' + (i === m.pick ? ' on' : '') + (o.ok ? '' : ' no') + '" data-do="opt" data-arg="' + i + '"><span class="key">' + (i + 1) + '</span><span class="ob"><b>' + body[0] + '</b><span>' + body[1] + '</span>' + (body[2] ? '<span>' + body[2] + '</span>' : '') + (body[3] ? '<span>' + body[3] + '</span>' : '') + (o.ok ? '' : '<span class="bad">' + esc(o.why) + '</span>') + '</span></button>';
+    const opt = (o, i, body) => '<button class="opt' + (i === m.pick ? ' on' : '') + (o.ok ? '' : ' no') + '" data-do="opt" data-arg="' + i + '"><span class="key">' + (i + 1) + '</span><span class="ob"><b>' + body[0] + '</b><span>' + body[1] + '</span>' + (body[2] ? '<span>' + body[2] + '</span>' : '') + (body[3] ? '<span>' + body[3] + '</span>' : '') + (o.ok ? '' : '<span class="bad lk">' + I('lock', '잠김', 's') + esc(o.why) + '</span>') + '</span></button>';
     if (m.type === 'buy') {
       const h = R.HOMES[m.to], info = m.info, from = R.HOMES[S.tier].name;
       const days = (7 - (S.day % 7)) % 7 + 1, f = days / 7; // 첫 일요일은 산 날만큼만 (대출 줄 · 미리 갚기 창과 같은 셈)
@@ -1491,7 +1561,8 @@
     }
     const box = $('toasts');
     for (let i = box.children.length - 1; i >= 0; i--) if (--box.children[i]._life <= 0) box.children[i].remove();
-    if (ui.toastQ.length && box.children.length < 2 && !busy()) { const q = ui.toastQ.shift(); toast(q[0], q[1], q[2]); } // 미뤄 둔 알림을 차례로
+    while (ui.toastQ.length && S && S.day - (ui.toastQ[0][3] || S.day) > 1) ui.toastQ.shift(); // 이틀 넘게 기다린 알림은 버림 (한참 뒤 날짜에 옛 알림이 뜨지 않게 — 업적은 업적 창에 남아 있음)
+    if (ui.toastQ.length && box.children.length < 2 && !busy()) { const q = ui.toastQ.shift(); toast(q[0], q[1], q[2], q[3]); } // 미뤄 둔 알림을 차례로
     stepFx();
     if (ui.coachDirty) { ui.coachDirty = false; try { renderCoach(); } catch (e) { $('coach').className = 'hide'; } } // 화면이 다시 그려진 뒤에 자리를 잰다 (안내의 오류가 판을 멈추지 않게)
   }

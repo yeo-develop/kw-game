@@ -250,24 +250,24 @@
       drawTree(g, 118, base + 6, 6);
       if (ph.lamp) { MAP = null; lightPool(g, 19, 64, 13, 5); MAP = ph.map; }
       // 벤치 그림자 · 등받이
-      P(g, 34, 64, 56, 2, 'd');
-      drawBenchBack(g, 34, 40, 54);
+      P(g, 34, 63, 56, 2, 'd');
+      drawBenchBack(g, 34, 39, 54);
       MAP = null;
       // 주인공 (밤에도 색 그대로)
-      drawHeroTop(g, 44, 30, 'calm');
+      drawHeroTop(g, 44, 29, 'calm');
       MAP = ph.map;
-      drawBenchSeat(g, 34, 54, 54);
+      drawBenchSeat(g, 34, 53, 54);
       MAP = null;
-      drawHeroLegs(g, 44, 30);
+      drawHeroLegs(g, 44, 29);
       MAP = ph.map;
-      drawFlyers(g, 70, 49);
+      drawFlyers(g, 70, 48);
       drawPigeon(g, 24, 59, false); drawPigeon(g, 98, 61, true);
       MAP = null;
       drawLamp(g, 16, 14, 64, ph.lamp);
       // 떠 있는 상태창 + 반짝
-      drawStatusWin(g, 70, 13, 28, 20, key === 'night' ? 'l' : 'w');
+      drawStatusWin(g, 70, 15, 28, 20, key === 'night' ? 'l' : 'w');
       const sp = key === 'night' ? 'Y' : 'w';
-      sparkle(g, 101, 12, sp); sparkle(g, 67, 9, sp); sparkle(g, 103, 30, sp);
+      sparkle(g, 103, 14, sp); sparkle(g, 66, 11, sp); sparkle(g, 104, 32, sp);
       MAP = null;
     }
 
@@ -577,11 +577,290 @@
       P(g, 7, 11, 1, 6, 'C'); P(g, 6, 19, 1, 4, 'C');
     }
 
+    // ═════ 실내 (2단계) ═════
+    const SHADE = { o: 'O', g: 'G', r: 'R', b: 'B', l: 'b', N: 'n', n: 'H', y: 'o', s: 'l', c: 'C', C: 'd', d: 'N', p: 'P', w: 'L', L: 'e', e: 'E', h: 'g', S: 's', Y: 'y', q: 's', P: 'n' };
+    const sh = k => SHADE[k] || 'k';
+    const isLit = key => key === 'evening' || key === 'night';
+    function drawRoom(g, o) {
+      const W = o.w || 128, H = o.h || 72, fy = o.floorY || 54;
+      P(g, 0, 0, W, fy, o.wall);
+      if (o.wallLine) for (let x = o.wallLine[1] - 1; x < W; x += o.wallLine[1]) P(g, x, 0, 1, fy, o.wallLine[0]);
+      if (o.ceil) { P(g, 0, 0, W, 3, o.ceil); P(g, 0, 3, W, 1, 'k'); }
+      P(g, 0, fy, W, H - fy, o.floor);
+      if (o.floorLine) { let r = 0; for (let y = fy + 3; y < H; y += o.floorLine[1], r++) { P(g, 0, y, W, 1, o.floorLine[0]); for (let x = (r % 2) * 9 + 4; x < W; x += 18) P(g, x, y - o.floorLine[1] + 1 < fy ? fy + 1 : y - o.floorLine[1] + 1, 1, y - Math.max(fy + 1, y - o.floorLine[1] + 1), o.floorLine[0]); } }
+      P(g, 0, fy - 2, W, 2, o.trim || 'w'); P(g, 0, fy, W, 1, 'k');
+    }
+    const WIN_SKY = { morning: ['q', 'S', 'Y', 'p'], day: ['s', 's', 'q', 'S'], evening: ['duskHi', 'dusk', 'o', 'y'], night: ['nite0', 'nite1', 'nite1', 'B'] };
+    function drawWindow(g, x, y, w, h, key, o) {
+      o = o || {}; const fr = o.frame || 'w', ix = x + 2, iy = y + 2, iw = w - 4, ih = h - 4, s = WIN_SKY[key] || WIN_SKY.day;
+      const saved = MAP; MAP = null;
+      box(g, x, y, w, h, fr);
+      for (let i = 0; i < 4; i++) { const y0 = iy + Math.floor(ih * i / 4), y1 = iy + Math.floor(ih * (i + 1) / 4); P(g, ix, y0, iw, y1 - y0, s[i]); if (i) dither(g, ix, y0, iw, 1, s[i - 1], 0); }
+      if (key === 'night') {
+        let r = x * 7 + y; for (let i = 0; i < Math.max(2, (iw * ih) >> 5); i++) { r = (r * 73 + 19) % 997; P(g, ix + r % iw, iy + (r >> 3) % Math.max(1, ih >> 1), 1, 1, i % 3 ? 'w' : 'Y'); }
+        if (iw > 8) { disc(g, ix + iw - 4, iy + 3, 2, 'Y', 'Y'); P(g, ix + iw - 3, iy + 1, 2, 2, 'nite0'); }
+      } else if (key === 'day') { if (iw > 14) { P(g, ix + 2, iy + 3, 7, 2, 'w'); P(g, ix + 3, iy + 2, 4, 1, 'w'); } }
+      else if (iw > 8) disc(g, ix + Math.floor(iw * .3), iy + ih - (key === 'evening' ? 4 : 6), 2, 'Y', 'y');
+      const lit = isLit(key) ? 'Y' : null;
+      if (o.view === 'city') {
+        const fc = { morning: 'P', day: 'l', evening: 'duskHi', night: 'nite0' }[key] || 'l';
+        let xx = ix, r = 3;
+        while (xx < ix + iw) { r = (r * 31 + 7) % 23; const bw = 4 + r % 4, bh = Math.max(3, Math.floor(ih * (.25 + (r % 5) * .08))), ww = Math.min(bw, ix + iw - xx);
+          P(g, xx, iy + ih - bh, ww, bh, fc); if (lit) for (let yy = iy + ih - bh + 1; yy < iy + ih - 1; yy += 2) for (let x2 = xx + 1; x2 < xx + ww - 1; x2 += 2) if ((x2 + yy + r) % 3) P(g, x2, yy, 1, 1, lit);
+          xx += bw + 1; }
+      } else if (o.view === 'sea') {
+        const hz = iy + Math.floor(ih * .6), sc = { morning: 's', day: 'b', evening: 'o', night: 'B' }[key] || 'b';
+        P(g, ix, hz, iw, iy + ih - hz, sc); for (let yy = hz + 2; yy < iy + ih; yy += 2) dither(g, ix, yy, iw, 1, key === 'night' ? 'nite1' : 'w', yy & 2 ? 1 : 0);
+      }
+      if (!isLit(key) && iw > 6) { P(g, ix + iw - 4, iy + 1, 1, 1, 'w'); P(g, ix + iw - 5, iy + 2, 1, 1, 'w'); P(g, ix + iw - 6, iy + 3, 1, 1, 'w'); }
+      if (o.cross !== false) { const cx = x + Math.floor(w / 2) - 1; P(g, cx, y + 1, 2, h - 2, fr); P(g, cx - 1 < x ? x : cx - 1, y + 1, 0, 0, fr); if (h > 18) P(g, x + 1, y + Math.floor(h / 2) - 1, w - 2, 2, fr); }
+      if (o.sill) { box(g, x - 2, y + h - 1, w + 4, 3, fr); }
+      if (o.curtain) {
+        const c = o.curtain, cw = Math.max(4, Math.floor(w / 5));
+        for (const [cx0, dir] of [[x - 2, 1], [x + w + 2 - cw, -1]]) {
+          P(g, cx0, y - 2, cw, h + 2, 'k'); P(g, cx0 + 1, y - 1, cw - 2, h, c);
+          for (let i = 2; i < cw - 1; i += 2) P(g, cx0 + i, y - 1, 1, h, sh(c));
+          P(g, cx0 + (dir > 0 ? cw - 2 : 1), y + Math.floor(h * .55), 1, 2, 'y');
+        }
+        P(g, x - 4, y - 3, w + 8, 2, 'n'); P(g, x - 4, y - 3, w + 8, 1, 'k');
+      }
+      MAP = saved;
+    }
+    function sunPatch(g, x, y, w, h, key) {
+      if (key === 'night') return; const k = key === 'day' ? 'w' : 'Y';
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const px = x + i + j, py = y + j; if (((px + py) & 1) === 0) P(g, px, py, 1, 1, k); }
+    }
+    function drawStand(g, x, fy, on) {
+      const top = fy - 26;
+      if (on) for (const [dx, dy] of [[-2, 1], [-2, 4], [10, 1], [10, 4], [0, -2], [4, -2], [8, -2], [-1, 9], [9, 9]]) P(g, x + dx, top + dy, 1, 1, 'Y');
+      map(g, x, top, ['..kkkkk..', '.kSSSSSk.', '.kSSSSSk.', 'kSSSSSSSk', 'kSSSSSSSk', 'kkkkkkkkk'].map(r => r.replace(/S/g, on ? 'Y' : 'c')));
+      if (on) P(g, x + 2, top + 1, 2, 1, 'w');
+      P(g, x + 4, top + 6, 1, 18, 'k'); P(g, x + 4, top + 6, 1, 18, 'E');
+      P(g, x + 3, top + 6, 1, 18, 'k'); P(g, x + 5, top + 6, 1, 18, 'k');
+      P(g, x + 1, fy - 2, 7, 2, 'k'); P(g, x + 2, fy - 2, 5, 1, 'E');
+    }
+    function drawSofa(g, x, y, w, col, part) {
+      const s = sh(col);
+      const arms = () => { for (const ax of [x, x + w - 6]) { box(g, ax, y - 5, 6, 12, col); P(g, ax + 1, y - 4, 4, 1, 'w'); P(g, ax + 1, y + 5, 4, 1, s); } };
+      if (part !== 'front') {
+        box(g, x + 3, y - 10, w - 6, 12, col); P(g, x + 4, y - 9, w - 8, 1, 'w');
+        const mid = x + Math.floor(w / 2); P(g, mid, y - 8, 1, 9, s);
+        P(g, x + 4, y - 1, w - 8, 2, s);
+        arms();
+      }
+      if (part !== 'back') {
+        box(g, x + 4, y, w - 8, 6, col); P(g, x + 5, y + 1, w - 10, 1, 'w'); P(g, x + Math.floor(w / 2), y + 1, 1, 4, s); P(g, x + 5, y + 4, w - 10, 1, s);
+        arms();
+        P(g, x + 2, y + 7, 2, 2, 'k'); P(g, x + w - 4, y + 7, 2, 2, 'k');
+      }
+    }
+    function drawPlant(g, x, fy, big) {
+      if (big) {
+        map(g, x, fy - 20, ['....kk......', '...khgk..kk.', '..khggk.kgk.', '.khgggkkhgk.', '.kgggGkhggk.', 'kkhggGkgggGk', 'khggGkhgggGk', 'kgggGkgggGk.', '.kGGkhggGk..', '..kkkgGGk...', '....kkkk....', '..kkkkkkkk..', '..kOooooOk..', '..kOooooOk..', '...kOoooOk..', '...kOoooOk..', '...kOoooOk..', '...kOoooOk..', '...kOOOOOk..', '...kkkkkkk..']);
+      } else {
+        map(g, x, fy - 14, ['...kk....', '..khgk.k.', '.khgkkhk.', '.kggkhgk.', 'kkhgGgGk.', 'khggGkk..', '.kkGkk...', '.kkkkkkk.', '.kOoooOk.', '.kOoooOk.', '..kOooOk.', '..kOooOk.', '..kOOOOk.', '..kkkkkk.']);
+      }
+    }
+    function drawFrame(g, x, y, w, h, kind) {
+      box(g, x, y, w, h, 'n'); P(g, x + 1, y + 1, w - 2, 1, 'N');
+      const ix = x + 2, iy = y + 2, iw = w - 4, ih = h - 4;
+      P(g, ix, iy, iw, ih, 'S');
+      if (kind === 'sea') { P(g, ix, iy + (ih >> 1), iw, ih - (ih >> 1), 'b'); P(g, ix + 1, iy + (ih >> 1) + 1, iw - 3, 1, 'l'); P(g, ix + iw - 3, iy + 1, 2, 2, 'y'); }
+      else if (kind === 'dot') { P(g, ix, iy, iw, ih, 'c'); P(g, ix + 1, iy + 1, 3, 3, 'r'); P(g, ix + iw - 4, iy + ih - 4, 3, 3, 'b'); P(g, ix + (iw >> 1), iy + 1, 2, 2, 'y'); }
+      else { for (let i = 0; i < iw; i++) { const hh = Math.max(1, Math.round((ih * .6) - Math.abs(i - iw * .4) * .6)); P(g, ix + i, iy + ih - hh, 1, hh, 'g'); } P(g, ix, iy + ih - 1, iw, 1, 'G'); P(g, ix + iw - 3, iy + 1, 2, 2, 'y'); }
+      P(g, x + (w >> 1), y - 2, 1, 2, 'k');
+    }
+    function drawHeroLying(g, x, y, blanket, len) {
+      const b = blanket || 'l', L = len || 30;
+      box(g, x - 2, y + 7, 26, 9, 'w'); P(g, x - 1, y + 14, 24, 1, 'L');
+      map(g, x, y, HERO.slice(0, 15));
+      box(g, x + 17, y + 9, L, 10, b); P(g, x + 18, y + 10, L - 2, 2, 'w'); P(g, x + 18, y + 17, L - 2, 1, sh(b));
+      for (let i = x + 24; i < x + 17 + L - 2; i += 7) P(g, i, y + 13, 1, 3, sh(b));
+    }
+    const OUTFIT = {
+      sauna: { b: 'O', l: 'o', w: 'p', E: 'O' },
+      home: { b: 'G', l: 'g', w: 'h' },
+      suit: { b: 'k', l: 'E', E: 'k' },
+    };
+    function drawKey(g, x, y) { map(g, x, y, ['.kkk...', 'kyYyk..', 'kykykkk', 'kyyyyOk', '.kkk.k.'].map(r => r)); }
+
+    // 김 (위로 오르는 점 두 줄)
+    function steam(g, x, y, k) { map(g, x, y, ['.k..k', 'k..k.', '.k..k', 'k..k.'].map(r => r.replace(/k/g, k || 'L'))); }
+
+    // ── 1 찜질방 수면실 ──
+    function sceneSauna(g, key) {
+      const lit = isLit(key), fy = 50;
+      drawRoom(g, { wall: 'C', wallLine: ['d', 7], floor: 'N', floorLine: ['n', 6], floorY: fy, trim: 'n', ceil: 'n' });
+      // 높은 작은 창
+      drawWindow(g, 66, 11, 24, 15, key, { frame: 'c', cross: true });
+      if (!lit) sunPatch(g, 64, 28, 6, 5, key);
+      // 불가마 문 (둥근 아치 + 이글거리는 불빛)
+      const kx = 4, ky = 16, kw = 30;
+      for (let y = ky; y < fy; y++) for (let x = kx; x < kx + kw; x++) {
+        const cx = kx + kw / 2 - .5, r = kw / 2, top = ky + r, inArch = y >= top || Math.hypot(x - cx, y - top) <= r;
+        if (!inArch) continue;
+        const d = y >= top ? Math.min(x - kx, kx + kw - 1 - x) : r - Math.hypot(x - cx, y - top);
+        P(g, x, y, 1, 1, d < 1 ? 'k' : d < 5 ? ((x + y) % 4 === 0 ? 'E' : 'e') : d < 6 ? 'k' : d < 8 ? 'O' : d < 10 ? 'o' : lit ? 'Y' : 'y');
+      }
+      for (let x = kx + 5; x < kx + kw - 5; x += 3) P(g, x, fy - 3, 2, 2, 'R');
+      // ♨ 표시판
+      box(g, 40, 13, 22, 13, 'w'); P(g, 41, 14, 20, 1, 'r');
+      map(g, 44, 16, ['.r..r..r..', 'r..r..r...', '.r..r..r..']); P(g, 43, 21, 15, 1, 'r'); P(g, 42, 20, 1, 2, 'r'); P(g, 58, 20, 1, 2, 'r'); P(g, 44, 22, 13, 1, 'r');
+      // 천장 등
+      P(g, 100, 4, 1, 3, 'k'); box(g, 96, 6, 9, 4, lit ? 'Y' : 'c'); if (lit) { P(g, 94, 11, 1, 1, 'Y'); P(g, 100, 12, 1, 1, 'Y'); P(g, 106, 11, 1, 1, 'Y'); }
+      // 수면 매트 셋 (뒤 → 앞)
+      box(g, 86, 46, 40, 6, 'r'); P(g, 87, 47, 38, 1, 'p');
+      box(g, 34, 51, 60, 8, 'r'); P(g, 35, 52, 58, 1, 'p'); P(g, 35, 57, 58, 1, 'R');
+      // 옆 사람 (이불 덩어리 + 양머리)
+      disc(g, 91, 44, 3, 'p', 'k'); P(g, 89, 44, 2, 1, 'k'); P(g, 90, 46, 1, 1, 'r'); box(g, 87, 39, 9, 4, 'w'); disc(g, 87, 41, 2, 'w', 'k'); P(g, 87, 41, 1, 1, 'L');
+      box(g, 96, 40, 26, 8, 'g'); P(g, 97, 41, 24, 1, 'h'); P(g, 104, 43, 1, 3, 'G'); P(g, 112, 43, 1, 3, 'G');
+      // 목침
+      box(g, 36, 47, 10, 5, 'N'); P(g, 37, 48, 8, 1, 'c');
+      // 주인공: 주황 찜질복 · 양머리 수건, 매트 위에 앉음
+      const hx = 52, hy = 27;
+      MAP = OUTFIT.sauna; drawHeroTop(g, hx, hy, 'calm'); MAP = null;
+      box(g, hx + 4, hy - 2, 14, 5, 'w'); P(g, hx + 5, hy - 1, 12, 1, 'L');
+      disc(g, hx + 4, hy + 1, 3, 'w', 'k'); P(g, hx + 4, hy + 1, 1, 1, 'L'); disc(g, hx + 17, hy + 1, 3, 'w', 'k'); P(g, hx + 17, hy + 1, 1, 1, 'L');
+      MAP = OUTFIT.sauna; drawHeroLegs(g, hx, hy); MAP = null;
+      // 삶은 달걀 바구니 · 식혜
+      box(g, 78, 50, 12, 6, 'N'); P(g, 79, 51, 10, 1, 'd');
+      disc(g, 81, 49, 2, 'c', 'k'); disc(g, 86, 49, 2, 'c', 'k'); P(g, 80, 48, 1, 1, 'w'); P(g, 85, 48, 1, 1, 'w');
+      box(g, 91, 50, 5, 7, 'w'); P(g, 92, 51, 3, 3, 'Y'); P(g, 92, 51, 3, 1, 'y');
+      steam(g, 84, 41, 'w');
+      // 상태창
+      drawStatusWin(g, 98, 17, 24, 16, lit ? 'l' : 'w');
+      sparkle(g, 95, 15, 'w');
+    }
+
+    // ── 2 고시원 방 ──
+    function sceneGosi(g, key) {
+      const lit = isLit(key);
+      // 좁은 상자 방: 뒷벽 · 양 옆벽 · 천장 · 바닥 (원근)
+      const bx0 = 30, bx1 = 98, by0 = 8, by1 = 50;
+      P(g, 0, 0, 128, 72, 'S');
+      for (let y = 0; y < 72; y++) {
+        const t = y < by0 ? 1 - y / by0 : y > by1 ? (y - by1) / (72 - by1) : 0;
+        const l = Math.round(bx0 * t), r = Math.round(128 - (128 - bx1) * t);
+        if (y < by0) { P(g, 0, y, 128, 1, 'L'); }
+        else if (y > by1) { P(g, 0, y, 128, 1, 'd'); }
+        else { P(g, 0, y, bx0, 1, 'q'); P(g, bx1, y, 128 - bx1, 1, 'q'); }
+      }
+      // 옆벽 · 바닥 · 천장의 모서리선
+      for (let y = 0; y < by0; y++) { const x = Math.round(bx0 * y / by0); P(g, 0, y, x, 1, 'e'); P(g, 128 - x, y, x, 1, 'e'); }
+      for (let y = by0; y <= by1; y++) { P(g, 0, y, bx0, 1, 'q'); }
+      line(g, 0, 0, bx0, by0, 'k'); line(g, 127, 0, bx1, by0, 'k'); line(g, 0, 71, bx0, by1, 'k'); line(g, 127, 71, bx1, by1, 'k');
+      P(g, bx0, by0, bx1 - bx0 + 1, 1, 'k'); P(g, bx0, by1, bx1 - bx0 + 1, 1, 'k'); P(g, bx0, by0, 1, by1 - by0, 'k'); P(g, bx1, by0, 1, by1 - by0, 'k');
+      // 뒷벽 벽지 점무늬
+      for (let y = by0 + 3; y < by1 - 1; y += 4) for (let x = bx0 + 3 + ((y >> 2) & 1) * 2; x < bx1 - 1; x += 4) P(g, x, y, 1, 1, 'q');
+      for (let y = 54; y < 72; y += 5) P(g, 0, y, 128, 1, 'N');
+      // 형광등
+      box(g, 50, 2, 28, 3, lit ? 'Y' : 'w'); if (lit) for (let x = 48; x < 82; x += 4) P(g, x, 7, 1, 1, 'Y');
+      // 작은 창
+      drawWindow(g, 38, 13, 18, 13, key, { frame: 'w', cross: true, sill: true });
+      if (!lit) sunPatch(g, 40, 30, 8, 6, key);
+      // 옷걸이 (오른쪽 옆벽)
+      P(g, 106, 18, 8, 1, 'k'); map(g, 104, 19, ['..kkkkkk...', '.kbllllbk..', 'kbllllllbk.', 'kblllllllbk', '.kbllllbk..', '.kbllllbk..', '.kbllllbk..', '.kbbbbbbk..', '..kkkkkk...']);
+      // 좁은 침대 (왼쪽 옆벽에 붙음)
+      box(g, 4, 40, 44, 6, 'w'); P(g, 5, 41, 42, 1, 'w'); box(g, 6, 36, 10, 6, 'w'); P(g, 7, 37, 8, 1, 'L');
+      box(g, 22, 39, 26, 7, 'l'); P(g, 23, 40, 24, 1, 'S');
+      // 책상 · 의자 없음 · 컵라면 · 책 · 스탠드
+      box(g, 70, 38, 32, 4, 'N'); P(g, 71, 39, 30, 1, 'c'); P(g, 72, 42, 2, 13, 'n'); P(g, 98, 42, 2, 13, 'n'); P(g, 72, 42, 1, 13, 'k'); P(g, 99, 42, 1, 13, 'k');
+      P(g, 74, 42, 24, 6, 'N'); P(g, 74, 42, 24, 1, 'k'); P(g, 74, 47, 24, 1, 'k'); P(g, 85, 44, 3, 1, 'k');
+      map(g, 86, 31, ['kkkkkkkk', 'kwwwwwwk', 'krrrrrrk', 'kwrwwrwk', '.kwwwwk.', '.kkkkkk.']); // 컵라면
+      steam(g, 88, 25, lit ? 'w' : 'L');
+      box(g, 73, 34, 11, 4, 'r'); P(g, 74, 35, 9, 1, 'w'); box(g, 74, 31, 10, 4, 'y'); P(g, 75, 32, 8, 1, 'w'); box(g, 73, 28, 11, 4, 'g'); P(g, 74, 29, 9, 1, 'h');
+      map(g, 92, 26, ['.kkkk.', 'kYYYYk', 'kkkkkk', '...k..', '...k..', '...k..', '...k..', '..kkk.'].map(r => lit ? r : r.replace(/Y/g, 'c')));
+      if (lit) { P(g, 90, 33, 1, 1, 'Y'); P(g, 99, 33, 1, 1, 'Y'); }
+      // 주인공: 침대 끝에 앉음
+      const hx = 40, hy = 26;
+      drawHeroTop(g, hx, hy, 'calm');
+      box(g, 2, 49, 48, 6, 'w'); P(g, 3, 50, 46, 1, 'L'); P(g, 4, 55, 2, 3, 'k'); P(g, 46, 55, 2, 3, 'k');
+      drawHeroLegs(g, hx, hy);
+      // 슬리퍼
+      // 상태창
+      drawStatusWin(g, 64, 14, 22, 14, lit ? 'l' : 'w');
+    }
+
+    // ── 3 원룸 ──
+    function sceneOneroom(g, key) {
+      const lit = isLit(key), fy = 54;
+      drawRoom(g, { wall: 'c', floor: 'N', floorLine: ['n', 6], floorY: fy, trim: 'w' });
+      P(g, 0, 0, 128, 2, 'C');
+      // 큰 창 (도시)
+      drawWindow(g, 22, 10, 40, 30, key, { frame: 'w', cross: true, view: 'city', sill: true });
+      if (!lit) sunPatch(g, 30, 56, 18, 8, key);
+      // 천장 등
+      P(g, 70, 0, 1, 3, 'k'); map(g, 66, 3, ['.kkkkkkk.', 'kccccccck', '.kkkkkkk.'].map(r => lit ? r.replace(/c/g, 'Y') : r));
+      if (lit) for (const [x, y] of [[64, 8], [70, 9], [76, 8]]) P(g, x, y, 1, 1, 'Y');
+      // 작은 냉장고
+      box(g, 4, 30, 15, 24, 'w'); P(g, 5, 31, 1, 22, 'w'); P(g, 17, 31, 1, 22, 'L'); P(g, 5, 39, 13, 1, 'k');
+      P(g, 15, 33, 1, 4, 'E'); P(g, 15, 42, 1, 6, 'E'); box(g, 7, 43, 4, 4, 'y'); P(g, 8, 34, 3, 2, 'r');
+      box(g, 5, 26, 7, 4, 'g'); P(g, 6, 27, 2, 1, 'h'); // 냉장고 위 화분 상자
+      // 벽 시계 · 포스터
+      disc(g, 70, 16, 4, 'w', 'k'); P(g, 70, 13, 1, 3, 'k'); P(g, 70, 16, 3, 1, 'k');
+      box(g, 113, 12, 12, 16, 'w'); P(g, 114, 13, 10, 7, 'o'); P(g, 115, 22, 8, 1, 'E'); P(g, 115, 24, 6, 1, 'E'); disc(g, 119, 16, 2, 'y', 'y');
+      // 침대 (오른쪽, 머리판)
+      box(g, 120, 30, 6, 26, 'n'); P(g, 121, 31, 4, 1, 'N');
+      box(g, 62, 42, 60, 8, 'w'); P(g, 63, 43, 58, 1, 'w');
+      box(g, 106, 38, 14, 6, 'w'); P(g, 107, 39, 12, 1, 'L');
+      box(g, 88, 41, 32, 9, 'l'); P(g, 89, 42, 30, 2, 'S'); P(g, 89, 48, 30, 1, 'b');
+      // 주인공: 침대 끝에 앉음
+      const hx = 66, hy = 26;
+      drawHeroTop(g, hx, hy, 'calm');
+      box(g, 60, 49, 64, 6, 'w'); P(g, 61, 50, 62, 1, 'L'); P(g, 61, 54, 62, 1, 'e'); P(g, 62, 55, 3, 3, 'k'); P(g, 118, 55, 3, 3, 'k');
+      box(g, 88, 49, 34, 3, 'l');
+      drawHeroLegs(g, hx, hy);
+      // 러그
+      P(g, 52, 62, 52, 4, 'o'); P(g, 54, 66, 48, 1, 'O'); for (let x = 54; x < 102; x += 4) P(g, x, 63, 2, 1, 'y');
+      // 상태창
+      drawStatusWin(g, 87, 14, 22, 15, lit ? 'l' : 'w');
+    }
+
+    // ── 4 내 집 거실 ──
+    function sceneHome(g, key) {
+      const lit = isLit(key), fy = 54;
+      drawRoom(g, { wall: 'Y', floor: 'N', floorLine: ['n', 6], floorY: fy, trim: 'w' });
+      P(g, 0, 36, 128, fy - 38, 'c'); P(g, 0, 36, 128, 1, 'w'); P(g, 0, 37, 128, 1, 'd');
+      for (let x = 6; x < 128; x += 10) P(g, x, 38, 1, fy - 40, 'C');
+      // 커튼 친 창
+      drawWindow(g, 10, 13, 30, 22, key, { frame: 'w', cross: true, view: 'sky', curtain: 'r', sill: true });
+      if (!lit) sunPatch(g, 14, 56, 18, 8, key);
+      // 화분 · 액자
+      drawPlant(g, 2, fy, true);
+      drawFrame(g, 112, 16, 13, 11, 'hill');
+      // 러그
+      P(g, 22, 58, 84, 7, 'o'); P(g, 22, 58, 84, 1, 'O'); P(g, 22, 64, 84, 1, 'O'); for (let x = 24; x < 104; x += 4) { P(g, x, 60, 2, 1, 'y'); P(g, x + 2, 62, 2, 1, 'y'); }
+      // 스탠드 + 불빛
+      if (lit) lightPool(g, 106, 58, 10, 3);
+      drawStand(g, 102, fy, lit);
+      // 소파 + 주인공 + 열쇠
+      const sx = 42, sy = 45, hx = 58, hy = sy - 24;
+      drawSofa(g, sx, sy, 50, 'g', 'back');
+      drawHeroTop(g, hx, hy, 'calm');
+      drawSofa(g, sx, sy, 50, 'g', 'front');
+      drawHeroLegs(g, hx, hy);
+      drawKey(g, hx + 17, hy + 20);
+      sparkle(g, hx + 25, hy + 18, 'w');
+      // 작은 탁자 + 컵
+      box(g, 24, 47, 14, 3, 'N'); P(g, 26, 50, 2, 6, 'n'); P(g, 34, 50, 2, 6, 'n'); box(g, 28, 43, 5, 5, 'w'); P(g, 29, 44, 3, 1, 'n');
+      // 상태창
+      drawStatusWin(g, 84, 14, 22, 15, lit ? 'l' : 'w');
+    }
+
+    const SCENE_BOX = {
+      0: { hero: [44, 26, 66, 60], win: [68, 13, 100, 40] },
+      1: { hero: [52, 24, 74, 58], win: [96, 15, 124, 38] },
+      2: { hero: [40, 23, 62, 57], win: [62, 12, 88, 33] },
+      3: { hero: [66, 23, 88, 57], win: [85, 12, 111, 34] },
+      4: { hero: [58, 18, 84, 52], win: [82, 12, 108, 34] },
+    };
+    const SCENES = [sceneStation, sceneSauna, sceneGosi, sceneOneroom, sceneHome];
+
     // ───── 감싸기 (이름별 캐시) ─────
     const cache = {};
     function img(key, w, h, alt, draw) {
       if (!cache[key]) {
-        const [c, g] = mk(w, h); const saved = MAP; draw(g); MAP = saved;
+        const [c, g] = mk(w, h); const saved = MAP; try { draw(g); } finally { MAP = saved; } // 그리다 오류가 나도 색 바꾸기 표가 다음 그림에 남지 않게
         cache[key] = `<img class="px" alt="${alt}" src="${c.toDataURL()}" width="${w}" height="${h}">`;
       }
       return cache[key];
@@ -595,11 +874,13 @@
     const old = { scene: Old.scene, thumb: Old.thumb, job: Old.job, act: Old.act, asset: Old.asset, die: Old.die, cup: Old.cup };
     const safe = (name, fn) => function () { try { const r = fn.apply(this, arguments); if (r != null) return r; } catch (e) { if (window.console) console.warn('pxart', name, e); } return old[name] ? old[name].apply(this, arguments) : ''; };
 
+    const SCENE_NAME = ['서울역 광장 벤치', '찜질방 수면실', '고시원 방', '원룸', '내 집 거실'];
     Old.scene = safe('scene', (tier, phase) => {
-      const t = Math.round(Number(tier) || 0);
-      if (t !== 0) return null; // 다른 집은 아직 예전 그림 (2단계)
+      const t = Math.max(0, Math.round(Number(tier) || 0));
+      if (t > 4) return null; // 5~8 은 pxhomes.js (없으면 예전 그림)
       const key = PHASES[phase] ? phase : 'day';
-      return img('scene0_' + key, 128, 72, SCENE_ALT[key], g => sceneStation(g, key));
+      const alt = t === 0 ? SCENE_ALT[key] : SCENE_NAME[t];
+      return img('scene' + t + '_' + key, 128, 72, alt, g => { MAP = null; SCENES[t](g, key); MAP = null; });
     });
     Old.thumb = safe('thumb', (tier, gray) => {
       const t = Math.max(0, Math.min(9, Math.round(Number(tier) || 0)));
@@ -618,6 +899,8 @@
       drawHero, drawHeroTop, drawHeroLegs, drawStatusWin, drawBenchBack, drawBenchSeat, drawLamp, lightPool,
       drawPigeon, drawTree, drawFlyers, drawCloud, drawSky, drawStars, drawMoon, drawStation, drawTower, drawFar,
       sceneStation, drawBuilding: (g, t) => BUILD[t](g), drawDie, drawCup, JOB, ACT, ASSET,
+      isLit, drawRoom, drawWindow, sunPatch, drawStand, drawSofa, drawPlant, drawFrame, drawHeroLying, OUTFIT, drawKey, SCENE_BOX,
+      steam, sceneSauna, sceneGosi, sceneOneroom, sceneHome, SHADE,
     };
   } catch (e) {
     if (typeof console !== 'undefined') console.warn('pxart.js 를 불러오지 못해 예전 그림을 씁니다', e);

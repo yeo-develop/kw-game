@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 화면 없는 브라우저(Playwright)는 KW_PLAYWRIGHT 환경 변수로 위치를 줄 수 있다.
 // 한 판을 화면으로 내 집(1막 끝)까지 몰아 보는 점검 (게임 폴더 밖). 창 없이 돌고, 화면 몇 장을 찍고, 글자 넘침 · 겹침 · 작은 글자 · 콘솔 오류를 모은다.
-// 그 뒤 단계(아파트 · 대출 · 미리 갚기 기준 · 사업 · 공부 종목 · 밤사이 갭 · 압류 · 호텔 선언 · 엔딩 · 가장 긴 숫자 · 로드맵 열 단계 · 사는 곳 그림 다섯)는 판 상태를 만들어 넣어 같은 점검을 한다.
+// 그 뒤 단계(아파트 · 대출 · 미리 갚기 기준 · 사업 · 공부 종목 · 밤사이 갭 · 압류 · 호텔 선언 · 엔딩 · 가장 긴 숫자 · 로드맵 열 단계 · 사는 곳 그림 아홉)는 판 상태를 만들어 넣어 같은 점검을 한다.
 // node check.js <게임 폴더> <찍을 폴더> [seed] [style: study|alba|gamble]
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
@@ -19,7 +19,12 @@ const LINT = () => {
     const rs = [...r.getClientRects()].filter(b => b.width > 0.5 && b.height > 0.5); if (!rs.length) continue;
     const b = { x0: Math.min(...rs.map(q => q.left)), y0: Math.min(...rs.map(q => q.top)), x1: Math.max(...rs.map(q => q.right)), y1: Math.max(...rs.map(q => q.bottom)) };
     const top = document.elementFromPoint((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
-    if (!top || !(top === el || el.contains(top) || top.contains(el))) continue; // 다른 것에 가려진 글자는 보지 않음
+    if (!top || !(top === el || el.contains(top) || top.contains(el))) { // 다른 것 밑에 깔린 글자
+      // 창 · 안내 · 알림처럼 위에 덮는 것에 가려진 글자는 보지 않는다. 그러나 같은 구역(같은 창) 안의 다른 것 밑에 깔린 글자는 아래의 겹침 검사에 넣는다
+      // (예전에는 이것도 건너뛰어서, 상태창의 시스템 한마디가 아래 알림 줄 밑에 깔려 두 줄이 포개진 것을 못 잡았다)
+      const BOX = '.zone,.win,.t-box,.e-box', home = el.closest(BOX), over = top && top.closest(BOX);
+      if (!home || home !== over) continue;
+    }
     const fs = parseFloat(cs.fontSize);
     if (fs < 13.99) bad.push('작은 글자 ' + fs + 'px: ' + t.slice(0, 24));
     if (b.x0 < sr.left - 1 || b.y0 < sr.top - 1 || b.x1 > sr.right + 1 || b.y1 > sr.bottom + 1) bad.push('화면 밖: ' + t.slice(0, 24));
@@ -30,7 +35,11 @@ const LINT = () => {
     }
     const box = el.closest('.arow,.opt,.sbtn,#hud,#me,#quest,#today,#board,.win,.e-box,.t-box'); // 종목 줄 · 고를 것 · 종목 단추 안에서 넘친 글도
     if (box) { const br = box.getBoundingClientRect(); if (b.x1 > br.right + 1 || b.y1 > br.bottom + 1 || b.x0 < br.left - 1 || b.y0 < br.top - 1) bad.push('칸 밖(' + (box.id || box.className) + '): ' + t.slice(0, 24)); }
-    leaves.push({ el, b, t });
+    // 겹침은 보이는 부분끼리 잰다: … 으로 줄인 글(줄 수 제한 · 말줄임)의 가려진 줄은 overflow 로 안 보이므로 그 조상의 칸으로 자른다 (넘침 자체는 위의 잘림 검사가 본다)
+    const v = Object.assign({}, b);
+    for (let p = el; p && p !== stage; p = p.parentElement) { const ps = getComputedStyle(p); if (ps.overflow === 'visible' && ps.overflowX === 'visible' && ps.overflowY === 'visible') continue; const pr = p.getBoundingClientRect(); v.x0 = Math.max(v.x0, pr.left); v.y0 = Math.max(v.y0, pr.top); v.x1 = Math.min(v.x1, pr.right); v.y1 = Math.min(v.y1, pr.bottom); }
+    if (v.x1 - v.x0 < 0.5 || v.y1 - v.y0 < 0.5) continue;
+    leaves.push({ el, b: v, t });
   }
   for (let i = 0; i < leaves.length; i++) for (let j = i + 1; j < leaves.length; j++) {
     const A = leaves[i], B = leaves[j]; if (A.el === B.el || A.el.contains(B.el) || B.el.contains(A.el)) continue;
@@ -404,25 +413,34 @@ const LINT = () => {
   { const r = await G(() => ({ scene: window.game.scene, h1: (document.querySelector('.e-box h1') || {}).textContent, card: (document.querySelector('.e-card pre') || {}).textContent || '', rank: (document.querySelector('.e-box .rank') || {}).textContent }));
     if (r.scene !== 'results' || r.h1 !== '한국 최고 부자' || !/한국 최고 부자/.test(r.card) || !r.rank) forced.push('선언 뒤 엔딩 결과 화면이 다름: ' + JSON.stringify(r).slice(0, 200)); }
   await shot('65_results_top');
-  // H. 사는 곳 그림: 내 집 · 아파트 · 주택 · 별장 · 호텔이 서로 다르고, 사업 · 대출 줄이 붙어 그림 칸이 낮아져도 인물 · 상태창이 안 잘림
+  // H. 사는 곳 그림 아홉(서울역 ~ 호텔): 픽셀 그림(128×72 를 3배)인지 · 서로 다른지(alt · src) · 사업 · 대출 줄이 둘 다 붙어 그림 칸이 가장 낮을 때도
+  //    주인공 · 상태창(window.PxArt.SCENE_BOX 의 점 좌표를 그림의 실제 자리로 옮긴 것)이 그림 칸 안에 다 보이는지 · 보이는 높이와 그림 위치가 3의 배수(점이 반만 보이지 않게)인지
   await fresh();
   { const sc = [];
-    for (const t of [4, 5, 6, 7, 8]) {
+    for (let t = 0; t <= 8; t++) {
       for (const slot of [0, 3]) {
-        await G(({ t, slot }) => { const g = window.game, S = g.state.raw, R = window.Rules; S.tier = t; S.homeVal = R.homePrice(S, t); S.biz = Math.max(1, t - 3); S.loan = t >= 5 ? { balance: 50000000, orig: 60000000, day: 40 } : null; S.cash = 9000000; S.day = 44; S.movedDay = 43; S.slot = slot; S.quest = 99; S.offer = null; S.picks = 0; S.event = null; S.act1 = S.act1 || { day: 22, rank: 'A', worth: 1, price: 1 }; g.render(); }, { t, slot });
+        await G(({ t, slot }) => { const g = window.game, S = g.state.raw, R = window.Rules; S.tier = t; S.homeVal = t >= 4 ? R.homePrice(S, t) : 0; S.biz = Math.max(1, t - 3); S.loan = { balance: 50000000, orig: 60000000, day: 40 }; S.cash = 9000000; S.day = 44; S.movedDay = 43; S.slot = slot; S.quest = 99; S.offer = null; S.picks = 0; S.event = null; S.act1 = S.act1 || { day: 22, rank: 'A', worth: 1, price: 1 }; g.render(); }, { t, slot });
         await step(5);
-        const r = await G(() => { const box = document.querySelector('#me .scene'), b = box.getBoundingClientRect(), svg = box.querySelector('svg'), rows = document.querySelectorAll('#me .me-row').length;
-          const part = sel => { const e = box.querySelector(sel); if (!e) return null; const q = e.getBoundingClientRect(); return { top: q.top - b.top, bottom: b.bottom - q.bottom, left: q.left - b.left, right: b.right - q.right }; };
-          return { name: svg.getAttribute('aria-label'), len: svg.outerHTML.length, h: b.height, rows, hero: part('[data-part="hero"]'), holo: part('[data-part="holo"]') }; });
+        const r = await G(() => { const box = document.querySelector('#me .scene'), b = box.getBoundingClientRect(), img = box.querySelector('img'), rows = document.querySelectorAll('#me .me-row').length;
+          const tier = window.game.state.tier, sb = window.PxArt && window.PxArt.SCENE_BOX && window.PxArt.SCENE_BOX[tier];
+          const inn = { top: b.top + box.clientTop, left: b.left + box.clientLeft }; inn.bottom = inn.top + box.clientHeight; inn.right = inn.left + box.clientWidth;
+          if (!img || box.querySelector('svg')) return { px: false, name: img ? img.alt : (box.querySelector('svg') || { getAttribute: () => '' }).getAttribute('aria-label') || '', h: box.clientHeight, rows };
+          const q = img.getBoundingClientRect(), W = Number(img.getAttribute('width')), H = Number(img.getAttribute('height')), k = q.width / W;
+          const part = a => { if (!a) return null; const x0 = q.left + a[0] * k, y0 = q.top + a[1] * k, x1 = q.left + a[2] * k, y1 = q.top + a[3] * k; return { top: y0 - inn.top, bottom: inn.bottom - y1, left: x0 - inn.left, right: inn.right - x1 }; };
+          return { px: img.classList.contains('px') && /^data:image\/png/.test(img.src) && W === 128 && H === 72 && k === 3 && q.height === 216, name: img.alt, src: img.src, h: box.clientHeight, off: q.top - inn.top, rows, box: !!sb, hero: part(sb && sb.hero), holo: part(sb && sb.win) }; });
         sc.push(Object.assign({ t, slot }, r));
-        for (const k of ['hero', 'holo']) { const q = r[k]; if (!q || q.top < -1 || q.bottom < -1 || q.left < -1 || q.right < -1) forced.push('사는 곳 ' + t + '(' + r.name + ') 그림 칸 ' + Math.round(r.h) + 'px 에서 ' + (k === 'hero' ? '인물' : '상태창') + '이 잘림: ' + JSON.stringify(q)); }
+        const tag = '사는 곳 ' + t + '(' + r.name + ') ' + ['오전', '', '', '밤'][slot];
+        if (!r.px) { forced.push(tag + ': 픽셀 그림(128×72 를 3배로 키운 img.px)이 아님 — 예전 그림이 나옴'); continue; }
+        if (!r.box) forced.push(tag + ': PxArt.SCENE_BOX[' + t + '] 가 없어 잘림을 잴 수 없음');
+        for (const k of ['hero', 'holo']) { const q = r[k]; if (r.box && (!q || q.top < -0.5 || q.bottom < -0.5 || q.left < -0.5 || q.right < -0.5)) forced.push(tag + ': 그림 칸 ' + Math.round(r.h) + 'px 에서 ' + (k === 'hero' ? '주인공' : '상태창') + '이 잘림: ' + JSON.stringify(q)); }
+        if (r.h % 3 || Math.round(r.off) % 3) forced.push(tag + ': 그림 칸 높이 ' + r.h + 'px · 그림 위치 ' + r.off + 'px 가 3의 배수가 아님 (맨 윗줄 · 아랫줄 점이 반만 보임)');
         if (slot === 3) await shot('66_scene_' + t + '_' + r.name.replace(/\s/g, ''));
       }
     }
-    const names = new Set(sc.map(x => x.name)), lens = new Set(sc.filter(x => x.slot === 3).map(x => x.len));
-    if (names.size !== 5 || [...names].some(n => /원룸/.test(n)) || lens.size !== 5) forced.push('내 집 ~ 호텔 그림이 다섯 가지로 다르지 않음: ' + [...names].join(' · '));
-    if (sc.some(x => x.t >= 5 && x.rows < 3)) forced.push('그림 점검이 사업 · 대출 줄이 붙은 상태가 아님: ' + JSON.stringify(sc.map(x => x.rows)));
-    log.push('사는 곳 그림: ' + [...names].join(' · ') + ' (그림 칸 ' + Math.round(Math.min(...sc.map(x => x.h))) + 'px 까지)'); }
+    const night = sc.filter(x => x.slot === 3 && x.px), names = new Set(night.map(x => x.name)), srcs = new Set(night.map(x => x.src));
+    if (names.size !== 9 || srcs.size !== 9) forced.push('사는 곳 그림 아홉이 서로 다르지 않음 (이름 ' + names.size + ' · 그림 ' + srcs.size + '): ' + [...names].join(' · '));
+    if (sc.some(x => x.rows < 3)) forced.push('그림 점검이 사업 · 대출 줄이 둘 다 붙은 상태가 아님: ' + JSON.stringify(sc.map(x => x.rows)));
+    log.push('사는 곳 그림: ' + [...names].join(' · ') + ' (그림 칸 ' + Math.min(...sc.map(x => x.h)) + 'px 까지)'); }
   await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=figures'); await page.screenshot({ path: path.join(out, 'figures.png') });
   const zones = await G(() => document.querySelectorAll('[data-zone]').length);
   forced.unshift(...forcedMain);
