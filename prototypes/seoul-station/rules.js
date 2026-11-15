@@ -732,7 +732,7 @@
   const PERKS = [
     { id: 'iron', name: '강철 체력', icon: 'muscle', max: 3, desc: () => '최대 체력 +' + T.perk_iron },
     { id: 'sleep', name: '꿀잠', icon: 'zzz', max: 2, desc: () => '밤마다 체력을 ' + T.perk_sleep + ' 더 회복' },
-    { id: 'hustle', name: '일머리', icon: 'coin', max: 3, desc: () => '알바 일당 +' + pc(T.perk_hustle) },
+    { id: 'hustle', name: '일머리', icon: 'coin', max: 3, grp: 'work', desc: () => '알바 일당 +' + pc(T.perk_hustle) },
     { id: 'hands', name: '금손', icon: 'sparkle', max: 2, desc: () => '미니게임 판정이 후해진다' },
     { id: 'lazy', name: '요령', icon: 'skip', max: 2, desc: () => '"대충" 배율 +' + T.perk_lazy + ', 실수해도 그만큼은 받는다' },
     { id: 'streak', name: '리듬', icon: 'fire', max: 2, desc: () => '콤보 한 단계의 보너스 +' + pc(T.perk_streak) + 'p' },
@@ -744,7 +744,7 @@
     { id: 'vip', name: '수수료 우대', icon: 'percent', max: 1, need: s => s.tier >= 2, desc: () => '매매 수수료 절반' },
     { id: 'tipster', name: '정보통', icon: 'news', max: 1, need: s => s.tier >= 2, desc: () => '아침마다 소식 하나의 진짜 방향을 귀띔받는다 (' + pc(T.perk_tip_acc) + ' 맞음)' },
     { id: 'guts', name: '강심장', icon: 'shield', max: 1, need: s => s.tier >= 3, desc: () => '청산될 때 한 번, 증거금의 ' + pc(T.perk_guts) + '를 건진다' },
-    // 양날: 얻는 것 + 대신 못 하는 것(con). 레벨 3 · 6 · 9 의 고르기에 한 장씩만. 같은 무리(grp)에서는 한 판에 하나
+    // 양날: 얻는 것 + 대신 못 하는 것(con). 레벨 3 · 6 · 9 의 고르기에 한 장씩만. 같은 무리(grp)에서는 한 판에 한 가지 (일머리 · 일중독도 'work' 한 무리 — 일머리는 3장까지 겹쳐 찍을 수 있다)
     { id: 'coinonly', name: '코인 외길', icon: 'bolt', max: 1, aug: true, grp: 'invest', con: '이 판 끝까지 주식을 살 수 없다 (가진 주식은 팔 수 있다)', need: s => s.tier >= 3, desc: () => '코인 이익 +' + pc(T.perk_coinonly) },
     { id: 'stockonly', name: '주식 외길', icon: 'chart', max: 1, aug: true, grp: 'invest', con: '이 판 끝까지 코인을 할 수 없다 (연 포지션은 정리할 수 있다)', need: s => s.tier >= 2, desc: () => '주식 이익 +' + pc(T.perk_stockonly) + ' · 수수료 0' },
     { id: 'workaholic', name: '일중독', icon: 'clock', max: 1, aug: true, grp: 'work', con: '쉴 수 없다 (할 수 있는 알바가 없을 때만)', desc: () => '알바 일당 +' + pc(T.perk_workaholic) },
@@ -759,7 +759,7 @@
   }
   const profitXp = (s, pnl) => { if (pnl > 0) gainXp(s, Math.min(T.xp_profit_cap, Math.floor(pnl / 10000 * T.xp_profit))); };
   function makeOffer(s) { // 아직 다 안 찍은 특성 가운데 셋. 레벨 3 · 6 · 9 의 고르기에는 그중 한 장이 양날
-    const free = p => perk(s, p.id) < p.max && (!p.need || p.need(s)) && !(p.grp && PERKS.some(q => q.grp === p.grp && perk(s, q.id) > 0));
+    const free = p => perk(s, p.id) < p.max && (!p.need || p.need(s)) && !(p.grp && PERKS.some(q => q.grp === p.grp && q.id !== p.id && perk(s, q.id) > 0)); // 같은 무리의 다른 특성을 가졌으면 안 뜬다 (자기 자신은 max 로만 막는다)
     const augLv = (s.lv - s.picks + 1) % T.aug_every === 0; // 지금 고르는 것이 몇 레벨 몫인가 (한꺼번에 여러 레벨이 오를 때)
     const pool = PERKS.filter(p => !p.aug && free(p)), augs = augLv ? PERKS.filter(p => p.aug && free(p)) : [], out = [];
     while (out.length < (augs.length ? 2 : 3) && pool.length) out.push(pool.splice(Math.floor(rnd3(s) * pool.length), 1)[0].id);
@@ -778,7 +778,11 @@
     after(s);
     return true;
   }
-  const perkCard = (s, p) => ({ id: p.id, name: p.name, icon: p.icon, desc: p.desc(), n: perk(s, p.id), max: p.max, aug: !!p.aug, con: p.con || '' });
+  const perkCard = (s, p) => ({ id: p.id, name: p.name, icon: p.icon, desc: p.desc(), n: perk(s, p.id), max: p.max, aug: !!p.aug, con: p.con || '', excl: exclText(p) });
+  function exclText(p) { // 함께 가질 수 없는 특성 (같은 무리의 다른 것들)
+    const o = p.grp ? PERKS.filter(q => q.grp === p.grp && q.id !== p.id).map(q => q.name) : [];
+    return o.length ? o.join(' · ') + jo(o[o.length - 1], '과', '와') + ' 함께 가질 수 없다' : '';
+  }
   const offerView = s => (s.offer ? s.offer.map(id => perkCard(s, byId(PERKS, id))) : null);
   const perksView = s => PERKS.filter(p => perk(s, p.id) > 0).map(p => perkCard(s, p));
   const xpView = s => ({ lv: s.lv, xp: s.xp, need: xpNeed(s.lv) });

@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 화면 없는 브라우저(Playwright)는 KW_PLAYWRIGHT 환경 변수로 위치를 줄 수 있다.
 // 규칙만으로 긴 판(기한 없음, DAYS 일까지)을 굴려 보는 봇 (균형 감 잡기용 · 게임 폴더 밖)
-// 쓰는 법: node tools/sim.js [폴더] [판 수] [이름=값 …]   환경 변수: BOTS=biz,invest · DAYS=150 · TRACE=봇:씨앗 · START=집단계:만원
+// 쓰는 법: node tools/sim.js [폴더] [판 수] [이름=값 …]   환경 변수: BOTS=biz,invest · DAYS=150 · TRACE=봇:씨앗 · START=집단계:만원 · WORK=1(일꾼 표: 일중독 · 일머리 · 손 점수 · 눌러앉기를 갈라 봄, DAYS=60 권장)
 const path = require('path');
 const dir = require('path').resolve(process.argv[2] || require('path').join(__dirname, '..'));
 global.window = {};
@@ -23,7 +23,7 @@ const won = n => R.won(Math.round(n / 10000) * 10000);
 function play(seed, bot) {
   const s = R.create(seed, 'bot');
   if (process.env.START) { const [t, c] = process.env.START.split(':').map(Number); s.tier = t; s.movedDay = 1; s.cash = c * M; s.quest = 9; s.stats.maxTier = t; } // 중간 단계에서 바로 시작 (START=집단계:만원)
-  s.bot = { labor: [], reach: {}, bizAt: {} };
+  s.bot = { labor: [], reach: {}, bizAt: {}, worth: {}, rng: seed * 2654435761 % 4294967296 }; // rng: 봇 손의 떨림 (게임 난수와 따로)
   let guard = 0;
   while (!s.ended && guard++ < DAYS * 40) {
     if (s.phase === 'night') {
@@ -34,8 +34,8 @@ function play(seed, bot) {
     }
     if (s.event) { const v = R.eventView(s); R.choose(s, s.event === 'den' ? 'b' : v.a.ok && v.a.cost <= s.cash * 0.05 ? 'a' : 'b'); continue; } // 돌발 사건: 현금의 5% 안이면 첫째, 아니면 둘째. 도박장은 안 간다
     if (s.den) { R.denLeave(s); continue; }
-    if (s.offer) { R.pickPerk(s, PRIO.find(id => s.offer.includes(id)) || s.offer[0]); continue; }
-    if (s.tier < 3 && R.moveInfo(s, s.tier + 1).ok) R.move(s, s.tier + 1); // 빌려 사는 곳은 기준이 되면 바로
+    if (s.offer) { R.pickPerk(s, (bot.prio || PRIO).find(id => s.offer.includes(id)) || s.offer.find(id => !(bot.avoid || []).includes(id)) || s.offer[0]); continue; }
+    if (s.tier < 3 && !(bot.stay && s.tier === 2 && !bot.stay(s)) && R.moveInfo(s, s.tier + 1).ok) R.move(s, s.tier + 1); // 빌려 사는 곳은 기준이 되면 바로 (stay: 고시원에 눌러앉기)
     if (s.tier >= 8 && R.worth(s) >= T.top_worth) { raise(s, R.worth(s)); R.declareTop(s); break; }
     grow(s, bot);
     note(s);
@@ -47,7 +47,7 @@ function play(seed, bot) {
     if (bot.trade) bot.trade(s);
     const acts = R.acts(s), act = bot.pick ? bot.pick(s, acts) : bestJob(s, acts);
     if (process.env.TRACE) (s.bot.acts = s.bot.acts || []).push(act.id + '@' + Math.round(s.hp));
-    if (act.kind === 'job') R.doJob(s, act.id, bot.score || 0.75); else if (act.kind === 'study') { if (!R.doStudy(s, studyPick(s, act))) R.doRest(s); } else R.doRest(s);
+    if (act.kind === 'job') R.doJob(s, act.id, typeof bot.score === 'function' ? bot.score(s) : bot.score || 0.75); else if (act.kind === 'study') { if (!R.doStudy(s, studyPick(s, act))) R.doRest(s); } else R.doRest(s);
     if (s.ev.some(e => e.t === 'sys' && /거래량/.test(e.text))) s.htSeen = s.day;
     s.ev.length = 0;
   }
@@ -57,7 +57,10 @@ function play(seed, bot) {
 function note(s) { // 단계별 처음 닿은 날
   for (let t = 4; t <= 9; t++) if (s.stats.maxTier >= t && !s.bot.reach[t]) s.bot.reach[t] = s.day;
   for (let b = 1; b <= 5; b++) if (s.biz >= b && !s.bot.bizAt[b]) s.bot.bizAt[b] = s.day;
+  for (const w of WORTH) if (!s.bot.worth[w] && R.worth(s) >= w * M) s.bot.worth[w] = { day: s.day, tier: s.tier }; // 순자산 w 만 원에 처음 닿은 날 · 그때 사는 곳
+  if (s.bot.reach[4] && !s.bot.perksAt4) { s.bot.perksAt4 = Object.assign({}, s.perks); s.bot.lvAt4 = s.lv; } // 내 집을 산 날의 특성
 }
+const WORTH = [500, 900, 1500];
 function raise(s, amt) { // 현금이 amt 가 되도록 투자한 것을 판다 (작은 것부터가 아니라 그냥 다)
   if (s.cash >= amt) return;
   for (const a of R.ASSETS) if (s.cash < amt && a.kind === 'stock' && s.hold[a.id].units > 0) R.sell(s, a.id, 1);
@@ -132,6 +135,17 @@ const bots = {
   // 견주기용 (기본 표에는 안 나옴, BOTS=investDaily): invest 와 같되 고시원부터 매일 저녁 칸을 공부에
   investDaily: { biz: true, pick: (s, acts) => (s.slot === 2 && acts.find(a => a.kind === 'study' && a.ok)) || bestJob(s, acts), trade: s => newsTrade(s, true, 1, 0.5) },
 };
+// 일꾼 (견주기용, WORK=1 표): 사람처럼 잘하는 손(미니게임 점수 0.88~0.96, 봇 자기 난수) · 투자 안 함 · 특성은 일중독 → 일머리 먼저.
+// perks: 'WH' 둘 다 노림 · 'W' 일중독만 · 'H' 일머리만 · '' 둘 다 안 고름. stay: 고시원에서 내 집 값 + 한 주 관리비를 모을 때까지 눌러앉음
+const hand = (lo, hi) => s => { s.bot.rng = (s.bot.rng * 1664525 + 1013904223) % 4294967296; return lo + (hi - lo) * s.bot.rng / 4294967296; };
+const INVEST_AUG = ['coinonly', 'stockonly', 'beast'];
+function worker(perks, stay, score) {
+  const want = ['workaholic', 'hustle'].filter(id => perks.includes(id === 'workaholic' ? 'W' : 'H'));
+  const no = ['workaholic', 'hustle'].filter(id => !want.includes(id)).concat(INVEST_AUG);
+  return { biz: true, score: score || hand(0.88, 0.96), prio: want.concat(PRIO.filter(id => !no.includes(id) && !want.includes(id))), avoid: no,
+    stay: stay ? s => s.cash >= T.price_home + T.week_home + T.gosiwon_week : null };
+}
+for (const p of ['WH', 'W', 'H', '']) for (const st of [0, 1]) { bots['work' + p + (st ? 'Stay' : '')] = worker(p, st); bots['mid' + p + (st ? 'Stay' : '')] = worker(p, st, 0.75); }
 function newsTrade(s, useReport, lev = 3, share = 0) {
   if (s.tier < 2) return;
   const keep = (R.bill(s) ? R.bill(s).amt : 0) + weekCostNow(s) + 10 * M;
@@ -150,6 +164,25 @@ function newsTrade(s, useReport, lev = 3, share = 0) {
   }
 }
 if (process.env.TRACE) { const [b, sd] = process.env.TRACE.split(':'); const s = play(Number(sd), bots[b]); console.log(JSON.stringify(s.ended), 'reach', JSON.stringify(s.bot.reach), 'biz', JSON.stringify(s.bot.bizAt), '압류', s.stats.foreclosed, '청산', s.stats.liq); process.exit(0); } // TRACE=봇:씨앗 → 그 한 판을 날마다 찍음
+
+// ── 일꾼 표 (WORK=1): 순자산 500 · 900 · 1,500만에 닿은 날 · 내 집 산 날 · 그때 특성 ────────
+if (process.env.WORK) {
+  const q = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(arr.length * p))], f = d => (d === Infinity ? '>' + DAYS : String(d));
+  const band = a => { a = a.slice().sort((x, y) => x - y); return f(q(a, 0.1)) + '/' + f(q(a, 0.5)) + '/' + f(q(a, 0.9)) + ' (' + (a.reduce((x, y) => x + Math.min(y, DAYS + 1), 0) / a.length).toFixed(1) + ')'; }; // 괄호: 평균 (못 닿은 판은 DAYS+1)
+  const list = (process.env.BOTS || 'workWH,workW,workH,work,workWHStay,workWStay,workHStay,workStay,midWH,midW,midH,mid,midWHStay,midStay').split(',');
+  console.log('일꾼 표 (씨앗 ' + N + '개 · ' + DAYS + '일까지) — 날짜는 p10/중앙/p90');
+  console.log('봇'.padEnd(12) + '순자산500'.padEnd(19) + '900'.padEnd(19) + '1500'.padEnd(19) + '내 집'.padEnd(19) + '900 때 고시원 이하 · 내 집 때 일중독 % · 일머리 평균 · 둘 다 % · 내 집 때 레벨 중앙');
+  for (const name of list) {
+    const runs = [];
+    for (let i = 1; i <= N; i++) runs.push(play(i * 7 + 1, bots[name]));
+    const wd = w => runs.map(s => (s.bot.worth[w] ? s.bot.worth[w].day : Infinity)), p4 = runs.map(s => s.bot.perksAt4 || s.perks);
+    const pct = fn => Math.round(runs.filter(fn).length / N * 100) + '%';
+    console.log(name.padEnd(12) + WORTH.map(w => band(wd(w)).padEnd(19)).join('') + band(runs.map(s => s.bot.reach[4] || Infinity)).padEnd(19) +
+      pct(s => s.bot.worth[900] && s.bot.worth[900].tier <= 2) + ' · ' + Math.round(p4.filter(p => p.workaholic).length / N * 100) + '% · ' + (p4.reduce((a, p) => a + (p.hustle || 0), 0) / N).toFixed(2) + ' · ' +
+      Math.round(p4.filter(p => p.workaholic && p.hustle).length / N * 100) + '% · ' + q(runs.map(s => s.bot.lvAt4 || s.lv).sort((a, b) => a - b), 0.5));
+  }
+  process.exit(0);
+}
 
 // ── 긴 판 표: 단계별 처음 닿은 날 (못 닿은 판은 ">DAYS" 로 셈) ────────
 const names = (process.env.BOTS || 'biz,invest,reckless,albaOnly,owner').split(',');

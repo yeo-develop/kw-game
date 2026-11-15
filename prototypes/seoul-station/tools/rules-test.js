@@ -417,7 +417,7 @@ ok('양날은 레벨 3 · 6 · 9 의 고르기에만, 한 번에 한 장, 투자
   for (const seed of [1, 2, 3, 4, 5, 6]) {
     const s = R.create(seed); s.tier = 3; s.cash = 1000 * M; s.hp = 100000; s.quest = 99; let guard = 0; const augAt = [];
     while (s.lv < 11 && guard++ < 3000) {
-      s.slot = 0; R.doJob(s, 'flyer', 0.95);
+      s.slot = 0; s.hp = 100000; R.doJob(s, 'flyer', 0.95); // 강철 체력을 고르면 체력이 최대치로 잘리므로 매번 채운다
       while (s.offer) {
         const lvFor = s.lv - s.picks + 1, v = R.offerView(s), augs = v.filter(c => c.aug);
         assert.ok(augs.length <= 1, 'Lv ' + lvFor + ' 양날 ' + augs.length);
@@ -425,7 +425,7 @@ ok('양날은 레벨 3 · 6 · 9 의 고르기에만, 한 번에 한 장, 투자
         const left = R.PERKS.filter(p => p.aug && !s.perks[p.id] && !(p.grp && R.PERKS.some(q => q.grp === p.grp && s.perks[q.id])));
         if (lvFor % 3 === 0 && left.length) assert.equal(augs.length, 1, 'Lv ' + lvFor);
         if (augs.length) augAt.push(lvFor);
-        R.pickPerk(s, augs.length ? augs[0].id : v[0].id);
+        R.pickPerk(s, augs.length ? augs[0].id : (v.find(c => c.id !== 'hustle') || v[0]).id); // 일머리를 고르면 일중독(같은 무리)이 막혀 양날 칸이 비므로, 여기서는 일머리를 피한다
       }
     }
     assert.ok(['coinonly', 'stockonly', 'beast'].filter(id => s.perks[id]).length <= 1); assert.ok(augAt.includes(3) && augAt.includes(6), String(augAt));
@@ -959,5 +959,63 @@ ok('한탕바이오 리포트 채점은 앞날을 흘리지 않는다: 여러 �
   assert.ok(n2 >= 40, '표본 ' + n2); assert.ok(hit / n2 > 0.3 && hit / n2 < 0.7, '채점 뒤 다음 칸을 맞히는 비율 ' + hit + '/' + n2);
   assert.ok(alert.real.length > 10 && alert.fake.length > 10 && new Set(alert.real.concat(alert.fake)).size === 1, '거래량 알림(사건 · 글)이 진짜 · 가짜에 따라 다름: ' + JSON.stringify([...new Set(alert.real.concat(alert.fake))]));
   console.log('    한탕 채점 뒤 다음 칸 적중 ' + hit + '/' + n2);
+});
+// 일머리 · 일중독은 서로 못 가지는 짝 (같은 무리 'work'). levelUp: 레벨을 maxLv 까지 올리며 뜬 고르기를 모두 보고 pick 으로 고른다
+const perkRun = (seed, init, maxLv, pick, look) => {
+  const s = R.create(seed); s.tier = 3; s.cash = 1000 * M; s.hp = 100000; s.quest = 99; Object.assign(s.perks, init); let guard = 0;
+  while (s.lv < maxLv && guard++ < 5000) { s.slot = 0; s.hp = 100000; R.doJob(s, 'flyer', 0.95); while (s.offer) { const lvFor = s.lv - s.picks + 1; if (look) look(s.offer.slice(), lvFor, s); R.pickPerk(s, pick(s.offer, s)); } }
+  assert.ok(s.lv >= maxLv, 'Lv ' + s.lv); return s;
+};
+const pName = id => R.PERKS.find(p => p.id === id).name;
+ok('일중독을 가진 판에서는 일머리가 한 번도 뜨지 않는다 (여러 씨앗 · 레벨 2~18)', () => {
+  let looked = 0;
+  for (let seed = 1; seed <= 10; seed++) perkRun(seed, { workaholic: 1 }, 18, o => o[0], (o, lv) => { looked++; assert.ok(!o.includes('hustle'), '씨앗 ' + seed + ' Lv ' + lv + ': ' + o); assert.ok(!o.includes('workaholic')); });
+  assert.ok(looked >= 100, '본 고르기 ' + looked);
+});
+ok('일머리를 가진 판에서는 일중독이 한 번도 뜨지 않는다 (양날 칸에는 다른 양날이 뜬다)', () => {
+  let augSeen = 0;
+  for (let seed = 1; seed <= 10; seed++) perkRun(seed, { hustle: 1 }, 18, o => o.find(id => id !== 'hustle') || o[0], (o, lv) => {
+    assert.ok(!o.includes('workaholic'), '씨앗 ' + seed + ' Lv ' + lv + ': ' + o);
+    if (o.some(id => R.PERKS.find(p => p.id === id).aug)) augSeen++;
+  });
+  assert.ok(augSeen > 0, '일중독 말고 다른 양날은 여전히 뜬다');
+  { const s = R.create(1); s.tier = 0; s.perks.hustle = 1; s.hp = 100000; s.quest = 99; s.cash = 100 * M; // 서울역(투자 양날이 아직 안 열림)에서 레벨 3: 뜰 양날이 없으면 보통 셋
+    while (s.lv < 4) { s.slot = 0; s.hp = 100000; R.doJob(s, 'flyer', 0.95); while (s.offer) { assert.ok(!s.offer.includes('workaholic')); assert.equal(s.offer.length, Math.min(3, s.offer.length)); R.pickPerk(s, s.offer[0]); } } }
+});
+ok('일중독이 없으면 일머리를 최대 장수까지 찍을 수 있다 (둘째 장부터 스스로를 막지 않음)', () => {
+  const max = R.PERKS.find(p => p.id === 'hustle').max;
+  for (let seed = 1; seed <= 6; seed++) {
+    const shown = {};
+    const s = perkRun(seed, {}, 40, o => (o.includes('hustle') ? 'hustle' : o.find(id => id !== 'workaholic') || o[0]), (o, lv, st) => { if (o.includes('hustle')) shown[R.perk(st, 'hustle')] = 1; });
+    assert.equal(R.perk(s, 'hustle'), max, '씨앗 ' + seed + ' 일머리 ' + R.perk(s, 'hustle'));
+    for (let k = 1; k < max; k++) assert.ok(shown[k], '씨앗 ' + seed + ': ' + k + '장 가진 뒤에도 뜬다');
+    assert.equal(R.perk(s, 'workaholic'), 0);
+  }
+});
+ok('투자 무리(코인 외길 · 주식 외길 · 야수의 심장)는 전처럼 한 판에 하나, 일 무리와는 따로', () => {
+  const inv = ['coinonly', 'stockonly', 'beast'];
+  for (const held of inv) for (let seed = 1; seed <= 4; seed++) {
+    let workSeen = 0;
+    perkRun(seed, { [held]: 1 }, 15, o => o.find(id => !inv.includes(id) && id !== 'hustle') || o[0], o => { assert.ok(!inv.some(id => id !== held && o.includes(id)), held + ' 씨앗 ' + seed + ': ' + o); if (o.includes('workaholic')) workSeen++; });
+    assert.ok(workSeen > 0, held + ' 를 가져도 일중독은 뜬다 (다른 무리)');
+  }
+  for (let seed = 1; seed <= 6; seed++) { const s = perkRun(seed, {}, 15, o => o.find(id => R.PERKS.find(p => p.id === id).aug && id !== 'workaholic') || o[0]); assert.ok(inv.filter(id => R.perk(s, id)).length <= 1); }
+});
+ok('카드에 함께 못 가지는 글: 일머리 카드에는 일중독, 일중독 카드에는 일머리 (가진 특성 목록에도)', () => {
+  const s = R.create(1); s.offer = ['hustle', 'workaholic', 'iron'];
+  const [h, w, i] = R.offerView(s);
+  assert.equal(h.excl, pName('workaholic') + '과 함께 가질 수 없다'); assert.equal(w.excl, pName('hustle') + '와 함께 가질 수 없다'); assert.equal(i.excl, '');
+  s.offer = ['coinonly']; assert.ok(R.offerView(s)[0].excl.includes(pName('stockonly')) && R.offerView(s)[0].excl.includes(pName('beast')));
+  s.offer = null; s.perks.hustle = 2; const v = R.perksView(s).find(p => p.id === 'hustle'); assert.ok(v.excl.includes(pName('workaholic')));
+});
+ok('일머리 · 일중독을 둘 다 가진 예전 저장: 깨지지 않고 둘 다 남으며, 그 뒤로 일머리 · 일중독은 더 뜨지 않는다', () => {
+  const a = R.create(5); a.tier = 2; a.hp = 100; a.perks.hustle = 1; a.perks.workaholic = 1;
+  const s = R.load(R.save(a)); assert.ok(s);
+  assert.equal(R.perk(s, 'hustle'), 1); assert.equal(R.perk(s, 'workaholic'), 1);
+  assert.equal(R.acts(s).find(x => x.id === 'flyer').pay, Math.round(T.pay_flyer * (1 + T.perk_hustle) * (1 + T.perk_workaholic) / 1000) * 1000);
+  assert.equal(R.perksView(s).length, 2);
+  s.tier = 3; s.cash = 1000 * M; s.hp = 100000; s.quest = 99; let looked = 0;
+  while (s.lv < 15) { s.slot = 0; s.hp = 100000; R.doJob(s, 'flyer', 0.95); while (s.offer) { looked++; assert.ok(!s.offer.includes('hustle') && !s.offer.includes('workaholic'), String(s.offer)); R.pickPerk(s, s.offer[0]); } }
+  assert.ok(looked >= 10); assert.equal(R.perk(s, 'hustle'), 1); assert.equal(R.perk(s, 'workaholic'), 1);
 });
 console.log(n + '개 통과');
