@@ -11,6 +11,7 @@
 | `zones.js` | 구역 다섯 개의 겹침 · 간격 · 머리줄 · 창 크기별 비율 | `node tools/zones.js` |
 | `textcount.js` | 화면 네 곳의 보이는 글자 수 (옛 판 폴더를 주면 줄어든 비율) | `node tools/textcount.js . <옛 판 폴더>` |
 | `shot.js` | 한 장 찍기 | `node tools/shot.js index.html out.png --query "scene=figures"` |
+| `build-web.py` | 웹 게시용 묶음을 만든다: `pub/`(틀 없는 본문 한 장 — 글꼴은 CSS 안에 넣음 — 과 `index.html` 이 부르는 js 전부) · `sim/`(게시 틀을 흉내 낸 것, 창 없는 점검용) | `python3 tools/build-web.py . <내보낼 폴더>` 뒤 `node tools/tut.js <내보낼 폴더>/sim <찍을 폴더>` · `node tools/rt.js <내보낼 폴더>/sim` |
 
 첫 판 안내는 `?manual=1` 로 여는 점검 창에는 뜨지 않는다(`&tut=1` 을 붙이면 뜬다). 보통으로 연 창에서는 처음 한 번 뜨고, `?tut=0` 으로 끌 수 있다.
 
