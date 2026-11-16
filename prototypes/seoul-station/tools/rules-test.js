@@ -1018,4 +1018,112 @@ ok('일머리 · 일중독을 둘 다 가진 예전 저장: 깨지지 않고 둘
   while (s.lv < 15) { s.slot = 0; s.hp = 100000; R.doJob(s, 'flyer', 0.95); while (s.offer) { looked++; assert.ok(!s.offer.includes('hustle') && !s.offer.includes('workaholic'), String(s.offer)); R.pickPerk(s, s.offer[0]); } }
   assert.ok(looked >= 10); assert.equal(R.perk(s, 'hustle'), 1); assert.equal(R.perk(s, 'workaholic'), 1);
 });
+
+// ── 알바 강도 (하 · 중 · 상 · 최상) ─────────────────────────────
+const JIDS = ['flyer', 'loading', 'store', 'delivery'], SCORES = [0.1, 0.5, 0.8, 0.95, null];
+const jobS = (seed, hp) => { const s = R.create(seed || 1); s.tier = 2; s.quest = 99; s.hp = hp == null ? 100 : hp; return s; }; // 알바 넷이 다 보이고, 퀘스트 보상이 끼지 않는 판
+const jobA = (s, id) => R.acts(s).find(a => a.id === id);
+const lastJob = s => s.ev.filter(e => e.t === 'job').pop();
+ok('강도: R.INT 는 하 · 중 · 상 · 최상, 알바 칸에 levels 넷 · any · int · use 가 붙고 예전 칸(pay · hp · ok)은 중의 값', () => {
+  assert.deepEqual(R.INT, ['하', '중', '상', '최상']);
+  const s = jobS(1, 100);
+  for (const id of JIDS) {
+    const a = jobA(s, id); assert.equal(a.levels.length, 4); assert.deepEqual(a.levels.map(l => l.name), R.INT);
+    assert.equal(a.hp, T['hp_' + id]); assert.equal(a.levels[1].hp, a.hp); assert.equal(a.levels[1].pay, a.pay); assert.equal(a.ok, s.hp >= a.hp);
+    a.levels.forEach((l, k) => { assert.equal(l.n, k); assert.equal(l.payMult, T['int_pay_' + k]); assert.equal(l.hpMult, T['int_hp_' + k]); assert.equal(l.pay, Math.round(a.pay * T['int_pay_' + k] / 1000) * 1000); assert.equal(l.ok, s.hp >= l.hp); });
+    assert.equal(a.any, a.levels[0].ok); assert.equal(a.int, 1); assert.equal(a.use, 1);
+  }
+});
+ok('강도: n 을 안 준 doJob 과 n = 1 인 doJob 은 판 상태가 완전히 같다 (여러 날 · 팁 · 사건을 켜고)', () => {
+  withTune({ tip_p: 1, event_p: 0.5 }, () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const a = R.create(seed), b = R.create(seed);
+      for (let k = 0; k < 15; k++) {
+        for (const s of [a, b]) { if (s.event) R.choose(s, 'b'); if (s.den) R.denLeave(s); if (s.offer) R.pickPerk(s, safePerk(s)); }
+        if (a.phase === 'night') { R.nextDay(a); R.nextDay(b); continue; }
+        if (a.slot >= 3) { R.endDay(a); R.endDay(b); continue; }
+        const j = R.acts(a).filter(x => x.kind === 'job' && x.ok).pop(), sc = SCORES[(seed + k) % SCORES.length];
+        if (j) { R.doJob(a, j.id, sc); R.doJob(b, j.id, sc, 1); } else { R.doRest(a); R.doRest(b); }
+        assert.equal(JSON.stringify(a), JSON.stringify(b), '씨앗 ' + seed + ' · ' + k + '번째');
+      }
+    }
+  });
+});
+ok('강도: 일당 = round1k(중의 일당 × max(대충, 등급 배율 × 강도 배율)), 실수는 어느 강도에서나 같은 돈, 하에서도 대충보다 덜 받지 않는다', () => {
+  for (const id of JIDS) for (let k = 0; k < 4; k++) {
+    for (const [sc, g] of [[0.5, 'ok'], [0.8, 'good'], [0.95, 'perfect']]) {
+      const s = jobS(1, 100), base = jobA(s, id).pay; assert.ok(R.doJob(s, id, sc, k));
+      assert.equal(lastJob(s).pay, Math.round(base * Math.max(R.skipMult(s), T['mult_' + g] * T['int_pay_' + k]) / 1000) * 1000, id + ' ' + R.INT[k] + ' ' + g);
+    }
+    const m = jobS(1, 100), base = jobA(m, id).pay; R.doJob(m, id, 0.1, k);
+    assert.equal(lastJob(m).pay, Math.round(base * Math.max(T.mult_miss, R.skipMult(m)) / 1000) * 1000, id + ' ' + R.INT[k] + ' 실수');
+    const u = jobS(1, 100); R.doJob(u, id, null); assert.ok(lastJob(m).pay >= lastJob(u).pay);
+  }
+  const s = jobS(1, 100), u = jobS(1, 100); R.doJob(s, 'flyer', 0.5, 0); R.doJob(u, 'flyer', null); assert.ok(lastJob(s).pay >= lastJob(u).pay, '하 · 보통 ≥ 대충');
+  const l = jobS(1, 100), lu = jobS(1, 100); l.perks.lazy = 1; lu.perks.lazy = 1; R.doJob(l, 'loading', 0.5, 0); R.doJob(lu, 'loading', null); // 요령으로 대충이 하 · 보통보다 커져도
+  assert.equal(lastJob(l).pay, lastJob(lu).pay); assert.equal(lastJob(l).mult, R.skipMult(l));
+});
+ok('강도: 드는 체력은 levels[n].hp = max(1, round(hp × int_hp_n)), 알바 넷 모두 하 < 중 < 상 < 최상', () => {
+  const want = { flyer: [9, 10, 11, 13], store: [8, 9, 10, 11], loading: [20, 24, 26, 30], delivery: [20, 24, 26, 30] }; // 기획서의 지금 값
+  for (const id of JIDS) {
+    const hps = jobA(jobS(1, 100), id).levels.map(l => l.hp); assert.deepEqual(hps, want[id], id);
+    for (let k = 0; k < 4; k++) { assert.equal(hps[k], Math.max(1, Math.round(T['hp_' + id] * T['int_hp_' + k]))); if (k) assert.ok(hps[k] > hps[k - 1]); const s = jobS(1, 100); R.doJob(s, id, 0.8, k); assert.equal(100 - s.hp, hps[k]); assert.equal(lastJob(s).hp, hps[k]); }
+  }
+  withTune({ hp_flyer: 1 }, () => assert.ok(jobA(jobS(1, 100), 'flyer').levels.every(l => l.hp >= 1)));
+});
+ok('강도: 체력이 최상에 모자라고 중에 되면 최상은 false(판 그대로) · 중은 됨, 중에 모자라고 하에 되면 ok false · any true · 하만 되고 대충은 안 됨', () => {
+  const s = jobS(1, 12), was = JSON.stringify(s); // 전단지 중 10 · 최상 13
+  assert.equal(R.doJob(s, 'flyer', 0.95, 3), false); assert.equal(JSON.stringify(s), was); assert.ok(R.doJob(s, 'flyer', 0.95, 1));
+  const t = jobS(1, 9), a = jobA(t, 'flyer'), tw = JSON.stringify(t); // 하 9 · 중 10
+  assert.equal(a.ok, false); assert.equal(a.any, true); assert.equal(a.use, 0);
+  assert.equal(R.doJob(t, 'flyer', null), false); assert.equal(R.doJob(t, 'flyer', null, 0), false); assert.equal(R.doJob(t, 'flyer', 0.8), false); assert.equal(JSON.stringify(t), tw);
+  assert.ok(R.doJob(t, 'flyer', 0.8, 0)); assert.equal(t.hp, 0);
+  const z = jobS(1, 8); assert.equal(jobA(z, 'flyer').any, false); assert.equal(jobA(z, 'flyer').use, -1); assert.equal(R.doJob(z, 'flyer', 0.8, 0), false);
+  for (const bad of [-1, 4, 1.5, NaN]) { const b = jobS(1, 100), bw = JSON.stringify(b); assert.equal(R.doJob(b, 'flyer', 0.8, bad), false, String(bad)); assert.equal(JSON.stringify(b), bw); }
+  const r = jobS(1, 100), rw = JSON.stringify(r); assert.equal(R.doJob(r, 'rest', 0.8), false); assert.equal(JSON.stringify(r), rw); // 알바가 아닌 칸은 안 됨
+});
+ok('강도: 대충은 n 을 뭘 주든 결과가 같다 (중의 체력 · 대충 배율)', () => {
+  const ref = jobS(3, 100); R.doJob(ref, 'loading', null); const want = JSON.stringify(ref);
+  for (const k of [0, 1, 2, 3, 9, -1, 'x']) { const s = jobS(3, 100); assert.ok(R.doJob(s, 'loading', null, k)); assert.equal(JSON.stringify(s), want, String(k)); }
+  assert.equal(100 - ref.hp, T.hp_loading); const e = lastJob(ref); assert.equal(e.int, 1); assert.equal(e.imult, 1); assert.equal(e.grade, 'skip');
+});
+ok('강도: setInt 가 기억되고(acts().int), 엉뚱한 값은 받지 않으며, use 는 체력에 따라 내려간다. inten 이 없는 예전 저장에서도 돈다', () => {
+  const s = jobS(1, 100); assert.deepEqual(s.inten, {}); const ev0 = s.ev.length, r0 = [s.rng, s.rng2, s.rng3].join();
+  assert.ok(R.setInt(s, 'flyer', 3)); assert.equal(jobA(s, 'flyer').int, 3); assert.equal(jobA(s, 'flyer').use, 3); assert.equal(jobA(s, 'store').int, 1);
+  assert.equal(s.ev.length, ev0); assert.equal([s.rng, s.rng2, s.rng3].join(), r0, '난수 · 이벤트 없음');
+  for (const bad of [-1, 4, 1.5, '2', NaN, null, undefined]) { assert.equal(R.setInt(s, 'flyer', bad), false, String(bad)); assert.equal(jobA(s, 'flyer').int, 3); }
+  assert.equal(R.setInt(s, 'rest', 2), false); assert.equal(R.setInt(s, 'nope', 2), false); assert.deepEqual(Object.keys(s.inten), ['flyer']);
+  for (const [hp, use] of [[13, 3], [12, 2], [11, 2], [10, 1], [9, 0], [8, -1]]) { s.hp = hp; assert.equal(jobA(s, 'flyer').use, use, 'hp ' + hp); }
+  R.setInt(s, 'flyer', 1); s.hp = 100; assert.equal(jobA(s, 'flyer').use, 1, '기억한 강도보다 높이 올리지 않음');
+  const old = jobS(2, 100); delete old.inten; const o = R.load(R.save(old)); assert.ok(o);
+  assert.equal(jobA(o, 'flyer').int, 1); assert.ok(R.doJob(o, 'flyer', 0.8, 2)); assert.ok(R.setInt(o, 'store', 0)); assert.equal(jobA(o, 'store').int, 0);
+});
+ok('강도: 최상으로 기억시켜도 사업 자동 수입(중의 일당 기준)과 일중독의 쉬기 막힘(중 기준)은 그대로', () => {
+  const mk = () => { const s = jobS(1, 100); s.tier = 5; s.biz = 2; return s; }, a = mk(), b = mk();
+  for (const id of JIDS) R.setInt(b, id, 3);
+  const auto = s => R.acts(s).find(x => x.kind === 'rest').auto; assert.ok(auto(a) > 0); assert.equal(auto(b), auto(a));
+  const best = Math.max(...R.acts(a).filter(x => x.kind === 'job').map(x => x.pay)); assert.equal(auto(a), Math.round(best * T.mult_ok * T.biz_auto_2 / 1000) * 1000);
+  const w = jobS(1, 0); w.tier = 0; w.perks.workaholic = 1; // 서울역: 전단지 · 상하차만 (편의점 중 9 가 끼지 않게) for (const id of JIDS) R.setInt(w, id, 3);
+  const rest = () => R.acts(w).find(x => x.kind === 'rest').ok;
+  w.hp = 10; assert.equal(rest(), false, '전단지 중이 되면 쉬지 못함 (최상이 안 돼도)');
+  w.hp = 9; assert.equal(jobA(w, 'flyer').any, true); assert.equal(rest(), true, '하만 되면 쉴 수 있음');
+});
+ok('강도: job 이벤트 — pay = round1k(base × mult × comboMult × extra), int · intName · gmult, imult 는 실수 · 대충이면 1', () => {
+  for (const k of [0, 1, 2, 3]) for (const sc of SCORES) for (const [combo, extra] of [[0, 1], [4, 1.5]]) {
+    const s = jobS(1, 100); s.combo = combo; if (extra !== 1) s.buff.nextJob = extra;
+    assert.ok(R.doJob(s, 'delivery', sc, k)); const e = lastJob(s), n = sc == null ? 1 : k;
+    assert.equal(e.pay, Math.round(e.base * e.mult * e.comboMult * e.extra / 1000) * 1000); assert.equal(e.base, jobA(jobS(1, 100), 'delivery').pay); assert.equal(e.extra, extra);
+    assert.equal(e.int, n); assert.equal(e.intName, R.INT[n]); assert.equal(e.hp, jobA(jobS(1, 100), 'delivery').levels[n].hp);
+    if (e.grade === 'miss' || e.grade === 'skip') { assert.equal(e.imult, 1); assert.equal(e.mult, e.gmult); }
+    else { assert.equal(e.imult, T['int_pay_' + k]); assert.equal(e.gmult, T['mult_' + e.grade]); assert.equal(e.mult, Math.max(R.skipMult(s), e.gmult * e.imult)); }
+  }
+});
+ok('강도: 숙련도 횟수 · 콤보 · 경험치 · 레벨은 강도와 무관 (같은 점수로 강도만 달리한 두 판)', () => {
+  const sc = [0.95, 0.8, 0.5, 0.95, 0.1, 0.8, 0.95, 0.95, 0.5, 0.8, null, 0.95];
+  const run = k => { const s = jobS(4, 100); s.cash = 100 * M; sc.forEach(x => { s.slot = 0; s.hp = 100; s.offer = null; R.doJob(s, 'store', x, k); }); return s; };
+  const lo = run(0), hi = run(3);
+  for (const key of ['jobs', 'combo', 'xp', 'lv', 'picks']) assert.deepEqual(lo[key], hi[key], key);
+  assert.equal(lo.stats.comboBest, hi.stats.comboBest); assert.equal(lo.stats.perfect, hi.stats.perfect); assert.equal(lo.stats.jobsDone, hi.stats.jobsDone);
+  assert.ok(hi.stats.alba > lo.stats.alba);
+});
 console.log(n + '개 통과');

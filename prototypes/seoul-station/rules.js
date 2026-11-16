@@ -93,7 +93,7 @@
     seed = ((seed >>> 0) % 1679616) || 1; // 판 코드(SS-XXXX)로 그대로 적을 수 있는 범위
     const s = {
       v: 3, biz: 0, loan: null, homeVal: 0, act1: null, seed: seed | 0, rng: seed | 0, rng2: (Math.imul(seed | 0, 7919) + 13) | 0, rng3: (Math.imul(seed | 0, 104729) + 71) | 0, name: (name || '').trim() || '나',
-      lv: 1, xp: 0, perks: {}, offer: null, picks: 0, combo: 0, buff: {}, event: null, evSeen: [], evDay: {}, ach: [], hpBonus: 0, gutsUsed: false, den: null,
+      lv: 1, xp: 0, perks: {}, offer: null, picks: 0, combo: 0, buff: {}, event: null, evSeen: [], evDay: {}, ach: [], hpBonus: 0, gutsUsed: false, den: null, inten: {}, // inten: 알바마다 마지막으로 고른 강도
       day: 1, slot: 0, phase: 'day', cash: 0, hp: T.start_hp, tier: 0, deposit: 0, arrears: 0, missed: 0, movedDay: 0, rentPaid: 0,
       jobs: { flyer: 0, loading: 0, store: 0, delivery: 0 }, studied: 0,
       market: { tick: 0, px: {}, hist: {}, chg: {}, news: [], nid: 0, ht: { phase: 'quiet', left: 4 }, intel: null, brief: null, shocks: [], gap: {} }, // intel = 오늘 공부해서 안 내일 것 · brief = 어제 공부해서 아는 오늘 것
@@ -165,8 +165,10 @@
     const out = [], bm = bizMult(s);
     for (const j of JOBS) {
       if (s.tier < j.tier) continue; // 아직 못 하는 알바는 아예 안 보임
-      const hp = T['hp_' + j.id], lv = skill(s, j.id);
-      out.push({ kind: 'job', id: j.id, name: j.name, note: j.note, pay: round1k(T['pay_' + j.id] * (1 + T.skill_bonus * lv) * (1 + T.perk_hustle * perk(s, 'hustle')) * (1 + T.perk_workaholic * perk(s, 'workaholic')) * bm), bizMult: bm, hp, lv, toNext: skillNext(s, j.id), ok: s.hp >= hp, why: s.hp >= hp ? '' : LOW_HP });
+      const hp = T['hp_' + j.id], lv = skill(s, j.id), pay = round1k(T['pay_' + j.id] * (1 + T.skill_bonus * lv) * (1 + T.perk_hustle * perk(s, 'hustle')) * (1 + T.perk_workaholic * perk(s, 'workaholic')) * bm);
+      const levels = INT.map((name, n) => { const payMult = T['int_pay_' + n], hpMult = T['int_hp_' + n], h = Math.max(1, Math.round(hp * hpMult)); return { n, name, pay: round1k(pay * payMult), hp: h, ok: s.hp >= h, payMult, hpMult }; });
+      const int = intOf(s, j.id); let use = int; while (use >= 0 && !levels[use].ok) use--; // 기억한 강도가 안 되면 할 수 있는 가장 높은 강도로
+      out.push({ kind: 'job', id: j.id, name: j.name, note: j.note, pay, bizMult: bm, hp, lv, toNext: skillNext(s, j.id), ok: s.hp >= hp, why: s.hp >= hp ? '' : LOW_HP, levels, any: levels[0].ok, int, use }); // pay · hp · ok 는 "중" 기준
     }
     const noRest = perk(s, 'workaholic') && out.some(a => a.kind === 'job' && a.ok); // 일중독: 할 수 있는 알바가 하나도 없을 때만 쉰다 (갇히지 않게)
     const auto = autoPay(s, out); // 사업 자동 수입: 일하지 않은 칸에도 들어오는 돈 (가게부터)
@@ -179,20 +181,24 @@
   const studied = s => !!(s.market.intel && s.market.intel.madeOn === s.day && !s.market.intel.free); // 오늘 한 칸을 써서 읽었나 (공짜로 얻은 리포트는 안 침)
   function canAct(s) { return !s.ended && s.phase === 'day' && s.slot < 3 && !s.event && !s.den; } // 돌발 사건 · 도박장이 떠 있으면 먼저 끝내야 함
   const skipMult = s => T.mult_skip + T.perk_lazy * perk(s, 'lazy'); // "대충"의 일당 배율 (특성 '요령' 포함)
-  function doJob(s, id, score) { // score: 0~1, null 이면 "대충 하기"
-    const a = acts(s).find(x => x.id === id);
-    if (!canAct(s) || !a || !a.ok) return false;
-    const g = score == null ? 'skip' : grade(score + T.perk_hands * perk(s, 'hands'));
-    const mult = g === 'skip' ? skipMult(s) : g === 'miss' ? Math.max(T.mult_miss, skipMult(s)) : T['mult_' + g]; // 직접 하면 실수해도 "대충"보다 덜 받지 않는다
+  const INT = ['하', '중', '상', '최상']; // 알바 강도 (중 = 기준)
+  const intOf = (s, id) => (s.inten && s.inten[id] != null ? s.inten[id] : 1); // 예전 저장에는 inten 이 없다
+  function setInt(s, id, n) { if (!Number.isInteger(n) || n < 0 || n > 3 || !byId(JOBS, id)) return false; (s.inten || (s.inten = {}))[id] = n; return true; }
+  function doJob(s, id, score, n) { // score: 0~1, null 이면 "대충 하기"(강도 무관 = 중). n: 강도 0~3 (안 주면 중)
+    if (score == null || n == null) n = 1;
+    const a = acts(s).find(x => x.id === id), L = a && a.levels && a.levels[n];
+    if (!canAct(s) || !L || !L.ok) return false;
+    const g = score == null ? 'skip' : grade(score + T.perk_hands * perk(s, 'hands')), sk = skipMult(s), ip = g === 'skip' || g === 'miss' ? 1 : L.payMult; // 실수 · 대충에는 강도 보너스 없음
+    const gmult = g === 'skip' ? sk : g === 'miss' ? Math.max(T.mult_miss, sk) : T['mult_' + g], mult = Math.max(sk, gmult * ip); // 직접 하면 어느 강도에서도 "대충"보다 덜 받지 않는다
     const comboWas = s.combo, comboMult = 1 + (T.combo_bonus + T.perk_streak * perk(s, 'streak')) * comboWas, extra = s.buff.nextJob || 1;
     const pay = round1k(a.pay * mult * comboMult * extra);
     const before = skill(s, id);
     delete s.buff.nextJob;
     if (g === 'good' || g === 'perfect') s.combo = Math.min(T.combo_max, s.combo + 1); else if (g !== 'ok') s.combo = 0; // 잘함 이상이면 쌓이고, 실수 · 대충이면 끊김
     s.stats.comboBest = Math.max(s.stats.comboBest || 0, s.combo);
-    s.hp -= a.hp; s.stats.jobsDone = (s.stats.jobsDone || 0) + 1; s.stats.alba += pay; if (g === 'perfect') s.stats.perfect++;
+    s.hp -= L.hp; s.stats.jobsDone = (s.stats.jobsDone || 0) + 1; s.stats.alba += pay; if (g === 'perfect') s.stats.perfect++;
     if (score != null) s.jobs[id]++; // 대충 하면 숙련도는 오르지 않는다
-    ev(s, 'job', { id, name: a.name, pay, base: a.pay, grade: g, gradeName: GRADE[g], mult, hp: a.hp, combo: s.combo, comboWas, comboMult, extra });
+    ev(s, 'job', { id, name: a.name, pay, base: a.pay, grade: g, gradeName: GRADE[g], mult, hp: L.hp, combo: s.combo, comboWas, comboMult, extra, int: n, intName: INT[n], imult: ip, gmult });
     const eff = bizEff(s);
     income(s, eff ? BIZ[eff].name + ' 수입 (' + a.name + ')' : a.name + ' 알바', pay);
     if (g === 'perfect' && rnd3(s) < T.tip_p) { const tip = round1k((T.tip_min + rnd3(s) * (T.tip_max - T.tip_min)) * a.bizMult); s.stats.tips = (s.stats.tips || 0) + 1; income(s, '팁', tip); ev(s, 'tip', { amt: tip }); }
@@ -1056,7 +1062,7 @@
     setTune, HOMES, ASSETS, create, acts, canAct, doJob, doRest, doStudy, endDay, nextDay,
     buy, sell, levOpen, levClose, levValue, levLiq, move, moveInfo, buyHouse, worth, invested, holdValue, housePrice, weekOf, bill, riseIn,
     homePrice, homeInfo, buyHome, repay, loanView, bizView, bizUp, BIZ, scale, goalView, declareTop,
-    skill, skipMult, unlocked, todayNews, intelView, questView, rnd2, won, num, save, load, weekCost, week, notices, holdings, denView, denBet, denLeave, SHOCKS,
+    skill, skipMult, setInt, INT, unlocked, todayNews, intelView, questView, rnd2, won, num, save, load, weekCost, week, notices, holdings, denView, denBet, denLeave, SHOCKS,
     hpMax, mealCost, saunaCost, sleepGain, studyAcc, perk, pickPerk, offerView, perksView, xpView, PERKS,
     eventView, choose, EVENTS, achList, codeOf, seedOf, dailySeed, resultCard, htText, accText,
     htAlert: s => !!(s.market && s.market.htAlert === s.day), // 오늘 한탕바이오 거래량 알림이 떴나

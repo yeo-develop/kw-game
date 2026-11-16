@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 화면 없는 브라우저(Playwright)는 KW_PLAYWRIGHT 환경 변수로 위치를 줄 수 있다.
 // 규칙만으로 긴 판(기한 없음, DAYS 일까지)을 굴려 보는 봇 (균형 감 잡기용 · 게임 폴더 밖)
-// 쓰는 법: node tools/sim.js [폴더] [판 수] [이름=값 …]   환경 변수: BOTS=biz,invest · DAYS=150 · TRACE=봇:씨앗 · START=집단계:만원 · WORK=1(일꾼 표: 일중독 · 일머리 · 손 점수 · 눌러앉기를 갈라 봄, DAYS=60 권장)
+// 쓰는 법: node tools/sim.js [폴더] [판 수] [이름=값 …]   환경 변수: BOTS=biz,invest · DAYS=150 · TRACE=봇:씨앗 · START=집단계:만원 · WORK=1(일꾼 표: 일중독 · 일머리 · 손 점수 · 눌러앉기를 갈라 봄, DAYS=60 권장) · INT=1(강도 표: 손 둘 × 강도 넷, DAYS=90 권장)
 const path = require('path');
 const dir = require('path').resolve(process.argv[2] || require('path').join(__dirname, '..'));
 global.window = {};
@@ -17,6 +17,11 @@ const DAYS = Number(process.env.DAYS || 150);
 const SHARE = Number(process.env.SHARE || 0.5); // invest · owner 가 한 번에 거는 몫 (현금 − 남길 돈의). 손잡이 실측용
 const M = 10000;
 const won = n => R.won(Math.round(n / 10000) * 10000);
+// 강도 표(INT=1)의 손: 강도 하 · 중 · 상 · 최상마다 미니게임 점수 범위 [낮음, 높음] (고르게 뽑음). 미니게임을 재 본 숫자로 바꿔 끼운다
+const HANDS = {
+  mid: { name: '보통 사람', score: [[0.85, 1.0], [0.68, 0.94], [0.40, 0.70], [0.28, 0.58]] }, // tools/mg-model.js 로 잰 평균(숙련 3 쪽에 무게): 0.93 · 0.81 · 0.55 · 0.43
+  pro: { name: '잘하는 사람', score: [[0.95, 1.0], [0.92, 1.0], [0.84, 1.0], [0.76, 0.98]] }, // 0.98 · 0.96 · 0.92 · 0.87
+};
 
 // ── 봇 공통 ──────────────────────────────────────────────────
 // 하루: 아침에 사건 · 특성 → (칸마다) 키우기 · 집 사기 · 매매 → 칸 고르기 → 일요일이면 청구 현금 마련 → 하루 마치기
@@ -24,6 +29,7 @@ function play(seed, bot) {
   const s = R.create(seed, 'bot');
   if (process.env.START) { const [t, c] = process.env.START.split(':').map(Number); s.tier = t; s.movedDay = 1; s.cash = c * M; s.quest = 9; s.stats.maxTier = t; } // 중간 단계에서 바로 시작 (START=집단계:만원)
   s.bot = { labor: [], reach: {}, bizAt: {}, worth: {}, rng: seed * 2654435761 % 4294967296 }; // rng: 봇 손의 떨림 (게임 난수와 따로)
+  if (bot.want != null) for (const a of ['flyer', 'loading', 'store', 'delivery']) R.setInt(s, a, bot.want); // 강도 표: 늘 그 강도 (모자라면 acts 의 use 가 내려 줌)
   let guard = 0;
   while (!s.ended && guard++ < DAYS * 40) {
     if (s.phase === 'night') {
@@ -47,7 +53,7 @@ function play(seed, bot) {
     if (bot.trade) bot.trade(s);
     const acts = R.acts(s), act = bot.pick ? bot.pick(s, acts) : bestJob(s, acts);
     if (process.env.TRACE) (s.bot.acts = s.bot.acts || []).push(act.id + '@' + Math.round(s.hp));
-    if (act.kind === 'job') R.doJob(s, act.id, typeof bot.score === 'function' ? bot.score(s) : bot.score || 0.75); else if (act.kind === 'study') { if (!R.doStudy(s, studyPick(s, act))) R.doRest(s); } else R.doRest(s);
+    if (act.kind === 'job') { const k = bot.want != null ? act.use : undefined; R.doJob(s, act.id, typeof bot.score === 'function' ? bot.score(s, k) : bot.score || 0.75, k); const e = k != null && s.ev.find(x => x.t === 'job'); if (e) { s.bot.jobs = (s.bot.jobs || 0) + 1; s.bot.miss = (s.bot.miss || 0) + (e.grade === 'miss'); s.bot.ksum = (s.bot.ksum || 0) + k; } } else if (act.kind === 'study') { if (!R.doStudy(s, studyPick(s, act))) R.doRest(s); } else R.doRest(s);
     if (s.ev.some(e => e.t === 'sys' && /거래량/.test(e.text))) s.htSeen = s.day;
     s.ev.length = 0;
   }
@@ -145,6 +151,9 @@ function worker(perks, stay, score) {
   return { biz: true, score: score || hand(0.88, 0.96), prio: want.concat(PRIO.filter(id => !no.includes(id) && !want.includes(id))), avoid: no,
     stay: stay ? s => s.cash >= T.price_home + T.week_home + T.gosiwon_week : null };
 }
+// 강도 (견주기용, INT=1 표): biz 봇과 같되 늘 강도 k 를 고르고(체력이 모자라면 할 수 있는 가장 높은 강도), 손은 HANDS. 알바는 그 강도의 일당이 가장 큰 것
+for (const h in HANDS) for (let k = 0; k < 4; k++) bots['int_' + h + k] = { biz: true, want: k, trade: bots.biz.trade, score: (s, n) => hand(...HANDS[h].score[n])(s),
+  pick: (s, acts) => acts.filter(a => a.kind === 'job' && a.use >= 0).sort((a, b) => b.levels[b.use].pay - a.levels[a.use].pay)[0] || acts.find(a => a.kind === 'rest') };
 for (const p of ['WH', 'W', 'H', '']) for (const st of [0, 1]) { bots['work' + p + (st ? 'Stay' : '')] = worker(p, st); bots['mid' + p + (st ? 'Stay' : '')] = worker(p, st, 0.75); }
 function newsTrade(s, useReport, lev = 3, share = 0) {
   if (s.tier < 2) return;
@@ -180,6 +189,21 @@ if (process.env.WORK) {
     console.log(name.padEnd(12) + WORTH.map(w => band(wd(w)).padEnd(19)).join('') + band(runs.map(s => s.bot.reach[4] || Infinity)).padEnd(19) +
       pct(s => s.bot.worth[900] && s.bot.worth[900].tier <= 2) + ' · ' + Math.round(p4.filter(p => p.workaholic).length / N * 100) + '% · ' + (p4.reduce((a, p) => a + (p.hustle || 0), 0) / N).toFixed(2) + ' · ' +
       Math.round(p4.filter(p => p.workaholic && p.hustle).length / N * 100) + '% · ' + q(runs.map(s => s.bot.lvAt4 || s.lv).sort((a, b) => a - b), 0.5));
+  }
+  process.exit(0);
+}
+
+// ── 강도 표 (INT=1): 손 둘 × 강도 넷. 내 집 · 아파트 · 엔딩에 닿은 날 · 실수 비율 · 실제로 한 강도 평균 ────────
+if (process.env.INT) {
+  const q = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(arr.length * p))], f = d => (d === Infinity ? '>' + DAYS : String(d));
+  const band = a => { a = a.slice().sort((x, y) => x - y); return f(q(a, 0.1)) + '/' + f(q(a, 0.5)) + '/' + f(q(a, 0.9)) + ' ' + Math.round(a.filter(x => x < Infinity).length / a.length * 100) + '%'; };
+  console.log('강도 표 (씨앗 ' + N + '개 · ' + DAYS + '일까지 · biz 봇 + 고른 강도) — 날짜는 p10/중앙/p90 · 닿은 판 %');
+  console.log('손 · 강도'.padEnd(14) + '내 집'.padEnd(19) + '아파트'.padEnd(19) + '엔딩'.padEnd(19) + '실수 % · 한 강도 평균 · 알바/판 · 끝 순자산 중앙');
+  for (const h in HANDS) for (let k = 0; k < 4; k++) {
+    const runs = []; for (let i = 1; i <= N; i++) runs.push(play(i * 7 + 1, bots['int_' + h + k]));
+    const jobs = runs.reduce((a, s) => a + (s.bot.jobs || 0), 0), at = t => runs.map(s => s.bot.reach[t] || Infinity);
+    console.log((HANDS[h].name + ' · ' + R.INT[k]).padEnd(14) + [4, 5, 9].map(t => band(at(t)).padEnd(19)).join('') + (runs.reduce((a, s) => a + (s.bot.miss || 0), 0) / jobs * 100).toFixed(1) + '% · ' +
+      (runs.reduce((a, s) => a + (s.bot.ksum || 0), 0) / jobs).toFixed(2) + ' · ' + (jobs / N).toFixed(0) + ' · ' + won(q(runs.map(s => R.worth(s)).sort((a, b) => a - b), 0.5)));
   }
   process.exit(0);
 }

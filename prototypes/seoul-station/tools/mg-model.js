@@ -1,0 +1,80 @@
+// 미니게임 난이도를 사람 손 모형으로 잰다 (브라우저 없이).
+// 쓰는 법: node tools/mg-model.js [폴더] [씨앗 수] [pace 넷을 쉼표로]   예) node tools/mg-model.js . 40 0.85,1,1.3,1.6 (안 주면 이 값 = config.js 의 mg_int_0..3)
+//          node tools/mg-model.js [폴더] demo [pace 넷]   — 시연 확인: 게임 넷 × 강도 넷 × 숙련 0 · 3. 30초에 오류 · 누름 · loops · rng 를 보고,
+//          점수 평균은 같은 시연을 5분까지 이어서 (30초 = 세 판이라 한 판의 실수에 너무 흔들림)
+// 손 셋: 완벽한 손 · 잘하는 사람 · 보통 사람. 손은 minigames.js 의 Minigames._hand (시연과 같은 손, 화면에 보이는 것만 읽음)에
+// 반응 · 박자 오차 · 헷갈림을 입힌 것. 손의 난수는 판의 난수와 따로.
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const dir = process.argv[2] || '.';
+const demoMode = process.argv[3] === 'demo';
+const seeds = demoMode ? 0 : Math.max(1, +process.argv[3] || 40);
+const paces = (process.argv[4] || '0.85,1,1.3,1.6').split(',').map(Number);
+const file = path.join(dir, 'minigames.js');
+const ctx = { console: console };
+ctx.globalThis = ctx;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
+const M = ctx.Minigames;
+function mulberry(seed) { let a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const INT = ['하', '중', '상', '최상'], DT = 1 / 60;
+
+if (demoMode) {
+  let bad = 0;
+  console.log('게임\t강도\tloops(30초)\t누름(30초)\trng\t숙련0 판·평균\t숙련3 판·평균\t오류');
+  for (const id of M.list) for (let n = 0; n < 4; n++) {
+    let calls = 0, presses = 0, loops = 0, err = '';
+    const sc = [[], []];
+    try {
+      for (const li of [0, 1]) {
+        const d = M.demo(id, { rng: function () { calls++; return 0.5; }, intensity: n, pace: paces[n], level: li * 3 });
+        let last = null;
+        for (let f = 0; f < 18000; f++) {
+          d.update(DT);
+          if (f === 1799 && !li) loops = d.loops;
+          if (d.lastPress && d.lastPress.age === 0 && f < 1800 && !li) presses++;
+          if (d.result && d.result !== last) { last = d.result; sc[li].push(d.result.score); }
+          if (d.done) throw new Error('done 이 true');
+        }
+      }
+    } catch (e) { err = e.message; }
+    const avg = function (a) { return a.reduce(function (x, y) { return x + y; }, 0) / Math.max(1, a.length); };
+    const ok = !err && presses > 0 && loops >= 2 && calls === 0 && avg(sc[0]) >= 0.85 && avg(sc[1]) >= 0.85;
+    if (!ok) bad++;
+    console.log([id, INT[n], loops, presses, calls, sc[0].length + '·' + avg(sc[0]).toFixed(3), sc[1].length + '·' + avg(sc[1]).toFixed(3), err || (ok ? '-' : '기준 미달')].join('\t'));
+  }
+  console.log(bad ? '실패 ' + bad : '모두 통과');
+  process.exit(bad ? 1 : 0);
+}
+
+const HANDS = [
+  ['완벽한 손', null],
+  ['잘하는 사람', { react: 0.22, rsd: 0.04, rlo: 0.12, rhi: 0.4, tsd: 0.035, wrong: 0.02, chain: 0.11, pick: 0.12 }],
+  ['보통 사람', { react: 0.30, rsd: 0.07, rlo: 0.18, rhi: 0.5, tsd: 0.06, wrong: 0.06, chain: 0.15, pick: 0.2 }],
+];
+function grade(x) { return x >= 0.9 ? 3 : x >= 0.7 ? 2 : x >= 0.4 ? 1 : 0; }
+function run(id, n, level, prof, seed) {
+  const g = M.create(id, { rng: mulberry(seed), intensity: n, pace: paces[n], level: level, font: 'x' });
+  const hand = M._hand(id, prof, mulberry(seed * 977 + 13));
+  for (let f = 0; !g.done && f < 60 * 20; f++) {
+    const code = hand(g._state, DT);
+    if (code) g.press(code);
+    g.update(DT);
+  }
+  return g.result.score;
+}
+console.log('pace ' + paces.join(' · ') + ' · 씨앗 ' + seeds + ' · 칸: 평균 (실수/보통/잘함/완벽 %)');
+console.log(['게임', '강도', '숙련'].concat(HANDS.map(function (h) { return h[0]; })).join('\t'));
+const sum = {};
+for (const id of M.list) for (let n = 0; n < 4; n++) for (const level of [0, 3]) {
+  const cells = HANDS.map(function (h, hi) {
+    const dist = [0, 0, 0, 0];
+    let tot = 0;
+    for (let s = 1; s <= seeds; s++) { const x = run(id, n, level, h[1], s * 7 + 1000 * level + 1); tot += x; dist[grade(x)]++; }
+    const k = hi + '/' + n + '/' + level;
+    sum[k] = (sum[k] || 0) + tot / seeds / M.list.length;
+    return (tot / seeds).toFixed(2) + ' (' + dist.map(function (c) { return Math.round(100 * c / seeds); }).join('/') + ')';
+  });
+  console.log([id, INT[n], level].concat(cells).join('\t'));
+}
+console.log('-- 네 게임 평균');
+for (let n = 0; n < 4; n++) for (const level of [0, 3]) console.log(['평균', INT[n], level].concat(HANDS.map(function (h, hi) { return sum[hi + '/' + n + '/' + level].toFixed(2); })).join('\t'));

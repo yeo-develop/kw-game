@@ -75,6 +75,19 @@ window.CONFIG = {
   mg_seconds: { value: 7, min: 4, max: 15, step: 0.5 }, // 미니게임 한 번의 길이 (초)
   mg_level_speed: { value: 0.16, min: 0, max: 0.4, step: 0.02 }, // 숙련 단계마다 미니게임 기본 속도 +
   mg_ramp: { value: 0.4, min: 0, max: 1.5, step: 0.05 }, // 한 판 안에서 끝으로 갈수록 빨라지는 정도 (끝에서 +40%)
+  // 알바 강도 하(0) · 중(1) · 상(2) · 최상(3). 중이 기준(1). 일당 배율은 "보통" 이상에만 붙는다 (실수 · 대충은 보너스 없음)
+  int_pay_0: { value: 0.8, min: 0.5, max: 1, step: 0.05 },
+  int_pay_1: { value: 1, min: 1, max: 1, step: 0.05 }, // 기준 (바꾸지 않음)
+  int_pay_2: { value: 1.2, min: 1, max: 2, step: 0.05 },
+  int_pay_3: { value: 1.5, min: 1, max: 3, step: 0.05 },
+  int_hp_0: { value: 0.85, min: 0.5, max: 1, step: 0.05 }, // 드는 체력 = max(1, round(hp_알바 × 이 값))
+  int_hp_1: { value: 1, min: 1, max: 1, step: 0.05 },
+  int_hp_2: { value: 1.1, min: 1, max: 2, step: 0.05 },
+  int_hp_3: { value: 1.25, min: 1, max: 2, step: 0.05 },
+  mg_int_0: { value: 0.85, min: 0.5, max: 1, step: 0.05 }, // 미니게임 속도 배율 (tools/mg-model.js 로 잰 값: 보통 사람의 평균 등급이 강도 한 칸에 한 칸쯤 내려감)
+  mg_int_1: { value: 1, min: 1, max: 1, step: 0.05 },
+  mg_int_2: { value: 1.3, min: 1, max: 2, step: 0.05 },
+  mg_int_3: { value: 1.6, min: 1, max: 2.5, step: 0.05 },
   // 숙련도: 같은 알바를 n1 · n2 · n3 번 하면 한 단계씩 오르고, 단계마다 일당이 skill_bonus 만큼 오른다
   skill_bonus: { value: 0.08, min: 0, max: 0.3, step: 0.01 },
   skill_n1: { value: 3, min: 1, max: 10, step: 1 },
