@@ -6,7 +6,7 @@
 // board 는 투자가 열리기 전에는 로드맵(서울역 → 한국 최고 부자, 열 단계), 열린 뒤에는 주식 · 코인 탭. 로드맵은 그 뒤 '나' 구역 머리의 버튼으로 여는 창.
 // 기한은 없다("N일째"로만 센다). 내 집 = 1막 끝(축하 창 뒤 계속), 호텔에서 "한국 최고 부자" 선언 = 엔딩. 사업 줄 · 대출 줄은 생긴 뒤에만 '나' 구역에 붙는다.
 // 돈은 숫자로(R.won · 좁은 곳은 R.num). 위쪽 띠의 현금 · 순자산과 미니게임 일당 · 밤 정산 합계는 step() 안에서 프레임으로 굴러간다(rolls).
-// 처음 하는 사람에게는 첫 판 안내(coach)가 첫날을 따라가며 한 곳씩 짚어 주고, 처음 하는 알바는 하는 법부터 보여 준다.
+// 처음 하는 사람에게는 첫 판 안내(coach)가 첫날을 따라가며 한 곳씩 짚어 주고, 알바는 늘 시작 전 화면(시연 · 강도 고르기)부터.
 (function () {
   'use strict';
 
@@ -189,7 +189,7 @@
   stage.addEventListener('pointerdown', e => {
     startAudio();
     const m = ui.modal;
-    if (!m || m.type !== 'mg' || m.res || m.wait) return;
+    if (!m || m.type !== 'mg' || m.res || m.pre) return;
     const b = e.target.closest('[data-mg]'); // 미니게임 버튼은 누르는 순간 반응
     if (b) { mgPress(b.dataset.mg); e.preventDefault(); return; }
     if (e.target.id === 'mgc') { // 그림을 직접 눌러도 됨: 가로로 나눈 칸이 조작 버튼 순서와 같다
@@ -229,7 +229,7 @@
   }
   function begin() {
     ui.tab = 'stock'; ui.sel = 'daejang'; ui.fresh = {}; ui.flash = {}; ui.queue = []; ui.modal = null; ui.ending = false; ui.say = null; ui.sayT = 0; ui.newAch = [];
-    if (S.pending) { const id = S.pending; S.pending = null; if (R.doJob(S, id, null)) S.log.push({ day: S.day, text: '하다 만 알바는 대충 한 것으로 처리했습니다.', tone: 'warn' }); }
+    if (S.pending) { const p = typeof S.pending === 'string' ? { id: S.pending, n: 1 } : S.pending; S.pending = null; if (R.quitJob(S, p.id, p.n)) S.log.push({ day: S.day, text: '하다 만 알바는 대충 한 것으로 처리했습니다.', tone: 'warn' }); } // 하는 중에 새로 고침: 칸은 반드시 쓴다 (예전 저장은 알바 이름 하나 = 중)
     const missed = (S.ach || []).filter(id => !meta.ach[id]); // 알림이 뜨기 전에 새로 고쳐서 판 저장에만 남은 업적
     if (missed.length) { for (const id of missed) meta.ach[id] = 1; saveMeta(); }
     ui.queue = (S.unseen || []).map(x => ({ type: x.type, e: x.e })); // 1막 끝 · 사업 확장 창을 보기 전에 새로 고쳤으면 다시 띄움
@@ -284,7 +284,8 @@
       else if (what === 'studyasset' && m.type === 'study') studyPick(arg);
       else if (what === 'copy' && m.type === 'act1') copyCard('act1');
       else if (what === 'why') deny(arg);
-      else if (what === 'mgstart' && m.type === 'mg' && m.wait) { m.wait = false; m.mg.idle = false; meta.seen[m.id] = 1; saveMeta(); S.pending = m.id; saveNow(); sfx.click(); renderVeil(); }
+      else if (what === 'mgstart' && m.type === 'mg' && m.pre) beginMg();
+      else if (what === 'int' && m.type === 'mg' && m.pre) pickInt(Number(arg));
       else if (what === 'perk' && m.type === 'perk') { if (R.pickPerk(S, arg)) { sfx.ding(); ui.modal = null; hold(16); renderVeil(); done(); } }
       else if (what === 'ev' && m.type === 'event' && !m.done) {
         if (R.choose(S, arg)) { const d = S.ev.find(e => e.t === 'event_done'); m.done = d ? d.text : ''; m.fx = d ? d.fx : null; saveNow(); sfx.click(); hold(20); $('veil').classList.add('arming'); renderVeil(); } // 고르자마자 저장 (새로 고쳐서 다시 고르기 없음)
@@ -425,7 +426,11 @@
     if (scene !== 'play') return;
     const d = /^Digit([1-9])$/.exec(code) || /^Numpad([1-9])$/.exec(code);
     if (m) {
-      if (m.type === 'mg' && !m.res) { if (!m.wait) mgPress(code); else if (ui.guard === 0 && (code === 'Space' || code === 'Enter')) run('mgstart'); return; }
+      if (m.type === 'mg' && !m.res) { // 시작 전: Space · Enter 시작 · Esc 돌아가기 · ← → 강도 (숫자 키는 편의점의 1~4 와 헷갈려 안 씀)
+        if (!m.pre) mgPress(code);
+        else if (ui.guard === 0) { if (code === 'Space' || code === 'Enter') run('mgstart'); else if (code === 'Escape') run('no'); else if (code === 'ArrowLeft' || code === 'ArrowRight') stepInt(code === 'ArrowLeft' ? -1 : 1); }
+        return;
+      }
       if (ui.guard > 0) { rearm(); return; }
       if (m.type === 'den') { // 1~4 판돈 · ← 홀 · → 짝 · Enter 따블 · Space 그만 (확인 창과 같은 뜻: Enter = 한다, Space = 돌아간다)
         if (m.fin) { if (code === 'Space' || code === 'Enter' || code === 'Escape') denRun('ok'); return; }
@@ -448,7 +453,7 @@
     if (ui.guard > 0) return;
     const c = coachNow();
     if (c && c.ok) { if (code === 'Space' || code === 'Enter') run('coachok'); else if (d) nudge(); return; } // 읽고 넘기는 안내 (숫자 키로 다른 것을 고르려 하면 무엇을 누를지 알려 줌)
-    if (d && S.slot < 3) { const a = R.acts(S)[Number(d[1]) - 1]; if (a && !a.ok) deny(a.why); else if (a) run(a.kind === 'job' ? 'job' : a.kind, a.id); return; }
+    if (d && S.slot < 3) { const a = R.acts(S)[Number(d[1]) - 1]; if (a && !(a.kind === 'job' ? a.any : a.ok)) deny(a.why); else if (a) run(a.kind === 'job' ? 'job' : a.kind, a.id); return; }
     if (code === 'Space' && S.slot >= 3) run('endday'); // Enter 는 확인 창의 "한다"라서 여기서는 안 받음
   }
 
@@ -723,6 +728,7 @@
     const m = ui.modal;
     if (!m || m.type === 'perk' || m.type === 'den' || (m.type === 'event' && !m.done)) return; // 고르기 전에는 닫히지 않음 (도박장은 "그만"으로만)
     hold(16);
+    if (m.type === 'mg' && m.pre) { if (!yes) { ui.modal = null; sfx.click(); renderVeil(); render(); } return; } // 돌아가기: 아무것도 쓰지 않는다
     if (m.type === 'mg') { if (!m.res) return; ui.modal = null; ui.from = { x: 640, y: 330 }; renderVeil(); sfx.pay(); done(); return; }
     if (m.type === 'night') { ui.modal = null; R.nextDay(S); if (!S.ended) saveNow(); renderVeil(); done(); return; }
     if (m.type === 'event') { ui.modal = null; renderVeil(); done(); return; }
@@ -789,28 +795,49 @@
     };
     return g;
   }
+  // 알바 카드를 누르면 언제나 "시작 전 화면": 그림 자리에 시연이 돌고, 강도를 고른 뒤 "시작"을 눌러야 칸 · 체력 · 난수를 쓴다
+  const mgOpts = (a, n) => ({ rng: () => R.rnd2(S), level: a.lv, seconds: tune.mg_seconds, pal: window.MGPAL || PAL, font: window.PXFONT || FONT, ramp: tune.mg_ramp, levelSpeed: tune.mg_level_speed, intensity: n, pace: tune['mg_int_' + n] });
+  function demoFor(m) { // 고른 강도의 실제 속도로 새로 돈다. minigames.js 가 없으면 대역의 첫 장면만 (움직이지 않음)
+    m.lit = '';
+    try { m.demo = window.Minigames && window.Minigames.demo ? window.Minigames.demo(m.id, mgOpts(m.act, m.n)) : null; } catch (e) { m.demo = null; }
+    m.still = !m.demo; if (m.still) m.demo = fallbackGame(mgOpts(m.act, m.n));
+  }
   function startJob(id) {
     const a = R.acts(S).find(x => x.id === id);
-    if (!a || !a.ok) { deny(a ? a.why : ''); return; }
-    const opts = { rng: () => R.rnd2(S), level: a.lv, seconds: tune.mg_seconds, pal: window.MGPAL || PAL, font: window.PXFONT || FONT, ramp: tune.mg_ramp, levelSpeed: tune.mg_level_speed };
-    let mg = null;
-    try { mg = window.Minigames ? window.Minigames.create(id, opts) : null; } catch (e) { mg = null; }
-    if (!mg) mg = fallbackGame(opts);
-    sfx.click();
-    const wait = GUIDE && !meta.seen[id]; // 처음 하는 알바는 하는 법을 읽고 "시작"을 눌러야 시간이 간다
-    if (!wait) { S.pending = id; saveNow(); } // 하다가 새로 고치면 "대충" 한 것으로 처리된다 (하는 법을 읽는 동안은 아직 시작 전이라 칸을 쓰지 않는다)
-    clearFlies();
-    ui.modal = { type: 'mg', id, act: a, mg, res: null, wait }; ui.guard = 0;
-    if (wait) { mg.idle = true; hold(24); $('veil').classList.add('arming'); } // idle: "준비" 띠 없이 첫 장면을 그대로 보여 줌
+    if (!a || !a.any) { deny(a ? a.why : ''); return; }
+    sfx.click(); clearFlies();
+    for (const o of [...$('toasts').children]) if (o._kind === 'deny') o.remove(); // 방 그림 위에 떠 있던 "모자랍니다" 류는 지운다 (창과 겹치지 않게)
+    const first = GUIDE && !meta.seen[id]; // 처음 하는 알바는 하는 법에 머리글을 달고 더 오래 막는다
+    ui.modal = { type: 'mg', id, act: a, n: a.use, mg: null, demo: null, res: null, pre: true, first }; ui.guard = 0; // n: 기억한 강도 이하에서 할 수 있는 가장 높은 것 (내려서 열어도 기억은 그대로)
+    demoFor(ui.modal);
+    hold(first ? 24 : 15); $('veil').classList.add('arming'); // 카드를 두 번 누른 것이 시작 · 강도 버튼까지 누르지 않게
     renderVeil();
+  }
+  function pickInt(n) {
+    const m = ui.modal, L = m.act.levels[n];
+    if (!L || n === m.n) return;
+    if (!L.ok) { sfx.deny(); m.why = L.name + (n ? '은' : '는') + ' 체력 ' + L.hp + ' 필요 (지금 ' + Math.floor(S.hp) + ')'; m.whyT = 120; renderVeil(); return; } // 알림 대신 창 안 맨 아래 줄에 2초 (창 위로 뜨는 알림이 그림을 가리지 않게)
+    m.n = n; m.why = ''; R.setInt(S, m.id, n); saveNow(); sfx.click(); demoFor(m); renderVeil();
+  }
+  function stepInt(d) { // ← → : 할 수 있는 강도 사이에서만. 막히면 바로 옆이 왜 안 되는지
+    const m = ui.modal, lv = m.act.levels;
+    for (let k = m.n + d; k >= 0 && k <= 3; k += d) if (lv[k].ok) { pickInt(k); return; }
+    if (lv[m.n + d]) pickInt(m.n + d); else sfx.deny();
+  }
+  function beginMg() { // 시작: 진짜 판을 고른 강도로. 여기서부터 칸을 쓰고, 하다가 새로 고치면 "대충"
+    const m = ui.modal, opts = mgOpts(m.act, m.n);
+    let mg = null;
+    try { mg = window.Minigames ? window.Minigames.create(m.id, opts) : null; } catch (e) { mg = null; }
+    m.mg = mg || fallbackGame(opts); m.demo = null; m.pre = false;
+    meta.seen[m.id] = 1; saveMeta(); S.pending = { id: m.id, n: m.n }; saveNow(); sfx.click(); renderVeil(); // 하다가 새로 고치면 그 강도의 체력으로 "대충" (R.quitJob)
   }
   function finishMg() {
     const m = ui.modal, r = m.mg.result || { score: 0 };
     const score = clamp(Number(r.score) || 0, 0, 1);
     S.pending = null;
-    R.doJob(S, m.id, score);
+    R.doJob(S, m.id, score, m.n);
     saveNow();
-    const j = S.ev.find(e => e.t === 'job') || { pay: 0, base: 0, grade: 'ok', gradeName: '보통', mult: 1, hp: 0, combo: 0, comboMult: 1, extra: 1 };
+    const j = S.ev.find(e => e.t === 'job') || { pay: 0, base: 0, grade: 'ok', gradeName: '보통', mult: 1, gmult: 1, imult: 1, int: m.n, intName: R.INT[m.n], hp: 0, combo: 0, comboWas: 0, comboMult: 1, extra: 1 };
     m.res = { j, tip: S.ev.find(e => e.t === 'tip'), wh: S.ev.find(e => e.t === 'while') };
     rollTo('mgpay', j.pay + (m.res.tip ? m.res.tip.amt : 0), 'mgpay', v => '+' + won(v), 0); // 일당이 0 에서 굴러 올라감
     hold(54); $('veil').classList.add('arming'); // 미니게임을 하던 누름이 결과 창을 닫지 않게 (0.9초)
@@ -818,23 +845,33 @@
     renderVeil();
   }
   function drawMg() {
-    const m = ui.modal;
-    if (!m || m.type !== 'mg') return;
-    const cv = $('mgc');
+    const m = ui.modal, g = m && m.type === 'mg' && (m.mg || m.demo);
+    const cv = g && $('mgc');
     if (!cv) return;
     const c = cv.getContext('2d');
-    c.setTransform(cv.width / m.mg.w, 0, 0, cv.height / m.mg.h, 0, 0);
-    try { m.mg.draw(c); } catch (e) { /* 그리기 실패는 판을 멈추지 않는다 */ }
+    c.setTransform(cv.width / g.w, 0, 0, cv.height / g.h, 0, 0);
+    try { g.draw(c); } catch (e) { /* 그리기 실패는 판을 멈추지 않는다 */ }
+  }
+  function litKeys(m) { // 시연이 방금 누른 키: 조작 키 딱지를 눌린 모양으로(0.15초) + 그림 아래 가운데에 크게(0.35초)
+    const p = m.demo.lastPress, on = p && p.age < 0.15 ? p.code : '', big = p && p.age < 0.35 ? p : null, e = document.querySelector('#veil .mg-press');
+    if (big !== m.big && e) {
+      const c = big && (m.demo.controls || []).find(x => x.code === big.code);
+      m.big = big; e.classList.toggle('hide', !big);
+      if (big) { e.innerHTML = '<span class="key">' + keyName(big.code) + '</span>' + esc(c ? c.label : ''); e.classList.remove('in'); void e.offsetWidth; e.classList.add('in'); }
+    }
+    if (on === m.lit) return;
+    m.lit = on;
+    for (const e of document.querySelectorAll('#veil .keys .key')) { e.classList.toggle('on', e.dataset.k === on); e.parentNode.classList.toggle('on', e.dataset.k === on); } // 이름도 함께 (저 때 저 키)
   }
 
   // ── 첫 판 안내: 한 번에 한 곳만 밝히고 한 줄만 말한다 ──
   // 단계는 판의 상태에서 읽는다 (저장했다 이어 해도 맞는 자리에서 이어진다).
   // ring = 고리를 두를 곳, lit = 고리 없이 밝혀 둘 곳, only = 그 단계에서 받는 누름, ok = 읽고 넘기는 단계의 버튼 글, at = 말풍선 자리.
-  const moveOk = () => R.moveInfo(S, 1).ok, flyerOk = () => R.acts(S).some(a => a.id === 'flyer' && a.ok); // 짚은 것을 할 수 없는 상태면 막지 않는다 (갇히지 않게)
+  const moveOk = () => R.moveInfo(S, 1).ok, flyerOk = () => R.acts(S).some(a => a.id === 'flyer' && a.any); // 짚은 것을 할 수 없는 상태면 막지 않는다 (갇히지 않게)
   const TODAY = ['job', 'skip', 'rest', 'study', 'why', 'tip']; // 오늘 칸에서 하는 것들
   const COACH = {
     job: { n: 1, at: 'below', ring: ['#today [data-arg="flyer"]'], lit: ['#quest'], only: (w, a) => !flyerOk() || (w === 'job' && a === 'flyer'),
-      html: () => '<b>전단지</b>를 눌러 첫 돈을 번다 <span class="key">1</span><i>왼쪽 아래 상태창의 퀘스트가 지금 할 일입니다</i>' },
+      html: () => '<b>전단지</b>를 눌러 첫 돈을 번다 <span class="key">1</span><i>시연을 보고 강도를 고른 뒤 시작. 할 일은 왼쪽 아래 상태창의 퀘스트에</i>' },
     slots: { n: 2, at: 'below', ring: ['#today', '#me .me-row'], lit: ['#quest'], only: w => TODAY.indexOf(w) >= 0,
       html: () => '<b>카드를 골라</b> 남은 칸을 쓴다<i>하루는 세 칸입니다. 알바는 체력 ' + I('hp', '', 's') + ' 을 쓰고, 쉬기는 채웁니다. ' + I('skip', '', 's') + ' 는 미니게임 없이 덜 받는 "대충"</i>' },
     endday: { n: 3, at: 'below', ring: ['#today [data-do="endday"]'], lit: ['#quest'], only: w => w === 'endday' || w === 'tip',
@@ -889,12 +926,37 @@
     const b = document.querySelector('#coach .bubble');
     if (b) { b.classList.remove('in', 'nudge'); void b.offsetWidth; b.classList.add('nudge'); }
   }
-  function howHtml(m) { // 처음 하는 알바: "시작"을 누르기 전에는 시간이 가지 않는다
-    const lines = m.mg.how || [m.mg.howto || '']; // how 가 없는 것은 minigames.js 없이 도는 대역(fallbackGame)뿐
-    return '<div class="mg-how"><div class="l"><em>처음 하는 알바 — 하는 법</em><ol>' + lines.map(t => '<li>' + esc(t) + '</li>').join('') + '</ol>' +
-      '<div class="keys">' + (m.mg.controls || []).map(c => '<span>' + esc(c.label) + ' <span class="key">' + keyName(c.code) + '</span></span>').join('') +
-      '<i>화면의 버튼을 눌러도 됩니다 · 잘할수록 일당 ×' + tune.mult_miss + ' ~ ×' + tune.mult_perfect + '</i></div></div>' +
-      '<button class="btn main" data-do="mgstart">시작 <span class="key">Space</span></button></div>';
+  // ── 미니게임 창의 아래쪽: 하는 법(+ 조작 키) · 가운데 줄(시작 전: 강도 넷 + 시작, 하는 중: 조작 버튼) · 고른 강도의 한 줄 ──
+  const ich = (n, long) => '<em class="ich i' + n + '" title="알바 강도 — 올릴수록 미니게임이 빠르고, 일당이 늘고, 체력이 조금 더 듭니다">' + (long ? '강도 ' : '') + R.INT[n] + '</em>';
+  const INT_WHAT = { // 강도에 따라 게임마다 달라지는 것 (하 · 상 · 최상)
+    flyer: ['뛰는 사람이 드물다', '사람이 잦고 뛰는 사람이 는다', '사람이 몰리고 뛰는 사람이 많다'],
+    loading: ['벨트가 느리다', '상자가 더 자주 온다', '상자가 쉴 틈 없이 온다'],
+    store: ['찍을 물건이 적다', '찍을 물건이 늘어난다', '찍을 물건이 많다'],
+    delivery: ['한 줄에 한 차선만 막힌다', '두 차선이 막히는 줄이 나온다', '두 차선이 막히는 줄이 나온다'],
+  };
+  function intLine(m) { // 결과 판이 떠 있으면 숨긴다 (자리는 지켜 그림 · 창이 안 움직이게)
+    const n = m.n, w = INT_WHAT[m.id];
+    const t = ['천천히', '기준 빠르기', '빠르다', '아주 빠르다'][n] + (w && n !== 1 ? ' · ' + w[n ? n - 1 : 0] : '');
+    const arrow = c => (m.pre ? '<span class="key" title="← → 로 강도를 바꿉니다">' + keyName(c) + '</span>' : ''); // 시작 전에는 딱지 양옆에 ← → (강도를 바꾸는 키)
+    return '<div class="mg-line' + (m.res ? ' gone' : '') + '">' + arrow('ArrowLeft') + ich(n, true) + arrow('ArrowRight') + (m.why ? '<b class="bad why">' + I('warn', '', 's') + esc(m.why) + '</b>' : '<span>' + t + '</span>' + (n >= 2 ? '<b class="bad">' + I('warn', '', 's') + '실수하면 보너스 없음</b>' : '')) +
+      (m.pre ? '<button class="btn small r" data-do="no">돌아가기 <span class="key">Esc</span></button>' : '') + '</div>';
+  }
+  function calcLine(j) { // "기준 170,000 · 잘함 ×1.2 · 최상 ×1.5" — 중이거나 실수면 강도 조각은 없음. 요령으로 대충 바닥에 걸리면 그 값
+    const parts = ['기준 ' + num(j.base), j.gradeName + ' ×' + j.gmult];
+    if (j.int !== 1 && j.grade !== 'miss') parts.push(j.intName + ' ×' + j.imult);
+    if (j.mult > j.gmult * j.imult + 1e-9) parts.push('대충 바닥 ×' + j.mult);
+    return parts.join(' · ');
+  }
+  function ctlHtml(m) {
+    const g = m.mg || m.demo, lines = g.how || [g.howto || '']; // how 가 없는 것은 minigames.js 없이 도는 대역(fallbackGame)뿐
+    const how = '<div class="mg-how"><ol>' + (m.first ? '<em>처음 하는 알바 — 하는 법</em>' : '') + lines.map(t => '<li>' + esc(t) + '</li>').join('') + '</ol>' +
+      '<div class="keys' + ((g.controls || []).length === 3 ? ' n3' : '') + '">' + (g.controls || []).map(c => '<span>' + esc(c.label) + '<span class="key" data-k="' + c.code + '">' + keyName(c.code) + '</span></span>').join('') + '</div></div>';
+    const lv = m.act.levels, act = m.pre
+      ? lv.map(L => '<button class="btn ib' + (L.n === m.n ? ' on' : '') + (L.ok ? '' : ' lock') + '" data-do="int" data-arg="' + L.n + '" title="' + L.name + ' — 일당(보통) ' + won(L.pay) + ' · 체력 ' + L.hp + (L.ok ? '' : ' (모자랍니다)') + '"><b>' + L.name + '</b>' + (L.ok ? '<span class="h">' + I('hp', '', 's') + '−' + L.hp + '</span><span class="p">' + I('coin', '', 's') + num(L.pay) + '</span>' : '<span class="h">' + I('lock', '', 's') + '</span><span class="p">' + I('hp', '체력', 's') + L.hp + ' 필요</span>') + '</button>').join('') +
+        '<button class="btn main go" data-do="mgstart">시작<span class="key">Space</span></button>'
+      : m.res ? '<button class="btn main" data-do="ok">확인 <span class="key">Space</span></button>' // 확인은 조작 버튼이 있던 자리에
+        : (g.controls || []).map(c => '<button class="btn" data-mg="' + c.code + '">' + esc(c.label) + ' <span class="key">' + keyName(c.code) + '</span></button>').join('');
+    return how + '<div class="mg-act' + (m.pre ? ' pick' : '') + '">' + act + '</div>' + intLine(m);
   }
 
   // ── 구역 hud: 날짜 · 시간 · 돈 · 다음 목표 · 단추 ──
@@ -1061,19 +1123,24 @@
       return;
     }
     const first = (coachNow() || {}).id === 'job'; // 안내가 첫 알바를 짚는 동안은 "대충"을 감춘다 (미니게임을 한 번은 해 보게)
-    const list = R.acts(S), q = R.questView(S) || {}, jobs = list.filter(a => a.kind === 'job' && a.ok);
+    const can = a => (a.kind === 'job' ? a.any : a.ok); // 알바는 어느 강도로든 할 수 있으면 켜짐 (대충은 중의 체력이 있을 때만)
+    const list = R.acts(S), q = R.questView(S) || {}, jobs = list.filter(a => a.kind === 'job' && a.any);
     const want = q.id === 'first_job' ? 'flyer' : q.id === 'study' ? 'study' : '';
-    const rec = want && list.some(a => a.id === want && a.ok) ? want : !jobs.length && list.some(a => a.kind === 'rest' && a.ok) ? 'rest' : ''; // 상태창 추천: 퀘스트가 바로 가리키는 카드(할 수 있을 때), 아니면 일할 체력이 없을 때 쉬기 (그 밖에는 없음)
-    const tag = a => (a.id === rec && a.ok ? '<span class="tag chip hot" title="지금 퀘스트(또는 체력)로 보아 상태창이 권하는 것">' + I('quest', '', 's') + '<span class="tl">상태창 </span>추천</span>' : '');
+    const rec = want && list.some(a => a.id === want && can(a)) ? want : !jobs.length && list.some(a => a.kind === 'rest' && a.ok) ? 'rest' : ''; // 상태창 추천: 퀘스트가 바로 가리키는 카드(할 수 있을 때), 아니면 일할 체력이 없을 때 쉬기 (그 밖에는 없음)
+    const tag = a => (a.id === rec && can(a) ? '<span class="tag chip hot" title="지금 퀘스트(또는 체력)로 보아 상태창이 권하는 것">' + I('quest', '', 's') + '<span class="tl">상태창 </span>추천</span>' : '');
     const autoLine = a => (a.auto ? '<span class="auto" title="' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + ' 사업 매출 ' + won(a.auto) + '이 들어옵니다 (직원이 일함)"><i>' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + '</i><b>+' + num(a.auto) + '</b></span>' : '');
+    const jl = a => a.levels[a.any ? a.use : 1], short = list.some(a => a.kind === 'job' && num(jl(a).pay).length > 11), jw = n => (short ? cwon(n) : num(n)); // 알바 카드의 금액: 하나라도 줄이면 다 줄임 (한 줄에서 "721,913,000"과 "13억"이 섞이지 않게, 전부는 title)
     $('today').innerHTML = head + '<div class="cards' + (list.length >= 5 ? ' n5' : '') + '">' + list.map((a, i) => {
-      const k = '<span class="key">' + (i + 1) + '</span>', off = a.ok ? 'data-do="' + a.kind + '"' + (a.kind === 'job' ? ' data-arg="' + a.id + '"' : '') + ' role="button"' : 'data-do="why" data-arg="' + esc(a.why) + '"';
+      const go = can(a);
+      const k = '<span class="key">' + (i + 1) + '</span>', off = go ? 'data-do="' + a.kind + '"' + (a.kind === 'job' ? ' data-arg="' + a.id + '"' : '') + ' role="button"' : 'data-do="why" data-arg="' + esc(a.why) + '"';
       if (a.kind === 'job') {
         const lv = '<span class="lv" title="숙련도: 직접 한 횟수가 ' + tune.skill_n1 + ' · ' + tune.skill_n2 + ' · ' + tune.skill_n3 + '번이 되면 일당이 ' + Math.round(tune.skill_bonus * 100) + '%씩 오릅니다">' + [1, 2, 3].map(n => '<s class="' + (a.lv >= n ? 'on' : '') + '"></s>').join('') + '</span>';
-        const long = num(a.pay).length > 8 ? ' long' : ''; // 사업이 커져 일당이 길면 일당 · 체력을 두 줄로
-        return '<div class="card ' + (a.ok ? 'go' : 'off') + long + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + esc(a.name + ' — ' + a.note + (a.bizMult > 1 ? ' (사업 ×' + num(a.bizMult) + ')' : '')) + '">' + k + lv + tag(a) + '<span class="pic">' + pic('job', a.id, !a.ok) + '</span><span class="nm">' + a.name + '</span>' +
-          '<span class="st"><span class="pay" title="일당 ' + won(a.pay) + (a.bizMult > 1 ? ' — 사업 ×' + num(a.bizMult) + ' 포함' : '') + '">' + I('coin', '', 's') + num(a.pay) + '</span><span class="' + (a.ok ? 'cost' : 'lack') + '" title="드는 체력' + (a.ok ? '' : ' — 모자랍니다') + '">' + I('hp', '', 's') + '−' + a.hp + '</span></span>' +
-          (a.ok && !first ? '<button class="skip" data-do="skip" data-arg="' + a.id + '" title="대충: 미니게임 없이 일당의 ' + Math.round(R.skipMult(S) * 100) + '%만 받고 넘어갑니다. 숙련도와 콤보는 오르지 않습니다">대충 ×' + R.skipMult(S).toFixed(1) + '</button>' : '') + '</div>';
+        const L = jl(a); // 기억한 강도(체력이 모자라면 할 수 있는 가장 높은 것)의 일당 · 체력
+        const pt = jw(L.pay), long = pt.length > 8 ? ' long' : '', sk = Math.round(a.pay * R.skipMult(S) / 1000) * 1000; // 사업이 커져 일당이 길면 일당 · 체력을 두 줄로. sk = "대충"이 받는 돈 (늘 중 기준)
+        return '<div class="card ' + (go ? 'go' : 'off') + long + (a.id === rec && go ? ' sug' : '') + '" ' + off + ' title="' + esc(a.name + ' — ' + a.note + (a.bizMult > 1 ? ' (사업 ×' + num(a.bizMult) + ')' : '') + (go ? ' · 강도 ' + L.name : '')) + '">' + k + (go && L.n !== 1 ? ich(L.n) : '') + lv + tag(a) + '<span class="pic">' + pic('job', a.id, !go) + '</span><span class="nm">' + a.name + '</span>' + // 강도 딱지는 하 · 상 · 최상만 (중은 기본이라 안 닮), 숫자 키 옆
+
+          '<span class="st"><span class="pay" title="일당(보통) ' + won(L.pay) + (a.bizMult > 1 ? ' — 사업 ×' + num(a.bizMult) + ' 포함' : '') + '">' + I('coin', '', 's') + pt + '</span><span class="' + (go ? 'cost' : 'lack') + '" title="드는 체력' + (go ? '' : ' — 모자랍니다') + '">' + I('hp', '', 's') + '−' + L.hp + '</span></span>' +
+          (a.ok && !first ? '<button class="skip" data-do="skip" data-arg="' + a.id + '" title="대충: 미니게임 없이 중 강도 일당의 ' + Math.round(R.skipMult(S) * 100) + '% (' + won(sk) + ') · 체력 −' + a.hp + ' · 숙련도와 콤보는 오르지 않음">대충 ' + jw(sk) + '</button>' : '') + '</div>';
       }
       const st = a.kind === 'rest' ? (a.ok ? '<span class="gain">' + I('hp', '', 's') + '+' + (-a.hp) + '</span>' : '<span class="lack">' + I('lock', '', 's') + esc(a.why.split(':')[0]) + '</span>') // 일중독(양날): 할 수 있는 알바가 있으면 못 쉼
         : a.ok ? '<span class="' + (a.hp > S.hp ? 'lack' : 'cost') + '" title="드는 체력">' + I('hp', '', 's') + '−' + a.hp + '</span><span class="sys" title="고른 종목의 내일 소식">' + I('news', '', 's') + '내일</span>' : '<span class="lack">' + I('check', '', 's') + (/읽었/.test(a.why) ? '읽음' : '체력') + '</span>';
@@ -1294,22 +1361,23 @@
     v.classList.toggle('hide', !m); v.classList.toggle('top', !!m && m.type === 'shock'); // 속보는 위쪽 띠
     if (!m) { v.innerHTML = ''; return; }
     if (m.type === 'mg') {
-      if (!v.querySelector('.mg')) {
-        v.innerHTML = '<div class="win mg corner"><div class="mg-head"><b>' + esc(m.mg.title || m.act.name) + '</b><span>' + esc(m.mg.howto || '') + '</span><i title="일당 — 잘할수록 ×' + tune.mult_miss + '~' + tune.mult_perfect + '">' + I('coin', '', 's') + won(m.act.pay) + (S.combo ? ' · ' + I('fire', '콤보', 's') + S.combo : '') + '</i></div>' +
-          '<canvas id="mgc" class="mg-canvas" width="1760" height="760"></canvas><div class="mg-ctl"></div><div id="mgres"></div></div>';
+      const g = m.mg || m.demo, L = m.act.levels[m.n];
+      if (!v.querySelector('.mg')) { // 틀은 한 번만 (강도를 바꿔도 뜨는 연출이 다시 돌지 않게). 머리줄 · 아래쪽은 그릴 때마다
+        v.innerHTML = '<div class="win mg corner"><div class="mg-head"></div><div class="mg-pic"><canvas id="mgc" class="mg-canvas" width="1760" height="760"></canvas><span class="mg-demo" title="스스로 하는 시연 — 시작을 누르면 내 차례">' + I('eye', '', 's') + '자동 시연</span><span class="mg-press chip hide"></span></div><div class="mg-ctl"></div><div id="mgres"></div></div>';
       }
-      const ctl = v.querySelector('.mg-ctl');
-      if (m.wait) { ctl.className = 'mg-ctl how'; ctl.innerHTML = howHtml(m); } // 하는 법은 그림을 가리지 않게 그림 아래에. 시작한 뒤에도 그 높이를 지켜 그림이 움직이지 않는다
-      else if (!m.res) { if (ctl.classList.contains('how')) ctl.style.minHeight = ctl.offsetHeight + 'px'; ctl.innerHTML = (m.mg.controls || []).map(c => '<button class="btn" data-mg="' + c.code + '">' + esc(c.label) + ' <span class="key">' + keyName(c.code) + '</span></button>').join(''); }
-      else {
+      v.querySelector('.mg-head').innerHTML = '<b>' + esc(g.title || m.act.name) + '</b>' + (m.pre ? '' : ich(m.n, true)) + '<i title="일당(보통) — 잘할수록 ×' + tune.mult_miss + '~' + tune.mult_perfect + ', 강도 ' + L.name + ' ×' + L.payMult + '">' + I('coin', '', 's') + won(L.pay) + (S.combo ? ' · ' + I('fire', '콤보', 's') + S.combo : '') + '</i>';
+      v.querySelector('.mg-demo').classList.toggle('hide', !m.pre); if (!m.pre) v.querySelector('.mg-press').classList.add('hide');
+      v.querySelector('.mg-ctl').innerHTML = ctlHtml(m); m.lit = ''; // 다시 그리면 눌린 키 딱지가 지워지므로 다음 걸음에 다시 켠다 // 세 줄의 높이가 시작 전 · 하는 중 · 결과에 같아 그림이 움직이지 않는다
+      if (m.res) {
         const j = m.res.j, w = m.res.wh;
         const det = m.mg.result && m.mg.result.detail; // 한 줄 내역 (왜 이 등급인지): "배달 4 / 5건 · 충돌 2번"
+        const lost = j.grade === 'miss' && j.int >= 2, broke = j.combo === 0 && j.comboWas > 0; // 상 · 최상에서 실수: 체력은 그 강도만큼, 보너스는 없음
         $('mgres').innerHTML = '<div class="mg-res"><div class="g ' + j.grade + '">' + j.gradeName + '</div>' + (det ? '<div class="d">' + esc(det) + '</div>' : '') + '<div class="m">' + I('coin', '', 'l') + '<span id="mgpay">+' + won(rolls.mgpay.v) + '</span></div>' +
-          '<div class="s"><span title="일당 × 등급 배율">' + won(j.base) + ' ×' + j.mult + '</span>' + (j.comboMult > 1 ? '<span class="gold" title="콤보 보너스: 잘함 이상이 이어진 만큼 일당에 얹힘">콤보 보너스 +' + Math.round((j.comboMult - 1) * 100) + '%</span>' : '') + (j.extra > 1 ? '<span class="gold" title="대타">' + I('swap', '', 's') + '×' + j.extra + '</span>' : '') +
+          (lost ? '<div class="nb">' + I('warn', '', 's') + '실수 — 강도 보너스 없음</div>' : '') +
+          '<div class="s"><span title="일당(중) × 등급 배율 × 강도 배율">' + calcLine(j) + '</span>' + (j.comboMult > 1 ? '<span class="gold" title="콤보 보너스: 잘함 이상이 이어진 만큼 일당에 얹힘">콤보 ' + (broke ? '' : '보너스 ') + '+' + Math.round((j.comboMult - 1) * 100) + '%' + (broke ? ' (이번에 끊김)' : '') + '</span>' : '') + (j.extra > 1 ? '<span class="gold" title="대타">' + I('swap', '', 's') + '×' + j.extra + '</span>' : '') +
           (m.res.tip ? '<span class="gold" title="팁">' + I('gift', '', 's') + '+' + won(m.res.tip.amt) + '</span>' : '') + '<span title="쓴 체력">' + I('hp', '', 's') + '−' + j.hp + '</span>' +
-          (j.combo > 0 ? '<span class="gold" title="콤보: 잘함 이상이면 쌓입니다">' + I('fire', '', 's') + '콤보 ' + j.combo + '</span>' : j.comboWas > 0 ? '<span class="bad" title="콤보가 끊겼습니다">' + I('fire', '', 's') + '콤보 끊김</span>' : '') + '</div>' +
+          (j.combo > 0 ? '<span class="gold" title="콤보: 잘함 이상이면 쌓입니다">' + I('fire', '', 's') + '콤보 ' + j.combo + '</span>' : broke && j.comboMult <= 1 ? '<span class="bad" title="콤보가 끊겼습니다">' + I('fire', '', 's') + '콤보 끊김</span>' : '') + '</div>' +
           (w ? '<div class="w ' + cls(w.delta) + '" title="일하는 동안 내 투자가 움직인 만큼">' + I('chart', '', 's') + '일하는 동안 ' + sign(w.delta) + ' (' + pct(w.pct) + ')</div>' : '') + '</div>';
-        ctl.innerHTML = '<button class="btn main" data-do="ok">확인 <span class="key">Space</span></button>'; // 확인 버튼은 조작 버튼이 있던 자리에 (창 높이 그대로 · 결과판 아래가 비지 않게)
       }
       drawMg();
       return;
@@ -1496,7 +1564,7 @@
       sec('calendar', '위쪽 띠', [c('calendar', '며칠째 (이번 주 일곱 칸)'), c('bill', '일요일 칸: 고정비 날'), c('sun', '오전'), c('noon', '오후'), c('moon', '저녁'), c('fire', '콤보'), c('cash', '현금'), c('wallet', '순자산'), c('key', '다음 목표와 거기까지 온 만큼 (되면 버튼)'), c('crown', '한국 최고 부자 (선언)'), c('trophy', '업적'), c('sound', '소리'), c('home', '제목으로 (저장됨)')], '기한은 없습니다. 내 집을 사면 1막 끝, 호텔에서 한국 최고 부자를 선언하면 엔딩') +
       sec('door', '나', [c('door', '지금 사는 곳'), c('map', '로드맵 (투자가 열린 뒤)'), c('star', '레벨과 경험치'), c('hp', '체력'), c('rocket', '사업 · 키우기 (내 집부터)'), c('bill', '대출 · 미리 갚기 (있을 때만)'), c('plus', '고른 특성이 쌓이는 줄'), c('lock', '주황 테두리 = 양날 특성')], '사업을 키우면 같은 알바의 일당이 몇 배가 되고, 가게부터는 쉬기 · 공부 칸에도 매출이 들어옵니다(자동 수입). 대출은 일요일 밤 원리금 · 미리 갚기는 칸을 안 씀. 양날 특성은 크게 얻는 대신 못 하게 되는 것이 있고, 그 버튼은 잠깁니다') +
       sec('quest', '상태창', [c('quest', '지금 할 퀘스트'), c('gift', '끝내면 받는 것'), c('door', '옮기기 · 사기 · 차리기 버튼'), c('bill', '고정비 · 원리금 (전날 · 당일 알림)'), c('news', '오늘 소식 수')], '고정비(대출이 있으면 원리금도)는 일요일 밤에 현금에서 나갑니다. 두 번 연속 못 내면 한 단계 내려갑니다 — 집이면 압류') +
-      sec('sun', '오늘', [c('coin', '일당'), c('hp', '드는 체력'), c('skip', '대충'), c('swap', '대타 (다음 일당 1.5배)'), c('book', '공부: 종목 하나를 골라 내일을 봄'), c('rocket', '쉬어도 + : 사업 매출')], '대충 = 미니게임 없이 일당의 일부만 받습니다. 직접 하면 실수해도 대충보다 덜 받지 않고, 숙련도(카드 위 네모 셋)와 콤보는 직접 해야 오릅니다') +
+      sec('sun', '오늘', [c('coin', '일당'), c('hp', '드는 체력'), c('skip', '대충'), c('swap', '대타 (다음 일당 1.5배)'), c('book', '공부: 종목 하나를 골라 내일을 봄'), c('rocket', '쉬어도 + : 사업 매출')], '대충 = 미니게임 없이 일당의 일부만 받습니다. 직접 하면 실수해도 대충보다 덜 받지 않고, 숙련도(카드 위 네모 셋)와 콤보는 직접 해야 오릅니다. 강도(그림 옆 딱지: 하 · 중 · 상 · 최상)는 시작 전 화면에서 고릅니다 — 올릴수록 미니게임이 빨라지고 일당 ×' + tune.int_pay_0 + '~×' + tune.int_pay_3 + ' · 체력이 조금 더 듭니다. 실수하면 강도 보너스가 없습니다') +
       sec('map', '로드맵', [c('cash', '하룻밤 요금'), c('bill', '주 고정비'), c('meal', '하루 끼니값'), c('bed', '자면 돌아오는 체력'), c('wallet', '입주 기준 순자산'), c('key', '집 값'), c('rocket', '열리는 사업'), c('lock', '아직 잠김')], '원룸까지는 순자산 기준만 넘으면 들어갑니다(돈을 가져가지 않음). 내 집은 현금으로, 아파트부터는 값의 ' + Math.round(tune.loan_ltv * 100) + '%까지 대출을 낄 수 있습니다') +
       sec('news', '소식', [dots(3, '공시 (거의 확실)'), dots(2, '기사 (대체로)'), dots(1, '찌라시 (반반)'), c('up', '호재 · 오름'), c('down', '악재 · 내림'), c('book', '리포트가 본 방향')], '밤사이 갭: 오늘 소식은 아침 장 전에 이미 값에 들어가 있습니다 (든 종목이면 아침에 내 손익 알림). 속보 = 예고 없이 한 종목이 크게 움직이는 일 — 공부로도 안 보이고, 위쪽 띠로 뜹니다. 공부 = 한 칸과 체력을 써서 고른 종목 하나의 내일을 미리 봅니다 (' + Math.round(tune.study_acc * 100) + '% 맞는 단서)') +
       sec('chart', '주식 · 코인', [c('cart', '사기 · 산 값'), c('sell', '팔기'), c('wallet', '보유 (평가액 · 손익률)'), c('percent', '수수료'), c('bolt', '배율'), c('skull', '청산'), c('bill', '유지비'), c('play', '연습 (진짜 돈 아님)')], '청산 = 반대로 크게 움직이면 건 돈을 전부 잃습니다. 배율이 높을수록 가깝습니다. 코인 탭의 "연습"에서 롱 · 숏 · 청산을 직접 눌러 볼 수 있습니다') +
@@ -1563,7 +1631,8 @@
     let n = 0;
     while (hit.length && n++ < 8) key(hit.shift());
     const m = ui.modal;
-    if (scene === 'play' && m && m.type === 'mg' && !m.res && !m.wait) {
+    if (scene === 'play' && m && m.type === 'mg' && m.pre) { if (m.whyT && --m.whyT === 0) { m.why = ''; renderVeil(); } if (!m.still) { try { m.demo.update(STEP); litKeys(m); } catch (e) { m.still = true; } } } // 시연은 판 상태 · 게임 난수를 건드리지 않는다
+    else if (scene === 'play' && m && m.type === 'mg' && !m.res) {
       try { m.mg.update(STEP); } catch (e) { m.mg.done = true; m.mg.result = m.mg.result || { score: 0.5 }; }
       if (m.mg.done) finishMg();
     }
@@ -1601,7 +1670,7 @@
     get scene() { return scene; },
     get state() {
       if (!S) return { scene };
-      return { day: S.day, slot: S.slot, phase: S.phase, cash: S.cash, worth: R.worth(S), hp: S.hp, tier: S.tier, quest: S.quest, title: S.title, lv: S.lv, combo: S.combo, modal: ui.modal ? ui.modal.type : '', guard: ui.guard, coach: (coachNow() || {}).id || '', wait: !!(ui.modal && ui.modal.wait), tut: ui.tut, ended: S.ended, goal: !!(S.ended && S.ended.kind === 'top'), act1: S.act1, next: R.goalView(S), housePrice: R.housePrice(S), rolling: rolling(), den: ui.modal && ui.modal.type === 'den' ? { rolling: !!ui.modal.roll, fin: ui.modal.fin, amt: ui.modal.amt, res: ui.modal.res } : null, drill: ui.modal && ui.modal.type === 'drill' ? { beat: ui.modal.beat, ph: ui.modal.ph, res: ui.modal.res, why: ui.modal.why } : null, queue: ui.queue.map(q => q.type), raw: S };
+      return { day: S.day, slot: S.slot, phase: S.phase, cash: S.cash, worth: R.worth(S), hp: S.hp, tier: S.tier, quest: S.quest, title: S.title, lv: S.lv, combo: S.combo, modal: ui.modal ? ui.modal.type : '', guard: ui.guard, coach: (coachNow() || {}).id || '', pre: !!(ui.modal && ui.modal.pre), int: ui.modal && ui.modal.type === 'mg' ? ui.modal.n : -1, tut: ui.tut, ended: S.ended, goal: !!(S.ended && S.ended.kind === 'top'), act1: S.act1, next: R.goalView(S), housePrice: R.housePrice(S), rolling: rolling(), den: ui.modal && ui.modal.type === 'den' ? { rolling: !!ui.modal.roll, fin: ui.modal.fin, amt: ui.modal.amt, res: ui.modal.res } : null, drill: ui.modal && ui.modal.type === 'drill' ? { beat: ui.modal.beat, ph: ui.modal.ph, res: ui.modal.res, why: ui.modal.why } : null, queue: ui.queue.map(q => q.type), raw: S };
     },
     press(code) { hit.push(code); },
     hold() { /* 이 게임은 누르고 있는 조작이 없음 */ },
@@ -1609,7 +1678,8 @@
     step(n, draw) { for (let i = 0; i < (n || 1); i++) step(); if (draw !== false) { drawMg(); drawFx(); } },
     run, // 점검용: 버튼과 같은 길
     render, // 점검용: 상태를 손으로 고친 뒤 다시 그림
-    get mg() { return ui.modal && ui.modal.type === 'mg' ? ui.modal.mg : null; }, // 점검용: 지금 열린 미니게임
+    get mg() { return ui.modal && ui.modal.type === 'mg' ? ui.modal.mg : null; }, // 점검용: 지금 하는 미니게임 (시작 전에는 null)
+    get demo() { return ui.modal && ui.modal.type === 'mg' && ui.modal.pre && !ui.modal.still ? ui.modal.demo : null; }, // 점검용: 시작 전 화면의 시연
     get fx() { return { parts: fx.parts.length, off: calm() }; }, // 점검용: 떠 있는 효과 입자 수
     get meta() { return meta; },
   };

@@ -1,9 +1,9 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 첫 판 안내(튜토리얼)를 처음부터 끝까지 따라가 본다. 창 없이 돌고, 단계마다 화면을 찍는다.
-// 보는 것: 단계가 차례로 뜨는가 · 짚은 것만 눌리는가(다른 것을 누르면 이유가 뜨는가) · 처음 하는 알바는 "시작"을 눌러야 시간이 가는가
+// 보는 것: 단계가 차례로 뜨는가 · 짚은 것만 눌리는가(다른 것을 누르면 이유가 뜨는가) · 알바는 시작 전 화면에서 "시작"을 눌러야 판이 움직이는가(← → 강도)
 //         · 말풍선이 화면 안에 있고 짚은 곳을 가리지 않는가 · 짚은 것을 할 수 없는 상태에서는 막지 않는가(갇히지 않는가)
 //         · 끄면 안 뜨는가 · 주식 설명 · 코인 연습(세 박자)은 한 번만 뜨는가 · 창 크기가 달라도 같은 자리인가 · 안내를 안 쓰는 점검(?manual=1)에는 안 뜨는가
-//         · 실제 저장으로: 이어하기 · 새로 고침 · 끄기/다시 켜기 · 예전 기록
+//         · 실제 저장으로: 이어하기 · 새로 고침(시작 전 · 하는 중 · 하만 되는 체력으로 하로 시작한 판) · 끄기/다시 켜기 · 예전 기록
 // node tools/tut.js [게임 폴더] [찍을 폴더]
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
@@ -30,7 +30,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     await page.goto('file://' + path.join(dir, 'index.html') + '?' + query);
     const G = (fn, arg) => page.evaluate(fn, arg);
     const step = n => G(n => { const g = window.game; g.step(n); const left = g.state.guard || 0; if (left) g.step(left + 1); g.step(2); }, n || 30); // 누름이 막힌 동안은 마저 기다림
-    const st = () => G(() => { const s = window.game.state; return { day: s.day, slot: s.slot, cash: s.cash, hp: s.hp, tier: s.tier, modal: s.modal, coach: s.coach, wait: s.wait, tut: s.tut }; });
+    const st = () => G(() => { const s = window.game.state; return { day: s.day, slot: s.slot, cash: s.cash, hp: s.hp, tier: s.tier, modal: s.modal, coach: s.coach, pre: s.pre, int: s.int, tut: s.tut }; });
     const shot = async n => { await page.waitForTimeout(420); await page.screenshot({ path: path.join(out, n + '.png') }); };
     const box = () => G(BOX);
     const closeAll = async () => { for (let i = 0; i < 8; i++) { const m = (await st()).modal; if (!m) break; await page.keyboard.press(m === 'perk' ? 'Digit1' : 'Space'); await step(60); } };
@@ -76,22 +76,24 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.shot('tut01b_nudge');
   // 전단지 → 하는 법 (시작 전에는 시간이 안 감)
   await p.page.click('#today [data-arg="flyer"]', { position: { x: 30, y: 80 } }); await p.step(20);
-  s = await p.st(); want(s.modal === 'mg' && s.wait, '처음 하는 알바에 하는 법이 안 뜸: ' + JSON.stringify(s));
-  want(await p.G(() => !window.game.state.raw.pending), '하는 법을 읽는 동안 벌써 알바를 시작한 것으로 적힘');
-  const t0 = await p.G(() => window.game.mg._state.wt); await p.step(240); const t1 = await p.G(() => window.game.mg._state.wt);
-  want(t0 === t1, '"시작"을 누르기 전에 미니게임 시간이 감: ' + t0 + ' → ' + t1);
+  s = await p.st(); want(s.modal === 'mg' && s.pre, '알바를 눌렀는데 시작 전 화면이 안 뜸: ' + JSON.stringify(s));
+  want(await p.G(() => !window.game.state.raw.pending && !window.game.mg && !!window.game.demo), '시작 전 화면인데 벌써 알바를 시작한 것으로 적히거나 시연이 없음');
+  { const j0 = await p.G(() => JSON.stringify(window.game.state.raw)); await p.step(240); want(j0 === await p.G(() => JSON.stringify(window.game.state.raw)), '"시작"을 누르기 전에 판 상태(JSON)가 바뀜'); }
   await p.page.waitForTimeout(350); // 창이 뜨는 연출(살짝 커짐)이 끝난 뒤에 자리를 잰다
   const how = await p.G(() => { const e = document.querySelector('.mg-how'), c = document.querySelector('#mgc').getBoundingClientRect(), r = e.getBoundingClientRect(), w = document.querySelector('.win.mg').getBoundingClientRect(), sr = document.getElementById('stage').getBoundingClientRect();
-    return { text: e.textContent.replace(/\s+/g, ' ').trim(), clear: r.top >= c.bottom, inside: r.left >= w.left && r.right <= w.right && r.bottom <= w.bottom && w.bottom <= sr.bottom && w.top >= sr.top, top: c.top, over: e.scrollHeight - e.clientHeight, ctl: document.querySelectorAll('[data-mg]').length, lines: e.querySelectorAll('li').length }; });
-  want(how.clear, '하는 법이 미니게임 그림을 가림'); want(how.inside && how.over <= 1, '하는 법이 창이나 화면 밖으로 나감'); want(how.ctl === 0, '하는 법을 보는 동안 조작 버튼이 떠 있음'); want(how.lines >= 2, '하는 법이 두 줄이 안 됨');
+    return { text: e.textContent.replace(/\s+/g, ' ').trim(), clear: r.top >= c.bottom, inside: r.left >= w.left && r.right <= w.right && r.bottom <= w.bottom && w.bottom <= sr.bottom && w.top >= sr.top, top: c.top, over: e.scrollHeight - e.clientHeight, ctl: document.querySelectorAll('[data-mg]').length, lines: e.querySelectorAll('li').length, first: /처음 하는 알바/.test(e.textContent), ints: document.querySelectorAll('#veil [data-do="int"]').length }; });
+  want(how.clear, '하는 법이 미니게임 그림을 가림'); want(how.inside && how.over <= 1, '하는 법이 창이나 화면 밖으로 나감'); want(how.ctl === 0, '시작 전에 조작 버튼이 떠 있음'); want(how.lines >= 2, '하는 법이 두 줄이 안 됨');
+  want(how.first && how.ints === 4, '처음 하는 알바의 시작 전 화면에 "처음 하는 알바" 머리글 · 강도 넷이 없음: ' + JSON.stringify(how));
   log.push('하는 법: ' + how.text);
-  await p.shot('tut02_howto_flyer');
-  await p.page.keyboard.press('ArrowLeft'); await p.step(10); want((await p.st()).wait, '시작이 아닌 키로 시작됨');
+  await p.shot('tut02_pre_flyer');
+  await p.page.keyboard.press('ArrowLeft'); await p.step(10); s = await p.st(); want(s.pre && s.int === 0, '← 로 강도가 하로 안 내려가거나 시작됨: ' + JSON.stringify(s));
+  await p.page.keyboard.press('ArrowRight'); await p.step(10); s = await p.st(); want(s.pre && s.int === 1, '→ 로 강도가 중으로 안 돌아옴: ' + JSON.stringify(s));
+  await p.page.keyboard.press('KeyA'); await p.page.keyboard.press('Digit1'); await p.step(10); s = await p.st(); want(s.pre && s.int === 1, '시작 · 강도와 상관없는 키(A · 1)로 무엇이 바뀜: ' + JSON.stringify(s));
   await p.page.keyboard.press('Space'); await p.step(4);
-  s = await p.st(); want(s.modal === 'mg' && !s.wait, 'Space 로 시작되지 않음');
-  want(await p.G(() => window.game.state.raw.pending === 'flyer'), '시작한 알바가 "하는 중"으로 적히지 않음');
+  s = await p.st(); want(s.modal === 'mg' && !s.pre, 'Space 로 시작되지 않음');
+  want(await p.G(() => { const q = window.game.state.raw.pending; return !!q && q.id === 'flyer' && q.n === 1; }), '시작한 알바가 "하는 중"(알바 · 강도)으로 적히지 않음');
   want(Math.abs(await p.G(() => document.querySelector('#mgc').getBoundingClientRect().top) - how.top) < 0.5, '시작할 때 미니게임 그림의 자리가 움직임');
-  want(await p.G(() => document.querySelectorAll('[data-mg]').length > 0 && !document.querySelector('.mg-how')), '시작한 뒤 조작 버튼이 없거나 하는 법이 남아 있음');
+  want(await p.G(() => document.querySelectorAll('[data-mg]').length > 0 && !document.querySelector('[data-do="int"]') && !document.querySelector('.mg-demo:not(.hide)')), '시작한 뒤 조작 버튼이 없거나 강도 버튼 · 시연 딱지가 남아 있음');
   await p.step(30); await p.shot('tut03_playing');
   for (let i = 0; i < 700 && !(await p.G(() => !!document.querySelector('.mg-res'))); i += 20) await p.G(() => { const g = window.game, m = g.mg; if (m && m._state.people) { const z = m._state; if (z.people.some(q => q.state === 'walk' && !q.busy && Math.abs(q.x - z.zoneX) < 30)) g.press('Space'); } g.step(20); });
   want(await p.G(() => !!document.querySelector('.mg-res')), '미니게임이 끝나지 않음');
@@ -104,8 +106,8 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.G(() => window.game.run('move', '1')); await p.step(10); want((await p.st()).tier === 0, '오늘 칸을 짚는 동안 이사가 됨 (찜질방 안내를 건너뛰게 됨)');
   // 두 번째 전단지는 하는 법 없이 바로
   await p.G(() => window.game.run('job', 'flyer')); await p.step(4);
-  s = await p.st(); want(s.modal === 'mg' && !s.wait, '해 본 알바에 하는 법이 또 뜸');
-  await finishMg(p); await p.step(60); await p.closeAll();
+  s = await p.st(); want(s.modal === 'mg' && s.pre && !(await p.G(() => /처음 하는 알바/.test(document.querySelector('.mg-how').textContent))), '해 본 알바인데 시작 전 화면이 없거나 "처음 하는 알바"가 또 붙음');
+  await p.G(() => window.game.press('Space')); await p.step(4); await finishMg(p); await p.step(60); await p.closeAll();
   want((await p.st()).coach === 'slots', '둘째 칸 뒤에도 "세 칸" 안내여야 함');
   await p.G(() => window.game.run('rest')); await p.step(30); await p.closeAll();
   s = await p.st(); b = await p.box();
@@ -141,8 +143,8 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.shot('tut08_free');
   // 처음 하는 다른 알바: 하는 법이 뜨고, 눌러서(마우스) 시작
   await p.G(() => window.game.run('job', 'loading')); await p.step(30);
-  want((await p.st()).wait, '처음 하는 상하차에 하는 법이 안 뜸'); await p.shot('tut09_howto_loading');
-  await p.page.click('[data-do="mgstart"]'); await p.step(4); want(!(await p.st()).wait, '"시작" 버튼으로 시작되지 않음');
+  want((await p.st()).pre, '처음 하는 상하차에 시작 전 화면이 안 뜸'); await p.shot('tut09_pre_loading');
+  await p.page.click('[data-do="mgstart"]'); await p.step(4); want(!(await p.st()).pre, '"시작" 버튼으로 시작되지 않음');
   await finishMg(p); await p.step(60); await p.closeAll();
   // 주식 · 코인 설명: 처음 그 탭을 열 때 한 번만
   await p.G(() => { const S = window.game.state.raw; S.tier = 2; S.cash = 2330000; S.day = 5; S.movedDay = 3; S.quest = 4; window.game.render(); window.game.run('tab', 'stock'); }); await p.step(30); await p.closeAll();
@@ -231,13 +233,13 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   want(/제목 화면/.test(await p.page.textContent('#toasts')), '안내를 끌 때 어디서 다시 켜는지 알려 주지 않음');
   want(await p.G(() => !!document.querySelector('#today [data-do="skip"]')), '안내를 끈 뒤 "대충" 버튼이 안 돌아옴');
   await p.G(() => window.game.run('job', 'loading')); await p.step(10);
-  s = await p.st(); want(s.modal === 'mg' && !s.wait, '안내를 껐는데 하는 법이 뜸');
+  s = await p.st(); want(s.modal === 'mg' && s.pre && !(await p.G(() => /처음 하는 알바/.test(document.querySelector('.mg-how').textContent))), '안내를 껐는데 "처음 하는 알바" 머리글이 붙거나 시작 전 화면이 없음');
   await p.page.close();
 
   // ── 4. 안내를 안 쓰는 점검 창에는 아무것도 안 뜸 ──
   p = await open('manual=1&scene=play&seed=5'); await p.start();
   s = await p.st(); want(!s.coach && !s.tut, '?manual=1 에 안내가 뜸');
-  await p.G(() => window.game.run('job', 'flyer')); await p.step(4); want(!(await p.st()).wait, '?manual=1 에 하는 법이 뜸');
+  await p.G(() => window.game.run('job', 'flyer')); await p.step(4); want((await p.st()).pre && !(await p.G(() => /처음 하는 알바/.test(document.querySelector('.mg-how').textContent))), '?manual=1 에 "처음 하는 알바" 머리글이 붙음');
   await p.page.close();
 
   // ── 5. 창 크기가 달라도 같은 자리 ──
@@ -257,7 +259,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     if (seedMeta) await ctx.addInitScript(m => { if (!localStorage.getItem('seoul-station-meta-v1')) localStorage.setItem('seoul-station-meta-v1', m); }, seedMeta);
     const page = await ctx.newPage();
     page.on('pageerror', e => errs.push('uncaught: ' + e.message));
-    const st = () => page.evaluate(() => { const s = window.game.state; return { scene: window.game.scene, day: s.day, slot: s.slot, coach: s.coach, tut: s.tut, modal: s.modal, wait: s.wait, mt: window.game.meta.tut }; });
+    const st = () => page.evaluate(() => { const s = window.game.state; return { scene: window.game.scene, day: s.day, slot: s.slot, coach: s.coach, tut: s.tut, modal: s.modal, pre: s.pre, int: s.int, mt: window.game.meta.tut, first: !!document.querySelector('.mg-how') && /처음 하는 알바/.test(document.querySelector('.mg-how').textContent) }; });
     const wait = ms => page.waitForTimeout(ms);
     const load = async q => { await page.goto('file://' + path.join(dir, 'index.html') + '?' + (q || query)); await wait(450); };
     const fresh = async () => { await page.click('[data-do="new"]'); await wait(300); if (await page.evaluate(() => window.game.scene) === 'title') { await page.click('[data-do="new"]'); await wait(300); } await wait(600); if ((await st()).modal === 'intro') { await page.click('#veil [data-do="ok"]'); await wait(700); } }; // 저장이 있으면 한 번 더 눌러야 시작
@@ -278,17 +280,29 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     await r.resume();
     s = await r.st(); want(s.coach === 'job' && s.day === 1, '이어하기에서 안내가 이어지지 않음: ' + JSON.stringify(s));
     await r.page.click('#today [data-arg="flyer"]', { position: { x: 30, y: 80 } }); await r.wait(500);
-    want((await r.st()).wait, '하는 법이 안 뜸 (실제 저장)');
-    await r.load(); await r.resume(); // 하는 법을 읽다가 새로 고침: 칸을 쓰지 않고 그 자리 그대로
-    s = await r.st(); want(s.slot === 0 && s.coach === 'job', '하는 법을 읽다가 새로 고치면 알바를 "대충" 한 것으로 처리됨: ' + JSON.stringify(s));
+    want((await r.st()).pre, '시작 전 화면이 안 뜸 (실제 저장)');
+    await r.page.keyboard.press('ArrowRight'); await r.wait(200); want((await r.st()).int === 2, '→ 로 강도가 상으로 안 바뀜 (실제 저장)');
+    await r.load(); await r.resume(); // 시작 전에 새로 고침: 칸을 쓰지 않고 그 자리 그대로
+    s = await r.st(); want(s.slot === 0 && s.coach === 'job', '시작 전에 새로 고치면 알바를 "대충" 한 것으로 처리됨: ' + JSON.stringify(s));
     await r.page.click('#today [data-arg="flyer"]', { position: { x: 30, y: 80 } }); await r.wait(600);
+    want((await r.st()).int === 2, '고른 강도(상)가 새로 고친 뒤 기억되지 않음: ' + JSON.stringify(await r.st()));
     await r.page.click('[data-do="mgstart"]'); await r.wait(300);
     await r.load(); await r.resume(); // 시작한 뒤에 새로 고침: 예전처럼 "대충" 처리
     s = await r.st(); want(s.slot === 1, '시작한 알바를 하다가 새로 고쳤는데 칸이 그대로: ' + JSON.stringify(s));
     await r.clear();
     await r.page.click('#today [data-arg="flyer"]', { position: { x: 30, y: 80 } }); await r.wait(500);
-    s = await r.st(); want(s.modal === 'mg' && !s.wait, '본 하는 법이 새로 고친 뒤 또 뜸 (본 것이 남지 않음): ' + JSON.stringify(s));
+    s = await r.st(); want(s.modal === 'mg' && s.pre && !s.first, '해 본 알바에 새로 고친 뒤 "처음 하는 알바"가 또 붙음 (본 것이 남지 않음): ' + JSON.stringify(s));
     await r.load(); await r.resume(); await r.clear();
+    { // 하만 되는 체력으로 하로 시작 → 하는 중에 새로 고침: 공짜로 다시 하지 않게 칸 · 체력(하만큼)이 쓰인다
+      const b0 = await r.page.evaluate(() => { const S = window.game.state.raw, L = window.Rules.acts(S).find(a => a.id === 'flyer').levels; S.hp = L[0].hp; window.game.render(); return { slot: S.slot, hp: S.hp, cash: S.cash, ok: window.Rules.acts(S).find(a => a.id === 'flyer').ok }; }); // ok = 중(대충)을 할 체력
+      await r.page.click('#today [data-arg="flyer"]', { position: { x: 30, y: 80 } }); await r.wait(600);
+      want((await r.st()).int === 0 && !b0.ok, '하만 되는 체력인데 시작 전 화면이 하로 열리지 않음: ' + JSON.stringify(await r.st()));
+      await r.page.click('[data-do="mgstart"]'); await r.wait(300);
+      await r.load(); await r.resume();
+      const a0 = await r.page.evaluate(() => { const S = window.game.state.raw; return { slot: S.slot, hp: S.hp, cash: S.cash, pending: S.pending }; });
+      want(a0.slot === b0.slot + 1 && a0.hp === 0 && a0.cash > b0.cash && !a0.pending, '하만 되는 체력으로 하로 시작해 하는 중에 새로 고쳤는데 칸 · 체력이 그대로 (공짜로 다시 함): ' + JSON.stringify({ b0, a0 }));
+      log.push('하로 시작해 하는 중에 새로 고침: 칸 ' + b0.slot + ' → ' + a0.slot + ' · 체력 ' + b0.hp + ' → ' + a0.hp + ' · 현금 +' + (a0.cash - b0.cash));
+      await r.clear(); }
     await r.page.click('[data-do="coachoff"]'); await r.wait(300);
     await r.quit(); await r.load();
     want(/꺼짐/.test(await r.page.textContent('[data-do="tuttoggle"]')), '끈 안내가 제목 화면에 "꺼짐"으로 안 보임');

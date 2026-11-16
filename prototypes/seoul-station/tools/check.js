@@ -94,6 +94,11 @@ const LINT = () => {
   while (guard++ < 4000) {
     const s = await st();
     if (s.scene !== 'play' || (s.act1 && !s.modal)) break; // 내 집(1막 끝)까지 몰고, 1막 끝 창 · 그 뒤 창을 닫으면 끝
+    if (s.modal === 'mg' && await G(() => window.game.state.pre)) { // 시작 전 화면: 기억한 강도 그대로 시작 (판은 강도와 무관하게 중의 봇)
+      if (mgShot < 1) await shot('03_mg_pre');
+      await G(() => window.game.press('Space')); await step(4);
+      if (await G(() => window.game.state.pre)) { forcedMain.push('시작 전 화면에서 Space 로 시작되지 않음'); break; }
+    }
     if (s.modal === 'mg') {
       // 미니게임: 일정 간격으로 그 게임의 키를 눌러 봄 (사람 흉내는 아님 — 끝까지 가는지만)
       const info = await G(() => { const m = document.querySelectorAll('[data-mg]'); return [...m].map(b => b.dataset.mg); });
@@ -447,6 +452,125 @@ const LINT = () => {
     if (names.size !== 9 || srcs.size !== 9) forced.push('사는 곳 그림 아홉이 서로 다르지 않음 (이름 ' + names.size + ' · 그림 ' + srcs.size + '): ' + [...names].join(' · '));
     if (sc.some(x => x.rows < 3)) forced.push('그림 점검이 사업 · 대출 줄이 둘 다 붙은 상태가 아님: ' + JSON.stringify(sc.map(x => x.rows)));
     log.push('사는 곳 그림: ' + [...names].join(' · ') + ' (그림 칸 ' + Math.min(...sc.map(x => x.h)) + 'px 까지)'); }
+  // I. 시작 전 화면(시연 · 강도 고르기). 번호는 화면 명세의 새 확인 (2 가장 긴 일당은 worst.js, 8 새로 고침은 tut.js 의 실제 저장)
+  await fresh();
+  { const JOBS = ['flyer', 'loading', 'store', 'delivery'];
+    const setS = o => G(o => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 3, slot: 0, quest: 99, offer: null, picks: 0, event: null, xp: 0, hp: 100, inten: {} }, o); g.render(); }, o || {});
+    const open = async id => { await G(id => window.game.run('job', id), id); await step(10); };
+    const lv = id => G(id => window.Rules.acts(window.game.state.raw).find(a => a.id === id).levels, id);
+    const view = () => G(() => { const g = window.game, w = document.querySelector('#veil .win.mg'), sr = document.getElementById('stage').getBoundingClientRect(), q = w ? w.getBoundingClientRect() : null;
+      return { modal: g.state.modal, pre: g.state.pre, int: g.state.int, mg: !!g.mg, demo: !!g.demo, ib: [...document.querySelectorAll('#veil .ib')].map(b => (b.classList.contains('on') ? 'on' : '') + (b.classList.contains('lock') ? 'lock' : '')),
+        pays: [...document.querySelectorAll('#veil .ib .p')].map(e => e.textContent), head: (document.querySelector('.mg-head i') || {}).textContent || '', chip: (document.querySelector('.mg-head .ich') || {}).textContent || '', howto: !!document.querySelector('.mg-head > span'), line: (document.querySelector('.mg-line') || {}).textContent || '', why: (document.querySelector('.mg-line .why') || {}).textContent || '',
+        lineHidden: !!document.querySelector('.mg-line') && getComputedStyle(document.querySelector('.mg-line')).visibility === 'hidden', press: (e => (e && !e.classList.contains('hide') ? e.textContent : ''))(document.querySelector('.mg-press')), demoTag: (document.querySelector('.mg-demo:not(.hide)') || {}).textContent || '',
+        win: q ? [q.left, q.top, q.width, q.height].map(x => Math.round(x * 10) / 10).join() : '', locks: [...document.querySelectorAll('#veil .ib.lock')].map(b => b.textContent),
+        over: [...document.querySelectorAll('#veil .ib, #veil .mg-head, #veil .mg-line, #veil .mg-how')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.className), inside: !!q && q.top >= sr.top && q.bottom <= sr.bottom && q.left >= sr.left && q.right <= sr.right,
+        toast: document.getElementById('toasts').textContent }; });
+    const toastsOff = () => G(() => document.querySelectorAll('#toasts .toast').forEach(e => e.remove()));
+    // 1. 게임 넷 × 강도 넷: 고른 것 · 창 머리 일당(한 줄 하는 법 · 강도 딱지는 머리에 없음) · 한 줄(빠르기를 말로, 숫자 배율 없음 · 상 · 최상만 "보너스 없음") · "자동 시연" 딱지 · 넘침 없음 · 창이 화면 안 (한 장씩 찍어 글자 점검도)
+    for (const id of JOBS) {
+      await setS(); await open(id);
+      const L = await lv(id), names = await G(() => window.Rules.INT);
+      for (let n = 0; n < 4; n++) {
+        await G(n => { window.game.run('int', String(n)); window.game.step(150); }, n); await step(5); // "준비" 띠가 지나 시연이 하는 중일 때 찍음
+        const v = await view(), want = await G(n => window.Rules.won(n), L[n].pay), pay = await G(n => window.Rules.num(n), L[n].pay);
+        if (!v.pre || v.mg || v.int !== n || v.ib.join() !== [0, 1, 2, 3].map(k => (k === n ? 'on' : '')).join() || v.head.indexOf(want) < 0 || v.chip || v.howto || v.pays[n].indexOf(pay) < 0 || (n >= 2) !== /실수하면 보너스 없음/.test(v.line) || v.line.indexOf(['천천히 · ', '기준 빠르기', '빠르다 · ', '아주 빠르다 · '][n]) < 0 || /×/.test(v.line) || v.demoTag !== '자동 시연' || v.over.length || !v.inside)
+          forced.push('시작 전 화면(' + id + ' · ' + names[n] + ')이 다름: ' + JSON.stringify(v).slice(0, 300));
+        await shot('70_pre_' + id + '_' + n);
+      }
+      await G(() => window.game.press('Escape')); await step(10);
+    }
+    // 3. 체력이 모자랄 때: 전단지 상 · 최상이 꺼짐(누르거나 → 로 가도 안 골라지고 까닭) · 기억한 최상보다 내려서 열림 · 하만 되는 카드 · 아무것도 안 되는 카드
+    { const L = await lv('flyer');
+      await setS({ hp: L[1].hp, inten: { flyer: 3 } }); await G(() => { window.game.run('why', '체력이 모자랍니다 — 쉬거나 가벼운 일을'); window.game.step(2); }); // 방 그림 위에 떠 있던 거절 알림은 창이 뜰 때 지워진다
+      await open('flyer'); await page.waitForTimeout(300); // 창이 뜨는 연출(0.2초)이 끝난 뒤의 자리를 기준으로
+      let v = await view();
+      if (v.int !== 1 || v.ib.join() !== ',on,lock,lock') forced.push('체력이 중까지만 될 때 시작 전 화면이 중으로 열리지 않거나 상 · 최상이 안 꺼짐: ' + JSON.stringify(v.ib) + ' int ' + v.int);
+      if (/모자랍니다/.test(v.toast)) forced.push('시작 전 창이 떴는데 "모자랍니다" 알림이 남아 창과 겹침: ' + v.toast);
+      if (v.locks.join('|') !== '상' + L[2].hp + ' 필요|최상' + L[3].hp + ' 필요') forced.push('꺼진 강도 칸에 "(하트) N 필요"가 없음: ' + v.locks.join('|'));
+      await shot('71_pre_low_hp');
+      const w0 = v.win; await page.click('#veil .ib[data-arg="3"]'); await step(5); v = await view();
+      if (v.int !== 1 || v.why !== '최상은 체력 ' + L[3].hp + ' 필요 (지금 ' + L[1].hp + ')' || v.toast) forced.push('꺼진 강도(최상)를 눌렀는데 골라지거나, 까닭이 창 안 맨 아래 줄이 아니라 알림으로 뜸: ' + JSON.stringify({ int: v.int, why: v.why, toast: v.toast }));
+      if (v.win !== w0) forced.push('까닭 글이 뜰 때 창이 움직임: ' + w0 + ' → ' + v.win);
+      await shot('71b_pre_low_hp_why');
+      await G(() => window.game.step(130)); v = await view();
+      if (v.why || !/기준 빠르기/.test(v.line)) forced.push('까닭 글이 2초쯤 뒤에 강도 한 줄로 돌아가지 않음: ' + v.line);
+      await G(() => window.game.press('ArrowRight')); await step(5); v = await view();
+      if (v.int !== 1 || v.why !== '상은 체력 ' + L[2].hp + ' 필요 (지금 ' + L[1].hp + ')' || v.toast) forced.push('→ 로 꺼진 강도(상)에 가는데 골라지거나 까닭이 창 안에 안 뜸: ' + JSON.stringify({ int: v.int, why: v.why, toast: v.toast }));
+      if (await G(() => window.game.state.raw.inten.flyer) !== 3) forced.push('체력이 모자라 내려서 열었는데 기억한 강도(최상)가 덮어써짐');
+      await G(() => window.game.press('Escape')); await step(10);
+      await setS({ hp: L[0].hp, inten: { flyer: 2, loading: 3 } }); await step(5); await toastsOff();
+      const c = await G(() => { const R = window.Rules, a = R.acts(window.game.state.raw), card = id => [...document.querySelectorAll('#today .card')].find(e => e.title.indexOf(a.find(x => x.id === id).name + ' —') === 0);
+        const f = card('flyer'), l = card('loading'); return { f: f && { cls: f.className, do: f.dataset.do, tag: (f.querySelector('.ich') || {}).textContent, pay: f.querySelector('.pay').textContent, hp: f.querySelector('.cost, .lack').textContent, skip: !!f.querySelector('.skip') }, l: l && { cls: l.className, do: l.dataset.do, tag: !!l.querySelector('.ich') }, want: R.num(a[0].levels[0].pay), hp0: '−' + a[0].levels[0].hp }; });
+      if (!c.f || !/go/.test(c.f.cls) || c.f.do !== 'job' || c.f.tag !== '하' || c.f.pay !== c.want || c.f.hp !== c.hp0 || c.f.skip) forced.push('하만 되는 전단지 카드가 켜져 하의 일당 · 체력 · 딱지를 보이고 대충을 숨겨야 함: ' + JSON.stringify(c));
+      if (!c.l || !/off/.test(c.l.cls) || c.l.do !== 'why' || c.l.tag) forced.push('아무 강도도 안 되는 상하차 카드가 꺼지지 않음: ' + JSON.stringify(c.l));
+      await shot('72_cards_low_hp');
+      await G(() => { const t = document.querySelector('#today .card.off'); if (t) t.click(); }); await step(5);
+      if (await G(() => window.game.state.modal)) forced.push('꺼진 알바 카드를 눌렀는데 창이 열림'); }
+    // 오늘 칸 카드의 강도 딱지가 넷 다 다를 때
+    await setS({ inten: { flyer: 0, loading: 1, store: 2, delivery: 3 } }); await step(5);
+    { const t = await G(() => ['flyer', 'loading', 'store', 'delivery'].map(id => { const c = document.querySelector('#today .card[data-arg="' + id + '"]'), e = c.querySelector('.ich');
+        const hit = e ? [...c.querySelectorAll('.pic, .lv, .tag, .key')].filter(o => { const a = e.getBoundingClientRect(), b = o.getBoundingClientRect(); return Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > (o.classList.contains('pic') ? 8 : 0.5); }).map(o => o.className) : []; // 그림 칸과는 맨 위 가장자리(8px)까지만 — 딱지는 카드 위쪽 줄에
+        const A = window.Rules.acts(window.game.state.raw).find(a => a.id === id); return { tag: e ? e.textContent : '', hit, skip: (c.querySelector('.skip') || {}).textContent, want: '대충 ' + window.Rules.num(Math.round(A.pay * window.Rules.skipMult(window.game.state.raw) / 1000) * 1000) }; }));
+      if (t.map(x => x.tag).join() !== '하,,상,최상') forced.push('오늘 칸 카드의 강도 딱지가 기억한 강도와 다르거나 중에도 붙음: ' + t.map(x => x.tag).join());
+      if (t.some(x => x.hit.length)) forced.push('카드의 강도 딱지가 그림 · 숙련 · 추천 · 숫자 키와 겹침: ' + JSON.stringify(t.map(x => x.hit)));
+      if (t.some(x => x.skip !== x.want)) forced.push('"대충" 버튼에 받을 돈(중 일당 × 대충 배율)이 안 적힘: ' + t.map(x => x.skip + ' / ' + x.want).join(' · ')); }
+    await shot('73_cards_int_tags');
+    // 4. 시연이 실제로 움직임: 0.5초 간격 그림 둘이 다름 · 판 수가 늚 · 시연이 누른 키 딱지가 눌린 모양
+    await setS(); await open('store');
+    { const pic = () => G(() => document.getElementById('mgc').toDataURL());
+      const a = await pic(); await page.screenshot({ path: path.join(out, '74_demo_a.png') }); await G(() => window.game.step(30)); const b = await pic(); await page.screenshot({ path: path.join(out, '74_demo_b.png') });
+      const l0 = await G(() => window.game.demo.loops); await G(() => window.game.step(60 * 14)); const l1 = await G(() => window.game.demo.loops);
+      const lit = await G(() => { const g = window.game; for (let i = 0; i < 600; i++) { g.step(1); const p = g.demo.lastPress, on = document.querySelector('#veil .keys .key.on'); if (p && p.age < 0.15 && on) { const big = document.querySelector('#veil .mg-press'), c = g.demo.controls.find(x => x.code === p.code); return { code: p.code, on: on.dataset.k, down: getComputedStyle(on).transform, big: big.classList.contains('hide') ? '' : big.textContent, label: c.label }; } } return null; });
+      await shot('74_demo_key_lit'); // 눌린 키 딱지가 노랗게 내려앉고, 그림 아래 가운데에 큰 키 딱지가 뜬 때
+      const off = await G(() => { window.game.step(20); const p = window.game.demo.lastPress; return p.age >= 0.15 ? document.querySelectorAll('#veil .keys .key.on').length : 0; });
+      const bigOff = await G(() => { const g = window.game; for (let i = 0; i < 600; i++) { g.step(1); const p = g.demo.lastPress; if (p.age >= 0.35) return !document.querySelector('#veil .mg-press').classList.contains('hide'); } return true; });
+      if (!lit || lit.big.indexOf(lit.label) < 0 || bigOff) forced.push('시연이 키를 누른 순간 그림 아래 가운데에 큰 키 딱지(키 + 조작 이름)가 안 뜨거나 0.35초 뒤에 안 꺼짐: ' + JSON.stringify({ lit, bigOff }));
+      await G(() => window.game.render()); { const relit = await G(() => { const g = window.game; for (let i = 0; i < 600; i++) { g.step(1); const p = g.demo.lastPress; if (p && p.age < 0.15) return !!document.querySelector('#veil .keys .key.on'); } return false; }); // 다른 까닭으로 다시 그려져도 다음 누름에 켜짐
+        if (!relit) forced.push('시작 전 화면이 다시 그려진 뒤 시연이 누른 키 딱지가 안 켜짐'); }
+      if (a === b) forced.push('시연이 0.5초 동안 그림이 그대로 (안 움직임)');
+      if (!(l1 > l0)) forced.push('시연이 되풀이되지 않음 (loops ' + l0 + ' → ' + l1 + ')');
+      if (!lit || lit.code !== lit.on || !/matrix/.test(lit.down) || off) forced.push('시연이 누른 키의 딱지가 눌린 모양이 아니거나 안 꺼짐: ' + JSON.stringify({ lit, off }));
+      log.push('시연: loops ' + l0 + ' → ' + l1 + ' · 깜빡인 키 ' + (lit && lit.code)); }
+    // 5. 돌아가기: 열고(강도를 바꾸고) 닫은 뒤의 판 상태 = 열기 전 (inten 만 다름). Esc · 버튼 둘 다
+    await G(() => window.game.press('Escape')); await step(10);
+    { const s0 = await G(() => JSON.stringify(window.game.state.raw));
+      await open('loading'); await G(() => window.game.press('ArrowRight')); await step(5); await page.click('#veil [data-do="no"]'); await step(10);
+      const r = await G(s0 => { const a = JSON.parse(s0), b = window.game.state.raw, c = JSON.parse(JSON.stringify(b)); const ia = a.inten, ib = c.inten; delete a.inten; delete c.inten; return { same: JSON.stringify(a) === JSON.stringify(c), ia, ib, modal: window.game.state.modal }; }, s0);
+      if (!r.same || r.modal || r.ib.loading !== 2 || (r.ia || {}).loading != null) forced.push('돌아가기 뒤 판 상태가 열기 전과 다름(강도 기억 말고): ' + JSON.stringify(r).slice(0, 200));
+      const s1 = await G(() => JSON.stringify(window.game.state.raw)); await open('flyer'); await G(() => window.game.press('Escape')); await step(10);
+      if (s1 !== await G(() => JSON.stringify(window.game.state.raw))) forced.push('Esc 로 돌아갔는데 판 상태가 바뀜'); }
+    // 6. 기억한 강도로 시작해 끝까지: 쓴 체력 = levels[n].hp · job 이벤트 int · 하는 중 · 결과에 머리의 강도 딱지 · 결과 판의 계산 줄(배율마다 이름: "기준 170,000 · 잘함 ×1.2 · 최상 ×1.5", 중 · 실수면 강도 조각 없음)
+    //    · 결과가 뜨면 맨 아래 강도 한 줄은 숨김 · 23. 시작 전 화면이 열린 뒤 강도를 바꿀 때 · 시연이 키를 누를 때 · 시작할 때 · 결과가 뜰 때 창이 한 점도 안 움직임
+    for (const [n, score, tag] of [[3, 0.8, 'top_good'], [3, 0.1, 'top_miss'], [0, 0.5, 'low_ok'], [1, 0.8, 'mid_good']]) {
+      await setS({ inten: { loading: n } }); await open('loading'); await page.waitForTimeout(300); // 뜨는 연출이 끝난 뒤부터는 누를 때마다 바로 잰다 (창을 새로 만들면 연출이 다시 돌아 잡힌다)
+      const L = await lv('loading'), hp0 = await G(() => window.game.state.raw.hp), wins = [(await view()).win];
+      if ((await view()).int !== n) forced.push('기억한 강도(' + n + ')로 열리지 않음');
+      await G(n => { window.game.run('int', String(n ? n - 1 : 1)); window.game.step(5); }, n); wins.push((await view()).win); await G(n => { window.game.run('int', String(n)); window.game.step(5); }, n); wins.push((await view()).win);
+      await G(() => { const g = window.game; for (let i = 0; i < 600 && !(g.demo.lastPress && g.demo.lastPress.age === 0); i++) g.step(1); }); wins.push((await view()).win);
+      await G(() => window.game.press('Space')); await step(4); wins.push((await view()).win);
+      if (!(await G(n => { const p = window.game.state.raw.pending; return !!window.game.mg && !window.game.state.pre && !!p && p.id === 'loading' && p.n === n; }, n))) forced.push('강도 ' + n + '(으)로 시작되지 않거나 하는 중으로 적힌 강도가 다름: ' + JSON.stringify(await G(() => window.game.state.raw.pending)));
+      const names = await G(() => window.Rules.INT); { const v = await view(); if (v.chip !== '강도 ' + names[n] || v.howto) forced.push('하는 중에 머리의 강도 딱지가 없거나 한 줄 하는 법이 머리에 남음: ' + JSON.stringify({ chip: v.chip, howto: v.howto })); }
+      if (n === 3 && score > 0.5) { await G(() => window.game.step(60)); await shot('75_playing_top'); }
+      await G(score => { const g = window.game; g.step(90); g.mg.done = true; g.mg.result = { score }; g.step(1); }, score); await G(() => window.game.step(60));
+      const v = await view(); wins.push(v.win);
+      const r = await G(() => { const S = window.game.state.raw, j = S.ev.find(e => e.t === 'job'), t = document.querySelector('.mg-res').textContent; return { j: j && { int: j.int, hp: j.hp, imult: j.imult, grade: j.grade, gradeName: j.gradeName, mult: j.mult, gmult: j.gmult, base: j.base }, hp: S.hp, t }; });
+      const calc = await G(j => { const N = window.Rules.num; return '기준 ' + N(j.base) + ' · ' + j.gradeName + ' ×' + j.gmult + (j.int !== 1 && j.grade !== 'miss' ? ' · ' + window.Rules.INT[j.int] + ' ×' + j.imult : ''); }, r.j);
+      if (!r.j || r.j.int !== n || r.j.hp !== L[n].hp || Math.abs(hp0 - r.hp - L[n].hp) > 1e-9) forced.push('강도 ' + n + '(으)로 했는데 쓴 체력 · job 이벤트가 다름: ' + JSON.stringify({ r, hp0, want: L[n].hp }));
+      if (r.t.indexOf(calc) < 0 || /\(최상\)|×1\(/.test(r.t)) forced.push('결과 판의 계산 줄에 배율마다 이름이 없음 (' + calc + '): ' + r.t);
+      if (v.chip !== '강도 ' + names[n] || !v.lineHidden) forced.push('결과 판에서 머리의 강도 딱지가 없거나 맨 아래 강도 한 줄이 남음: ' + JSON.stringify({ chip: v.chip, hidden: v.lineHidden }));
+      if (tag === 'top_good' && (r.j.imult !== await G(() => window.CONFIG.int_pay_3.value) || r.t.indexOf('최상 ×' + r.j.imult) < 0 || /보너스 없음/.test(r.t))) forced.push('최상 · 잘함인데 강도 배율이 안 붙음: ' + JSON.stringify(r.j));
+      if (tag === 'top_miss' && (r.j.imult !== 1 || !/실수 — 강도 보너스 없음/.test(r.t) || /최상 ×/.test(r.t))) forced.push('최상 · 실수인데 "강도 보너스 없음"이 한눈에 안 보이거나 강도 조각이 남음: ' + r.t);
+      if (tag === 'low_ok' && r.t.indexOf('하 ×' + L[0].payMult) < 0) forced.push('하 · 보통인데 "하 ×0.8" 조각이 없음: ' + r.t);
+      if (tag === 'mid_good' && /중 ×/.test(r.t)) forced.push('중인데 강도 조각이 붙음: ' + r.t);
+      if (new Set(wins).size !== 1) forced.push('시작 전 화면부터 결과까지 창이 움직임 (강도 ' + n + '): ' + wins.join(' / '));
+      await shot('75_result_' + tag);
+      await G(() => window.game.press('Space')); await step(20); await closeAll(); }
+    // 7. 다시 열면 기억한 강도 · 체력이 모자라면 내려가 있고 기억은 그대로
+    { await setS({ inten: { loading: 3 } }); await open('loading'); const a = (await view()).int; await G(() => window.game.press('Escape')); await step(10);
+      const L = await lv('loading'); await setS({ hp: L[2].hp, inten: { loading: 3 } }); await open('loading'); const b = (await view()).int; await G(() => window.game.press('Escape')); await step(10);
+      const keep = await G(() => window.game.state.raw.inten.loading);
+      if (a !== 3 || b !== 2 || keep !== 3) forced.push('다시 열 때 기억한 강도가 아니거나, 체력이 모자라 내린 것이 기억을 덮음: ' + JSON.stringify({ a, b, keep })); }
+  }
   await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=figures'); await page.screenshot({ path: path.join(out, 'figures.png') });
   const zones = await G(() => document.querySelectorAll('[data-zone]').length);
   forced.unshift(...forcedMain);

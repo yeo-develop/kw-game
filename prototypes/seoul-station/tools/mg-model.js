@@ -8,7 +8,8 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const dir = process.argv[2] || '.';
 const demoMode = process.argv[3] === 'demo';
 const seeds = demoMode ? 0 : Math.max(1, +process.argv[3] || 40);
-const paces = (process.argv[4] || '0.85,1,1.3,1.6').split(',').map(Number);
+global.window = {}; require(path.resolve(dir, 'config.js'));
+const paces = process.argv[4] ? process.argv[4].split(',').map(Number) : [0, 1, 2, 3].map(n => window.CONFIG['mg_int_' + n].value);   // 기본은 config.js 의 값
 const file = path.join(dir, 'minigames.js');
 const ctx = { console: console };
 ctx.globalThis = ctx;

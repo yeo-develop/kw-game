@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 화면 없는 브라우저(Playwright)는 KW_PLAYWRIGHT 환경 변수로 위치를 줄 수 있다.
 // 실제 시간 · 실제 클릭으로 첫 이틀을 해 보는 점검 (사람이 하듯: 클릭 사이에 기다림). 창 없이 돈다.
-// 처음 연 사람의 길 그대로라서 첫 판 안내(튜토리얼)를 따라간다: 전단지 → 하는 법 → 세 칸 → 하루 마치기 → 찜질방 → 마무리.
+// 처음 연 사람의 길 그대로라서 첫 판 안내(튜토리얼)를 따라간다: 전단지 → 시작 전 화면(시연 · 강도) → 세 칸 → 하루 마치기 → 찜질방 → 마무리.
 // node rt.js <게임 폴더> <찍을 폴더>
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
@@ -32,12 +32,14 @@ fs.mkdirSync(out, { recursive: true });
     return seen;
   };
   const coach = async (id, where) => { const c = (await st()).coach; if (c !== id) errs.push(where + ': 안내가 "' + id + '"여야 하는데 "' + c + '"'); };
-  const begin = async () => { // 처음 하는 알바: 하는 법이 떠 있는 동안은 시간이 가지 않고, "시작"을 눌러야 시작
-    if (!(await page.evaluate(() => window.game.state.wait))) { errs.push('처음 하는 알바에 하는 법이 안 뜸'); return; }
-    const t0 = await page.evaluate(() => window.game.mg._state.wt); await wait(900);
-    if (await page.evaluate(() => window.game.mg._state.wt) !== t0) errs.push('하는 법을 읽는 동안 미니게임 시간이 감');
+  const begin = async () => { // 알바를 누르면 시작 전 화면(시연 · 강도): 그동안 판 상태는 한 글자도 안 바뀌고, "시작"을 눌러야 시작
+    if (!(await page.evaluate(() => window.game.state.pre && !window.game.mg))) { errs.push('알바를 눌렀는데 시작 전 화면이 안 뜸'); return; }
+    const pic = () => page.evaluate(() => document.getElementById('mgc').toDataURL());
+    const s0 = await page.evaluate(() => JSON.stringify(window.game.state.raw)), p0 = await pic(); await wait(900);
+    if (await page.evaluate(() => JSON.stringify(window.game.state.raw)) !== s0) errs.push('시작 전 화면에서 판 상태가 바뀜 (칸 · 체력 · 난수)');
+    if (!(await page.evaluate(() => !!window.game.demo)) || await pic() === p0) errs.push('시작 전 화면에 시연이 안 돎 (0.9초 동안 그림이 그대로)');
     await page.click('[data-do="mgstart"]'); await wait(150);
-    if (await page.evaluate(() => window.game.state.wait)) errs.push('"시작"을 눌러도 시작되지 않음');
+    if (await page.evaluate(() => window.game.state.pre || !window.game.mg)) errs.push('"시작"을 눌러도 시작되지 않음');
   };
   const mgButtons = () => page.evaluate(() => Array.from(document.querySelectorAll('[data-mg]')).map(b => b.dataset.mg + ':' + b.textContent.trim()));
   await wait(500); await page.fill('#name', '동여'); await shot('rt01_title');
@@ -50,8 +52,8 @@ fs.mkdirSync(out, { recursive: true });
   await page.dblclick('[data-do="job"][data-arg="flyer"]', { position: { x: 30, y: 80 } }); await wait(400);
   let s = await note('전단지 두 번 누름');
   if (s.modal !== 'mg') errs.push('미니게임이 열리지 않음');
-  await wait(300); await shot('rt03b_howto'); await begin();
-  const title = await page.textContent('.mg-head b'); const howto = await page.textContent('.mg-head span');
+  await wait(300); await shot('rt03b_pre'); await begin();
+  const title = await page.textContent('.mg-head b'); const howto = await page.textContent('.mg-how li'); // 한 줄 하는 법은 창 머리가 아니라 아래 하는 법 칸에
   log.push('미니게임: ' + title + ' / ' + howto + ' / 버튼: ' + (await mgButtons()).join(' | '));
   for (let i = 0; i < 16; i++) { await wait(560); if (i === 5) await shot('rt04_minigame_mid'); if (await page.locator('.mg-res').count()) break; await page.keyboard.press('Space'); }
   await page.waitForSelector('.mg-res', { timeout: 6000 });

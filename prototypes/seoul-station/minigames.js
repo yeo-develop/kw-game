@@ -230,7 +230,11 @@
   function makeFx(P) {
     const floats = [], rings = [], bits = [], marks = [];
     const fx = { shake: 0, clock: 0, flashA: 0, flashC: P.text };
-    fx.float = function (x, y, text, color) { floats.push({ x: x, y: y, text: text, color: color, t: 0 }); };
+    const rise = function (t) { return 34 * easeOut(t * 1.6) + 8 * bump(t * 5); };   // 튀는 숫자가 떠오른 높이
+    fx.float = function (x, y, text, color) { // 앞의 숫자가 아직 근처에 있으면 한 줄 위로 (겹쳐 뭉개지지 않게)
+      for (let i = 0; i < floats.length; i++) { const f = floats[i], fy = f.y - rise(f.t); if (Math.abs(f.x - x) < 64 && Math.abs(fy - y) < 34) { y = fy - 34; i = -1; } }
+      floats.push({ x: x, y: y, text: text, color: color, t: 0 });
+    };
     fx.ring = function (x, y, color, r0, r1) { rings.push({ x: x, y: y, color: color, r0: r0, r1: r1, t: 0 }); };
     fx.burst = function (x, y, color, n, power) { // 난수 없이 정해진 각도로 퍼짐
       for (let i = 0; i < n; i++) {
@@ -269,7 +273,7 @@
     fx.drawText = function (ctx, font, ox, oy) { // 실제 크기 화면에: 튀는 숫자 (둥근모꼴 32px)
       for (const f of floats) {
         if (!blink(f.t, 0.6)) continue;
-        ptext(ctx, font, f.text, f.x + ox, f.y - 34 * easeOut(f.t * 1.6) - 8 * bump(f.t * 5) + oy, 32, fx.tone(f.color));
+        ptext(ctx, font, f.text, f.x + ox, f.y - rise(f.t) + oy, 32, fx.tone(f.color));
       }
     };
     return fx;
@@ -346,17 +350,19 @@
           const t3 = a > 0.15 ? 4 : 2;
           fr(g, 0, 0, LW, t3, c); fr(g, 0, LH - t3, LW, t3, c); fr(g, 0, 0, t3, LH, c); fr(g, LW - t3, 0, t3, LH, c);
         }
-        // 남은 시간: 위쪽 외곽선 막대 (파랑, 4분의 1 아래는 노랑)
-        const left = clamp(1 - wt / seconds, 0, 1), bw = LW - 14, fw = left > 0 ? Math.max(2, Math.round(bw * left)) : 0;
-        OB(g, 6, 2, bw + 2, 6, 'L');
-        if (fw) { fr(g, 7, 3, fw, 4, left < 0.25 ? 'y' : 'b'); fr(g, 7, 3, fw, 1, left < 0.25 ? 'Y' : 'l'); }
+        // 남은 시간: 위쪽 외곽선 막대 (파랑, 4분의 1 아래는 노랑). 시연에는 없다 (내 판의 시간이 도는 것처럼 보이지 않게)
+        if (!game.idle) {
+          const left = clamp(1 - wt / seconds, 0, 1), bw = LW - 14, fw = left > 0 ? Math.max(2, Math.round(bw * left)) : 0;
+          OB(g, 6, 2, bw + 2, 6, 'L');
+          if (fw) { fr(g, 7, 3, fw, 4, left < 0.25 ? 'y' : 'b'); fr(g, 7, 3, fw, 1, left < 0.25 ? 'Y' : 'l'); }
+        }
         // 준비 · 시작 · 끝 (띠는 점으로, 글자는 실제 크기로 나중에)
         let say = null;
-        if (phase === 'ready' && !game.idle) {   // idle = 하는 법을 읽는 동안: 띠 없이 첫 장면만
+        if (phase === 'ready' && !game.idle) {   // idle = 시연: "준비" · "시작!" 없이 장면만
           const k = Math.max(0.3, pop(t / 0.18));
           band(g, L(H / 2), Math.round(18 * Math.min(1, k)));
           say = ['준비', k > 0.7 ? 64 : 32, 'w', H / 2];
-        } else if (phase === 'play' && wt < 0.45) {
+        } else if (phase === 'play' && wt < 0.45 && !game.idle) {
           if (wt < 0.3 || Math.floor(wt * 24) % 2 === 0) say = ['시작!', 64, 'y', (impl.startY || H / 2) - Math.round(wt * 30)]; // startY: 첫 장면의 중요한 것(편의점 첫 손님 말풍선)을 가리지 않는 높이
         } else if (phase === 'end') {
           const k = clamp(endT / 0.15, 0, 1);
@@ -575,7 +581,7 @@
   function makeFlyer(env) {
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed, rate = env.rate;
     const GY = 318, ZX = 240, ZH = 60, MX = 112;       // 바닥 · 건네는 자리 가운데 · 꺾쇠 반폭 · 내 자리
-    const BUSY = [0.12, 0.22, 0.3, 0.36][env.intensity], DENSE = [1.1, 1, 0.75, 0.6][env.intensity], MARG = [0.08, 0.06, 0.04, 0.02][env.intensity];   // 강도: 바쁜 사람 비율 · 사람 간격 · 자리에서 앞사람과의 틈
+    const BUSY = [0.12, 0.22, 0.3, 0.36][env.intensity], DENSE = [1.1, 1, 0.75, 0.6][env.intensity], MARG = [0.08, 0.06, 0.06, 0.06][env.intensity];   // 강도: 바쁜 사람 비율 · 사람 간격 · 자리에서 앞사람과의 틈 (0.06초 아래로는 안 줄임 — 누를 틈)
     const JH = ZH + 10;                                // 판정 반폭: 몸이 꺾쇠에 걸치면 인정 (눈에 보이는 것보다 박하지 않게)
     const CAP_WALK = 2 * JH / 0.28, CAP_BUSY = 2 * JH / 0.26;   // 걷는 속도 상한: 판정 자리를 0.28초(바쁜 사람 0.26초)는 지나가게
     // 등장 시각: 간격이 (속도 x 점점 빨라짐) 에 반비례해 시작 0.72초 -> 끝으로 갈수록 줄어든다
@@ -1360,7 +1366,7 @@
   const READ = {
     flyer: function (s, done) {
       let p = null;
-      for (const q of s.people) if (q.state === 'walk' && !done.has(q) && q.x < W + 20 && q.x >= s.zoneX - s.zoneHalf && (!p || q.x < p.x)) p = q;
+      for (const q of s.people) if (q.state === 'walk' && !done.has(q) && q.x < W && q.x >= s.zoneX - s.zoneHalf && (!p || q.x < p.x)) p = q;
       return p && { key: p, code: p.busy ? null : 'Space', alt: p.busy ? ['Space'] : [], eta: (p.x - s.zoneX) / p.v };
     },
     loading: function (s, done, m, dt) {
@@ -1377,12 +1383,12 @@
     },
     delivery: function (s) {
       const SY = 298, ahead = s.obs.filter(function (o) { return o.y + o.half > 0 && o.y < SY + o.half + 22; });
-      if (!ahead.length && !s.pins.some(function (p) { return !p.got && p.y > -20; })) return null;
+      if (!ahead.length && !s.pins.some(function (p) { return !p.got && p.y > -12; })) return null;   // 핀: 그림 아래 끝(y + 21)의 세 점 · 땅 그림자가 화면에 들어온 때부터 보인다
       const r1 = ahead.length ? Math.min.apply(null, ahead.map(function (o) { return o.row; })) : -1;
       const lanes = function (r) { return ahead.filter(function (o) { return o.row === r; }).map(function (o) { return o.lane; }); };
       const b1 = lanes(r1), b2 = lanes(r1 + 1), y1 = ahead.length ? Math.max.apply(null, ahead.filter(function (o) { return o.row === r1; }).map(function (o) { return o.y; })) : -1e9;
       let pin = null;
-      for (const p of s.pins) if (!p.got && p.y > -20 && p.y < SY + 80 && (!pin || p.y > pin.y)) pin = p;
+      for (const p of s.pins) if (!p.got && p.y > -12 && p.y < SY + 80 && (!pin || p.y > pin.y)) pin = p;
       // 다음 두 줄에서 모두 빈 차선(길이 늘 하나는 남겨 둔다)이 있으면 그리로 — 버스가 지나자마자 다음 줄이 오는 때를 미리 피한다
       const free = function (l) { return b1.indexOf(l) < 0 && b2.indexOf(l) < 0; };
       let want = s.lane, why = 'r' + r1;
@@ -1427,6 +1433,8 @@
       for (const k in opts) o[k] = opts[k];
       o.rng = spareRng(seed);
       game = build(o, MAKERS[id]); hand = makeHand(id, DEMO_HAND, spareRng(seed * 31 + 7)); rest = 0;
+      game.idle = true;
+      for (let i = 0; i < 60 && game._state.phase === 'ready'; i++) game.update(1 / 60);   // 준비 시간을 건너뛴다: 열거나 강도를 바꾸자마자 하는 장면이 보이게
       self.title = game.title; self.howto = game.howto; self.how = game.how; self.controls = game.controls; self._state = game._state;
     }
     self.update = function (dt) {
@@ -1472,7 +1480,6 @@
       return demo(id, opts);
     },
     _hand: makeHand,   // 재는 도구(tools/mg-model.js)가 같은 손을 쓴다: _hand(id, prof 또는 null, rng) → (판 상태, dt) → 누를 키
-    _demoHand: DEMO_HAND,
     // 미니게임에 나오는 모든 등장물. draw(ctx, x, y, s): x, y = 그림 가운데, s = 배율 (1 = 게임 안 크기 = 점 하나가 논리 3px)
     sprites: function () {
       const S = function (name, make) {

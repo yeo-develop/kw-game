@@ -87,7 +87,7 @@ window.CONFIG = {
   mg_int_0: { value: 0.85, min: 0.5, max: 1, step: 0.05 }, // 미니게임 속도 배율 (tools/mg-model.js 로 잰 값: 보통 사람의 평균 등급이 강도 한 칸에 한 칸쯤 내려감)
   mg_int_1: { value: 1, min: 1, max: 1, step: 0.05 },
   mg_int_2: { value: 1.3, min: 1, max: 2, step: 0.05 },
-  mg_int_3: { value: 1.6, min: 1, max: 2.5, step: 0.05 },
+  mg_int_3: { value: 1.6, min: 1, max: 2, step: 0.05 }, // 상한 2 = minigames.js 의 pace 자르기
   // 숙련도: 같은 알바를 n1 · n2 · n3 번 하면 한 단계씩 오르고, 단계마다 일당이 skill_bonus 만큼 오른다
   skill_bonus: { value: 0.08, min: 0, max: 0.3, step: 0.01 },
   skill_n1: { value: 3, min: 1, max: 10, step: 1 },

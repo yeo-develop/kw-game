@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // 게임이 불러오지 않는 개발용 도구. 글이 가장 많은 날(소식 3건 + 리포트 3건 + 긴 숫자)의 주식 · 코인 탭이 넘치지 않는지,
 // 도장 · 효과 줄이기가 되는지, 창이 몰리는 때(퀘스트 여러 개 · 건너뛰기 · 같은 알림)에 한 장으로 모이는지,
-// 속보 띠(든 종목 · 안 든 종목 · 퀘스트 창과 몰릴 때 · 청산과 겹칠 때 · 효과 줄이기)와 양날 특성(카드 · 잠긴 행동의 이유)을 본다.
+// 속보 띠(든 종목 · 안 든 종목 · 퀘스트 창과 몰릴 때 · 청산과 겹칠 때 · 효과 줄이기)와 양날 특성(카드 · 잠긴 행동의 이유), 가장 긴 일당(카드 · 시작 전 화면의 강도 버튼)을 본다.
 // node tools/worst.js [게임 폴더] [찍을 폴더]
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
@@ -188,7 +188,26 @@ fs.mkdirSync(out, { recursive: true });
     if (l.levs.join() !== 'why:1배,why:2배,lev:3배,lev:5배' || !/야수의 심장/.test(l.levClick.join())) ag.bad.push('야수의 심장인데 1 · 2배가 안 잠기거나 이유가 안 뜸: ' + JSON.stringify(l.levs) + JSON.stringify(l.levClick));
     if (!l.rest || !/일중독/.test(l.restClick.join())) ag.bad.push('일중독인데 쉬기가 안 잠기거나 이유가 안 뜸: ' + JSON.stringify(l.restClick)); }
   if (ag.bad.length) report.aug = ag.bad;
-  console.log(JSON.stringify({ errors: errs, report, fx: fxr, popups: pops, shock: sh, aug: ag }, null, 1));
+  // 가장 긴 일당(재벌 · 숙련 3 · 일머리 3 · 일중독 · 최상 = 10억 단위): 오늘 칸 카드와 시작 전 화면의 강도 버튼 · 창 머리에서 글자가 안 잘림
+  const pl = await fresh(), lp = { bad: [] };
+  const fit = sel => pl.evaluate(sel => [...document.querySelectorAll(sel)].map(b => { const r = b.getBoundingClientRect(), cs = getComputedStyle(b), bw = parseFloat(cs.borderLeftWidth), bb = parseFloat(cs.borderBottomWidth), kids = [...b.querySelectorAll('.nm, .st, .st > span, .skip, .ich, b, span:not(.lv):not(.key)')].filter(e => e.getBoundingClientRect().width && !e.closest('.lv, .tag'));
+    return { t: b.textContent.trim().slice(0, 40), over: kids.filter(e => { const q = e.getBoundingClientRect(); return q.right > r.right - bw + 0.5 || q.left < r.left + bw - 0.5 || q.bottom > r.bottom - bb + 0.5; }).map(e => e.className || e.tagName) }; }), sel); // 글 · 버튼이 틀(테두리) 안쪽에 다 들어오는지
+  lp.want = await pl.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 8, biz: 5, hp: 100, slot: 0, quest: 99, offer: null, picks: 0, event: null, xp: 0, perks: { hustle: 3, workaholic: 1 }, inten: { flyer: 3, loading: 3, store: 3, delivery: 3 } }); for (const id in S.jobs) S.jobs[id] = 99; g.render(); return window.Rules.acts(S).filter(a => a.kind === 'job').map(a => window.Rules.num(a.levels[3].pay)); });
+  await pl.evaluate(() => window.game.step(10)); await pl.screenshot({ path: path.join(out, 'long-pay-cards.png') });
+  lp.cards = await fit('#today .card');
+  lp.cardPays = await pl.evaluate(() => [...document.querySelectorAll('#today .card .pay')].map(e => e.textContent));
+  await pl.evaluate(() => { const g = window.game; g.run('job', 'delivery'); g.step(30); });
+  await pl.waitForTimeout(300); await pl.screenshot({ path: path.join(out, 'long-pay-pre.png') });
+  lp.ib = await fit('#veil .ib'); lp.head = await fit('#veil .mg-head'); lp.line = await fit('#veil .mg-line');
+  lp.ibPays = await pl.evaluate(() => [...document.querySelectorAll('#veil .ib .p')].map(e => e.textContent));
+  if (Math.max(...lp.want.map(s => s.length)) < 13) lp.bad.push('점검이 10억 단위 일당을 못 만듦: ' + lp.want.join(' · '));
+  { const short = lp.want.some(t => t.length > 11), v = t => Number(t.replace(/,/g, '')) / 1e8, eok = t => (v(t) >= 10 ? Math.floor(v(t)) : Math.floor(v(t) * 10) / 10) + '억'; // 하나라도 10억이 넘으면 알바 카드 전부 줄임 ("13억" · "7.2억")
+    if (!short || lp.cardPays.some((t, i) => t !== eok(lp.want[i]))) lp.bad.push('카드의 일당이 최상의 일당이 아니거나, 한 줄에 줄임 표기와 긴 숫자가 섞임: ' + lp.cardPays.join(' · ') + ' ≠ ' + lp.want.join(' · ')); }
+  if (lp.ibPays[3] !== lp.want[3]) lp.bad.push('최상 버튼의 일당이 다름: ' + lp.ibPays[3] + ' ≠ ' + lp.want[3]);
+  for (const k of ['cards', 'ib', 'head', 'line']) for (const x of lp[k]) if (x.over.length) lp.bad.push('긴 일당에서 틀 밖으로 나감(' + k + ' · ' + x.over.join() + '): ' + x.t);
+  await pl.close();
+  if (lp.bad.length) report.longPay = lp.bad;
+  console.log(JSON.stringify({ errors: errs, report, fx: fxr, popups: pops, shock: sh, aug: ag, longPay: lp }, null, 1));
   if (errs.length || Object.values(report).some(v => v.length)) process.exitCode = 1;
   await browser.close();
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

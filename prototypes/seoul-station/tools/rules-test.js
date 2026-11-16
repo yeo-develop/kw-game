@@ -1103,7 +1103,8 @@ ok('강도: 최상으로 기억시켜도 사업 자동 수입(중의 일당 기�
   for (const id of JIDS) R.setInt(b, id, 3);
   const auto = s => R.acts(s).find(x => x.kind === 'rest').auto; assert.ok(auto(a) > 0); assert.equal(auto(b), auto(a));
   const best = Math.max(...R.acts(a).filter(x => x.kind === 'job').map(x => x.pay)); assert.equal(auto(a), Math.round(best * T.mult_ok * T.biz_auto_2 / 1000) * 1000);
-  const w = jobS(1, 0); w.tier = 0; w.perks.workaholic = 1; // 서울역: 전단지 · 상하차만 (편의점 중 9 가 끼지 않게) for (const id of JIDS) R.setInt(w, id, 3);
+  const w = jobS(1, 0); w.tier = 0; w.perks.workaholic = 1; // 서울역: 전단지 · 상하차만 (편의점 중 9 가 끼지 않게)
+  for (const id of JIDS) R.setInt(w, id, 3); assert.equal(jobA(w, 'flyer').int, 3);
   const rest = () => R.acts(w).find(x => x.kind === 'rest').ok;
   w.hp = 10; assert.equal(rest(), false, '전단지 중이 되면 쉬지 못함 (최상이 안 돼도)');
   w.hp = 9; assert.equal(jobA(w, 'flyer').any, true); assert.equal(rest(), true, '하만 되면 쉴 수 있음');
@@ -1125,5 +1126,22 @@ ok('강도: 숙련도 횟수 · 콤보 · 경험치 · 레벨은 강도와 무�
   for (const key of ['jobs', 'combo', 'xp', 'lv', 'picks']) assert.deepEqual(lo[key], hi[key], key);
   assert.equal(lo.stats.comboBest, hi.stats.comboBest); assert.equal(lo.stats.perfect, hi.stats.perfect); assert.equal(lo.stats.jobsDone, hi.stats.jobsDone);
   assert.ok(hi.stats.alba > lo.stats.alba);
+});
+ok('강도: 하다 만 알바(quitJob) — 돈 · 숙련 · 콤보 · 경험치는 대충과 같고 체력은 시작한 강도만큼(남은 체력까지만), 하만 되는 체력에서도 칸을 쓴다', () => {
+  const ref = jobS(1, 100); ref.combo = 3; R.doJob(ref, 'flyer', null); const skip = lastJob(ref);
+  const t = jobS(1, 9); t.combo = 3; const L0 = jobA(t, 'flyer').levels[0], c0 = t.cash, x0 = t.xp; // 하 9 · 중 10: 대충은 못 함
+  assert.ok(R.quitJob(t, 'flyer', 0)); assert.equal(t.slot, 1); assert.equal(9 - t.hp, L0.hp); assert.equal(t.cash - c0, skip.pay); assert.equal(t.xp - x0, ref.xp - jobS(1, 100).xp);
+  assert.equal(t.jobs.flyer, 0); assert.equal(t.combo, 0); const e = lastJob(t); assert.equal(e.grade, 'skip'); assert.equal(e.int, 0); assert.equal(e.hp, L0.hp); assert.equal(e.pay, skip.pay);
+  const u = jobS(1, 100), L3 = jobA(u, 'loading').levels[3]; assert.ok(R.quitJob(u, 'loading', 3)); assert.equal(100 - u.hp, L3.hp); assert.equal(u.jobs.loading, 0); assert.equal(lastJob(u).imult, 1);
+  const v = jobS(1, 25); assert.ok(R.quitJob(v, 'loading', 3)); assert.equal(v.hp, 0); assert.equal(lastJob(v).hp, 25); // 최상 30 인데 남은 25: 남은 만큼
+  const z = jobS(1, 0); assert.ok(R.quitJob(z, 'flyer', 2)); assert.equal(z.slot, 1); assert.equal(z.hp, 0);
+  const w = jobS(1, 100); assert.ok(R.quitJob(w, 'store', 'x')); assert.equal(100 - w.hp, T.hp_store); // 엉뚱한 강도는 중
+  const d = jobS(1, 100); d.slot = 3; const dw = JSON.stringify(d); assert.equal(R.quitJob(d, 'flyer', 1), false); assert.equal(JSON.stringify(d), dw); // canAct 가 아닐 때만 false
+});
+ok('강도: 체력이 안 드는 알바(hp_ 설정 0)는 어느 강도도 체력 0 · 체력 0 에서도 됨', () => {
+  withTune({ hp_flyer: 0 }, () => { const s = jobS(1, 0), a = jobA(s, 'flyer'); assert.deepEqual(a.levels.map(l => l.hp), [0, 0, 0, 0]); assert.ok(a.levels.every(l => l.ok) && a.ok && a.any); assert.ok(R.doJob(s, 'flyer', 0.8, 3)); assert.equal(s.hp, 0); });
+});
+ok('강도: 저장의 강도 값이 엉뚱해도(7 · -1 · 1.5 · "2" · null) acts 가 돌고 중으로 읽는다', () => {
+  for (const bad of [7, -1, 1.5, '2', null, NaN]) { const s = jobS(1, 100); s.inten = { flyer: bad }; const a = jobA(s, 'flyer'); assert.equal(a.int, 1, String(bad)); assert.equal(a.use, 1); }
 });
 console.log(n + '개 통과');
