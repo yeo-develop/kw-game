@@ -12,7 +12,7 @@
 | `textcount.js` | 화면 네 곳의 보이는 글자 수 (옛 판 폴더를 주면 줄어든 비율) | `node tools/textcount.js . <옛 판 폴더>` |
 | `shot.js` | 한 장 찍기 | `node tools/shot.js index.html out.png --query "scene=figures"` |
 | `mg-model.js` | 미니게임 난이도를 사람 손 모형 셋(완벽한 손 · 잘하는 사람 · 보통 사람)으로 잼: 게임 넷 × 강도 넷 × 숙련 0 · 3 의 평균 점수와 등급 분포. `demo` 를 주면 시연 판 확인(오류 · 누름 · 되풀이 · `opts.rng` 안 씀 · 점수) | `node tools/mg-model.js . 40` · `node tools/mg-model.js . demo` (속도 배율은 `config.js` 의 `mg_int_0..3` 을 읽는다. 바꿔 보려면 뒤에 `0.85,1,1.3,1.6` 처럼) |
-| `build-web.py` | 웹 게시용 묶음을 만든다: `pub/`(틀 없는 본문 한 장 — 글꼴은 CSS 안에 넣음 — 과 `index.html` 이 부르는 js 전부) · `sim/`(게시 틀을 흉내 낸 것, 창 없는 점검용) | `python3 tools/build-web.py . <내보낼 폴더>` 뒤 `node tools/tut.js <내보낼 폴더>/sim <찍을 폴더>` · `node tools/rt.js <내보낼 폴더>/sim` |
+| `build-web.py` | 웹 게시용 묶음을 만든다: `pub/`(틀 없는 본문 한 장 — 글꼴은 CSS 안에 넣음 — 과 `index.html` 이 부르는 js 전부) · `sim/`(게시 틀을 흉내 낸 것, 창 없는 점검용) · `one/`(글꼴 · js 를 다 넣은 `index.html` 한 장 — 파일 하나만 올리는 곳에 그대로 올린다, noindex) | `python3 tools/build-web.py . <내보낼 폴더>` 뒤 `node tools/tut.js <내보낼 폴더>/sim <찍을 폴더>` · `node tools/rt.js <내보낼 폴더>/sim` |
 
 첫 판 안내는 `?manual=1` 로 여는 점검 창에는 뜨지 않는다(`&tut=1` 을 붙이면 뜬다). 보통으로 연 창에서는 처음 한 번 뜨고, `?tut=0` 으로 끌 수 있다.
 
