@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{TITLE}}</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --panel: #fffdf8; --ink: #23262e; --dim: #666b78; --line: #d9d3c4; --accent: #2f6fd6; --accent-ink: #fff; --chip: #e8eefb; --warm: #e8873a;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17191f; --panel: #20232b; --ink: #ecebe6; --dim: #a2a7b4; --line: #363a46; --accent: #7fb0ff; --accent-ink: #10131a; --chip: #262c3a; --warm: #f0a25e; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+  header.top { padding-block: 40px 8px; }
+  header.top h1 { margin: 0 0 8px; font-size: clamp(26px, 4vw, 38px); line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; }
+  header.top p.lead { margin: 0 0 16px; max-width: 70ch; color: var(--dim); }
+  ul.facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  ul.facts li { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 14px; }
+  ul.facts b { margin-right: 8px; color: var(--dim); font-weight: 600; }
+  nav.jump { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+  nav.jump .wrap { display: flex; gap: 6px; overflow-x: auto; padding-block: 10px; }
+  nav.jump a { flex: none; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 14px; white-space: nowrap; }
+  nav.jump a:hover { border-color: var(--accent); }
+  .code { display: inline-block; font: 600 12px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: var(--accent-ink); background: var(--accent); border-radius: 4px; padding: 3px 6px; margin-right: 8px; vertical-align: 2px; letter-spacing: 0.02em; }
+  section, .intro { padding-block: 28px 8px; }
+  h2 { margin: 0 0 6px; font-size: 22px; line-height: 1.3; }
+  h2 small { margin-left: 10px; font-size: 14px; font-weight: 400; color: var(--dim); }
+  p.note { margin: 0 0 14px; max-width: 80ch; color: var(--dim); }
+  .two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr); } }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+  .box h3 { margin: 0 0 10px; font-size: 16px; }
+  svg.wire { display: block; width: 100%; height: auto; }
+  svg.wire .f { fill: none; stroke: var(--dim); stroke-width: 2; }
+  svg.wire .z { fill: var(--chip); stroke: var(--accent); stroke-width: 2; }
+  svg.wire .zt { fill: var(--ink); font: 700 30px/1 -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; text-anchor: middle; dominant-baseline: middle; }
+  svg.wire .zd { fill: var(--dim); font: 400 20px/1 -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; text-anchor: middle; dominant-baseline: middle; }
+  ol.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; counter-reset: f; }
+  ol.flow li { counter-increment: f; }
+  ol.flow li > * { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 10px; text-decoration: none; color: inherit; padding: 6px 8px; border-radius: 8px; }
+  ol.flow li > a:hover { background: var(--chip); }
+  ol.flow li > *::before { content: counter(f); grid-row: 1 / span 2; width: 26px; height: 26px; border-radius: 50%; background: var(--warm); color: #fff; font: 700 13px/26px ui-monospace, Menlo, monospace; text-align: center; margin-top: 2px; }
+  ol.flow b { font-weight: 700; }
+  ol.flow i { font-style: normal; color: var(--dim); font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 18px; }
+  figure.shot { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; scroll-margin-top: 70px; }
+  figure.shot .pic { display: block; width: 100%; padding: 0; border: 0; background: #cfe0f5; cursor: zoom-in; }
+  figure.shot img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+  figure.shot figcaption { padding: 10px 14px 14px; }
+  figure.shot figcaption b { font-size: 16px; }
+  figure.shot figcaption p { margin: 4px 0 0; color: var(--dim); font-size: 14px; line-height: 1.55; }
+  figure.shot .pic:focus-visible, nav.jump a:focus-visible, .lb button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  footer { padding-block: 32px 48px; color: var(--dim); font-size: 14px; }
+  .lb { position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 16, 0.92); display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .lb[hidden] { display: none; }
+  .lb .bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: #f2f1ec; }
+  .lb .bar b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
+  .lb button { background: #2b2f3a; color: #f2f1ec; border: 1px solid #4a5060; border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+  .lb .stage { min-height: 0; display: grid; place-items: center; padding: 0 16px 16px; cursor: zoom-out; }
+  .lb img { max-width: 100%; max-height: 100%; image-rendering: pixelated; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <h1>{{TITLE2}}</h1>
+  <p class="lead">{{LEAD}}</p>
+  <ul class="facts">{{FACTS}}<li><b>화면 수</b>{{COUNT}}장</li><li><b>찍은 날</b>{{DATE}}</li></ul>
+</div></header>
+<nav class="jump" aria-label="묶음으로 가기"><div class="wrap"><a href="#wire">구역 · 흐름</a>{{NAV}}</div></nav>
+<main class="wrap">
+  <div class="intro" id="wire"><div class="two">
+    <div class="box"><h3>메인 화면의 구역 (1280 × 720)</h3>
+      <svg class="wire" viewBox="0 0 1280 720" role="img" aria-label="메인 화면의 구역 다섯: 위쪽 띠, 나, 상태창, 오늘, 판"><rect x="1" y="1" width="1278" height="718" class="f"/>{{ZONES}}</svg>
+    </div>
+    <div class="box"><h3>한 판의 흐름</h3><ol class="flow">{{FLOW}}</ol></div>
+  </div></div>
+  {{SECTIONS}}
+</main>
+<footer><div class="wrap">그림을 누르면 원래 크기(1280 × 720)로 봅니다. ← → 로 앞뒤 화면, Esc 로 닫습니다. 모든 화면은 실제 게임을 창 없는 브라우저로 돌려 찍은 것입니다.</div></footer>
+<div class="lb" hidden><div class="bar"><span class="code" id="lbc"></span><b id="lbn"></b><button type="button" id="lbp">← 앞</button><button type="button" id="lbx">뒤 →</button><button type="button" id="lbq">닫기 Esc</button></div><div class="stage"><img alt="" id="lbi"></div></div>
+<script>
+(function () {
+  var pics = [].slice.call(document.querySelectorAll('figure.shot .pic')), lb = document.querySelector('.lb'), img = document.getElementById('lbi'), cur = -1, back = null;
+  function show(i) { cur = (i + pics.length) % pics.length; var p = pics[cur]; img.src = p.querySelector('img').src; img.alt = p.dataset.name; document.getElementById('lbc').textContent = p.dataset.code; document.getElementById('lbn').textContent = p.dataset.name; }
+  function open(i) { back = document.activeElement; show(i); lb.hidden = false; document.body.style.overflow = 'hidden'; document.getElementById('lbq').focus(); }
+  function close() { lb.hidden = true; document.body.style.overflow = ''; if (back) back.focus(); }
+  pics.forEach(function (p, i) { p.addEventListener('click', function () { open(i); }); });
+  document.getElementById('lbp').addEventListener('click', function () { show(cur - 1); });
+  document.getElementById('lbx').addEventListener('click', function () { show(cur + 1); });
+  document.getElementById('lbq').addEventListener('click', close);
+  lb.querySelector('.stage').addEventListener('click', close);
+  document.addEventListener('keydown', function (e) { if (lb.hidden) return; if (e.key === 'Escape') close(); else if (e.key === 'ArrowLeft') show(cur - 1); else if (e.key === 'ArrowRight') show(cur + 1); });
+})();
+</script>
+</body>
+</html>
