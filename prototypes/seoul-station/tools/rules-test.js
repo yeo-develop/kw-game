@@ -188,7 +188,7 @@ ok('특성 14개가 저마다 규칙을 바꾼다', () => {
   assert.equal(R.hpMax(P('iron')), 100 + T.perk_iron);
   assert.equal(R.sleepGain(P('sleep')), R.sleepGain(base()) + T.perk_sleep);
   const pay = s => R.acts(s).find(a => a.id === 'flyer').pay; assert.equal(pay(P('hustle')), Math.round(T.pay_flyer * (1 + T.perk_hustle) / 1000) * 1000);
-  { const a = base(), b = P('hands'); R.doJob(a, 'flyer', 0.65); R.doJob(b, 'flyer', 0.65); assert.ok(b.cash > a.cash, '금손'); }
+  { const a = base(), b = P('hands'); const sc = T.grade_good - T.perk_hands / 2; R.doJob(a, 'flyer', sc); R.doJob(b, 'flyer', sc); assert.ok(b.cash > a.cash, '금손'); } // 잘함 기준 바로 아래 점수: 금손이면 넘는다
   { const a = base(), b = P('lazy'); R.doJob(a, 'flyer', null); R.doJob(b, 'flyer', null); assert.equal(b.cash - a.cash, Math.round(T.pay_flyer * T.perk_lazy / 1000) * 1000); }
   { const a = base(), b = P('streak'); for (const s of [a, b]) { s.hp = 100; R.doJob(s, 'flyer', 0.8); s.slot = 0; s.cash = 0; R.doJob(s, 'flyer', 0.8); } assert.ok(b.cash > a.cash, '리듬'); }
   assert.equal(R.mealCost(P('thrift')), Math.round(T.meal_cost * (1 - T.perk_thrift) / 1000) * 1000); assert.ok(R.weekCost(P('thrift')) < R.weekCost(base())); assert.ok(R.saunaCost(P('thrift')) <= R.saunaCost(base()));
@@ -1060,7 +1060,7 @@ ok('강도: 일당 = round1k(중의 일당 × max(대충, 등급 배율 × 강�
     const u = jobS(1, 100); R.doJob(u, id, null); assert.ok(lastJob(m).pay >= lastJob(u).pay);
   }
   const s = jobS(1, 100), u = jobS(1, 100); R.doJob(s, 'flyer', 0.5, 0); R.doJob(u, 'flyer', null); assert.ok(lastJob(s).pay >= lastJob(u).pay, '하 · 보통 ≥ 대충');
-  const l = jobS(1, 100), lu = jobS(1, 100); l.perks.lazy = 1; lu.perks.lazy = 1; R.doJob(l, 'loading', 0.5, 0); R.doJob(lu, 'loading', null); // 요령으로 대충이 하 · 보통보다 커져도
+  const l = jobS(1, 100), lu = jobS(1, 100); l.perks.lazy = 2; lu.perks.lazy = 2; R.doJob(l, 'loading', 0.5, 0); R.doJob(lu, 'loading', null); assert.ok(R.skipMult(l) > T.mult_ok * T.int_pay_0); // 요령(두 장)으로 대충이 하 · 보통보다 커져도
   assert.equal(lastJob(l).pay, lastJob(lu).pay); assert.equal(lastJob(l).mult, R.skipMult(l));
 });
 ok('강도: 드는 체력은 levels[n].hp = max(1, round(hp × int_hp_n)), 알바 넷 모두 하 < 중 < 상 < 최상', () => {

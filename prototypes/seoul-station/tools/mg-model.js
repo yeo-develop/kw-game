@@ -1,5 +1,5 @@
 // 미니게임 난이도를 사람 손 모형으로 잰다 (브라우저 없이).
-// 쓰는 법: node tools/mg-model.js [폴더] [씨앗 수] [pace 넷을 쉼표로]   예) node tools/mg-model.js . 40 0.85,1,1.3,1.6 (안 주면 이 값 = config.js 의 mg_int_0..3)
+// 쓰는 법: node tools/mg-model.js [폴더] [씨앗 수] [pace 넷을 쉼표로]   예) node tools/mg-model.js . 40 1.2,1.6,2,2.4 (안 주면 config.js 의 mg_int_0..3)
 //          node tools/mg-model.js [폴더] demo [pace 넷]   — 시연 확인: 게임 넷 × 강도 넷 × 숙련 0 · 3. 30초에 오류 · 누름 · loops · rng 를 보고,
 //          점수 평균은 같은 시연을 5분까지 이어서 (30초 = 세 판이라 한 판의 실수에 너무 흔들림)
 // 손 셋: 완벽한 손 · 잘하는 사람 · 보통 사람. 손은 minigames.js 의 Minigames._hand (시연과 같은 손, 화면에 보이는 것만 읽음)에
@@ -52,7 +52,8 @@ const HANDS = [
   ['잘하는 사람', { react: 0.22, rsd: 0.04, rlo: 0.12, rhi: 0.4, tsd: 0.035, wrong: 0.02, chain: 0.11, pick: 0.12 }],
   ['보통 사람', { react: 0.30, rsd: 0.07, rlo: 0.18, rhi: 0.5, tsd: 0.06, wrong: 0.06, chain: 0.15, pick: 0.2 }],
 ];
-function grade(x) { return x >= 0.9 ? 3 : x >= 0.7 ? 2 : x >= 0.4 ? 1 : 0; }
+const GR = ['grade_ok', 'grade_good', 'grade_perfect'].map(k => window.CONFIG[k].value);   // 등급 기준은 config.js 에서
+function grade(x) { return x >= GR[2] - 1e-9 ? 3 : x >= GR[1] - 1e-9 ? 2 : x >= GR[0] - 1e-9 ? 1 : 0; }
 function run(id, n, level, prof, seed) {
   const g = M.create(id, { rng: mulberry(seed), intensity: n, pace: paces[n], level: level, font: 'x' });
   const hand = M._hand(id, prof, mulberry(seed * 977 + 13));

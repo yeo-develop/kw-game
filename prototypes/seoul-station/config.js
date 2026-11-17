@@ -67,15 +67,19 @@ window.CONFIG = {
   hp_store: { value: 9, min: 0, max: 50, step: 1 },
   hp_delivery: { value: 24, min: 0, max: 60, step: 1 },
   // 미니게임 결과별 일당 배율 (실수 · 보통 · 잘함 · 완벽 · 대충 하기)
-  mult_miss: { value: 0.8, min: 0.2, max: 1, step: 0.05 },
+  mult_miss: { value: 0.7, min: 0.2, max: 1, step: 0.05 }, // 2026-11-17 어렵게: 0.8 → 0.7
   mult_ok: { value: 1.0, min: 0.5, max: 1.5, step: 0.05 },
   mult_good: { value: 1.2, min: 0.8, max: 2, step: 0.05 },
   mult_perfect: { value: 1.4, min: 1, max: 3, step: 0.05 },
-  mult_skip: { value: 0.8, min: 0.2, max: 1.2, step: 0.05 },
+  mult_skip: { value: 0.7, min: 0.2, max: 1.2, step: 0.05 }, // 2026-11-17 어렵게: 0.8 → 0.7 (직접 하면 이보다 덜 받지는 않는다)
+  // 미니게임 점수(0~1) → 등급. 완벽은 흠 없이 해야 나온다 (2026-11-17 어렵게: 0.9 · 0.7 · 0.4 → 0.95 · 0.75 · 0.4)
+  grade_perfect: { value: 0.95, min: 0.6, max: 1, step: 0.01 },
+  grade_good: { value: 0.75, min: 0.4, max: 0.95, step: 0.01 },
+  grade_ok: { value: 0.4, min: 0.1, max: 0.8, step: 0.01 },
   mg_seconds: { value: 7, min: 4, max: 15, step: 0.5 }, // 미니게임 한 번의 길이 (초)
   mg_level_speed: { value: 0.16, min: 0, max: 0.4, step: 0.02 }, // 숙련 단계마다 미니게임 기본 속도 +
   mg_ramp: { value: 0.4, min: 0, max: 1.5, step: 0.05 }, // 한 판 안에서 끝으로 갈수록 빨라지는 정도 (끝에서 +40%)
-  // 알바 강도 하(0) · 중(1) · 상(2) · 최상(3). 중이 기준(1). 일당 배율은 "보통" 이상에만 붙는다 (실수 · 대충은 보너스 없음)
+  // 알바 강도 하(0) · 중(1) · 상(2) · 최상(3). 일당 · 체력은 중이 기준(1). 일당 배율은 "보통" 이상에만 붙는다 (실수 · 대충은 보너스 없음)
   int_pay_0: { value: 0.8, min: 0.5, max: 1, step: 0.05 },
   int_pay_1: { value: 1, min: 1, max: 1, step: 0.05 }, // 기준 (바꾸지 않음)
   int_pay_2: { value: 1.2, min: 1, max: 2, step: 0.05 },
@@ -84,10 +88,12 @@ window.CONFIG = {
   int_hp_1: { value: 1, min: 1, max: 1, step: 0.05 },
   int_hp_2: { value: 1.1, min: 1, max: 2, step: 0.05 },
   int_hp_3: { value: 1.25, min: 1, max: 2, step: 0.05 },
-  mg_int_0: { value: 0.85, min: 0.5, max: 1, step: 0.05 }, // 미니게임 속도 배율 (tools/mg-model.js 로 잰 값: 보통 사람의 평균 등급이 강도 한 칸에 한 칸쯤 내려감)
-  mg_int_1: { value: 1, min: 1, max: 1, step: 0.05 },
-  mg_int_2: { value: 1.3, min: 1, max: 2, step: 0.05 },
-  mg_int_3: { value: 1.6, min: 1, max: 2, step: 0.05 }, // 상한 2 = minigames.js 의 pace 자르기
+  // 미니게임 속도 배율. 2026-11-17 "미니게임 너무쉬움" → 전체를 어렵게(예전 0.85 · 1 · 1.3 · 1.6). 판정 폭 · 머무는 시간 · 간격의 강도별 표는 minigames.js 에 있다.
+  // tools/mg-model.js 로 잰 평균 점수(숙련 0 → 3): 잘하는 사람 하 0.98→0.96 · 중 0.93→0.89 · 상 0.86→0.81 · 최상 0.77→0.69 / 보통 사람 0.87→0.79 · 0.66→0.54 · 0.41→0.32 · 0.29→0.23
+  mg_int_0: { value: 1.2, min: 0.5, max: 2.5, step: 0.05 },
+  mg_int_1: { value: 1.6, min: 0.5, max: 2.5, step: 0.05 },
+  mg_int_2: { value: 2, min: 0.5, max: 2.5, step: 0.05 },
+  mg_int_3: { value: 2.4, min: 0.5, max: 2.5, step: 0.05 }, // 상한 2.5 = minigames.js 의 pace 자르기
   // 숙련도: 같은 알바를 n1 · n2 · n3 번 하면 한 단계씩 오르고, 단계마다 일당이 skill_bonus 만큼 오른다
   skill_bonus: { value: 0.08, min: 0, max: 0.3, step: 0.01 },
   skill_n1: { value: 3, min: 1, max: 10, step: 1 },

@@ -156,7 +156,7 @@
   function riseIn() { return null; } // 집값은 이제 오르지 않는다 (이름만 남김)
   function skill(s, id) { const n = s.jobs[id]; return n >= T.skill_n3 ? 3 : n >= T.skill_n2 ? 2 : n >= T.skill_n1 ? 1 : 0; }
   function skillNext(s, id) { const n = s.jobs[id]; const at = [T.skill_n1, T.skill_n2, T.skill_n3].find(x => n < x); return at ? at - n : 0; }
-  function grade(score) { return score >= 0.9 ? 'perfect' : score >= 0.7 ? 'good' : score >= 0.4 ? 'ok' : 'miss'; }
+  function grade(score) { return score >= T.grade_perfect - 1e-9 ? 'perfect' : score >= T.grade_good - 1e-9 ? 'good' : score >= T.grade_ok - 1e-9 ? 'ok' : 'miss'; } // 기준은 config 의 grade_*
   function unlocked(s, what) { return what === 'stock' || what === 'study' ? s.tier >= 2 : what === 'coin' ? s.tier >= 3 : true; }
 
   // 지금 칸에서 고를 수 있는 것

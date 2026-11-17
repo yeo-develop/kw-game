@@ -3,13 +3,14 @@
 // Date: 2026-11-12
 // 알바 미니게임 4종: 전단지(flyer) · 상하차(loading) · 편의점(store) · 배달(delivery).
 // 약속: window.Minigames = { list, create(id, opts), demo(id, opts), sprites() }.
-// opts.intensity: 알바 강도 0 하 · 1 중 · 2 상 · 3 최상 (기본 1 = 예전 그대로). 게임마다 헷갈리는 것 하나를 강도에 맞춰 늘리고 줄인다.
-// opts.pace: 강도의 속도 배율 (기본 1, ui 가 config 의 mg_int_n 을 넘김). 판 속도 = (1 + levelSpeed x level) x pace.
+// opts.intensity: 알바 강도 0 하 · 1 중 · 2 상 · 3 최상 (기본 1). 강도가 높을수록 판정 자리가 좁고, 머무는 시간이 짧고, 더 촘촘히 온다 (2026-11-17 전체를 어렵게: "미니게임 너무쉬움").
+// opts.pace: 강도의 속도 배율 (기본 1, ui 가 config 의 mg_int_n 을 넘김, 2.5 에서 자름). 판 속도 = (1 + levelSpeed x level) x pace.
 // demo(id, opts): 스스로 하는 시연 판. create 와 같은 모양 + lastPress { code, age } · loops(몇 판째). press 는 무시, done 은 늘 false, opts.rng 는 안 씀.
 // 결정적: 난수는 opts.rng 만, 시간은 update(dt) 로만 흐른다. 같은 씨앗 + 같은 입력이면 같은 result.
 // 숙련도(level): 판 전체가 (1 + levelSpeed x level) 배 빨라진다 (levelSpeed 기본 0.16) = 같은 7초에 더 빨리, 더 많이 온다.
 // 점점 빨라짐(ramp): 한 판 안에서도 시작 -> 끝으로 갈수록 빨라진다 (ramp 기본 0.4 = 끝에서 약 +40%). 처음 1~2초는 거의 그대로.
-// 빨라져도 등장물이 판정 자리에 머무는 시간은 0.25초 아래로 내려가지 않게 각 게임이 속도 위쪽을 눌러 둔다.
+// 빨라져도 등장물이 판정 자리에 머무는 시간은 강도별 바닥(STAY: 하 0.18 · 중 0.13 · 상 0.105 · 최상 0.09초) 아래로 내려가지 않게,
+// 그리고 한 번 누른 뒤 다음 것까지의 틈도 강도별 바닥(게임마다) 아래로 내려가지 않게 각 게임이 속도 위쪽을 눌러 둔다 (사람 손으로 만점이 가능한 선).
 // 자동 점검용으로 game._state (내부 상태, 읽기만) 를 내놓는다.
 // 그림 (2026-11-16~): 밝은 낮의 픽셀 그림. 낮은 해상도 화면(294×127, 논리 1/3)에 PX 색으로 점을 찍고 정수 배로 키워 찍는다.
 // 글자는 둥근모꼴(opts.font) 16 · 32 · 64px. 색 역할표 window.MGPAL 을 내놓는다(ui.js 가 opts.pal 로 넘김).
@@ -18,6 +19,7 @@
   const root = typeof window !== 'undefined' ? window : globalThis;
   const W = 880, H = 380;            // 논리 크기
   const READY = 0.8, OUTRO = 0.5;    // 준비 · 마무리 길이(초)
+  const STAY = [0.18, 0.13, 0.105, 0.09];   // 강도별: 등장물이 판정 자리에 머무는 시간의 바닥(초)
   const EPS = 1e-9;
 
   // palette.js 가 안 불렸을 때만 쓰는 예비 색 (같은 값)
@@ -305,7 +307,7 @@
     const ramp = opts.ramp == null || !(+opts.ramp >= 0) ? 0.4 : Math.min(+opts.ramp, 1.5);                       // 한 판 안에서 끝에 +ramp 배
     const levelSpeed = opts.levelSpeed == null || !(+opts.levelSpeed >= 0) ? 0.16 : Math.min(+opts.levelSpeed, 0.4);   // 단계마다 +levelSpeed 배
     const intensity = opts.intensity == null ? 1 : clamp(Math.round(+opts.intensity) || 0, 0, 3);              // 알바 강도 0 하 · 1 중 · 2 상 · 3 최상
-    const pace = +opts.pace > 0 ? Math.min(+opts.pace, 2) : 1;                                                    // 강도의 속도 배율 (중 = 1)
+    const pace = +opts.pace > 0 ? Math.min(+opts.pace, 2.5) : 1;                                                    // 강도의 속도 배율 (안 주면 1)
     const rng = typeof opts.rng === 'function' ? opts.rng : spareRng(1);
     const fx = makeFx(P);
     const env = {
@@ -580,10 +582,11 @@
 
   function makeFlyer(env) {
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed, rate = env.rate;
-    const GY = 318, ZX = 240, ZH = 60, MX = 112;       // 바닥 · 건네는 자리 가운데 · 꺾쇠 반폭 · 내 자리
-    const BUSY = [0.12, 0.22, 0.3, 0.36][env.intensity], DENSE = [1.1, 1, 0.75, 0.6][env.intensity], MARG = [0.08, 0.06, 0.06, 0.06][env.intensity];   // 강도: 바쁜 사람 비율 · 사람 간격 · 자리에서 앞사람과의 틈 (0.06초 아래로는 안 줄임 — 누를 틈)
-    const JH = ZH + 10;                                // 판정 반폭: 몸이 꺾쇠에 걸치면 인정 (눈에 보이는 것보다 박하지 않게)
-    const CAP_WALK = 2 * JH / 0.28, CAP_BUSY = 2 * JH / 0.26;   // 걷는 속도 상한: 판정 자리를 0.28초(바쁜 사람 0.26초)는 지나가게
+    const GY = 318, ZX = 240, ZH = [46, 35, 27, 22][env.intensity], MX = 112;       // 바닥 · 건네는 자리 가운데 · 꺾쇠 반폭(강도가 높으면 좁다) · 내 자리
+    const BUSY = [0.24, 0.32, 0.38, 0.42][env.intensity], DENSE = [0.9, 0.72, 0.6, 0.52][env.intensity], MARG = 0.05;   // 강도: 바쁜 사람 비율 · 사람 간격 · 자리에서 앞사람과의 틈(누를 틈)
+    const SPACE = [0.42, 0.34, 0.29, 0.26][env.intensity], FLOOR = STAY[env.intensity], VM = [1.1, 1.3, 1.4, 1.5][env.intensity];   // 앞사람과의 시간 간격 바닥 · 자리에 머무는 시간 바닥 · 걸음 속도 배율
+    const JH = ZH + 8;                                 // 판정 반폭: 몸이 꺾쇠에 걸치면 인정 (눈에 보이는 것보다 박하지 않게)
+    const CAP_WALK = 2 * JH / FLOOR, CAP_BUSY = 2 * JH / (FLOOR - 0.02);   // 걷는 속도 상한: 판정 자리를 FLOOR 초(바쁜 사람은 0.02초 덜)는 지나가게
     // 등장 시각: 간격이 (속도 x 점점 빨라짐) 에 반비례해 시작 0.72초 -> 끝으로 갈수록 줄어든다
     const first = 0.8, lastAt = seconds - 0.45, nominal = [];
     for (let t = first; nominal.length < 3 || t <= lastAt + EPS;) {
@@ -601,10 +604,10 @@
     let prevAt = 0, prevStay = 0;
     for (let i = 0; i < n; i++) {
       const busy = busyAt.indexOf(i) >= 0;
-      const raw = (busy ? 470 + 70 * rng() : 230 + 150 * rng()) * speed * rate(nominal[i]);   // 저마다 다른 속도, 뒤로 갈수록 빠름
+      const raw = (busy ? 470 + 70 * rng() : 230 + 150 * rng()) * speed * VM * rate(nominal[i]);   // 저마다 다른 속도, 뒤로 갈수록 빠름
       const v = busy ? softCap(raw, CAP_BUSY, 0.9) : softCap(raw, CAP_WALK, 0.8);
       const stay = 2 * JH / v;                                              // 판정 자리에 머무는 시간
-      const at = i ? Math.max(nominal[i], prevAt + (prevStay + stay) / 2 + MARG) : nominal[i];   // 자리 한가운데에 닿는 시각 (앞사람과 자리에서 겹치지 않게)
+      const at = i ? Math.max(nominal[i], prevAt + (prevStay + stay) / 2 + MARG, prevAt + SPACE) : nominal[i];   // 자리 한가운데에 닿는 시각 (앞사람과 자리에서 겹치지 않게, 너무 붙지도 않게)
       if (at > lastAt + EPS && people.length >= 3) break;
       people.push({ busy: busy, at: at, v: v, stay: stay, look: env.pick(3), state: 'walk', x: W + 300, hop: 0 });
       prevAt = at; prevStay = stay;
@@ -774,11 +777,13 @@
 
   function makeLoading(env) {
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed;
-    const BX = 440, BW = 116, LINE = 250, WIN = 42, TOP = 82, END = 344, GAP = 90;   // 선 반폭 42 < 상자 간격 90: 선에 늘 상자는 하나만
-    const v0 = Math.min(2 * WIN / 0.28, 128 * speed * [1, 1, 1.2, 1.3][env.intensity]);   // 벨트 처음 속도(강도가 높으면 조금 더). 선에 0.28초는 머물게. 끝날 때는 (1 + ACC) 배
+    const BX = 440, BW = 116, LINE = 250, WIN = [32, 25, 20, 17][env.intensity], TOP = 82, END = 344;   // 선 반폭(강도가 높으면 좁다)
+    const FLOOR = STAY[env.intensity], SPACE = [0.39, 0.32, 0.275, 0.25][env.intensity];                 // 선에 머무는 시간 바닥 · 상자 사이 시간 바닥(세 방향을 고를 틈)
+    const v0 = Math.min(2 * WIN / (FLOOR + 0.01), 128 * speed * [1.1, 1.3, 1.45, 1.55][env.intensity]);   // 벨트 처음 속도(강도가 높으면 조금 더). 선에 FLOOR 초는 머물게. 끝날 때는 (1 + ACC) 배
     // 벨트는 한 줄로 흐르기만 해서 가속이 덜 느껴진다: ramp 0.4 일 때 예전처럼 1.5배(ACC 0.5)가 되도록 1.25 배로 건다.
-    // 상자가 선에 머무는 시간(2 x WIN / 속도)이 끝에서도 0.27초 아래로 내려가지 않게 ACC 를 누른다.
-    const ACC = Math.max(0, Math.min(env.ramp * 1.25, 2 * WIN / (0.27 * v0) - 1));
+    // 상자가 선에 머무는 시간(2 x WIN / 속도)이 끝에서도 FLOOR 초 아래로 내려가지 않게 ACC 를 누른다.
+    const ACC = Math.max(0, Math.min(env.ramp * 1.25, 2 * WIN / (FLOOR * v0) - 1));
+    const GAP = Math.max(90, Math.ceil(v0 * (1 + ACC) * SPACE));   // 상자 간격: 선 반폭의 두 배보다 넓고(선에 늘 하나만), 가장 빠를 때도 SPACE 초는 벌어지게
     const wp = env.warp(ACC);
     const travel = function (wt) { return v0 * wp.tau(wt); };   // 벨트가 흐른 거리
     const d0 = v0 * 0.85;
@@ -835,7 +840,7 @@
         }
       },
       finish: function () {
-        return { score: clamp((S.hits - 0.34 * S.empties) / S.total, 0, 1), hits: S.hits, total: S.total,
+        return { score: clamp((S.hits - 0.34 * S.empties - 0.34 * S.wrongs) / S.total, 0, 1), hits: S.hits, total: S.total,   // 틀린 방향: 그 상자를 잃고 감점도
           detail: '실은 상자 ' + S.hits + ' / ' + S.total + (S.wrongs ? ' · 떨어뜨림 ' + S.wrongs + '번' : '') + (S.empties ? ' · 헛누름 ' + S.empties + '번' : '') };
       },
       draw: function (g) {
@@ -1010,8 +1015,8 @@
 
   function makeStore(env) {
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed, font = env.font, rate = env.rate;
-    // 만점 기준 개수 (보통 손님 3명 분, 강도가 높으면 더). 빠른 사람이 물건 하나에 0.35초(손님 바뀜 포함)면 채울 수 있는 데까지만
-    const par = Math.max(3, Math.min(Math.floor(seconds / 0.35), Math.round(8 * [1, 1, 1.15, 1.3][env.intensity] * speed * seconds / 7)));
+    // 만점 기준 개수 (하 · 숙련 0 이 12개 = 손님 네댓 명 분, 강도 · 숙련이 높으면 더). 상한은 강도별 16 · 18 · 20 · 21개(7초 기준) — 가장 빠른 사람이 물건 하나에 0.33초(손님 바뀜 포함)
+    const par = Math.max(3, Math.min(Math.floor(seconds / [0.4375, 0.389, 0.35, 0.33][env.intensity] + 1e-6), Math.round(8 * [1.2, 1.4, 1.5, 1.6][env.intensity] * speed * seconds / 7)));
     const TRANS = 0.25, CX = 150, CY = 184, BX0 = 250, BY0 = 32, BH = 128;
     const counts = shuffle([3, 3, 2], rng), customers = [];
     let lastLook = -1;
@@ -1231,12 +1236,12 @@
     const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed;
     const LANE_W = 108, RX0 = W / 2 - LANE_W * 1.5, RX1 = W / 2 + LANE_W * 1.5, SY = 298;
     const PB = 80;                                                          // 초록 지점을 밟는 폭(앞뒤): 스쿠터와 핀 그림이 닿는 거리
-    const easy = env.intensity === 0 || (env.level === 0 && env.intensity <= 1);                                           // 숙련 0단계: 한 줄에 한 차선만 막히고 줄 간격도 조금 넓다 (다른 세 알바와 비슷한 어려움)
-    const dsp = speed * [1, 1, 0.92, 0.84][env.intensity];
+    const easy = env.intensity === 0;                                           // 하: 한 줄에 한 차선만 막히고 줄 간격도 조금 넓다. 중부터는 두 차선이 막히는 줄이 섞인다
+    const dsp = Math.pow(speed, 0.55) * [1, 1, 0.97, 0.95][env.intensity];   // 판 속도를 다 싣지 않는다(0.55 제곱): 줄 간격이 사람 손(차선 두 번 바꾸기)을 넘지 않게
     const vb = 280 * dsp, gap = 0.62 / dsp * (easy ? 1.15 : 1), T0 = 1.05;   // 길 처음 속도 · 줄 간격 · 첫 줄 (둘 다 '흐른 시간' tau 로 잰다)
     const rowT = function (k) { return T0 + k * gap; };
-    // 길은 시작 vb -> 끝 vb x (1 + rEff). 초록 지점이 밟는 폭 안에 0.27초는 머물도록 rEff 를 누른다.
-    const rEff = Math.max(0, Math.min(env.ramp, 2 * PB / 0.27 / vb - 1));
+    // 길은 시작 vb -> 끝 vb x (1 + rEff). 초록 지점이 밟는 폭 안에 강도별 바닥(STAY + 0.02초)은 머물도록 rEff 를 누른다.
+    const rEff = Math.max(0, Math.min(env.ramp, 2 * PB / (STAY[env.intensity] + 0.02) / vb - 1));
     const wp = env.warp(rEff);
     let R = 0; while (rowT(R) <= wp.tau(seconds - 0.37)) R++; R = Math.max(3, R);   // 차가 오는 줄 수
     const nPins = Math.max(2, Math.min(R, Math.round(R * 0.6)));
@@ -1421,8 +1426,8 @@
       return slip ? (q.alt.length ? q.alt[Math.min(q.alt.length - 1, Math.floor(rng() * q.alt.length))] : null) : q.code;
     };
   }
-  // 시연의 손: 잘하는 사람만큼 빠르되 덜 틀린다 (보는 사람이 맞는 플레이를 보게) — 가끔 한 번 놓친다
-  const DEMO_HAND = { react: 0.22, rsd: 0.03, rlo: 0.16, rhi: 0.3, tsd: 0.025, wrong: 0, chain: 0.1, pick: 0.03 };   // 시연은 일부러 틀리지 않는다 (박자를 놓치는 일만 가끔)
+  // 시연의 손: 잘하는 사람보다 빠르고 틀리지 않는다 (보는 사람이 맞는 플레이를 보게) — 가끔 한 번 놓친다
+  const DEMO_HAND = { react: 0.15, rsd: 0.02, rlo: 0.1, rhi: 0.2, tsd: 0.015, wrong: 0, chain: 0.05, pick: 0.02 };   // 시연은 일부러 틀리지 않는다 (높은 강도에서도 맞는 플레이를 보이게 손이 빠르다 — 박자를 놓치는 일만 가끔)
   function demo(id, opts) {
     opts = opts || {};
     let game = null, hand = null, rest = 0;
