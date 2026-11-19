@@ -7,4 +7,4 @@
 
 2026-11-20 판 — iteration 5 (2026-11-19 피드백: 체력의 드라마 · 보증금/전세 · 신용 대출 · 부동산 · 종목 일곱 · 공부 성장 · 가게 · 꿈). 소스를 고치면 이 두 파일은 위 명령으로 다시 만들어 바꿔 넣는다.
 
-올린 주소는 아직 앞선 판(2026-11-17)이다: https://s.nolss.uk/seoul-station · https://s.nolss.uk/seoul-station-screens — 이 두 파일을 그대로 올리면 같아진다.
+올린 주소도 이 판이다 (2026-11-20 올림 — 올라간 파일이 이 두 파일과 바이트까지 같다): https://s.nolss.uk/seoul-station · https://s.nolss.uk/seoul-station-screens — 그 전에 올라가 있던 판(2026-11-17)은 커밋 `a4426d4` 의 이 폴더에 그대로 있다.
