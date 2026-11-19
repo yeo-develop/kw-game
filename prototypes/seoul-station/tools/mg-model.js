@@ -10,6 +10,8 @@ const demoMode = process.argv[3] === 'demo';
 const seeds = demoMode ? 0 : Math.max(1, +process.argv[3] || 40);
 global.window = {}; require(path.resolve(dir, 'config.js'));
 const paces = process.argv[4] ? process.argv[4].split(',').map(Number) : [0, 1, 2, 3].map(n => window.CONFIG['mg_int_' + n].value);   // 기본은 config.js 의 값
+const cv = (k, d) => (process.env.NOWARM ? d : window.CONFIG[k] ? window.CONFIG[k].value : d);
+const START = { ready: cv('mg_ready', 0.8), warm: cv('mg_warm', 1), warmSec: cv('mg_warm_sec', 0) };   // 준비 시간 · 느린 시작 (NOWARM=1 이면 끄고 잰다 — 견주기용)
 const file = path.join(dir, 'minigames.js');
 const ctx = { console: console };
 ctx.globalThis = ctx;
@@ -27,7 +29,7 @@ if (demoMode) {
     const sc = [[], []];
     try {
       for (const li of [0, 1]) {
-        const d = M.demo(id, { rng: function () { calls++; return 0.5; }, intensity: n, pace: paces[n], level: li * 3 });
+        const d = M.demo(id, Object.assign({ rng: function () { calls++; return 0.5; }, intensity: n, pace: paces[n], level: li * 3 }, START));
         let last = null;
         for (let f = 0; f < 18000; f++) {
           d.update(DT);
@@ -55,7 +57,7 @@ const HANDS = [
 const GR = ['grade_ok', 'grade_good', 'grade_perfect'].map(k => window.CONFIG[k].value);   // 등급 기준은 config.js 에서
 function grade(x) { return x >= GR[2] - 1e-9 ? 3 : x >= GR[1] - 1e-9 ? 2 : x >= GR[0] - 1e-9 ? 1 : 0; }
 function run(id, n, level, prof, seed) {
-  const g = M.create(id, { rng: mulberry(seed), intensity: n, pace: paces[n], level: level, font: 'x' });
+  const g = M.create(id, Object.assign({ rng: mulberry(seed), intensity: n, pace: paces[n], level: level, font: 'x' }, START));
   const hand = M._hand(id, prof, mulberry(seed * 977 + 13));
   for (let f = 0; !g.done && f < 60 * 20; f++) {
     const code = hand(g._state, DT);
@@ -64,7 +66,7 @@ function run(id, n, level, prof, seed) {
   }
   return g.result.score;
 }
-console.log('pace ' + paces.join(' · ') + ' · 씨앗 ' + seeds + ' · 칸: 평균 (실수/보통/잘함/완벽 %)');
+console.log('pace ' + paces.join(' · ') + ' · 준비 ' + START.ready + '초 · 느린 시작 ×' + START.warm + ' → 1 (' + START.warmSec + '초) · 씨앗 ' + seeds + ' · 칸: 평균 (실수/보통/잘함/완벽 %)');
 console.log(['게임', '강도', '숙련'].concat(HANDS.map(function (h) { return h[0]; })).join('\t'));
 const sum = {};
 for (const id of M.list) for (let n = 0; n < 4; n++) for (const level of [0, 3]) {

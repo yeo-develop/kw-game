@@ -28,12 +28,12 @@
   const PX = window.PX || {};
 
   let scene = 'title', S = null; // S = 규칙의 상태 (window.game.state 가 요약해서 보여 줌)
-  const ui = { tab: 'stock', sel: 'daejang', lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, fresh: {}, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
+  const ui = { tab: 'road', sview: 'market', sel: 'daejang', qty: 1, bamt: 0, lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, fresh: {}, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
 
   // 판 밖에 남는 것: 업적 · 기록 · 설정 (판 저장과 따로)
   function loadMeta() {
     // runs: 시작한 판 · homes: 내 집(1막 끝)에 간 판 · act1Best/act1Rank: 가장 빨리 산 내 집 · wins: 엔딩(한국 최고 부자) · bestDay/bestRank: 가장 빠른 엔딩 · bestTier: 가장 높이 간 곳
-    const d = { mv: 2, ach: {}, runs: 0, homes: 0, act1Best: 0, act1Rank: '', wins: 0, bestDay: 0, bestRank: '', bestTier: 0, fxOff: false, tut: 0, seen: {} }; // tut: 첫 판 안내를 0 안 봄 · 1 보는 중 · 2 끝냄(또는 끔). seen: 한 번씩만 뜨는 설명 중 본 것
+    const d = { mv: 2, ach: {}, runs: 0, homes: 0, act1Best: 0, act1Rank: '', wins: 0, bestDay: 0, bestRank: '', bestTier: 0, fxOff: false, tut: 0, seen: {}, look: 0 }; // look: 고른 후드 색 // tut: 첫 판 안내를 0 안 봄 · 1 보는 중 · 2 끝냄(또는 끔). seen: 한 번씩만 뜨는 설명 중 본 것
     if (MANUAL) return d;
     let old = {};
     try { old = JSON.parse(localStorage.getItem(META) || '{}') || {}; } catch (e) { /* 못 읽으면 처음부터 */ }
@@ -64,7 +64,7 @@
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const r1k = n => Math.round(n / 1000) * 1000;
-  const loanWeekly = L => (L > 0 ? r1k(L * tune.loan_rate) + Math.min(L, r1k(L / tune.loan_weeks)) : 0); // 빌린 돈 L 의 한 주 원리금 (rules 의 homeInfo.weekly 와 같은 셈)
+  const loanWeekly = (L, rate) => (L > 0 ? r1k(L * (rate == null ? R.creditView(S).mort : rate)) + Math.min(L, r1k(L / tune.loan_weeks)) : 0); // 빌린 돈 L 의 한 주 원리금 (rules 의 homeInfo.weekly 와 같은 셈 — 이자는 지금 신용등급의 것)
   const jo = (w, a, b) => ((w.charCodeAt(w.length - 1) - 0xAC00) % 28 ? a : b); // 받침이 있으면 a
   const eok = n => { const v = n / 1e8; return (v >= 10 ? Math.floor(v) : Math.floor(v * 10) / 10) + '억'; }; // 1억 이상 금액의 단위 길잡이 (숫자 표기는 그대로, 옆에 작게)
   const eokTag = n => (n >= 1e8 ? ' <i class="u">' + eok(n) + '</i>' : '');
@@ -127,9 +127,11 @@
     if (!r) r = rolls[key] = { v: from == null ? to : from, from: 0, to: from == null ? to : from, f: 0, n: 0 };
     if (from != null) r.v = from;
     r.id = id; r.fmt = fmt;
-    if (r.to !== to || from != null) { r.from = r.v; r.to = to; r.f = 0; r.n = calm() ? 0 : ROLL; if (!r.n) r.v = to; }
+    if (r.to !== to || from != null) { r.from = r.v; r.to = to; r.f = 0; r.n = calm() ? 0 : Math.round(ROLL * rollSize(r.v, to)[0]); r.big = to > r.v && rollSize(r.v, to)[1] >= 2; if (!r.n) r.v = to; }
     return r.v;
   }
+  // 금액의 크기: 바뀌는 돈 ÷ 그때 가진 돈 → [굴러가는 길이 배수, 단계 0~3] (가진 돈이 적을 때는 100,000원을 바닥으로 — 첫 일당도 크게 느껴지게)
+  function rollSize(from, to) { const r = Math.abs(to - from) / Math.max(Math.abs(from), 100000); return r < 0.02 ? [0.5, 0] : r < 0.15 ? [1, 1] : r < 0.6 ? [1.7, 2] : [2.6, 3]; }
   function rollNow(key, v) { rolls[key] = { v, from: v, to: v, f: 0, n: 0 }; } // 굴리지 않고 그 값으로 (판을 열 때)
   function stepRolls() {
     let ticked = false;
@@ -139,7 +141,8 @@
       r.f++;
       r.v = r.f >= r.n ? r.to : r.from + (r.to - r.from) * ease(r.f / r.n);
       const el = r.id && $(r.id);
-      if (el) { const t = r.fmt(r.v); if (el.textContent !== t) { el.textContent = t; if (!ticked && r.f % 3 === 1) { sfx.tick(); ticked = true; } } }
+      if (el) { const t = r.fmt(r.v); if (el.textContent !== t) { el.textContent = t; if (!ticked && r.f % 3 === 1) { tone(1300 + 900 * (r.n ? r.f / r.n : 1), 0.02, 'square', 0.04); ticked = true; } } } // 다라라락: 끝으로 갈수록 높아진다
+      if (r.v === r.to && r.big) { r.big = false; sfx.pay(); if (el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } } // 큰돈이면 다 굴렀을 때 한 번 더
     }
   }
   const rolling = () => Object.keys(rolls).some(k => rolls[k].v !== rolls[k].to);
@@ -153,9 +156,20 @@
     const cols = [PX.y, PX.b, PX.r, PX.g, PX.o, PX.w];
     for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (fr() - 0.5) * spread, v = 240 + fr() * 460; fx.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.9 + fr() * 0.8, c: cols[i % cols.length], s: 5 + fr() * 6, r: fr() * 6 }); }
   }
+  function coins(from, amt) { // 번 자리에서 위쪽 띠의 현금으로 날아가는 동전: 금액이 클수록 많이 (3 · 7 · 14 · 26개)
+    if (calm() || !(amt > 0)) return;
+    const el = $('cash'), sr = stage.getBoundingClientRect(), k = sr.width ? 1280 / sr.width : 1, q = el ? el.getBoundingClientRect() : null;
+    const tx = q ? (q.left + q.width / 2 - sr.left) * k : 520, ty = q ? (q.top + q.height / 2 - sr.top) * k : 38, o = from || ui.from || { x: 640, y: 300 };
+    const n = [3, 7, 14, 26][rollSize(S.cash - amt, S.cash)[1]];
+    for (let i = 0; i < n; i++) fx.parts.push({ coin: 1, x: o.x, y: o.y, x0: o.x + (fr() - 0.5) * 60, y0: o.y + (fr() - 0.5) * 30, cx: (o.x + tx) / 2 + (fr() - 0.5) * 220, cy: Math.min(o.y, ty) - 60 - fr() * 120, x1: tx, y1: ty, t: -i * 0.035, d: 0.5 + fr() * 0.25, life: 9, s: 8 });
+    fx.dirty = true;
+  }
   function stepFx() {
     if (!fx.parts.length) return;
-    for (const p of fx.parts) { p.vy += 900 * STEP; p.x += p.vx * STEP; p.y += p.vy * STEP; p.life -= STEP; p.r += 8 * STEP; }
+    for (const p of fx.parts) {
+      if (p.coin) { p.t += STEP / p.d; const t = clamp(p.t, 0, 1), a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, c = t * t; p.x = a * p.x0 + b * p.cx + c * p.x1; p.y = a * p.y0 + b * p.cy + c * p.y1; if (p.t >= 1) { p.life = 0; if (!p.hit) { p.hit = 1; tone(1900, 0.03, 'square', 0.03); } } continue; }
+      p.vy += 900 * STEP; p.x += p.vx * STEP; p.y += p.vy * STEP; p.life -= STEP; p.r += 8 * STEP;
+    }
     fx.parts = fx.parts.filter(p => p.life > 0 && p.y < 760);
     fx.dirty = true;
   }
@@ -166,7 +180,10 @@
     const w = ui.modal && !/^(mg|den|drill)$/.test(ui.modal.type) && document.querySelector('#veil .win'), sr = stage.getBoundingClientRect();
     c.save();
     if (w && sr.width) { const q = w.getBoundingClientRect(), k = 1280 / sr.width; c.beginPath(); c.rect(0, 0, 1280, 720); c.rect((q.left - sr.left) * k, (q.top - sr.top) * k, q.width * k, q.height * k); c.clip('evenodd'); } // 창이 떠 있으면 색종이는 창 바깥에만 (창 제목 · 글을 가리지 않게)
-    for (const p of fx.parts) { const s = Math.round(p.s / 2) * 2; c.fillStyle = p.c; c.fillRect(Math.round(p.x / 2) * 2 - s / 2, Math.round(p.y / 2) * 2 - s / 2, s, Math.cos(p.r) > 0 ? s : s / 2); } // 픽셀 조각: 돌리지 않고 2px 칸에 맞춰 (도는 것은 높이가 바뀌는 것으로)
+    for (const p of fx.parts) {
+      if (p.coin) { if (p.t < 0) continue; const x = Math.round(p.x / 2) * 2 - 5, y = Math.round(p.y / 2) * 2 - 5; c.fillStyle = PX.k; c.fillRect(x, y, 10, 10); c.fillStyle = PX.y; c.fillRect(x + 2, y + 2, 6, 6); c.fillStyle = PX.Y; c.fillRect(x + 2, y + 2, 2, 2); continue; } // 동전: 외곽선 + 노랑 + 밝은 점
+      const s = Math.round(p.s / 2) * 2; c.fillStyle = p.c; c.fillRect(Math.round(p.x / 2) * 2 - s / 2, Math.round(p.y / 2) * 2 - s / 2, s, Math.cos(p.r) > 0 ? s : s / 2);
+    } // 픽셀 조각: 돌리지 않고 2px 칸에 맞춰 (도는 것은 높이가 바뀌는 것으로)
     c.restore();
     fx.dirty = fx.parts.length > 0;
   }
@@ -176,11 +193,11 @@
   const hit = [];
   const hold = n => { ui.guard = Math.max(ui.guard, n); }; // n 걸음 동안 누름을 버림 (60걸음 = 1초)
   const rearm = () => hold(15); // 창이 막힌 동안 또 누르면 조금 더 막는다: 연타로는 안 넘어가고, 멈췄다 눌러야 넘어간다
-  const GUARD = { night: 36, quest: 36, tier: 36, liq: 36, intro: 36, perk: 30, event: 24, confirm: 24, den: 30, roadmap: 12, buy: 24, repay: 18, study: 12, act1: 45, foreclose: 36, biz: 30, drill: 24, shock: 30 }; // 창마다 처음 막는 걸음 수
+  const GUARD = { night: 36, quest: 36, tier: 36, liq: 36, intro: 36, perk: 30, event: 24, confirm: 24, den: 30, roadmap: 12, buy: 24, repay: 18, study: 12, act1: 45, foreclose: 36, biz: 30, drill: 24, shock: 30, collapse: 45, story: 36, lease: 24 }; // 창마다 처음 막는 걸음 수
   const DEN_ROLL = 42, DEN_AFTER = 24; // 도박장: 주사위가 구르는 걸음 수(0.7초) · 결과가 뜬 뒤 누름을 버리는 걸음 수
   addEventListener('keydown', e => {
     startAudio();
-    if (e.target && e.target.tagName === 'INPUT') { if (e.code === 'Enter') { e.preventDefault(); hit.push('Enter'); } return; }
+    if (e.target && e.target.tagName === 'INPUT') { if (e.code === 'Enter') { e.preventDefault(); if (e.target.id === 'qty') e.target.blur(); else hit.push('Enter'); } return; } // 수량 칸의 Enter = 적은 수를 확정 (사기 · 팔기는 버튼으로)
     if (e.repeat) return;
     hit.push(e.code);
     if (e.code === 'Space' || e.code.indexOf('Arrow') === 0) e.preventDefault();
@@ -197,6 +214,8 @@
       if (cs.length) { mgPress(cs[clamp(Math.floor((e.clientX - r.left) / r.width * cs.length), 0, cs.length - 1)].code); e.preventDefault(); }
     }
   });
+  stage.addEventListener('input', e => { if (e.target && e.target.id === 'qty' && scene === 'play' && S) qtyTyped(e.target); });
+  stage.addEventListener('change', e => { if (e.target && e.target.id === 'qty' && scene === 'play' && S && !ui.modal) qtyTyped(e.target, true); }); // 칸에서 손을 뗄 때: 다시 그리지 않는다 (바로 이어 누른 "사기"의 누름이 씹히지 않게)
   stage.addEventListener('click', e => {
     const sr = stage.getBoundingClientRect();
     ui.from = { x: (e.clientX - sr.left) / sr.width * 1280, y: (e.clientY - sr.top) / sr.height * 720 }; // 번 돈 숫자가 떠오를 자리
@@ -221,14 +240,14 @@
       if (!MANUAL) try { runs = Number(localStorage.getItem(RUNS)) || 0; localStorage.setItem(RUNS, String(runs + 1)); } catch (e) { /* 저장을 못 써도 게임은 됨 */ }
       seed = CONFIG.seed + runs * 101; // 판마다 시세가 다르게
     }
-    S = R.create(seed, ui.name);
+    S = R.create(seed, ui.name); R.setLook(S, meta.look || 0);
     ui.tut = GUIDE && meta.tut !== 2; // 안내를 끝낸 적이 없으면 첫날을 따라가며 알려 준다
     const mark = ui.tut ? 1 : meta.tut === 1 ? 0 : meta.tut; // "보는 중"(1)은 늘 지금 판을 가리킨다: 안내 없이 연 새 판이 보던 판을 갈아 치우면 "안 봄"으로 되돌림
     meta.tut = mark; meta.runs++; saveMeta(); // 판 수는 시작한 판으로 센다 (끝이 멀어서)
     begin();
   }
   function begin() {
-    ui.tab = 'stock'; ui.sel = 'daejang'; ui.fresh = {}; ui.flash = {}; ui.queue = []; ui.modal = null; ui.ending = false; ui.say = null; ui.sayT = 0; ui.newAch = [];
+    ui.tab = R.unlocked(S, 'stock') ? 'stock' : 'road'; ui.sview = 'market'; ui.sel = 'daejang'; ui.qty = 1; ui.bamt = 0; ui.fresh = {}; ui.flash = {}; ui.queue = []; ui.modal = null; ui.ending = false; ui.say = null; ui.sayT = 0; ui.newAch = [];
     if (S.pending) { const p = typeof S.pending === 'string' ? { id: S.pending, n: 1 } : S.pending; S.pending = null; if (R.quitJob(S, p.id, p.n)) S.log.push({ day: S.day, text: '하다 만 알바는 대충 한 것으로 처리했습니다.', tone: 'warn' }); } // 하는 중에 새로 고침: 칸은 반드시 쓴다 (예전 저장은 알바 이름 하나 = 중)
     const missed = (S.ach || []).filter(id => !meta.ach[id]); // 알림이 뜨기 전에 새로 고쳐서 판 저장에만 남은 업적
     if (missed.length) { for (const id of missed) meta.ach[id] = 1; saveMeta(); }
@@ -261,6 +280,7 @@
         ui.askNew = false; sfx.up(); newGame(seed);
         saveNow(); // 새 판을 고른 순간 하던 판의 저장을 덮는다 ("보는 중"인 안내가 예전 판에 붙지 않게). ?scene=play 로 바로 여는 점검 길은 저장을 건드리지 않는다
       } else if (what === 'continue') { const s = hasSave(); if (s) { S = s; ui.tut = GUIDE && meta.tut === 1; sfx.click(); begin(); } }
+      else if (what === 'look') { meta.look = clamp(Number(arg) || 0, 0, 3); saveMeta(); sfx.click(); renderTitle(); }
       else if (what === 'tuttoggle') {
         if (meta.tut === 2) { guideOn(); toast(I('info') + '<span>새 판을 시작하면 첫날을 따라가며 알려 줍니다</span>', 'tip', 260); }
         else { guideOff(); toast(I('info') + '<span>첫 판 안내를 껐습니다</span>', 'tip', 200); }
@@ -282,6 +302,8 @@
       else if (what === 'no') closeModal(false);
       else if (what === 'opt' && m.opts) { const i = Number(arg); if (m.opts[i]) { m.pick = i; sfx.click(); renderVeil(); } } // 집 사기 · 미리 갚기: 고르고 Enter
       else if (what === 'studyasset' && m.type === 'study') studyPick(arg);
+      else if (what === 'studygo' && m.type === 'study') studyGo();
+      else if (what === 'dream' && m.type === 'intro') { m.dream = arg; sfx.click(); renderVeil(); }
       else if (what === 'copy' && m.type === 'act1') copyCard('act1');
       else if (what === 'why') deny(arg);
       else if (what === 'mgstart' && m.type === 'mg' && m.pre) beginMg();
@@ -302,25 +324,46 @@
     if (what === 'tip') { sfx.click(); toast(I('info') + '<span>' + esc(arg) + '</span>', 'tip', 260); return; } // 아이콘을 누르면 뜻이 뜬다 (마우스를 못 올리는 화면에서도)
     if (what === 'roadmap') { sfx.click(); openModal({ type: 'roadmap' }); return; }
     if (what === 'tab') {
-      ui.tab = arg; ui.fresh[arg] = false; sfx.click(); renderQuest(); renderBoard();
+      ui.tab = arg; ui.fresh[arg] = false; if (arg === 'stock' && ui.sview === 'detail' && !R.visible(S, ui.sel)) ui.sview = 'market'; sfx.click(); renderQuest(); renderBoard();
       if (arg === 'coin' && GUIDE && !meta.seen.coin && !S.lev && R.unlocked(S, 'coin')) openModal(drillNew()); // 코인 탭을 처음 열면: 설명 대신 직접 눌러 보는 연습 (진짜 돈 아님)
       return;
     }
     if (what === 'drill') { sfx.click(); openModal(drillNew()); return; } // 코인 탭의 "연습"으로 다시
-    if (what === 'sel') { ui.sel = arg; sfx.click(); renderBoard(); return; }
+    if (what === 'sview') { ui.sview = arg; sfx.click(); renderBoard(); return; } // 주식 탭: 장 보기 · 내 보유
+    if (what === 'sel') { ui.sel = arg; ui.sview = 'detail'; ui.qty = 1; ui.tab = 'stock'; sfx.click(); renderBoard(); return; } // 종목을 누르면 그 종목의 상세로
+    if (what === 'qty') { setQty(arg); sfx.click(); renderBoard(); return; }
+    if (what === 'buyq') { if (R.buyUnits(S, ui.sel, ui.qty)) sfx.click(); done(); return; }
+    if (what === 'sellq') { const h = S.hold[ui.sel]; if (R.sellUnits(S, ui.sel, Math.min(ui.qty, h ? h.units : 0))) sfx.pay(); done(); return; }
+    if (what === 'eat') { ui.from = { x: 240, y: 400 }; if (R.eat(S, arg)) sfx.ding(); done(); return; }
+    if (what === 'item') { if (R.buyItem(S, arg)) sfx.up(); done(); return; }
+    if (what === 'wear') { if (R.wear(S, arg)) sfx.click(); done(); return; }
+    if (what === 'bamt') { setBamt(arg); sfx.click(); renderBoard(); return; }
+    if (what === 'borrow') { if (R.borrow(S, ui.bamt)) { sfx.pay(); ui.bamt = 0; } done(); return; }
+    if (what === 'repaycl') { if (R.repayCl(S, ui.bamt || S.cl)) { sfx.click(); ui.bamt = 0; } done(); return; }
+    if (what === 'propbuy' || what === 'propsell') {
+      const v = R.propView(S).rows.find(r => r.id === arg);
+      if (!v) return;
+      if (what === 'propbuy' && !v.ok) { deny(v.why); return; }
+      openModal({ type: 'confirm', kind: what === 'propbuy' ? 'propbuy' : 'propsell', v }); return;
+    }
+    if (what === 'lease') { // 원룸 월세 → 전세로 갈아타기
+      const info = R.moveInfo(S, 3, 'jeonse');
+      if (!info.ok) { deny(info.why || '지금은 전세로 바꿀 수 없습니다'); return; }
+      openModal({ type: 'confirm', kind: 'swap', info }); return;
+    }
     if (what === 'lev') { ui.lev = Number(arg); sfx.click(); renderBoard(); return; }
     if (what === 'share') { ui.share = Number(arg); sfx.click(); renderBoard(); return; }
     if (what === 'job') { startJob(arg); return; }
-    if (what === 'skip') { ui.from = { x: 1200, y: 100 }; if (R.doJob(S, arg, null)) { sfx.pay(); hold(20); } else deny('체력이 모자랍니다 — 쉬거나 가벼운 일을'); done(); return; } // 번 돈은 오늘 칸의 머리줄에서 뜬다 (마지막 칸이면 그 자리에 "하루 마치기"가 들어서므로 그림 위에 겹치지 않게)
+    if (what === 'skip') { ui.from = { x: 1200, y: 100 }; if (R.doJob(S, arg, null)) { sfx.pay(); hold(20); } else deny('체력이 모자랍니다 — 쉬거나 사 먹기'); done(); return; } // 번 돈은 오늘 칸의 머리줄에서 뜬다 (마지막 칸이면 그 자리에 "하루 마치기"가 들어서므로 그림 위에 겹치지 않게)
     if (what === 'rest') { if (R.doRest(S)) { sfx.click(); hold(20); } done(); return; }
     if (what === 'study') { // 공부: 종목을 고르는 창 → 고른 종목 하나의 내일
       const a = R.acts(S).find(x => x.kind === 'study');
       if (!a || !a.ok) { deny(a ? a.why : ''); return; }
-      sfx.click(); openModal({ type: 'study', assets: a.assets, auto: a.auto }); return;
+      sfx.click(); openModal({ type: 'study', assets: a.assets, auto: a.auto, picks: a.picks || 1, sel: [] }); return;
     }
     if (what === 'endday') { // 그냥 자면 손해가 나는 밤은 한 번 더 묻는다 (Space 연타로 넘어가지 않게)
-      const b = R.bill(S), short = b && b.inDays === 0 && S.cash < b.amt;
-      if (S.slot >= 3 && short) { openModal({ type: 'confirm', kind: 'sleep', short, b }); return; }
+      const b = R.bill(S), lack = b && b.inDays === 0 ? b.amt - b.income - S.cash : 0, room = R.creditView(S).room, short = lack > 0; // 모자란 돈: 같은 밤에 들어올 임대수익 · 배당을 빼고
+      if (S.slot >= 3 && short) { openModal({ type: 'confirm', kind: 'sleep', short, b, lack, auto: Math.ceil(lack / 10000) * 10000 <= room }); return; }
       sleepNow(); return;
     }
     if (what === 'buy') { const f = Number(arg), amt = arg === 'all' ? S.cash : f > 0 && f <= 1 ? Math.floor(S.cash * f) : f; if (R.buy(S, ui.sel, amt)) sfx.click(); done(); return; } // 버튼은 현금의 비율(0.25 · 0.5 · 1), 점검 도구는 금액도 넣는다
@@ -328,18 +371,19 @@
     if (what === 'long' || what === 'short') { if (R.levOpen(S, what === 'long' ? 1 : -1, Math.floor(S.cash * ui.share), ui.lev)) { sfx.click(); hold(24); } done(); return; }
     if (what === 'close') { if (R.levClose(S)) { sfx.pay(); hold(24); } done(); return; }
     if (what === 'move') {
-      const to = Number(arg), info = R.moveInfo(S, to);
-      if (!info.ok) { deny(info.why); return; }
+      const to = Number(arg), info = R.moveInfo(S, to), alt = to === 3 ? R.moveInfo(S, 3, 'jeonse') : null;
+      if (!info.ok && !(alt && alt.ok)) { deny(info.why); return; }
       if (to === 1) { R.move(S, to); sfx.up(); hold(20); done(); return; }
+      if (to === 3) { openModal(leaseModal()); return; } // 원룸: 월세 · 전세를 고른다
       openModal({ type: 'confirm', kind: 'move', to, info });
       return;
     }
     if (what === 'house') { // 내 집부터: 한 단계 위 집을 산다 (내 집은 현금으로만, 아파트부터는 대출을 고름)
       const to = S.tier + 1;
       if (to < 4 || to > 8) { deny(to < 4 ? '원룸부터 집을 살 수 있습니다' : '호텔이 마지막 집입니다 — 이제 "선언"으로 끝냅니다'); return; }
-      const info = R.homeInfo(S, to);
-      if (!info.ok) { deny(info.why); return; }
-      openModal(buyModal(to, info)); return;
+      const info = R.homeInfo(S, to), jeonse = info.leases.indexOf('jeonse') >= 0 ? R.homeInfo(S, to, 'jeonse') : null;
+      if (!info.ok && !(jeonse && jeonse.ok)) { deny(info.why); return; }
+      openModal(buyModal(to, info, jeonse)); return;
     }
     if (what === 'repay') {
       const l = R.loanView(S);
@@ -357,32 +401,60 @@
       openModal({ type: 'confirm', kind: 'top', g }); return;
     }
   }
-  function buyModal(to, info) { // 고를 것: 대출 최대 · 절반 · 없이 (내 집은 현금 하나). 고른 것마다 지금 낼 현금 · 일요일 밤마다 나갈 돈
-    const loans = info.canLoan ? [info.loanMax, Math.floor(info.loanMax / 2 / 10000) * 10000, 0] : [0];
-    const names = info.canLoan ? ['최대로 빌림', '절반', '대출 없이'] : ['현금으로'];
+  function buyModal(to, info, jeonse) { // 고를 것: (아파트 · 주택은) 전세 · 대출 최대 · 절반 · 없이 (내 집은 현금 하나). 고른 것마다 지금 낼 현금 · 일요일 밤마다 나갈 돈
+    const loans = info.loanMax > 0 ? [info.loanMax, Math.floor(info.loanMax / 2 / 10000) * 10000, 0] : [0];
+    const names = info.loanMax > 0 ? ['최대로 빌려 산다', '절반만 빌려 산다', '대출 없이 산다'] : [to === 4 ? '현금으로 산다' : '대출 없이 산다'];
     const opts = loans.map((loan, i) => {
-      const cash = info.full - loan, weekly = loanWeekly(loan), ok = S.cash >= cash;
-      return { name: names[i], loan, cash, weekly, fixed: info.fixed, ok, why: ok ? '' : '현금이 ' + won(cash - S.cash) + ' 모자랍니다' };
+      const cash = info.full - loan, weekly = loan > 0 ? r1k(loan * info.rate) + Math.min(loan, r1k(loan / tune.loan_weeks)) : 0, ok = S.cash >= cash;
+      return { name: names[i], lease: 'own', loan, cash, weekly, fixed: info.fixed, ok, why: ok ? '' : '현금이 ' + won(cash - S.cash) + ' 모자랍니다' };
     });
+    if (jeonse) opts.unshift({ name: '전세로 들어간다', lease: 'jeonse', loan: 0, cash: jeonse.full, deposit: jeonse.deposit, weekly: 0, fixed: jeonse.fixed, ok: jeonse.ok, why: jeonse.ok ? '' : '현금이 ' + won(jeonse.full - S.cash) + ' 모자랍니다' });
     const pick = Math.max(0, opts.findIndex(o => o.ok));
-    return { type: 'buy', to, info, opts, pick };
+    return { type: 'buy', to, info, jeonse, opts, pick };
+  }
+  function dayEarn() { // 지금 벌이(견줄 숫자): 하루 세 칸을 돈 많이 주는 알바부터 보통으로 했을 때. 같은 알바는 하루 job_per_day 번이라 한 가지만 세 번 하지 못한다
+    const pays = R.acts(S).filter(a => a.kind === 'job').map(a => a.pay).sort((x, y) => y - x), per = tune.job_per_day > 0 ? tune.job_per_day : 3;
+    let left = 3, sum = 0;
+    for (const p of pays) { const k = Math.min(left, per); sum += p * k; left -= k; if (left <= 0) break; }
+    return r1k(sum * tune.mult_ok);
+  }
+  function leaseModal() { // 원룸 입주: 월세 · 전세. 고른 것마다 걸 보증금 · 지금 나갈 현금 · 일요일 밤마다 나갈 돈
+    const opts = ['rent', 'jeonse'].map(lease => { const info = R.moveInfo(S, 3, lease); return { name: R.LEASE[lease], lease, info, ok: info.ok, why: info.why }; });
+    return { type: 'lease', to: 3, opts, pick: Math.max(0, opts.findIndex(o => o.ok)) };
+  }
+  function setQty(arg) { // 수량: −10 · −1 · +1 · +10 · 살 수 있는 만큼의 25% · 50% · 전부 · 가진 만큼
+    const h = S.hold[ui.sel] || { units: 0 }, max = R.maxUnits(S, ui.sel), top = Math.max(1, max, Math.floor(h.units));
+    const q = arg === 'max' ? max : arg === 'q50' ? Math.floor(max / 2) : arg === 'q25' ? Math.floor(max / 4) : arg === 'all' ? Math.ceil(h.units) : /^=/.test(arg) ? Number(arg.slice(1)) : ui.qty + Number(arg);
+    ui.qty = clamp(Math.floor(q) || 1, 1, Math.max(1, top));
+  }
+  function setBamt(arg) { // 은행에서 빌리거나 갚을 금액: 한도 · 잔액 안에서
+    const v = R.creditView(S), top = Math.max(v.room, v.balance), unit = top >= 1e8 ? 1e7 : top >= 1e7 ? 1e6 : 1e5;
+    const q = arg === 'room' ? v.room : arg === 'bal' ? Math.min(v.balance, Math.floor(S.cash / 10000) * 10000) : arg === 'half' ? Math.floor(v.room / 2 / 10000) * 10000 : ui.bamt + Number(arg) * unit;
+    ui.bamt = clamp(Math.floor(q / 10000) * 10000, 0, Math.max(0, top));
   }
   function repayModal(l) { // 미리 갚기: 잔액의 25% · 50% · 전부. 고른 것마다 갚은 뒤 잔액 · 이번 일요일 원리금 (대출 줄과 같은 기준: 이번 일요일에 실제로 나갈 돈 — 이사한 주는 산 날만큼)
     const b = R.bill(S), wf = (b ? b.days : 7) / 7;
     const per = l.orig / tune.loan_weeks, leftOf = bal => (bal > 0 ? Math.ceil(bal / per - 1e-9) : 0);
-    const interest = bal => { let t = 0, f = wf, g = 0; while (bal > 0 && g++ < 200) { t += r1k(bal * tune.loan_rate * f); bal -= Math.min(bal, r1k(per * f)); f = 1; } return t; }; // 이대로 다 갚을 때까지 낼 이자 (원금은 매주 같은 몫이라 미리 갚으면 남은 회가 준다)
+    const interest = bal => { let t = 0, f = wf, g = 0; while (bal > 0 && g++ < 200) { t += r1k(bal * l.rate * f); bal -= Math.min(bal, r1k(per * f)); f = 1; } return t; }; // 이대로 다 갚을 때까지 낼 이자 (원금은 매주 같은 몫이라 미리 갚으면 남은 회가 준다)
     const all = interest(l.balance);
     const opts = [0.25, 0.5, 1].map(f => {
       const amt = f === 1 ? l.balance : Math.floor(l.balance * f / 10000) * 10000, bal = l.balance - amt, ok = amt > 0 && S.cash >= amt;
-      const next = bal > 0 ? r1k(bal * tune.loan_rate * wf) + Math.min(bal, r1k(l.orig / tune.loan_weeks * wf)) : 0; // rules 의 loanDue 와 같은 셈
+      const next = bal > 0 ? r1k(bal * l.rate * wf) + Math.min(bal, r1k(l.orig / tune.loan_weeks * wf)) : 0; // rules 의 loanDue 와 같은 셈 (이자는 빌릴 때 정해진 것)
       return { name: f === 1 ? '전부' : Math.round(f * 100) + '%', amt, bal, next, left: leftOf(bal), saved: all - interest(bal), ok, why: ok ? '' : '현금이 ' + won(amt - S.cash) + ' 모자랍니다' };
     });
     const pick = Math.max(0, opts.findIndex(o => o.ok));
     return { type: 'repay', l, opts, pick, due: b ? b.loan : l.weekly, days: b ? b.days : 7 };
   }
-  function studyPick(id) {
+  function studyPick(id) { // 한 종목만 읽는 단계면 누르는 대로, 두 종목을 읽는 단계(3단계부터)면 골라 두고 "공부한다"
+    const m = ui.modal;
+    if (m.picks > 1) { const i = m.sel.indexOf(id); if (i >= 0) m.sel.splice(i, 1); else { if (m.sel.length >= m.picks) m.sel.shift(); m.sel.push(id); } sfx.click(); renderVeil(); return; }
+    m.sel = [id]; studyGo();
+  }
+  function studyGo() {
+    const m = ui.modal, ids = (m.sel || []).slice();
+    if (!ids.length) { deny('종목을 고르세요'); return; }
     ui.modal = null; hold(20); renderVeil();
-    if (R.doStudy(S, id)) sfx.ding(); else deny('지금은 공부할 수 없습니다');
+    if (R.doStudy(S, ids)) sfx.ding(); else deny('지금은 공부할 수 없습니다');
     done();
   }
   function sleepNow() {
@@ -443,39 +515,52 @@
       }
       if (m.type === 'perk') { const o = d && S.offer && S.offer[Number(d[1]) - 1]; if (o) run('perk', o); return; } // 특성은 꼭 하나 골라야 닫힘
       if (m.type === 'event' && !m.done) { if (d && d[1] === '1') run('ev', 'a'); else if (d && d[1] === '2') run('ev', 'b'); return; }
-      if (m.type === 'study') { const a = d && m.assets[Number(d[1]) - 1]; if (a) run('studyasset', a.id); else if (code === 'Space' || code === 'Escape') closeModal(false); return; } // 종목 고르기: 숫자 = 그 종목, Space = 돌아가기
+      if (m.type === 'study') { const a = d && m.assets[Number(d[1]) - 1]; if (a) run('studyasset', a.id); else if (code === 'Enter' && m.picks > 1) run('studygo'); else if (code === 'Space' || code === 'Escape') closeModal(false); return; } // 종목 고르기: 숫자 = 그 종목, Space = 돌아가기 (두 종목을 읽는 단계면 고른 뒤 Enter)
+      if (m.type === 'intro' && d) { const dr = R.dreamList()[Number(d[1]) - 1]; if (dr) run('dream', dr.id); return; } // 첫 창: 숫자로 꿈을 고른다
       if (m.type === 'drill') { if (d && d[1] === '1') drillRun('drillgo', 'long'); else if (d && d[1] === '2') drillRun('drillgo', 'short'); else if (code === 'Escape') drillRun('drillskip'); else if (code === 'Space' || code === 'Enter') drillRun('ok'); return; } // 연습: 1 롱 · 2 숏 · Space 다음 · Esc 건너뛰기
       if (m.opts && d) { run('opt', String(Number(d[1]) - 1)); return; } // 집 사기 · 미리 갚기: 숫자로 고르고 Enter
-      if (m.type === 'confirm' || m.type === 'buy' || m.type === 'repay') { if (code === 'Enter') closeModal(true); else if (code === 'Space' || code === 'Escape') closeModal(false); return; } // 확인 창은 늘 같다: Enter = 한다, Space · Esc = 돌아간다 (연타해도 안전한 쪽)
+      if (m.type === 'confirm' || m.type === 'buy' || m.type === 'repay' || m.type === 'lease') { if (code === 'Enter') closeModal(true); else if (code === 'Space' || code === 'Escape') closeModal(false); return; } // 확인 창은 늘 같다: Enter = 한다, Space · Esc = 돌아간다 (연타해도 안전한 쪽)
       if (code === 'Space' || code === 'Enter') closeModal(true);
       return;
     }
     if (ui.guard > 0) return;
     const c = coachNow();
     if (c && c.ok) { if (code === 'Space' || code === 'Enter') run('coachok'); else if (d) nudge(); return; } // 읽고 넘기는 안내 (숫자 키로 다른 것을 고르려 하면 무엇을 누를지 알려 줌)
-    if (d && S.slot < 3) { const a = R.acts(S)[Number(d[1]) - 1]; if (a && !(a.kind === 'job' ? a.any : a.ok)) deny(a.why); else if (a) run(a.kind === 'job' ? 'job' : a.kind, a.id); return; }
+    if (d && S.slot < 3) { const a = R.acts(S)[Number(d[1]) - 1]; if (a && !(a.kind === 'job' ? a.any || a.push : a.ok)) deny(a.why); else if (a) run(a.kind === 'job' ? 'job' : a.kind, a.id); return; }
     if (code === 'Space' && S.slot >= 3) run('endday'); // Enter 는 확인 창의 "한다"라서 여기서는 안 받음
   }
 
   // ── 규칙이 쌓아 둔 사건을 화면으로 ──
   function drain() {
     const evs = S.ev.splice(0);
-    const homeQuest = evs.some(e => e.t === 'quest_done' && /^(roof|address|oneroom)$/.test(e.quest.id)); // 이사로 끝난 퀘스트 창이 "열림"을 이미 알려 줌
+    const homeQuest = evs.some(e => e.t === 'quest_done' && /^(roof|address|oneroom|jeonse)$/.test(e.quest.id)); // 이사로 끝난 퀘스트 창이 "열림"을 이미 알려 줌
     const flies = [], quests = { done: [], skipped: [], next: null, at: -1 }; // 한꺼번에 끝난 퀘스트는 창 한 장으로 모은다
     const heldShock = evs.some(e => e.t === 'shock' && e.held), liqNow = evs.some(e => e.t === 'liq'); // 내 것에 속보가 터진 칸: 도장 대신 속보 띠가 한 번 (청산까지 가면 흔들림은 청산이)
     for (let i = 0; i < evs.length; i++) {
       const e = evs[i];
       events.push(e);
-      if (e.t === 'money' && e.amt > 0 && e.label !== '사업 매출') flies.push(['+' + won(e.amt), 'gold', null]);
-      else if (e.t === 'auto') flies.push(['매출 +' + won(e.amt), 'gold', autoFrom()]); // 쉬기 · 공부 칸에도 들어온 사업 매출: 카드 줄 위(오늘 칸 머리줄)에서 떠오름 (카드 이름을 가리지 않게)
+      if (e.t === 'money' && e.amt > 0 && e.label !== '사업 매출') flies.push(['+' + won(e.amt), 'gold', null, e.amt]);
+      else if (e.t === 'auto') flies.push(['매출 +' + won(e.amt), 'gold', autoFrom(), e.amt]); // 쉬기 · 공부 칸에도 들어온 사업 매출: 카드 줄 위(오늘 칸 머리줄)에서 떠오름 (카드 이름을 가리지 않게)
       else if (e.t === 'gap') gapToast(e);
       else if (e.t === 'act1') { ui.queue.push({ type: 'act1', e }); S.unseen = (S.unseen || []).filter(x => x.type !== 'act1').concat([{ type: 'act1', e }]); meta.homes = (meta.homes || 0) + 1; if (!meta.act1Best || e.day < meta.act1Best) { meta.act1Best = e.day; meta.act1Rank = e.rank; } saveMeta(); }
       else if (e.t === 'biz') { ui.queue.push({ type: 'biz', e }); S.unseen = (S.unseen || []).filter(x => x.type !== 'biz').concat([{ type: 'biz', e }]); } // 창을 닫기 전에 새로 고쳐도 다시 뜨게 (판 저장에 남김)
+      else if (e.t === 'gm_alert') toast(I('warn') + '<div><span class="lab">꿀잼게임즈 신작 발표</span> · <b>' + Math.round(tune.g_hype_ticks / 3) + '일 뒤 출시</b></div>', 'gap up', 480);
       else if (e.t === 'ht_alert') toast(I('warn') + '<div><span class="lab">한탕바이오 거래량 급증</span> · <b>누가 사 모으는 중</b></div>', 'gap up', 480); // 알림은 모두 한 줄 · 줄인 글만으로 뜻이 통하게 (#toasts 는 누름을 통과시켜 title 이 안 뜬다)
       else if (e.t === 'trade' && e.side === 'sell') { const t = (a, p) => '<div><span class="lab">' + esc(e.name) + ' 팔기</span> ' + a + ' · <b class="' + cls(e.pnl) + '">손익 ' + p + '</b></div>'; toast(I('sell') + fitLine([t(num(e.amt), sign(e.pnl)), t(cwon(e.amt), csign(e.pnl))]), '', 300); }
-      else if (e.t === 'trade') { const fee = Math.round(e.amt * tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1)), t = (a, f) => '<div><span class="lab">' + esc(e.name) + ' 사기</span> ' + a + ' · <b>' + (fee ? '수수료 −' + f : '수수료 없음') + '</b></div>'; toast(I('cart') + fitLine([t(num(e.amt), num(fee)), t(cwon(e.amt), num(fee)), t(cwon(e.amt), cwon(fee))]), 'tip', 260); } // "대장전자 사기 1,980,000 · 수수료 −5,940" (말이 끊기지 않게)
-      else if (e.t === 'repay') { const t = (a, b) => '<div><span class="lab">미리 갚음</span> ' + a + ' · <b>잔액 ' + b + '</b></div>'; toast(I('check') + fitLine([t(num(e.amt), num(e.balance)), t(cwon(e.amt), cwon(e.balance))]), '', 240); }
+      else if (e.t === 'trade') { const fee = e.fee != null ? e.fee : Math.round(e.amt * tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1)), t = (a, f) => '<div><span class="lab">' + esc(e.name) + ' 사기</span> ' + a + ' · <b>' + (fee ? '수수료 −' + f : '수수료 없음') + '</b></div>'; toast(I('cart') + fitLine([t(num(e.amt), num(fee)), t(cwon(e.amt), num(fee)), t(cwon(e.amt), cwon(fee))]), 'tip', 260); } // "대장전자 사기 1,980,000 · 수수료 −5,940" (말이 끊기지 않게)
+      else if (e.t === 'repay') { const t = (a, b) => '<div><span class="lab">' + (e.credit ? '마이너스 통장 갚음' : '미리 갚음') + '</span> ' + a + ' · <b>잔액 ' + b + '</b></div>'; toast(I('check') + fitLine([t(num(e.amt), num(e.balance)), t(cwon(e.amt), cwon(e.balance))]), '', 240); }
       else if (e.t === 'foreclose') ui.queue.push({ type: 'foreclose', e });
+      else if (e.t === 'collapse') { ui.queue.push({ type: 'collapse', e }); shake(); } // 쓰러짐: 한 장으로 크게
+      else if (e.t === 'push_ok') toast(I('warn') + '<div><span class="lab">무리했지만</span> <b>버텼다</b> · 쓰러질 확률 ' + Math.round(e.risk * 100) + '%였음</div>', 'gap up', 300);
+      else if (e.t === 'sick') toast(I('clinic') + '<div><span class="lab">퇴원 수속</span> <b>오전이 지나갔다</b></div>', 'deny', 300);
+      else if (e.t === 'eat') flies.push(['체력 +' + e.hp, 'good', { x: 230, y: 330 }]);
+      else if (e.t === 'item') toast(I('gift') + '<div><span class="lab">샀다</span> <b>' + esc(e.name) + '</b></div>', '', 260);
+      else if (e.t === 'borrow' && !e.auto) toast(I('bank') + '<div><span class="lab">마이너스 통장</span> <b>+' + cwon(e.amt) + '</b> · 빚 ' + cwon(e.balance) + '</div>', 'tip', 280);
+      else if (e.t === 'prop') toast(I('building') + '<div><span class="lab">' + esc(e.name) + (e.side === 'buy' ? ' 삼' : ' 팖') + '</span> <b>' + cwon(e.amt) + '</b>' + (e.side === 'sell' ? ' · <b class="' + cls(e.pnl) + '">손익 ' + csign(e.pnl) + '</b>' : '') + '</div>', '', 300);
+      else if (e.t === 'credit' && (Math.abs(e.delta) >= 20 || e.grade !== e.was)) toast(I('bank') + '<div><span class="lab">신용점수</span> <b class="' + (e.delta > 0 ? 'good' : 'bad') + '">' + (e.delta > 0 ? '+' : '−') + Math.abs(e.delta) + '</b> · ' + e.score + '점 ' + e.grade + '등급</div>', e.delta > 0 ? '' : 'deny', 300);
+      else if (e.t === 'know') { toast(I('book') + '<div><span class="lab">투자 공부 ' + e.lv + '단계</span> <b>' + esc(e.name) + '</b></div>', '', 360); sfx.level(); burst(860, 360, 36, 2.4); ui.fresh.info = ui.tab !== 'info'; }
+      else if (e.t === 'alert') toast(I('warn') + '<div><span class="lab">속보 경보</span> <b>' + esc(e.name) + '</b> · 오늘 큰 소식</div>', 'gap up', 420);
+      else if (e.t === 'dream') { ui.queue.push({ type: 'story', e }); }
       else if (e.t === 'tick') { for (const id in e.chg) ui.flash[id] = e.chg[id]; if (!heldShock) stamps(e.chg); }
       else if (e.t === 'shock') ui.queue.push({ type: 'shock', e, still: liqNow }); // 속보 띠: 다른 창과 같은 줄에 서서 하나씩
       else if (e.t === 'while') flies.push([sign(e.delta), cls(e.delta), { x: 860, y: 330 }]);
@@ -485,9 +570,10 @@
       else if (e.t === 'intro') ui.queue.push({ type: 'intro', next: e.quest });
       else if (e.t === 'perk') ping();
       else if (e.t === 'tier') {
-        if (e.up && e.to === 2) ui.fresh.stock = true;
-        if (e.up && e.to === 3) ui.fresh.coin = true;
-        if (e.up && !homeQuest && e.to !== 4) ui.queue.push({ type: 'tier', e }); // 내 집은 1막 끝 창이 알려 줌
+        if (e.up && e.to === 1) { ui.fresh.stock = true; ui.fresh.info = true; }
+        if (e.up && e.to === 2) ui.fresh.bank = true;
+        if (e.up && e.to === 3 && !e.swap) { ui.fresh.coin = true; ui.fresh.realty = true; }
+        if (e.up && (!homeQuest || e.swap) && e.to !== 4) ui.queue.push({ type: 'tier', e }); // 내 집은 1막 끝 창이 알려 줌
         meta.bestTier = Math.max(meta.bestTier || 0, e.to); saveMeta();
       }
       else if (e.t === 'liq') { ui.queue.push({ type: 'liq', e }); shake(); }
@@ -498,7 +584,7 @@
     }
     if (quests.done.length) ui.queue.splice(quests.at, 0, { type: 'quest', done: quests.done, skipped: quests.skipped, next: quests.next });
     else for (const q of quests.skipped) toast(I('skip') + fitLine(['<div><span class="lab">때가 지나 건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>', '<div><span class="lab">건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>']), '', 300);
-    if (!ui.modal && !ui.queue.length && !S.offer && !S.event && !ui.ending) for (const f of flies) fly(f[0], f[1], f[2]); // 창이 뜰 참이면 창 위에 겹치므로 내지 않음 (숫자는 위쪽 띠에서 굴러감)
+    if (!ui.modal && !ui.queue.length && !S.offer && !S.event && !ui.ending) for (const f of flies) { fly(f[0], f[1], f[2]); if (f[3]) coins(f[2], f[3]); } // 창이 뜰 참이면 창 위에 겹치므로 내지 않음 (숫자는 위쪽 띠에서 굴러감)
     pump();
   }
   function autoFrom() { // 사업 매출이 떠오를 자리: 쉬기 · 공부 카드(오른쪽 끝) 위, 오늘 칸 머리줄 높이 — 카드 이름을 가리지 않게 (키보드로 골라도 같은 자리)
@@ -735,14 +821,16 @@
     if (m.type === 'confirm') {
       ui.modal = null; renderVeil();
       if (yes && m.kind === 'sleep') { sleepNow(); return; }
-      if (yes) { if (m.kind === 'move') { if (R.move(S, m.to)) sfx.up(); } else if (m.kind === 'biz') { if (R.bizUp(S)) sfx.level(); } else if (m.kind === 'top') R.declareTop(S); }
+      if (yes) { if (m.kind === 'move') { if (R.move(S, m.to)) sfx.up(); } else if (m.kind === 'swap') { if (R.move(S, 3, 'jeonse')) sfx.up(); } else if (m.kind === 'biz') { if (R.bizUp(S)) sfx.level(); } else if (m.kind === 'top') R.declareTop(S);
+        else if (m.kind === 'propbuy') { if (R.buyProp(S, m.v.id)) sfx.up(); } else if (m.kind === 'propsell') { if (R.sellProp(S, m.v.id)) sfx.pay(); } }
       done(); return;
     }
-    if (m.type === 'buy' || m.type === 'repay') {
+    if (m.type === 'intro') { R.setDream(S, m.dream || R.dreamList()[0].id); saveNow(); } // 고른 꿈으로 판을 시작한다
+    if (m.type === 'buy' || m.type === 'repay' || m.type === 'lease') {
       const o = m.opts[m.pick];
       if (yes && !(o && o.ok)) { deny(o ? o.why : ''); return; } // 못 하는 것을 고른 채 Enter: 창은 그대로
       ui.modal = null; renderVeil();
-      if (yes) { if (m.type === 'buy') { if (R.buyHome(S, m.to, o.loan)) sfx.up(); } else if (R.repay(S, o.amt)) sfx.pay(); }
+      if (yes) { if (m.type === 'buy') { if (R.buyHome(S, m.to, o.loan, o.lease)) sfx.up(); } else if (m.type === 'lease') { if (R.move(S, 3, o.lease)) sfx.up(); } else if (R.repay(S, o.amt)) sfx.pay(); }
       done(); return;
     }
     if (m.type === 'act1' || m.type === 'biz') { S.unseen = (S.unseen || []).filter(x => x.type !== m.type); saveNow(); } // 본 창은 저장에서 지움
@@ -796,7 +884,7 @@
     return g;
   }
   // 알바 카드를 누르면 언제나 "시작 전 화면": 그림 자리에 시연이 돌고, 강도를 고른 뒤 "시작"을 눌러야 칸 · 체력 · 난수를 쓴다
-  const mgOpts = (a, n) => ({ rng: () => R.rnd2(S), level: a.lv, seconds: tune.mg_seconds, pal: window.MGPAL || PAL, font: window.PXFONT || FONT, ramp: tune.mg_ramp, levelSpeed: tune.mg_level_speed, intensity: n, pace: tune['mg_int_' + n] });
+  const mgOpts = (a, n) => ({ rng: () => R.rnd2(S), level: a.lv, seconds: tune.mg_seconds, pal: window.MGPAL || PAL, font: window.PXFONT || FONT, ramp: tune.mg_ramp, levelSpeed: tune.mg_level_speed, intensity: n, pace: tune['mg_int_' + n], ready: tune.mg_ready, warm: tune.mg_warm, warmSec: tune.mg_warm_sec }); // 준비 시간 · 느린 시작
   function demoFor(m) { // 고른 강도의 실제 속도로 새로 돈다. minigames.js 가 없으면 대역의 첫 장면만 (움직이지 않음)
     m.lit = '';
     try { m.demo = window.Minigames && window.Minigames.demo ? window.Minigames.demo(m.id, mgOpts(m.act, m.n)) : null; } catch (e) { m.demo = null; }
@@ -804,7 +892,7 @@
   }
   function startJob(id) {
     const a = R.acts(S).find(x => x.id === id);
-    if (!a || !a.any) { deny(a ? a.why : ''); return; }
+    if (!a || !(a.any || a.push)) { deny(a ? a.why : ''); return; }
     sfx.click(); clearFlies();
     for (const o of [...$('toasts').children]) if (o._kind === 'deny') o.remove(); // 방 그림 위에 떠 있던 "모자랍니다" 류는 지운다 (창과 겹치지 않게)
     const first = GUIDE && !meta.seen[id]; // 처음 하는 알바는 하는 법에 머리글을 달고 더 오래 막는다
@@ -816,12 +904,12 @@
   function pickInt(n) {
     const m = ui.modal, L = m.act.levels[n];
     if (!L || n === m.n) return;
-    if (!L.ok) { sfx.deny(); m.why = L.name + (n ? '은' : '는') + ' 체력 ' + L.hp + ' 필요 (지금 ' + Math.floor(S.hp) + ')'; m.whyT = 120; renderVeil(); return; } // 알림 대신 창 안 맨 아래 줄에 2초 (창 위로 뜨는 알림이 그림을 가리지 않게)
+    if (!L.can) { sfx.deny(); m.why = L.name + (n ? '은' : '는') + ' 체력 ' + L.hp + ' 필요 (지금 ' + Math.floor(S.hp) + ')'; m.whyT = 120; renderVeil(); return; } // 알림 대신 창 안 맨 아래 줄에 2초 (창 위로 뜨는 알림이 그림을 가리지 않게)
     m.n = n; m.why = ''; R.setInt(S, m.id, n); saveNow(); sfx.click(); demoFor(m); renderVeil();
   }
   function stepInt(d) { // ← → : 할 수 있는 강도 사이에서만. 막히면 바로 옆이 왜 안 되는지
     const m = ui.modal, lv = m.act.levels;
-    for (let k = m.n + d; k >= 0 && k <= 3; k += d) if (lv[k].ok) { pickInt(k); return; }
+    for (let k = m.n + d; k >= 0 && k <= 3; k += d) if (lv[k].can) { pickInt(k); return; }
     if (lv[m.n + d]) pickInt(m.n + d); else sfx.deny();
   }
   function beginMg() { // 시작: 진짜 판을 고른 강도로. 여기서부터 칸을 쓰고, 하다가 새로 고치면 "대충"
@@ -868,12 +956,12 @@
   // 단계는 판의 상태에서 읽는다 (저장했다 이어 해도 맞는 자리에서 이어진다).
   // ring = 고리를 두를 곳, lit = 고리 없이 밝혀 둘 곳, only = 그 단계에서 받는 누름, ok = 읽고 넘기는 단계의 버튼 글, at = 말풍선 자리.
   const moveOk = () => R.moveInfo(S, 1).ok, flyerOk = () => R.acts(S).some(a => a.id === 'flyer' && a.any); // 짚은 것을 할 수 없는 상태면 막지 않는다 (갇히지 않게)
-  const TODAY = ['job', 'skip', 'rest', 'study', 'why', 'tip']; // 오늘 칸에서 하는 것들
+  const TODAY = ['job', 'skip', 'rest', 'study', 'why', 'tip', 'tab', 'eat', 'item', 'wear']; // 오늘 칸에서 하는 것들 + 판의 탭(가게에서 사 먹기)
   const COACH = {
     job: { n: 1, at: 'below', ring: ['#today [data-arg="flyer"]'], lit: ['#quest'], only: (w, a) => !flyerOk() || (w === 'job' && a === 'flyer'),
       html: () => '<b>전단지</b>를 눌러 첫 돈을 번다 <span class="key">1</span><i>시연을 보고 강도를 고른 뒤 시작. 할 일은 왼쪽 아래 상태창의 퀘스트에</i>' },
     slots: { n: 2, at: 'below', ring: ['#today', '#me .me-row'], lit: ['#quest'], only: w => TODAY.indexOf(w) >= 0,
-      html: () => '<b>카드를 골라</b> 남은 칸을 쓴다<i>하루는 세 칸입니다. 알바는 체력 ' + I('hp', '', 's') + ' 을 쓰고, 쉬기는 채웁니다. ' + I('skip', '', 's') + ' 는 미니게임 없이 덜 받는 "대충"</i>' },
+      html: () => '<b>카드를 골라</b> 남은 칸을 쓴다<i>하루는 세 칸, 같은 알바는 하루 한 번. 알바는 체력 ' + I('hp', '', 's') + ' 을 쓰고 쉬기는 채웁니다. 모자란 채 일하면(무리) 쓰러질 수 있어요. 아래 <b>가게</b>에서 사 먹으면 체력이 찹니다</i>' },
     endday: { n: 3, at: 'below', ring: ['#today [data-do="endday"]'], lit: ['#quest'], only: w => w === 'endday' || w === 'tip',
       html: () => '다 썼으면 <b>하루 마치기</b> <span class="key">Space</span><i>밤마다 번 돈과 쓴 돈이 한 장으로 정리되고, 자는 동안 체력이 돌아옵니다</i>' },
     move: { n: 4, at: 'right', ring: ['#board .rung.next [data-do="move"]'], lit: ['#quest', '#board .rung.next'], only: (w, a) => w === 'move' && Number(a) === 1, // 로드맵의 다음 칸(찜질방) 옮기기 버튼. 상태창의 같은 버튼도 받는다
@@ -881,9 +969,9 @@
     earn: { n: 4, at: 'right', ring: ['#board .rung.next'], lit: ['#quest', '#today', '#me', '#hud'], // 찜질방 요금이 없을 때: 막지 않고, 벌 수 있게 오늘 칸을 밝혀 둔다
       html: () => '현금 ' + won(R.saunaCost(S)) + '이 모이면 <b>옮기기</b>가 켜진다<i>그때까지는 알바로 벌어 둡니다</i>' },
     goal: { n: 5, at: 'above', ring: ['#quest', '#hud .goal'], lit: ['#hud [data-do="help"]'], ok: '알겠다',
-      html: () => '안내는 여기까지<i>할 일은 늘 이 <b>상태창</b>에 뜹니다. 위쪽 ' + I('key', '', 's') + ' 은 다음 목표 — 기한 없이 한 단계씩 올라 한국 최고 부자까지. 모르는 아이콘은 오른쪽 위 ' + I('help', '', 's') + '</i>' },
-    stock: { lab: '주식 — 처음 열었을 때', num: true, at: [660, 78], ring: ['#board .newsbox', '#board .alist', '#board .order'], ok: '알겠다',
-      html: () => '<p><u>1</u>오늘 소식은 <b>이미 값에 들어가 있다</b>. 내일 것은 "공부"로 미리 본다</p><p><u>2</u>종목을 고르고</p><p><u>3</u>현금의 몇 %를 누르면 바로 산다. 팔아야 내 돈</p>' },
+      html: () => '안내는 여기까지<i>할 일은 늘 이 <b>상태창</b>에 뜹니다. 위쪽 ' + I('key', '', 's') + ' 은 다음 목표 — 기한 없이 한 단계씩 올라 한국 최고 부자까지. 주식 계좌도 열렸습니다(오른쪽 아래 탭). 모르는 아이콘은 오른쪽 위 ' + I('help', '', 's') + '</i>' },
+    stock: { lab: '주식 — 처음 열었을 때', num: true, at: [660, 78], ring: ['#board .mlist', '#board .svtabs [data-arg="mine"]', '#board .tabs [data-arg="info"]'], ok: '알겠다',
+      html: () => '<p><u>1</u><b>종목을 누르면</b> 차트가 뜨고, 몇 주를 살지 골라 산다. 팔아야 내 돈</p><p><u>2</u>가진 것은 <b>내 보유</b>에서 한눈에</p><p><u>3</u>소식과 공부는 <b>뉴스·공부</b> 탭에. 오늘 소식은 이미 값에 들어가 있다</p>' },
   };
   for (const id in COACH) COACH[id].id = id;
   function coachNow() {
@@ -893,7 +981,7 @@
       return S.tier > 0 ? COACH.goal : moveOk() ? COACH.move : COACH.earn;
     }
     if (!GUIDE) return null;
-    if (ui.tab === 'stock' && R.unlocked(S, 'stock') && !meta.seen.stock) return COACH.stock;
+    if (ui.tab === 'stock' && ui.sview === 'market' && R.unlocked(S, 'stock') && !meta.seen.stock) return COACH.stock;
     return null;
   }
   function renderCoach() {
@@ -938,7 +1026,7 @@
     const n = m.n, w = INT_WHAT[m.id];
     const t = ['천천히', '기준 빠르기', '빠르다', '아주 빠르다'][n] + (w && n !== 1 ? ' · ' + w[n ? n - 1 : 0] : '');
     const arrow = c => (m.pre ? '<span class="key" title="← → 로 강도를 바꿉니다">' + keyName(c) + '</span>' : ''); // 시작 전에는 딱지 양옆에 ← → (강도를 바꾸는 키)
-    return '<div class="mg-line' + (m.res ? ' gone' : '') + '">' + arrow('ArrowLeft') + ich(n, true) + arrow('ArrowRight') + (m.why ? '<b class="bad why">' + I('warn', '', 's') + esc(m.why) + '</b>' : '<span>' + t + '</span>' + (n >= 2 ? '<b class="bad">' + I('warn', '', 's') + '실수하면 보너스 없음</b>' : '')) +
+    return '<div class="mg-line' + (m.res ? ' gone' : '') + '">' + arrow('ArrowLeft') + ich(n, true) + arrow('ArrowRight') + (m.why ? '<b class="bad why">' + I('warn', '', 's') + esc(m.why) + '</b>' : m.pre && !m.act.levels[n].ok ? '<b class="bad why">' + I('warn', '', 's') + '체력이 모자랍니다 (' + Math.floor(S.hp) + ' / ' + m.act.levels[n].hp + ') — 무리하면 끝나고 쓰러질 확률 ' + Math.round(m.act.levels[n].risk * 100) + '%</b>' : '<span>' + t + '</span>' + (n >= 2 ? '<b class="bad">' + I('warn', '', 's') + '실수하면 보너스 없음</b>' : '')) +
       (m.pre ? '<button class="btn small r" data-do="no">돌아가기 <span class="key">Esc</span></button>' : '') + '</div>';
   }
   function calcLine(j) { // "기준 170,000 · 잘함 ×1.2 · 최상 ×1.5" — 중이거나 실수면 강도 조각은 없음. 요령으로 대충 바닥에 걸리면 그 값
@@ -952,8 +1040,8 @@
     const how = '<div class="mg-how"><ol>' + (m.first ? '<em>처음 하는 알바 — 하는 법</em>' : '') + lines.map(t => '<li>' + esc(t) + '</li>').join('') + '</ol>' +
       '<div class="keys' + ((g.controls || []).length === 3 ? ' n3' : '') + '">' + (g.controls || []).map(c => '<span>' + esc(c.label) + '<span class="key" data-k="' + c.code + '">' + keyName(c.code) + '</span></span>').join('') + '</div></div>';
     const lv = m.act.levels, act = m.pre
-      ? lv.map(L => '<button class="btn ib' + (L.n === m.n ? ' on' : '') + (L.ok ? '' : ' lock') + '" data-do="int" data-arg="' + L.n + '" title="' + L.name + ' — 일당(보통) ' + won(L.pay) + ' · 체력 ' + L.hp + (L.ok ? '' : ' (모자랍니다)') + '"><b>' + L.name + '</b>' + (L.ok ? '<span class="h">' + I('hp', '', 's') + '−' + L.hp + '</span><span class="p">' + I('coin', '', 's') + num(L.pay) + '</span>' : '<span class="h">' + I('lock', '', 's') + '</span><span class="p">' + I('hp', '체력', 's') + L.hp + ' 필요</span>') + '</button>').join('') +
-        '<button class="btn main go" data-do="mgstart">시작<span class="key">Space</span></button>'
+      ? lv.map(L => '<button class="btn ib' + (L.n === m.n ? ' on' : '') + (L.ok ? '' : L.can ? ' risk' : ' lock') + '" data-do="int" data-arg="' + L.n + '" title="' + L.name + ' — 일당(보통) ' + won(L.pay) + ' · 체력 ' + L.hp + (L.ok ? '' : L.can ? ' (모자랍니다 — 무리하면 쓰러질 확률 ' + Math.round(L.risk * 100) + '%)' : ' (모자랍니다)') + '"><b>' + L.name + '</b>' + (L.ok ? '<span class="h">' + I('hp', '', 's') + '−' + L.hp + '</span><span class="p">' + I('coin', '', 's') + num(L.pay) + '</span>' : L.can ? '<span class="h">' + I('warn', '', 's') + '</span><span class="p risk">무리 ' + Math.round(L.risk * 100) + '%</span>' : '<span class="h">' + I('lock', '', 's') + '</span><span class="p">' + I('hp', '체력', 's') + L.hp + ' 필요</span>') + '</button>').join('') +
+        '<button class="btn ' + (lv[m.n].ok ? 'main' : 'up') + ' go" data-do="mgstart">' + (lv[m.n].ok ? '시작' : '무리') + '<span class="key">Space</span></button>'
       : m.res ? '<button class="btn main" data-do="ok">확인 <span class="key">Space</span></button>' // 확인은 조작 버튼이 있던 자리에
         : (g.controls || []).map(c => '<button class="btn" data-mg="' + c.code + '">' + esc(c.label) + ' <span class="key">' + keyName(c.code) + '</span></button>').join('');
     return how + '<div class="mg-act' + (m.pre ? ' pick' : '') + '">' + act + '</div>' + intLine(m);
@@ -962,24 +1050,24 @@
   // ── 구역 hud: 날짜 · 시간 · 돈 · 다음 목표 · 단추 ──
   function weekStrip(wk) { // 이번 주 일곱 칸: 지난 날 · 오늘 · 남은 날, 일요일 칸에는 고정비. 고정비가 생긴 뒤(고시원부터)에만 — 그 전에는 "7일 기한"으로 읽히지 않게 아예 안 보임
     if (!wk.billDay) return '';
-    const b = wk.bill, t = wk.week + '주차 ' + wk.dow + '일 / 7일' + (wk.billDay ? ' — 일요일(7일째) 밤 ' + (b.loan ? '고정비 · 원리금 ' : '고정비 ') + won(b.amt) + (b.inDays === 0 ? ', 오늘 밤' : '') : '');
+    const b = wk.bill, t = wk.week + '주차 ' + wk.dow + '일 / 7일' + (wk.billDay ? ' — 일요일(7일째) 밤 정산: ' + R.billName(b) + ' ' + won(b.amt) + (b.income ? ' · 들어올 돈(임대수익 · 배당) ' + won(b.income) : '') + (b.inDays === 0 ? ', 오늘 밤' : '') : '');
     return '<div class="wk" title="' + t + '">' + [1, 2, 3, 4, 5, 6, 7].map(i => {
       const c = i < wk.dow ? 'past' : i === wk.dow ? 'now' : '';
       return i === 7 ? '<span class="bill ' + c + (b.inDays <= 1 ? ' due' : '') + '">' + art('icon', 'bill') + '</span>' : '<i class="' + c + '"></i>';
-    }).join('') + '<span class="wkl' + (b.inDays <= 1 ? ' due' : '') + '">고정비</span></div>';
+    }).join('') + '<span class="wkl' + (b.inDays <= 1 ? ' due' : '') + '">' + (b.net > 0 ? '−' + cwon(b.net) : b.net < 0 ? '+' + cwon(-b.net) : '정산') + '</span></div>'; // 이번 일요일에 나갈 돈(들어올 돈을 뺀 것)을 늘 보인다
   }
   function goalHtml() { // 다음 목표: 이름 · 값 · 거기까지 온 만큼. 살 수 있으면 그 자리가 버튼 (옮기기 · 사기 · 선언)
     const g = R.goalView(S), top = g.kind === 'top', ic = top ? 'crown' : 'key';
     if (g.canBuy && !(ui.tut && S.day === 1)) { // 첫날 안내 중에는 버튼으로 안 보임 (안내가 그 단계에 오기 전에는 눌러도 안 되므로)
       const act = top ? 'data-do="top"' : g.tier <= 3 ? 'data-do="move" data-arg="' + g.tier + '"' : 'data-do="house"';
       const label = top ? '최고 부자 선언' : g.tier <= 3 ? g.name + '으로 옮기기' : g.name + ' 사기';
-      const t = top ? '순자산이 ' + won(g.price) + '을 넘었습니다 — 누르면 한국 최고 부자 선언 확인 (엔딩)' : g.tier <= 3 ? g.name + '으로 옮길 수 있습니다' : g.name + '을 살 수 있습니다 — 누르면 대출을 고르는 창';
+      const t = top ? '순자산이 ' + won(g.price) + '을 넘었습니다 — 누르면 한국 최고 부자 선언 확인 (엔딩)' : g.tier <= 3 ? g.name + '으로 옮길 수 있습니다' : g.name + '에 들어갈 수 있습니다 — 누르면 전세 · 대출을 고르는 창';
       return '<div class="goal"><button class="btn warm small goal-go" ' + act + ' title="' + t + '">' + I(ic) + label + '</button></div>';
     }
     const t = top ? '마지막 목표: 호텔에서 순자산 ' + won(g.price) + '을 넘기면 한국 최고 부자 선언 (지금 ' + won(g.have) + ')'
       : g.tier <= 1 ? '다음 목표: ' + g.name + ' — 현금 ' + won(g.price) + '이면 들어갑니다'
-        : g.tier <= 3 ? '다음 목표: ' + g.name + ' — 순자산 ' + won(g.price) + '이면 들어갑니다 (돈을 가져가지 않음)'
-          : '다음 목표: ' + g.name + ' ' + won(g.price) + ' — ' + (g.tier === 4 ? '현금으로만' : '대출을 최대(' + won(g.loanMax) + ')로 끼면') + ' 현금 ' + won(g.need) + '이 있으면 삽니다 (살던 집을 판 돈 포함). 막대는 지금 현금';
+        : g.tier <= 3 ? '다음 목표: ' + g.name + ' — 보증금 ' + won(g.price) + ' (나갈 때 돌려받는 돈 · 살던 곳의 보증금이 보태집니다)'
+          : '다음 목표: ' + g.name + ' ' + won(g.price) + ' — ' + (g.tier === 4 ? '현금으로만 (전세 보증금은 돌려받아 보태집니다)' : (g.loanMax ? '대출을 최대(' + won(g.loanMax) + ')로 끼거나 ' : '') + '전세(보증금 ' + won(g.jeonse) + ')로 들어가면') + ' 현금 ' + won(g.need) + '이 있으면 됩니다. 막대는 지금 현금';
     return '<div class="goal" title="' + t + '">' + I(ic) + '<span class="gn">' + g.name + '</span><span class="gp">' + shortWon(g.price) + '</span><div class="bar"><div style="width:' + (g.pct * 100).toFixed(1) + '%"></div></div><b>' + Math.floor(g.pct * 100) + '%</b></div>';
   }
   function renderHud() {
@@ -1019,32 +1107,41 @@
         : '<button class="chip off r" data-do="why" data-arg="' + esc(n.why) + '" title="' + esc(n.name + ' ' + won(n.cost) + ' — ' + n.why) + '">' + I('lock', '', 's') + n.name + ' ' + num(n.cost) + '</button>';
     return '<div class="me-row biz" title="사업 — 같은 알바를 해도 일당 ×' + num(v.effMult) + (auto ? '. 쉬기 · 공부 칸에도 일당의 ' + auto + '%가 사업 매출로 들어옵니다' : '') + '">' + I('rocket') + '<b class="bn">' + v.name + '</b><span class="gold">×' + num(v.mult) + '</span>' + cut + go + '</div>';
   }
-  function loanRow() { // 대출: 잔액 · 이번 일요일 원리금 · 남은 회 · 미리 갚기 (대출이 있을 때만)
-    const l = R.loanView(S);
-    if (!l) return '';
-    const b = R.bill(S), due = b ? b.loan : l.weekly, part = !!(b && b.days < 7); // 이사한 주는 산 날만큼: "이번 일요일 N (6일치)"로 한 주 전체 원리금과 다른 까닭을 보임
-    return '<div class="me-row loan" title="주담대 잔액 ' + won(l.balance) + ' — 일요일 밤마다 고정비와 함께 원리금이 나갑니다. 두 번 연속 못 내면 압류되어 한 단계 아래로">' + I('bill') + '<span class="lab">대출</span><b>' + shortWon(l.balance) + '</b>' +
-      '<span class="dim" title="이번 일요일 원리금 ' + won(due) + (part ? ' (' + b.days + '일치 — 이사한 주는 산 날만큼)' : '') + ' (이자 ' + won(b ? b.interest : l.interest) + ' + 원금 ' + won(b ? b.principal : l.principal) + ') · 한 주 전체로는 ' + won(l.weekly) + ' · 남은 ' + l.left + '회">' + (part ? '이번 ' + num(due) + ' (' + b.days + '일치)' : '주 ' + num(due) + ' · ' + l.left + '회') + '</span>' +
-      '<button class="chip go r" data-do="repay" title="미리 갚기 — 칸을 쓰지 않습니다. 잔액이 줄면 다음 주 이자가 줍니다">갚기</button></div>';
+  function loanRow() { // 빚: 주담대 + 마이너스 통장. 합계 · 이번 일요일에 나갈 원리금과 이자 · 은행 탭으로 (빚이 있을 때만)
+    const l = R.loanView(S), cv = R.creditView(S), total = (l ? l.balance : 0) + cv.balance;
+    if (!total) return '';
+    const b = R.bill(S), due = (b ? b.loan + b.credit : (l ? l.weekly : 0) + cv.week), part = !!(b && b.days < 7 && l);
+    const tip = '빚 ' + won(total) + (l ? ' — 주담대 ' + won(l.balance) + ' (남은 ' + l.left + '회 · 한 주 이자 ' + pct1(l.rate) + ')' : '') + (cv.balance ? ' — 마이너스 통장 ' + won(cv.balance) + ' (한 주 이자 ' + pct1(cv.rate) + ')' : '') + '. 일요일 밤마다 고정비와 함께 나가고, 두 번 연속 못 내면 한 단계 아래로';
+    return '<div class="me-row loan" title="' + tip + '">' + I('bill') + '<span class="lab">빚</span><b>' + shortWon(total) + '</b>' +
+      '<span class="dim" title="이번 일요일에 나갈 원리금 · 이자 ' + won(due) + (part ? ' (' + b.days + '일치 — 이사한 주는 산 날만큼)' : '') + '">' + (part ? '이번 ' + num(due) + ' (' + b.days + '일치)' : '주 ' + num(due) + (l ? ' · ' + l.left + '회' : '')) + '</span>' +
+      '<button class="chip go r" data-do="tab" data-arg="bank" title="은행 — 신용등급 · 마이너스 통장 · 미리 갚기 · 이번 일요일 정산">은행</button></div>';
+  }
+  const pct1 = v => (Math.round(v * 1000) / 10) + '%'; // 0.022 → 2.2%
+  function condChip() { // 컨디션: 쌩쌩(일당 +) · 지침(일당 −). 보통일 때는 없음
+    const c = R.condOf(S);
+    if (c === 'good') return '<span class="cond good" title="쌩쌩 — 체력이 ' + Math.round(tune.cond_good * 100) + '% 이상이면 알바 일당 +' + Math.round(tune.cond_good_pay * 100) + '%">쌩쌩 +' + Math.round(tune.cond_good_pay * 100) + '%</span>';
+    if (c === 'tired') return '<span class="cond tired" title="지침 — 체력이 ' + Math.round(tune.cond_tired * 100) + '% 아래면 알바 일당 −' + Math.round(tune.cond_tired_cut * 100) + '%. 체력이 모자란 채 일하면(무리) 쓰러질 수 있습니다">지침 −' + Math.round(tune.cond_tired_cut * 100) + '%</span>';
+    return '';
   }
   function renderMe() {
     const x = R.xpView(S), mx = R.hpMax(S), low = S.hp < 25, perks = R.perksView(S), extra = bizRow() + loanRow(), rows = (extra.match(/class="me-row/g) || []).length;
     // 그림 칸: 줄이 없으면 216px(128×72 를 3배) 전부. 사업 · 대출 줄이 하나 붙을 때마다 34px 낮아지고, 그림은 3배 그대로 가운데를 맞춰 위아래가 잘린다.
     // 보이는 높이와 위치를 3의 배수로 맞춰 맨 윗줄 · 아랫줄 점이 반만 보이지 않게 한다. 줄이 둘이면 49줄(y 11~59)이 보여 그림의 약속(y 12~59)이 다 들어간다.
-    const vis = Math.min(72, Math.floor((216 - 34 * rows) / 3)), sh = vis * 3 + 12, sy = -3 * Math.floor((72 - vis) / 2);
+    const vis = Math.min(72, Math.floor((216 - 34 * rows) / 3)), sh = vis * 3 + 12, sy = -3 * Math.floor((72 - vis) / 2), lease = R.leaseOf(S);
+    try { if (window.PxArt && window.PxArt.setWear) window.PxArt.setWear(S.wear, S.look); } catch (e) { /* 옷 색을 못 바꿔도 그림은 뜬다 */ }
     // 알림은 그림 칸 위쪽 가장자리(안쪽 위 +2px)에 한 줄(28px)씩 쌓인다. 주인공 얼굴(그림 상자 위 + 9점: 더듬이 · 머리카락 아래)이 가려지지 않는 만큼만: 둘(+60px까지) 또는 하나
     const sb = window.PxArt && window.PxArt.SCENE_BOX && window.PxArt.SCENE_BOX[S.tier], faceTop = sb ? sy + (sb.hero[1] + 9) * 3 : 216;
     ui.toastCap = faceTop >= 60 ? 2 : 1;
     if ($('toasts').children.length > ui.toastCap) { const o = $('toasts').firstChild; if (o._kind !== 'deny' && o._kind !== 'tip') ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 칸이 낮아진 순간 넘친 것은 줄로
     $('me').innerHTML =
-      '<div class="zh">' + I('door', '지금 사는 곳') + '<span class="place">' + R.HOMES[S.tier].name + '</span>' +
+      '<div class="zh">' + I('door', '지금 사는 곳') + '<span class="place">' + R.HOMES[S.tier].name + '</span>' + (lease ? '<span class="lease" title="계약: ' + R.LEASE[lease] + (S.deposit ? ' — 보증금 ' + won(S.deposit) + ' (나갈 때 돌려받음)' : '') + '">' + R.LEASE[lease] + '</span>' : '') +
       '<span class="who chip hot" title="' + esc(S.name + ' · 칭호 ' + S.title) + '">' + esc(S.title) + '</span>' + // 칭호만 (이름까지 붙이면 잘림)
       '<span class="r lvb" title="레벨 ' + x.lv + ' — 경험치 ' + x.xp + ' / ' + x.need + '. 오르면 특성을 하나 고릅니다">' + I('star', '', 's') + 'Lv.' + x.lv + '<i class="xpbar"><i style="width:' + (x.xp / x.need * 100).toFixed(0) + '%"></i></i></span></div>' +
       '<div class="scene" style="height:' + sh + 'px;--sy:' + sy + 'px">' + art('scene', S.tier, PHASE[Math.min(3, S.slot)]) + '</div>' +
-      '<div class="me-row hp' + (low ? ' low' : '') + '" title="체력 — 알바 · 공부에 쓰고, 쉬거나 자면 돌아옵니다">' + I('hp') + '<div class="bar"><div style="width:' + (S.hp / mx * 100).toFixed(0) + '%"></div></div><b>' + Math.round(S.hp) + ' / ' + mx + '</b></div>' + extra +
+      '<div class="me-row hp' + (low ? ' low' : '') + '" title="체력 — 알바 · 공부에 쓰고, 쉬거나 자면 돌아옵니다">' + I('hp') + '<div class="bar"><div style="width:' + (S.hp / mx * 100).toFixed(0) + '%"></div></div><b>' + Math.round(S.hp) + ' / ' + mx + '</b>' + condChip() + '</div>' + extra +
       '<div class="perks' + (perks.length > 10 ? ' many' : '') + '"><span class="pl" title="레벨이 오를 때 고른 특성">특성</span><span class="pks">' + (perks.length ? perks.map(p => '<span class="pk' + (p.n > 1 ? ' x' + p.n : '') + (p.aug ? ' aug' : '') + '" data-do="tip" data-arg="' + perkTip(p) + '" title="' + perkTip(p) + '">' + art('icon', p.icon) + '</span>').join('')
         : '<span class="none" title="레벨이 오르면 특성이 여기에 쌓입니다">' + I('star', '', 's') + I('plus', '', 's') + '</span>') + '</span>' +
-      (R.unlocked(S, 'stock') ? '<button class="chip go mapbtn" data-do="roadmap" title="로드맵 — 서울역에서 한국 최고 부자까지 열 단계, 다음 단계로 옮기기 · 사기">' + I('map', '', 's') + '<span class="t">로드맵</span></button>' : '') + '</div>'; // 투자가 열리기 전에는 판 자리가 로드맵. 로드맵 단추는 특성 칸 밖이라 특성이 많아도 밀려나지 않음
+      '</div>'; // 로드맵 · 은행 · 가게는 오른쪽 아래 판의 탭에 있다
     fitPerks($('me').querySelector('.pks'), perks);
   }
   const perkTip = p => esc(p.name + (p.n > 1 ? ' ×' + p.n : '') + (p.aug ? ' (양날)' : '') + ' — ' + p.desc + (p.aug ? '. 대신: ' + p.con : '') + (p.excl ? '. ' + p.excl : ''));
@@ -1065,15 +1162,15 @@
   function questGo(q) { // 퀘스트 그 자리에서 누르는 버튼: 옮기기 · 집 계약 · 주식/코인 탭
     if (!q || !q.go) return '';
     if (q.go === 'move') {
-      const to = S.tier + 1, info = R.moveInfo(S, to);
+      const to = S.tier + 1, info = R.moveInfo(S, to), alt = to === 3 ? R.moveInfo(S, 3, 'jeonse') : null;
       if (to > 3) return '';
       const label = I('door', '', 's') + R.HOMES[to].name + '으로 옮기기';
-      return info.ok ? '<button class="chip hot go" data-do="move" data-arg="' + to + '" title="' + R.HOMES[to].name + '으로 옮깁니다">' + label + '</button>'
+      return info.ok || (alt && alt.ok) ? '<button class="chip hot go" data-do="move" data-arg="' + to + '" title="' + R.HOMES[to].name + '으로 옮깁니다">' + label + '</button>'
         : '<button class="chip off" data-do="why" data-arg="' + esc(info.why) + '" title="' + esc(info.why) + '">' + label + '</button>';
     }
     if (q.go === 'house') { // 다음 집 사기 (살 수 있을 때만)
       const to = S.tier + 1;
-      return to >= 4 && to <= 8 && R.homeInfo(S, to).ok ? '<button class="chip hot go warmgo" data-do="house" title="' + R.HOMES[to].name + ' 사기 — ' + (to === 4 ? '현금으로만' : '대출을 고르는 창') + '">' + I('key', '', 's') + R.HOMES[to].name + ' 사기</button>' : '';
+      return to >= 4 && to <= 8 && R.goalView(S).canBuy ? '<button class="chip hot go warmgo" data-do="house" title="' + R.HOMES[to].name + ' — ' + (to === 4 ? '현금으로만' : '전세 · 대출을 고르는 창') + '">' + I('key', '', 's') + R.HOMES[to].name + (to === 4 ? ' 사기' : ' 들어가기') + '</button>' : '';
     }
     if (q.go === 'biz') { // 사업 키우기
       const n = R.bizView(S).next;
@@ -1081,13 +1178,19 @@
       return n.ok ? '<button class="chip hot go" data-do="bizup" title="' + n.name + ' 차리기 — ' + won(n.cost) + '">' + I('rocket', '', 's') + n.name + ' 차리기</button>'
         : '<button class="chip off" data-do="why" data-arg="' + esc(n.why) + '" title="' + esc(n.why) + '">' + I('rocket', '', 's') + n.name + ' 차리기</button>';
     }
+    if (q.go === 'jeonse') { // 원룸 월세 → 전세
+      if (S.tier !== 3 || R.leaseOf(S) !== 'rent') return '';
+      const info = R.moveInfo(S, 3, 'jeonse'), label = I('key', '', 's') + '전세로 갈아타기';
+      return info.ok ? '<button class="chip hot go" data-do="lease" data-arg="jeonse" title="원룸을 전세로 바꿉니다 — 보증금 ' + won(info.need) + '">' + label + '</button>' : '<button class="chip off" data-do="why" data-arg="' + esc(info.why) + '" title="' + esc(info.why) + '">' + label + '</button>';
+    }
+    if (q.go === 'shop' || q.go === 'bank' || q.go === 'realty') return q.go !== ui.tab && (q.go === 'shop' || R.unlocked(S, q.go)) ? '<button class="chip hot go" data-do="tab" data-arg="' + q.go + '">' + I(TAB_IC[q.go], '', 's') + TAB_NAME[q.go] + '</button>' : '';
     if (q.go === 'top') return R.goalView(S).canBuy && R.goalView(S).kind === 'top' ? '<button class="chip hot go warmgo" data-do="top" title="한국 최고 부자 선언 — 이 판의 끝">' + I('crown', '', 's') + '최고 부자 선언</button>' : '';
     if (q.go !== ui.tab && R.unlocked(S, q.go)) return '<button class="chip hot go" data-do="tab" data-arg="' + q.go + '">' + I(q.go === 'coin' ? 'bolt' : 'chart', '', 's') + (q.go === 'coin' ? '코인' : '주식') + '</button>';
     return '';
   }
   function renderQuest() {
     const q = R.questView(S), say = ui.say || S.log[S.log.length - 1]; // 시스템의 마지막 한마디 (잠깐 밝다가 흐려짐)
-    const go = questGo(q), notes = R.notices(S);
+    const go = questGo(q), notes = R.notices(S), dr = R.dreamView(S);
     const news = R.unlocked(S, 'stock') ? R.todayNews(S).filter(n => n.asset !== 'coin' || R.unlocked(S, 'coin')).length : 0;
     $('quest').innerHTML =
       '<div class="zh">' + I('quest') + '<span>상태창</span>' + (q || news ? '<span class="r">' + (news ? '<span class="nw" title="오늘 소식 ' + news + '건 — 오른쪽 주식 탭의 소식 칸">' + I('news', '', 's') + news + '건</span>' : '') + (q ? '퀘스트 ' + q.n + ' / ' + q.of : '') + '</span>' : '') + '</div>' + // 오늘 소식 수는 머리줄에 (아래 알림 줄이 한 줄로 들게)
@@ -1096,7 +1199,8 @@
         '<div class="q-row"><span class="rw" title="끝내면 받는 것: ' + esc(q.reward) + '">' + I('gift', '', 's') + '<span>' + esc(q.reward) + '</span></span>' + (q.near ? '<span class="near">거의 다 됨</span>' : '') + go + '</div></div>' : '<div class="q-in"><div class="q-title">모든 퀘스트 완료</div></div>') + // 보상이 길면 버튼이 다음 줄로 (보상 글은 자르지 않음)
       (say ? '<div class="q-say ' + (say.tone || '') + (ui.sayT > 400 ? ' in' : ui.sayT === 0 ? ' old' : '') + '" title="' + esc(say.text) + '">' + esc(say.text) + '</div>' : '') + // 앞에 "[시스템] " 이 붙는다. 줄 수는 fitQuest 가
       '<div class="q-due">' + // 알림 줄: 고정비(+ 원리금)는 전날(차분하게)과 당일(눈에 띄게)에만
-      notes.map(n => '<span class="note plain ' + n.kind + ' ' + n.when + '" title="고정비(대출이 있으면 원리금도)는 일요일 밤에 현금에서 나갑니다. 두 번 연속 못 내면 한 단계 아래로">' + I('bill', '', 's') + esc(n.text) + '</span>').join('') +
+      notes.map(n => '<span class="note plain ' + n.kind + ' ' + n.when + '" title="정산(고정비 · 원리금 · 이자)은 일요일 밤에 현금에서 나갑니다. 모자라면 마이너스 통장에서 자동으로 빌리고, 그래도 안 되면 연체 — 두 번 연속이면 한 단계 아래로">' + I('bill', '', 's') + esc(n.text) + '</span>').join('') +
+      (dr.set ? '<span class="note plain dream" title="꿈: ' + esc(dr.name + ' — ' + dr.line + '. 장면 ' + dr.done + ' / ' + dr.of + (dr.on ? ' · 얻은 힘: ' + dr.gain : ' · 둘째 장면에서 얻는 힘: ' + dr.gain)) + '">' + I('star', '', 's') + '꿈 · ' + esc(dr.name) + ' ' + dr.done + '/' + dr.of + '</span>' : '') +
       '</div>';
     fitQuest();
   }
@@ -1123,13 +1227,13 @@
       return;
     }
     const first = (coachNow() || {}).id === 'job'; // 안내가 첫 알바를 짚는 동안은 "대충"을 감춘다 (미니게임을 한 번은 해 보게)
-    const can = a => (a.kind === 'job' ? a.any : a.ok); // 알바는 어느 강도로든 할 수 있으면 켜짐 (대충은 중의 체력이 있을 때만)
+    const can = a => (a.kind === 'job' ? a.any || a.push : a.ok); // 알바는 어느 강도로든 할 수 있으면 켜짐 — 체력이 모자라도 조금이라도 있으면 "무리"로 (대충은 중의 체력이 있을 때만)
     const list = R.acts(S), q = R.questView(S) || {}, jobs = list.filter(a => a.kind === 'job' && a.any);
     const want = q.id === 'first_job' ? 'flyer' : q.id === 'study' ? 'study' : '';
     const rec = want && list.some(a => a.id === want && can(a)) ? want : !jobs.length && list.some(a => a.kind === 'rest' && a.ok) ? 'rest' : ''; // 상태창 추천: 퀘스트가 바로 가리키는 카드(할 수 있을 때), 아니면 일할 체력이 없을 때 쉬기 (그 밖에는 없음)
     const tag = a => (a.id === rec && can(a) ? '<span class="tag chip hot" title="지금 퀘스트(또는 체력)로 보아 상태창이 권하는 것">' + I('quest', '', 's') + '<span class="tl">상태창 </span>추천</span>' : '');
     const autoLine = a => (a.auto ? '<span class="auto" title="' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + ' 사업 매출 ' + won(a.auto) + '이 들어옵니다 (직원이 일함)"><i>' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + '</i><b>+' + num(a.auto) + '</b></span>' : '');
-    const jl = a => a.levels[a.any ? a.use : 1], short = list.some(a => a.kind === 'job' && num(jl(a).pay).length > 11), jw = n => (short ? cwon(n) : num(n)); // 알바 카드의 금액: 하나라도 줄이면 다 줄임 (한 줄에서 "721,913,000"과 "13억"이 섞이지 않게, 전부는 title)
+    const jl = a => a.levels[a.any || a.push ? a.use : 1], short = list.some(a => a.kind === 'job' && num(jl(a).pay).length > 11), jw = n => (short ? cwon(n) : num(n)); // 알바 카드의 금액: 하나라도 줄이면 다 줄임 (한 줄에서 "721,913,000"과 "13억"이 섞이지 않게, 전부는 title)
     $('today').innerHTML = head + '<div class="cards' + (list.length >= 5 ? ' n5' : '') + '">' + list.map((a, i) => {
       const go = can(a);
       const k = '<span class="key">' + (i + 1) + '</span>', off = go ? 'data-do="' + a.kind + '"' + (a.kind === 'job' ? ' data-arg="' + a.id + '"' : '') + ' role="button"' : 'data-do="why" data-arg="' + esc(a.why) + '"';
@@ -1137,14 +1241,15 @@
         const lv = '<span class="lv" title="숙련도: 직접 한 횟수가 ' + tune.skill_n1 + ' · ' + tune.skill_n2 + ' · ' + tune.skill_n3 + '번이 되면 일당이 ' + Math.round(tune.skill_bonus * 100) + '%씩 오릅니다">' + [1, 2, 3].map(n => '<s class="' + (a.lv >= n ? 'on' : '') + '"></s>').join('') + '</span>';
         const L = jl(a); // 기억한 강도(체력이 모자라면 할 수 있는 가장 높은 것)의 일당 · 체력
         const pt = jw(L.pay), long = pt.length > 8 ? ' long' : '', sk = Math.round(a.pay * R.skipMult(S) / 1000) * 1000; // 사업이 커져 일당이 길면 일당 · 체력을 두 줄로. sk = "대충"이 받는 돈 (늘 중 기준)
-        return '<div class="card ' + (go ? 'go' : 'off') + long + (a.id === rec && go ? ' sug' : '') + '" ' + off + ' title="' + esc(a.name + ' — ' + a.note + (a.bizMult > 1 ? ' (사업 ×' + num(a.bizMult) + ')' : '') + (go ? ' · 강도 ' + L.name : '')) + '">' + k + (go && L.n !== 1 ? ich(L.n) : '') + lv + tag(a) + '<span class="pic">' + pic('job', a.id, !go) + '</span><span class="nm">' + a.name + '</span>' + // 강도 딱지는 하 · 상 · 최상만 (중은 기본이라 안 닮), 숫자 키 옆
+        const risk = a.push ? Math.round(L.risk * 100) : 0; // 무리: 어느 강도도 체력이 모자람 — 하더라도 쓰러질 수 있다
+        return '<div class="card ' + (go ? 'go' : 'off') + long + (a.push ? ' push' : '') + (a.closed ? ' closed' : '') + (a.id === rec && go ? ' sug' : '') + '" ' + off + ' title="' + esc(a.name + ' — ' + (a.closed ? '오늘은 이 알바를 마쳤습니다 (같은 알바는 하루 한 번)' : a.note + (a.bizMult > 1 ? ' (사업 ×' + num(a.bizMult) + ')' : '') + (a.push ? ' · 체력이 모자랍니다 — 무리하면 쓰러질 확률 ' + risk + '%' : go ? ' · 강도 ' + L.name : ''))) + '">' + k + (go && !a.push && L.n !== 1 ? ich(L.n) : '') + (a.push ? '<em class="ich i3" title="체력이 모자란 채 일합니다 — 끝나고 쓰러질 확률 ' + risk + '%">무리</em>' : '') + lv + tag(a) + '<span class="pic">' + pic('job', a.id, !go) + '</span><span class="nm">' + a.name + '</span>' + // 강도 딱지는 하 · 상 · 최상만 (중은 기본이라 안 닮), 숫자 키 옆
 
-          '<span class="st"><span class="pay" title="일당(보통) ' + won(L.pay) + (a.bizMult > 1 ? ' — 사업 ×' + num(a.bizMult) + ' 포함' : '') + '">' + I('coin', '', 's') + pt + '</span><span class="' + (go ? 'cost' : 'lack') + '" title="드는 체력' + (go ? '' : ' — 모자랍니다') + '">' + I('hp', '', 's') + '−' + L.hp + '</span></span>' +
-          (a.ok && !first ? '<button class="skip" data-do="skip" data-arg="' + a.id + '" title="대충: 미니게임 없이 중 강도 일당의 ' + Math.round(R.skipMult(S) * 100) + '% (' + won(sk) + ') · 체력 −' + a.hp + ' · 숙련도와 콤보는 오르지 않음">대충 ' + jw(sk) + '</button>' : '') + '</div>';
+          '<span class="st"><span class="pay" title="일당(보통) ' + won(L.pay) + (a.bizMult > 1 ? ' — 사업 ×' + num(a.bizMult) + ' 포함' : '') + '">' + I('coin', '', 's') + pt + '</span>' + (a.closed ? '<span class="lack" title="같은 알바는 하루 한 번">' + I('check', '', 's') + '오늘 마감</span>' : '<span class="' + (go && !a.push ? 'cost' : 'lack') + '" title="드는 체력' + (go && !a.push ? '' : ' — 모자랍니다') + '">' + I('hp', '', 's') + '−' + L.hp + '</span>') + '</span>' +
+          (a.ok && !first ? '<button class="skip" data-do="skip" data-arg="' + a.id + '" title="대충: 미니게임 없이 중 강도 일당의 ' + Math.round(R.skipMult(S) * 100) + '% (' + won(sk) + ') · 체력 −' + a.hp + ' · 숙련도와 콤보는 오르지 않음">대충 ' + (num(sk).length > 9 ? cwon(sk) : jw(sk)) + '</button>' : '') + '</div>';
       }
       const st = a.kind === 'rest' ? (a.ok ? '<span class="gain">' + I('hp', '', 's') + '+' + (-a.hp) + '</span>' : '<span class="lack">' + I('lock', '', 's') + esc(a.why.split(':')[0]) + '</span>') // 일중독(양날): 할 수 있는 알바가 있으면 못 쉼
         : a.ok ? '<span class="' + (a.hp > S.hp ? 'lack' : 'cost') + '" title="드는 체력">' + I('hp', '', 's') + '−' + a.hp + '</span><span class="sys" title="고른 종목의 내일 소식">' + I('news', '', 's') + '내일</span>' : '<span class="lack">' + I('check', '', 's') + (/읽었/.test(a.why) ? '읽음' : '체력') + '</span>';
-      return '<div class="card ' + (a.ok ? 'go' : 'off') + (a.auto ? ' auto' : '') + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + (a.kind === 'rest' ? '쉬기 — 체력을 채웁니다' : '공부 — 체력 ' + a.hp + '과 한 칸을 써서, 고른 종목 하나의 내일 소식이 오르는 쪽인지 내리는 쪽인지 리포트를 봅니다 (' + R.accText(R.studyAcc(S)) + ')') + '">' + k + tag(a) + '<span class="pic">' + pic('act', a.id, !a.ok) + '</span><span class="nm">' + a.name + '</span>' +
+      return '<div class="card ' + (a.ok ? 'go' : 'off') + (a.auto ? ' auto' : '') + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + (a.kind === 'rest' ? '쉬기 — 체력을 채웁니다' : '공부 — 체력 ' + a.hp + '과 한 칸을 써서, 고른 종목' + (a.picks > 1 ? ' 둘' : ' 하나') + '의 내일 소식이 오르는 쪽인지 내리는 쪽인지 리포트를 봅니다 (' + Math.round(R.studyAcc(S) * 100) + '% 맞음). 공부가 쌓이면 단계가 오릅니다') + '">' + k + tag(a) + '<span class="pic">' + pic('act', a.id, !a.ok) + '</span><span class="nm">' + a.name + '</span>' +
         '<span class="st">' + st + '</span>' + autoLine(a) + '</div>';
     }).join('') + '</div>';
   }
@@ -1164,19 +1269,26 @@
   }
 
   // ── 구역 board: 투자가 열리기 전에는 로드맵, 열린 뒤에는 주식 / 코인 ──
+  const TABS = ['road', 'stock', 'coin', 'info', 'realty', 'bank', 'shop'];
+  const TAB_NAME = { road: '로드맵', stock: '주식', coin: '코인', info: '뉴스·공부', realty: '부동산', bank: '은행', shop: '가게' };
+  const TAB_IC = { road: 'map', stock: 'chart', coin: 'bolt', info: 'news', realty: 'building', bank: 'bank', shop: 'cart' };
+  const TAB_TIP = { road: '로드맵 — 서울역에서 한국 최고 부자까지 열 단계', stock: '주식 — 장 보기 · 내 보유 · 종목 상세', coin: '코인 레버리지', info: '뉴스·공부 — 오늘 소식 · 내일 리포트 · 투자 공부 단계',
+    realty: '부동산 — 시세 · 상가와 건물 (임대수익)', bank: '은행 — 신용등급 · 마이너스 통장 · 이번 일요일 정산', shop: '가게 — 사 먹기 · 옷 · 살림' };
+  const tabsOpen = () => TABS.filter(t => t === 'road' || t === 'shop' || R.unlocked(S, t === 'info' ? 'stock' : t)); // 아직 못 쓰는 탭은 아예 안 보인다
   function renderBoard() {
-    if (!R.unlocked(S, 'stock')) { // 로드맵: 서울역 → 내 집, 다음 칸에 옮기기
-      $('board').innerHTML = '<div class="zh" title="로드맵 — 서울역에서 한국 최고 부자까지 열 단계. 원룸까지는 들어갈 때 돈을 가져가지 않습니다">' + I('map') + '<span>로드맵</span><span class="r">서울역 → 한국 최고 부자</span></div><div class="pbody">' + roadmapHtml() + '</div>';
-      roadDraw($('board')); ui.flash = {}; ui.coachDirty = true; return;
-    }
-    const tabs = [['stock', '주식', 'chart', '주식 매매']];
-    if (R.unlocked(S, 'coin')) tabs.push(['coin', '코인', 'bolt', '코인 레버리지']);
-    if (!tabs.some(t => t[0] === ui.tab)) ui.tab = 'stock';
-    if (ui.tab === 'stock' && ui.sel === 'coin') ui.sel = 'daejang';
-    $('board').innerHTML = '<div class="zh tabs">' + tabs.map(t => '<button class="' + (ui.tab === t[0] ? 'on' : ui.fresh[t[0]] ? 'new' : '') + '" data-do="tab" data-arg="' + t[0] + '" title="' + t[3] + '">' + I(t[2], '', 's') + t[1] + '</button>').join('') +
-      (ui.tab === 'coin' ? '<span class="r"><button class="chip go drillbtn" data-do="drill" title="코인 연습 — 진짜 돈이 아닌 ' + won(DRILL_PUT) + '으로 롱 · 숏 · 청산을 직접 눌러 봅니다 (판에는 영향 없음)">' + I('play', '', 's') + '연습</button></span>' : '') + '</div>' +
-      '<div class="pbody">' + tradeHtml(ui.tab) + '</div>';
-    drawChart($('chart'), ui.tab === 'coin' ? 'coin' : ui.sel);
+    const tabs = tabsOpen();
+    if (ui.tut && S.day >= 2 && S.tier === 0) ui.tab = 'road'; // 첫 판 안내가 로드맵의 "옮기기"를 짚는 동안
+    if (tabs.indexOf(ui.tab) < 0) ui.tab = 'road';
+    const t = ui.tab;
+    const extra = t === 'coin' ? '<button class="chip go drillbtn" data-do="drill" title="코인 연습 — 진짜 돈이 아닌 ' + won(DRILL_PUT) + '으로 롱 · 숏 · 청산을 직접 눌러 봅니다 (판에는 영향 없음)">' + I('play', '', 's') + '연습</button>'
+      : t === 'road' ? '<button class="chip go drillbtn" data-do="roadmap" title="로드맵을 큰 창으로 — 열 단계의 값 · 고정비 · 열리는 것을 전부">' + I('map', '', 's') + '크게 보기</button>' : '';
+    $('board').innerHTML = '<div class="zh tabs">' + tabs.map(k => '<button class="' + (t === k ? 'on' : ui.fresh[k] ? 'new' : '') + '" data-do="tab" data-arg="' + k + '" title="' + TAB_TIP[k] + '">' + I(TAB_IC[k], '', 's') + TAB_NAME[k] + '</button>').join('') +
+      (extra ? '<span class="r">' + extra + '</span>' : '') + '</div><div class="pbody tb-' + t + '">' +
+      (t === 'road' ? roadmapHtml() : t === 'stock' ? stockHtml() : t === 'coin' ? coinHtml() : t === 'info' ? infoHtml() : t === 'realty' ? realtyHtml() : t === 'bank' ? bankHtml() : shopHtml()) + '</div>';
+    if (t === 'road') roadDraw($('board'));
+    else if (t === 'coin') drawChart($('chart'), 'coin');
+    else if (t === 'stock' && ui.sview === 'detail') drawChart($('chart'), ui.sel);
+    else if (t === 'realty') drawRe($('rechart'));
     ui.flash = {}; ui.coachDirty = true;
   }
   function roadDraw(el) { try { if (window.PXUI) window.PXUI.road(el.querySelector('.ladder.ten')); } catch (e) { /* 길 그림이 없어도 칸은 읽힌다 */ } }
@@ -1184,47 +1296,48 @@
     // 판 자리(full 아님)에서는 지금 · 다음만 다 보이고, 지나온 곳은 이름만, 먼 곳은 값 한 줄만 흐리게. 로드맵 창은 전부
     const row = (ic, title, html, c) => '<div class="rr' + (c ? ' ' + c : '') + '" title="' + title + '">' + I(ic, '', 's') + '<span>' + html + '</span></div>';
     const sleep = t => row('bed', '자면 돌아오는 체력', '잠 +' + tune[R.HOMES[t].sleep]);
-    const need = n => row('wallet', '입주 기준: 순자산(현금 + 투자)이 ' + won(n) + ' 있으면 들어갑니다. 돈을 내는 것은 아닙니다 (가져가지 않음)', num(n) + '부터' + (full ? '<i>(가져가지 않음)</i>' : ''), 'need'); // 판 자리의 좁은 칸에서는 "순자산"을 아이콘으로 (뜻은 title)
-    const week = t => row('bill', '고정비: 매주 일요일 밤' + (t >= 5 ? ' (대출이 있으면 원리금도 함께)' : t === 4 ? ' (관리비 · 세금)' : ' (끼니 포함)'), '주 ' + num(R.weekCost(S, t)));
-    const price = t => row('key', t === 4 ? '값 — 현금으로만 삽니다' : '값 — 대출을 값의 ' + Math.round(tune.loan_ltv * 100) + '%까지 낄 수 있습니다. 살던 집은 산 값 그대로 팔려 보태집니다', num(R.homePrice(S, t)), 'need');
+    const dep = (n, name) => row('wallet', (name || '보증금') + ' ' + won(n) + ' — 나갈 때 돌려받는 돈입니다 (순자산에 그대로 남음)', (name ? name + ' ' : '') + num(n), 'need'); // 보증금: 걸어 두는 돈 (돌려받는다는 말은 설명과 창 머리글에)
+    const week = t => row('bill', '고정비: 매주 일요일 밤' + (t >= 5 ? ' (대출이 있으면 원리금도 함께)' : t === 4 ? ' (관리비 · 세금)' : t === 3 ? ' — 월세 ' + won(R.weekCost(S, 3, 'rent')) + ' · 전세 ' + won(R.weekCost(S, 3, 'jeonse')) + ' (끼니 포함)' : ' (끼니 포함)'), '주 ' + num(R.weekCost(S, t, t === S.tier ? '' : 'rent')));
+    const cv = R.creditView(S), jt = t => (R.HOMES[t].lease.indexOf('jeonse') >= 0 ? ' 전세 보증금은 값의 ' + Math.round(tune.jeonse_ratio * 100) + '%.' : '');
+    const price = t => row('key', t === 4 ? '값 — 현금으로만 삽니다 (부동산 시세를 따라 움직입니다)' : '값 — 부동산 시세를 따라 움직입니다. 대출은 신용등급에 따라(지금 ' + cv.grade + '등급 = 값의 ' + Math.round(cv.ltv * 100) + '%까지).' + jt(t) + ' 살던 집은 그때 시세에 팔려 보태집니다', num(R.homePrice(S, t)), 'need');
     const rows = t => t === 0 ? [row('meal', '끼니: 하루 ' + won(R.mealCost(S)), '끼니 ' + num(R.mealCost(S))), sleep(0)]
       : t === 1 ? [row('cash', '하룻밤 요금 (밤마다)', '하룻밤 ' + num(R.saunaCost(S))), sleep(1)]
-        : t <= 3 ? [need(t === 2 ? tune.gosiwon_need : tune.oneroom_need), week(t)]
+        : t === 2 ? [dep(tune.gosiwon_dep, '예치금'), week(2)] : t === 3 ? [dep(tune.oneroom_dep, '보증금'), week(3)].concat(full ? [row('wallet', '전세로 들어가면: 보증금 ' + won(tune.oneroom_jeonse) + ' (나갈 때 돌려받음) · 일요일 밤마다 ' + won(R.weekCost(S, 3, 'jeonse')), '전세 ' + cwon(tune.oneroom_jeonse) + '·주 ' + cwon(R.weekCost(S, 3, 'jeonse')))] : [])
           : t <= 8 ? [price(t), week(t)]
             : [row('crown', '호텔에 살면서 순자산이 이만큼 되면 선언합니다', num(tune.top_worth), 'need'), row('wallet', '값이 아니라 순자산 기준 (현금 + 투자 + 집 − 대출)', '순자산 기준')];
     const open = (svg, title, big) => '<span' + (big ? ' class="big"' : '') + ' title="' + title + '">' + svg + '</span>'; // big = 알바 · 종목 그림(32×32)은 제 크기로
     const chip = (ic, text, title) => '<span class="oc" title="' + title + '">' + I(ic, '', 's') + '<b>' + text + '</b></span>'; // 판 자리에서는 아이콘만 (이름은 title)
     const opens = t => t === 0 ? open(art('job', 'flyer'), '전단지 알바', 1) + open(art('job', 'loading'), '상하차 알바', 1)
-      : t === 1 ? open(art('job', 'store'), '편의점 알바', 1)
-        : t === 2 ? open(art('job', 'delivery'), '배달 알바', 1) + open(art('icon', 'chart'), '주식 계좌') + open(art('icon', 'book'), '공부(리포트)')
-          : t === 3 ? open(art('asset', 'coin'), '코인', 1) + open(art('icon', 'bolt'), '레버리지')
-            : t <= 8 ? chip('rocket', R.BIZ[t - 3].name, '사업 ' + (t - 3) + '단계 ' + R.BIZ[t - 3].name + ' — 일당 ×' + num(Math.pow(tune.biz_mult, t - 3))) + (t === 5 ? chip('bill', '대출', '주담대: 값의 ' + Math.round(tune.loan_ltv * 100) + '%까지 · ' + tune.loan_weeks + '회에 나눠 갚음') : '')
+      : t === 1 ? open(art('job', 'store'), '편의점 알바', 1) + open(art('icon', 'chart'), '주식 계좌') + open(art('icon', 'book'), '공부(리포트)')
+        : t === 2 ? open(art('job', 'delivery'), '배달 알바', 1) + open(art('icon', 'bank'), '은행 (신용 · 마이너스 통장)')
+          : t === 3 ? open(art('asset', 'coin'), '코인', 1) + open(art('icon', 'building'), '부동산 (상가)')
+            : t <= 8 ? chip('rocket', R.BIZ[t - 3].name, '사업 ' + (t - 3) + '단계 ' + R.BIZ[t - 3].name + ' — 일당 ×' + num(Math.pow(tune.biz_mult, t - 3))) + (t === 5 ? chip('bill', '대출', '주담대: 신용등급에 따라 값의 ' + Math.round(tune.ltv_6 * 100) + '~' + Math.round(tune.ltv_1 * 100) + '%까지 · ' + tune.loan_weeks + '회에 나눠 갚음') : '')
               : chip('trophy', '엔딩', '한국 최고 부자 선언 — 이 판의 끝');
     const bar = p => '<div class="bar"><div style="width:' + (clamp(p, 0, 1) * 100).toFixed(1) + '%"></div></div>';
     const why = (ic, amt, title) => '<div class="why" title="' + esc(title) + '">' + I(ic, '', 's') + num(amt) + ' 더</div>';
     return '<div class="ladder ten' + (full ? ' full' : '') + '">' + R.HOMES.map((h, t) => {
       const next = t === S.tier + 1, past = t < S.tier, here = t === S.tier;
       let foot;
-      if (here) foot = full ? '<div class="why sys">' + I('check', '', 's') + '지금 여기</div>' : ''; // 판 자리에서는 그림 칸의 "지금 여기" 딱지로 (줄을 아낌)
+      if (here) foot = full ? '<div class="why sys">' + I('check', '', 's') + '지금 사는 곳' + (R.leaseOf(S) ? ' · ' + R.LEASE[R.leaseOf(S)] : '') + '</div>' : ''; // 그림 칸에는 내 모습이 서 있다
       else if (past) foot = full ? '<div class="why">' + I('check', '', 's') + '지나옴</div>' : '';
       else if (next && t <= 3) {
-        const info = R.moveInfo(S, t), short = t === 1 ? ['cash', '현금', info.need - S.cash] : info.have < info.need ? ['wallet', '순자산', info.need - info.have] : ['cash', '현금', info.pay - S.cash];
-        foot = info.ok ? '<button class="btn main" data-do="move" data-arg="' + t + '">' + I('door') + '옮기기</button>'
-          : (t >= 2 && info.have < info.need ? bar(info.have / info.need) : '') + why(short[0], short[2], short[1] + ' ' + won(short[2]) + ' 더 — ' + info.why);
+        const info = R.moveInfo(S, t), alt = t === 3 ? R.moveInfo(S, 3, 'jeonse') : null, lack = Math.max(0, info.need - info.have);
+        foot = info.ok || (alt && alt.ok) ? '<button class="btn main" data-do="move" data-arg="' + t + '">' + I('door') + '옮기기</button>'
+          : (t >= 2 ? bar(info.have / info.need) : '') + why('cash', lack, (t === 1 ? '현금 ' : '보증금에 ') + won(lack) + ' 더 — ' + info.why);
       } else if (next && t <= 8) {
-        const info = R.homeInfo(S, t);
-        foot = info.ok ? '<button class="btn warm" data-do="house" title="' + h.name + ' 사기 — ' + (t === 4 ? '현금으로만' : '대출을 고르는 창') + '">' + I('key') + '사기</button>'
-          : bar(info.down ? S.cash / info.down : 1) + why('cash', info.down - S.cash, (t === 4 ? '현금으로만 삽니다. ' : '대출을 최대로 끼면 ') + '현금 ' + won(info.down) + '이 있어야 합니다 — ' + info.why);
+        const info = R.homeInfo(S, t), g = R.goalView(S);
+        foot = g.canBuy ? '<button class="btn warm" data-do="house" title="' + h.name + ' — ' + (t === 4 ? '현금으로만' : '전세 · 대출을 고르는 창') + '">' + I('key') + (t === 4 ? '사기' : '들어가기') + '</button>'
+          : bar(g.need ? S.cash / g.need : 1) + why('cash', g.need - S.cash, (t === 4 ? '현금으로만 삽니다. ' : '전세로 들어가거나 대출을 최대로 끼면 ') + '현금 ' + won(g.need) + '이 있어야 합니다 — ' + info.why);
       } else if (next) {
         const g = R.goalView(S);
         foot = g.canBuy ? '<button class="btn warm" data-do="top">' + I('crown') + '선언</button>' : bar(g.pct) + why('wallet', g.price - g.have, '순자산이 ' + won(g.price - g.have) + ' 더 있어야 선언합니다');
       } else foot = ''; // 아직 먼 단계: 자물쇠는 그림 칸 모서리에 (칸 아래에 따로 두면 아랫줄 것처럼 보임)
-      const all = rows(t), show = full || here || next ? all : past ? null : all.slice(0, 1);
-      const cond = next && t >= 5 && t <= 8 ? row('cash', '사는 조건: 대출을 최대로 끼면 지금 현금 ' + won(R.homeInfo(S, t).down) + ' (살던 집을 판 돈 포함)', (full ? '현금 ' : '') + num(R.homeInfo(S, t).down) + '부터', 'need') : ''; // 다음 집의 사는 조건
+      const all = rows(t), show = full || here || (next && t < 9) ? all : past ? null : all.slice(0, 1);
+      const cond = next && t >= 5 && t <= 8 && (full || R.goalView(S).canBuy) ? row('cash', '들어가는 조건: 전세로 가거나 대출을 최대로 끼면 지금 현금 ' + won(R.goalView(S).need) + ' (살던 집을 판 돈 · 돌려받는 보증금 포함)', (full ? '현금 ' : '') + num(R.goalView(S).need) + '부터', 'need') : ''; // 다음 집에 들어가는 조건
       const big = t >= 4 ? (t === 9 ? tune.top_worth : R.homePrice(S, t)) : 0; // 1억이 넘는 값은 그림 위에 "100억" 길잡이 (자리를 더 쓰지 않게)
-      const flag = here ? '<span class="flag here chip" title="지금 사는 곳">지금 여기</span>' : next ? '<span class="flag chip hot" title="다음 목표">다음 목표</span>' : '';
+      const flag = here ? '<span class="mehere" title="지금 여기 — ' + esc(S.name) + ' 님이 사는 곳">' + art('hero') + '</span>' : next ? '<span class="flag chip hot" title="다음 목표">다음 목표</span>' : ''; // 지금 사는 칸에는 글자 대신 내 모습이 서 있다 (입은 옷 그대로)
       const far = !(here || past || next);
-      return '<div class="rung ' + (here ? 'here' : past ? 'past' : next ? 'next' : 'far') + '" style="--gr:' + (t < 5 ? 1 : 2) + ';--gc:' + (t < 5 ? t + 1 : 10 - t) + '"><div class="th">' + flag + art('thumb', t, far) + (far ? '<span class="lk" title="앞 단계부터 — 아직 잠김">' + art('icon', 'lock') + '</span>' : '') + (big >= 1e8 ? '<span class="eok" title="' + won(big) + '">' + eok(big) + '</span>' : '') + '</div>' + // 윗줄 1→5, 아랫줄은 오른쪽부터 6→10 (S자 길). 아직 먼 단계는 회색 그림 + 모서리 자물쇠
+      return '<div class="rung ' + (here ? 'here' : past ? 'past' : next ? 'next' : 'far') + '" style="--gr:' + (t < 5 ? 1 : 2) + ';--gc:' + (t < 5 ? t + 1 : 10 - t) + '"><div class="th">' + flag + art('thumb', t, far) + (far ? '<span class="lk" title="앞 단계부터 — 아직 잠김">' + art('icon', 'lock') + '</span>' : '') + (big >= 1e8 && !here ? '<span class="eok" title="' + won(big) + '">' + eok(big) + '</span>' : '') + '</div>' + // 윗줄 1→5, 아랫줄은 오른쪽부터 6→10 (S자 길). 아직 먼 단계는 회색 그림 + 모서리 자물쇠
         (show ? '<div class="opens">' + opens(t) + '</div>' : '') + '<div class="in"><div class="nm">' + h.name + '</div>' +
         (show ? '<div class="rows">' + (cond ? [all[0], cond] : show).join('') + '</div>' : '') + '<div class="foot">' + foot + '</div></div></div>';
     }).join('') + '</div>';
@@ -1232,75 +1345,199 @@
   function todayChg(id) { const h = S.market.hist[id], open = h[h.length - 1 - Math.min(3, S.slot)]; return S.slot === 0 ? null : S.market.px[id] / open - 1; }
   const pxText = id => Math.round(S.market.px[id]).toLocaleString('en-US') + '원';
   const REL = { official: 3, article: 2, rumor: 1 };
-  function newsHtml() {
-    const coin = R.unlocked(S, 'coin');
-    const today = R.todayNews(S).filter(n => n.asset !== 'coin' || coin), intel = R.intelView(S);
-    const gap = S.market.gap || {}; // 밤사이 이미 값에 들어간 만큼 (그날 내내 소식 옆에 남김)
-    const item = n => '<div class="nitem"><span class="src ' + n.src + '" title="' + n.srcName + ' — ' + n.srcNote + '">' + n.srcName + '<span class="rel">' + [1, 2, 3].map(k => '<i class="' + (REL[n.src] >= k ? 'on' : '') + '"></i>').join('') + '</span></span>' + arrow(n.dir, n.dir > 0 ? '호재' : '악재') +
-      '<span class="tx">' + esc(n.head) + '</span>' + (gap[n.asset] ? '<span class="gp ' + cls(gap[n.asset]) + '" title="밤사이 장 전에 이미 값에 들어간 만큼">밤사이 ' + pct(gap[n.asset], 0) + '</span>' : '') +
+  const newsLine = n => { // 소식 한 줄: 출처(믿을 만한 정도) · 호재/악재 · 머리글 · 밤사이 이미 들어간 만큼 · 리포트가 본 방향
+    const gap = (S.market.gap || {})[n.asset];
+    return '<div class="nitem"><span class="src ' + n.src + '" title="' + n.srcName + ' — ' + n.srcNote + '">' + n.srcName + '<span class="rel">' + [1, 2, 3].map(k => '<i class="' + (REL[n.src] >= k ? 'on' : '') + '"></i>').join('') + '</span></span>' + arrow(n.dir, n.dir > 0 ? '호재' : '악재') +
+      '<span class="tx" title="' + esc(n.head) + '">' + esc(n.head) + '</span>' + (gap ? '<span class="gp ' + cls(gap) + '" title="밤사이 장 전에 이미 값에 들어간 만큼">밤사이 ' + pct(gap, 0) + '</span>' : '') +
       (n.report ? '<span class="rep ' + cls(n.report) + '" title="' + (BY[n.by] || '리포트') + ': 이 소식은 진짜로는 ' + (n.report > 0 ? '오르는' : '내리는') + ' 쪽">' + (BY[n.by] || '리포트') + I(n.report > 0 ? 'up' : 'down', '', 's') + '</span>' : '') + '</div>';
-    const left = '<h4 title="오늘 소식 — 점이 많을수록 믿을 만합니다 (공시 · 기사 · 찌라시). 오늘 소식은 아침 장 전에 믿을 만한 만큼 이미 값에 들어갔습니다">' + I('news', '', 's') + '오늘 소식<span class="pre">아침 값에 이미 들어감 — 보고 사면 늦음</span></h4>' + (today.length ? today.map(item).join('') : '<div class="nitem dim">조용함</div>');
-    let right;
-    const acc = Math.round(R.studyAcc(S) * 100);
-    if (intel && intel.assets.length) { // 공부한 종목만: 소식이 있으면 리포트가 본 방향, 없으면 조용함, 한탕바이오는 매집의 기울기
-      const nm = id => R.ASSETS.find(a => a.id === id).name;
-      right = '<h4 title="공부한 종목의 내일 소식이 오르는 쪽인지 내리는 쪽인지 (리포트 · ' + acc + '% 맞음). 시세는 소식 말고도 출렁입니다. 내일 밤에 맞았는지 알려 줍니다">' + I('book', '', 's') + '내일 리포트 <span>' + R.accText(R.studyAcc(S)).replace(' 맞음', '') + '</span></h4>' +
-        intel.assets.filter(id => id !== 'coin' || coin).map(id => {
-          if (id === 'hantang') return '<div class="nitem ht" title="한탕바이오 — 리포트를 읽은 때 기준. 매집 알림은 진짜 · 가짜에 똑같이 뜹니다"><span class="em">' + art('asset', 'hantang') + '</span><span class="tx ' + (intel.ht && intel.ht.stale ? 'dim' : 'warm') + '">' + esc(R.htText(intel.ht) || '조용합니다') + '</span></div>';
-          const its = intel.items.filter(i => i.asset === id);
-          return its.length ? its.map(i => '<div class="nitem"><span class="em">' + art('asset', i.asset) + '</span><span class="tx">' + i.name + '</span>' + arrow(i.dir) + '<span class="' + cls(i.dir) + '">' + (i.dir > 0 ? '오르는' : '내리는') + ' 쪽</span></div>').join('')
-            : '<div class="nitem"><span class="em">' + art('asset', id) + '</span><span class="tx">' + nm(id) + '</span><span class="dim">소식 없음</span></div>';
-        }).join('');
-    } else right = '<h4 title="한 칸과 체력을 공부에 쓰면, 고른 종목의 내일 소식 방향이 여기에 뜹니다">' + I('book', '', 's') + '내일</h4><div class="nitem dim">' + I('lock', '', 's') + '공부하면 보임</div>';
-    return '<div class="newsbox"><div>' + left + '</div><div>' + right + '</div></div>';
+  };
+  const visNews = () => R.todayNews(S).filter(n => n.asset !== 'coin' || R.unlocked(S, 'coin'));
+  function infoHtml() { // 뉴스·공부: 왼쪽 = 오늘 소식, 오른쪽 = 투자 공부(단계 · 다음에 열리는 것) + 내일 리포트
+    const today = visNews(), intel = R.intelView(S), k = R.knowView(S), coin = R.unlocked(S, 'coin'), act = R.acts(S).find(a => a.kind === 'study');
+    const nm = id => R.ASSETS.find(a => a.id === id).name;
+    const alerts = k.lv >= 5 ? S.market.shocks.filter(x => x.day === S.day && x.slot >= S.slot && R.visible(S, x.asset)) : []; // 속보 경보: 아직 안 터진 오늘의 속보 (종목만, 방향은 모름)
+    const left = '<h4 title="오늘 소식 — 점이 많을수록 믿을 만합니다 (공시 · 기사 · 찌라시). 오늘 소식은 아침 장 전에 믿을 만한 만큼 이미 값에 들어갔습니다">' + I('news', '', 's') + '오늘 소식<span class="pre">아침 값에 이미 들어감 — 보고 사면 늦음</span></h4>' +
+      (today.length ? today.map(newsLine).join('') : '<div class="nitem dim">조용함</div>') +
+      alerts.map(x => '<div class="nitem alert" title="공부 5단계: 오늘 이 종목에 예고 없는 큰 소식이 터질 수 있습니다 (오를지 내릴지는 모릅니다)">' + I('warn', '', 's') + '<span class="tx">속보 경보 — ' + esc(nm(x.asset)) + '</span></div>').join('');
+    let rep;
+    if (intel && intel.assets.length) { // 공부한 종목만: 소식이 있으면 리포트가 본 방향, 없으면 조용함, 한탕바이오 · 꿀잼게임즈는 기울기
+      rep = intel.assets.filter(id => id !== 'coin' || coin).map(id => {
+        if (id === 'hantang') return '<div class="nitem ht" title="한탕바이오 — 리포트를 읽은 때 기준. 매집 알림은 진짜 · 가짜에 똑같이 뜹니다"><span class="em">' + art('asset', 'hantang') + '</span><span class="tx ' + (intel.ht && intel.ht.stale ? 'dim' : 'warm') + '">' + esc(R.htText(intel.ht) || '조용합니다') + '</span></div>';
+        if (id === 'game') return '<div class="nitem ht" title="꿀잼게임즈 — 신작을 발표한 뒤에만 흥행 쪽 · 혹평 쪽 기울기가 보입니다"><span class="em">' + art('asset', 'game') + '</span><span class="tx ' + (intel.gm && intel.gm.stale ? 'dim' : 'warm') + '">' + esc(R.gmText(intel.gm) || '신작 소식이 없습니다') + '</span></div>';
+        const its = intel.items.filter(i => i.asset === id);
+        return its.length ? its.map(i => '<div class="nitem"><span class="em">' + art('asset', i.asset) + '</span><span class="tx">' + i.name + '</span>' + arrow(i.dir) + '<span class="' + cls(i.dir) + '">' + (i.dir > 0 ? '오르는' : '내리는') + ' 쪽</span></div>').join('')
+          : '<div class="nitem"><span class="em">' + art('asset', id) + '</span><span class="tx">' + nm(id) + '</span><span class="dim">소식 없음</span></div>';
+      }).join('');
+    } else rep = '<div class="nitem dim">' + I('lock', '', 's') + '오늘 공부하면 여기에 뜹니다</div>';
+    const pcA = Math.round(k.acc * 100), bar = k.next ? (k.xp - k.from) / (k.next - k.from) : 1;
+    const steps = k.list.map(x => '<span class="ks' + (x.got ? ' got' : '') + (x.lv === k.lv ? ' now' : '') + '" title="' + x.lv + '단계 ' + x.name + ' (공부 ' + x.at + '번) — ' + x.gain + '">' + x.lv + '</span>').join('');
+    const go = act && act.ok ? '<button class="btn main small studygo" data-do="study" title="한 칸과 체력 ' + act.hp + '을 써서 공부합니다 — 리포트 ' + k.picks + '종목 + 공부 횟수 1">' + I('book', '', 's') + '공부하기 <i>' + I('hp', '', 's') + '−' + act.hp + '</i></button>'
+      : '<span class="dim studyno">' + (act ? (/읽었/.test(act.why) ? '오늘은 이미 공부했습니다' : S.slot >= 3 ? '오늘 칸을 다 썼습니다' : '체력이 모자랍니다') : '') + '</span>';
+    const right = '<div class="know" title="투자 공부 — 공부한 횟수가 쌓여 단계가 오릅니다. 지금 ' + k.lv + '단계 ' + k.name + ' (공부 ' + k.xp + '번)"><div class="kh">' + I('book') + '<b>투자 공부</b><em>' + k.lv + '단계 · ' + k.name + '</em><span class="steps">' + steps + '</span></div>' +
+      '<div class="kbar"><div class="bar"><div style="width:' + (clamp(bar, 0, 1) * 100).toFixed(0) + '%"></div></div><b>' + (k.next ? k.xp + ' / ' + k.next + '번' : '다 배움') + '</b></div>' +
+      '<div class="kl"><span title="리포트가 맞을 확률">리포트 <b>' + pcA + '%</b> 맞음</span><span title="한 번 공부에 읽는 종목 수">한 번에 <b>' + k.picks + '종목</b></span></div>' +
+      (k.next ? '<div class="kn" title="다음 단계에서 열리는 것">' + I('gift', '', 's') + '<span>' + (k.lv + 1) + '단계 ' + k.nextName + ': ' + esc(k.nextGain) + '</span></div>' : '') + '</div>' +
+      '<h4 title="공부한 종목의 내일 소식이 오르는 쪽인지 내리는 쪽인지 (리포트 · ' + pcA + '% 맞음). 시세는 소식 말고도 출렁입니다. 맞았는지는 밤 정산에서 알려 줍니다">' + I('eye', '', 's') + '내일 리포트' + go + '</h4>' + rep;
+    return '<div class="info2"><div class="icol news">' + left + '</div><div class="icol study">' + right + '</div></div>';
   }
+
   const augWhy = id => { const p = R.perk(S, id) && R.perksView(S).find(x => x.id === id); return p ? p.name + ' — 대신 ' + p.con : ''; }; // 양날 특성 때문에 못 하는 것: 버튼을 잠그고 누르면 이 이유
   const lockBtn = (why, cls2, html, title) => '<button class="' + cls2 + ' lock" data-do="why" data-arg="' + esc(why) + '" title="' + esc(why) + '">' + html + '</button>';
-  function tradeHtml(tab) {
-    const coinTab = tab === 'coin', cur = coinTab ? 'coin' : ui.sel, a = R.ASSETS.find(x => x.id === cur), c = todayChg(cur);
-    let left, main, sum = '';
-    if (coinTab) { // 왼쪽 = 주문 칸(또는 내 포지션), 오른쪽 = 차트와 버튼. 정리 버튼은 롱 · 숏과 다른 자리에 둔다
-      const l = S.lev, fund = n => (n * tune.lev_fund * 100).toFixed(1) + '%';
-      if (l) {
-        const v = R.levValue(S), p = v - l.put, side = l.dir > 0 ? '<b class="up">롱</b>' : '<b class="down">숏</b>';
-        left = '<div class="levform"><div class="pos"><span title="' + (l.dir > 0 ? '롱: 오르면 이익' : '숏: 내리면 이익') + '">' + I(l.dir > 0 ? 'up' : 'down') + side + ' ' + l.lev + '배</span><span title="건 돈(증거금)"><i>건 돈</i>' + won(l.put) + '</span>' +
-          '<span title="지금 정리하면 돌려받는 돈" class="' + cls(p) + '"><i>지금</i>' + won(v) + '</span><span title="청산가: 시세가 여기에 닿으면 증거금을 전부 잃습니다" class="bad"><i>청산</i>' + Math.round(R.levLiq(l)).toLocaleString('en-US') + '원</span>' +
-          '<span title="유지비: 들고 있으면 칸마다 증거금에서 나갑니다" class="dim"><i>유지비</i>칸마다 −' + fund(l.lev) + '</span></div></div>';
-        main = '<div class="mine-line"><span>' + side + ' ' + l.lev + '배</span><span class="' + cls(p) + '"><b>' + sign(p) + '</b> (' + pct(p / l.put) + ')</span></div>' +
-          '<div class="order" style="justify-content:flex-end"><button class="btn warm" data-do="close" title="포지션을 정리해 현금으로 돌려받습니다">' + I('check') + '정리</button></div>';
-      } else {
-        const m = Math.floor(S.cash * ui.share), dis = m < 100000 ? ' disabled' : '';
-        const beast = augWhy('beast'), minLev = beast ? tune.beast_min_lev : 1;
-        if (ui.lev < minLev) ui.lev = [1, 2, 3, 5].find(n => n >= minLev) || 5; // 야수의 심장: 낮은 배율은 잠김
-        left = '<div class="levform"><div class="row" title="배율: 맞히면 움직임의 몇 배를 벌고, 틀리면 그만큼 잃습니다">' + I('bolt') + '<div class="seg pick">' + [1, 2, 3, 5].map(n => n < minLev ? lockBtn(beast, '', I('lock', '', 's') + n + '배') : '<button class="' + (ui.lev === n ? 'on' : '') + '" data-do="lev" data-arg="' + n + '">' + n + '배</button>').join('') + '</div></div>' +
-          '<div class="row" title="증거금: 현금에서 얼마를 걸지">' + I('cash') + '<div class="seg pick">' + [0.25, 0.5, 1].map(n => '<button class="' + (ui.share === n ? 'on' : '') + '" data-do="share" data-arg="' + n + '">' + Math.round(n * 100) + '%</button>').join('') + '</div></div>' +
-          '<div class="note" title="유지비: 들고 있으면 칸마다 증거금에서 나갑니다. 포지션은 한 번에 하나">' + I('bill', '', 's') + '유지비 칸마다 −' + fund(ui.lev) + '</div></div>';
-        main = '<div class="mine-line"><span title="걸 돈">' + I('cash', '', 's') + '<b>' + won(m) + '</b> ×' + ui.lev + '</span><span class="bad" title="반대로 ' + Math.round(100 / ui.lev) + '% 움직이면 증거금을 전부 잃습니다 (청산)">' + I('skull', '', 's') + '−' + Math.round(100 / ui.lev) + '%</span>' + (m < 100000 ? '<span class="dim">' + won(100000) + '부터</span>' : '') + '</div>' +
-          (augWhy('stockonly') ? '<div class="order">' + lockBtn(augWhy('stockonly'), 'btn up', I('lock') + '롱') + lockBtn(augWhy('stockonly'), 'btn down', I('lock') + '숏') + '</div>' // 주식 외길: 코인을 못 함
-            : '<div class="order"><button class="btn up" data-do="long"' + dis + ' title="롱: 오른다에 건다">' + I('up') + '롱</button><button class="btn down" data-do="short"' + dis + ' title="숏: 내린다에 건다">' + I('down') + '숏</button></div>');
-      }
+  const unitsText = n => (Math.abs(n - Math.round(n)) < 1e-6 ? num(Math.round(n)) : (Math.floor(n * 100) / 100).toFixed(2)) + '주';
+  const feeRate = () => tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1);
+  // ── 주식 탭: 장 보기(종목 목록) · 내 보유 · 종목 상세(차트 + 수량으로 주문) ──
+  function stockHtml() {
+    const hv = R.holdings(S), tot = hv.total;
+    if (ui.sview === 'detail' && !hv.rows.some(r => r.id === ui.sel)) ui.sview = 'market';
+    if (ui.sview === 'detail') return detailHtml(hv);
+    const sv = ui.sview, mineN = hv.rows.filter(r => r.units > 0).length + (hv.lev ? 1 : 0);
+    const head = '<div class="svtabs"><button class="' + (sv === 'market' ? 'on' : '') + '" data-do="sview" data-arg="market" title="장 보기 — 살 수 있는 종목과 오늘 시세. 종목을 누르면 차트와 주문">' + I('chart', '', 's') + '장 보기</button>' +
+      '<button class="' + (sv === 'mine' ? 'on' : '') + '" data-do="sview" data-arg="mine" title="내 보유 — 가진 종목의 수량 · 평가액 · 손익">' + I('wallet', '', 's') + '내 보유' + (mineN ? '<i>' + mineN + '</i>' : '') + '</button>' +
+      '<span class="hsum" title="내가 든 것 전부 — 지금 값과 산 값 대비 손익">' + (tot.cost ? '<i>보유 합계</i><b>' + won(tot.value) + '</b><span class="' + cls(tot.pnl) + '">' + sign(tot.pnl) + ' (' + pct(tot.pct) + ')</span>' : '<span class="dim">가진 것 없음 — 종목을 눌러 삽니다</span>') + '</span></div>';
+    return head + (sv === 'mine' ? mineHtml(hv) : '<div class="mlist">' + hv.rows.map(marketRow).join('') + '</div>');
+  }
+  function marketRow(x) { // 장 보기의 한 칸: 종목 · 값 / 오늘 소식 · 내가 가진 만큼 · 오늘 움직임
+    const d = todayChg(x.id), f = ui.flash[x.id], n = R.todayNews(S).find(q => q.asset === x.id);
+    const badge = x.id === 'hantang' && R.htAlert(S) ? '<i class="vol" title="오늘 거래량 알림 — 누군가 사 모으는 중 (진짜면 급등, 아니면 폭락)">' + I('up', '', 's') + '거래량</i>'
+      : x.id === 'game' && R.gmAlert(S) ? '<i class="vol" title="신작 출시를 앞두고 있습니다 — 흥행이면 급등, 혹평이면 급락">' + I('warn', '', 's') + '신작</i>' : '<i>' + x.tag + '</i>';
+    return '<button class="arow' + (x.units > 0 ? ' mine' : '') + (f > 0 ? ' flash-up' : f < 0 ? ' flash-down' : '') + '" data-do="sel" data-arg="' + x.id + '" title="' + esc(x.name + ' — ' + x.hint + ' (누르면 차트와 주문)') + '"><span class="em">' + art('asset', x.id) + '</span><span class="bd">' +
+      '<span class="l1"><span class="nm">' + x.name + badge + '</span><span class="px">' + pxText(x.id) + '</span></span>' +
+      '<span class="l2"><span class="mine' + (x.units > 0 ? '' : ' dim') + '">' + (n ? '<span class="' + cls(n.dir) + '" title="오늘 소식: ' + esc(n.head) + ' (' + n.srcName + ')">' + I('news', '', 's') + '</span>' : '') +
+      (x.units > 0 ? '<span title="내가 가진 수량 · 산 값 대비 손익 ' + sign(x.pnl) + '">내 것 ' + unitsText(x.units) + ' <em class="' + cls(x.pnl) + '">' + pct(x.pct) + '</em></span>' : '<span title="이 종목은 가진 것이 없습니다">내 것 없음</span>') + '</span>' +
+      '<span class="chg ' + (d == null ? 'dim' : cls(d)) + '" title="오늘 시세 움직임 (내 손익 아님)">' + (d == null ? '' : '오늘 ' + pct(d)) + '</span></span></span></button>';
+  }
+  function mineHtml(hv) { // 내 보유: 가진 종목만. 칸마다 수량 · 평가액 / 산 값 · 손익
+    const rows = hv.rows.filter(r => r.units > 0), lv = hv.lev;
+    if (!rows.length && !lv) return '<div class="empty">' + I('wallet', '', 'l') + '<span>아직 가진 것이 없습니다.<br><b>장 보기</b>에서 종목을 누르면 차트와 주문이 뜹니다.</span></div>';
+    const sw = n => (n < 0 ? '−' : '+') + (Math.abs(n) >= 1e8 ? eok(Math.abs(n)) : num(Math.abs(n))); // 손익: 1억이 넘으면 줄임 (전부는 title)
+    const cell = (id, name, tag, l1, l2, tip, pnl, pc, act) => '<button class="arow mine" ' + act + ' title="' + esc(name) + ' — 누르면 차트와 주문"><span class="em">' + art('asset', id) + '</span><span class="bd">' +
+      '<span class="l1"><span class="nm">' + name + '<i>' + tag + '</i></span><span class="px" title="지금 값(평가액)">' + l1 + '</span></span>' +
+      '<span class="l2"><span class="mine dim" title="' + tip + '">' + l2 + '</span><span class="chg ' + cls(pnl) + '" title="손익 (산 값 대비) ' + sign(pnl) + '">' + sw(pnl) + ' (' + pct(pc) + ')</span></span></span></button>';
+    return '<div class="mlist own">' + rows.map(x => cell(x.id, x.name, x.tag, won(x.value), unitsText(x.units) + ' · 산 값 ' + shortWon(x.cost), '수량 · 산 값 ' + won(x.cost), x.pnl, x.pct, 'data-do="sel" data-arg="' + x.id + '"')).join('') +
+      (lv ? cell('coin', '달나라코인', (lv.dir > 0 ? '롱' : '숏') + ' ' + lv.lev + '배', won(lv.value), '건 돈 ' + shortWon(lv.put), '건 돈(증거금) ' + won(lv.put), lv.pnl, lv.pct, 'data-do="tab" data-arg="coin"') : '') + '</div>';
+  }
+
+  function detailHtml(hv) { // 종목 상세: 차트 · 오늘 소식 · 내 보유 · 수량을 골라 사고판다
+    const x = hv.rows.find(r => r.id === ui.sel), a = R.ASSETS.find(q => q.id === x.id), c = todayChg(x.id), h = S.hold[x.id], fr = feeRate(), px = S.market.px[x.id];
+    ui.qty = clamp(Math.floor(ui.qty) || 1, 1, Math.max(1, x.max, Math.floor(h.units)));
+    const q = ui.qty, qt = R.quote(S, x.id, q), cost = qt.buy, sq = Math.min(q, h.units), get = qt.sell, no = augWhy('coinonly'); // 버튼의 금액 = 규칙이 실제로 오가게 하는 돈 (같은 식)
+    const ns = R.todayNews(S).filter(n => n.asset === x.id);
+    const note = ns.length ? ns.map(newsLine).join('') : '<div class="nitem dim">' + I('info', '', 's') + '<span class="tx">' + esc(a.hint) + (x.id === 'bank' ? ' (지난 정산 뒤로 내내 든 만큼의 ' + pct1(tune.bk_div) + ')' : '') + '</span></div>';
+    const alert = x.id === 'hantang' && R.htAlert(S) ? '<i class="vol">' + I('up', '', 's') + '거래량</i>' : x.id === 'game' && R.gmAlert(S) ? '<i class="vol">' + I('warn', '', 's') + '신작 출시 대기</i>' : '';
+    const st = (arg, t, tip, dis) => '<button data-do="qty" data-arg="' + arg + '"' + (dis ? ' disabled' : '') + ' title="' + tip + '">' + t + '</button>';
+    return '<div class="dt"><div class="thead"><button class="chip go back" data-do="sview" data-arg="market" title="종목 목록으로">' + I('up', '', 's') + '목록</button><span class="em">' + art('asset', x.id) + '</span><b>' + x.name + '</b><i class="tg">' + x.tag + '</i>' + alert +
+      '<span class="p">' + pxText(x.id) + '</span><span class="' + (c == null ? 'dim' : cls(c)) + '" title="오늘 움직임">' + (c == null ? '' : pct(c)) + '</span>' +
+      '<span class="h" title="사고팔 때 수수료">' + I('percent', '', 's') + '수수료 ' + (fr * 100).toFixed(2).replace(/0$/, '') + '%</span></div>' +
+      '<div class="chart"><canvas id="chart" width="1560" height="232"></canvas></div><div class="dnews">' + note + '</div>' +
+      '<div class="mine-line">' + (h.units > 0 ? '<span title="가진 수량">' + I('wallet', '', 's') + '<b>' + unitsText(h.units) + '</b></span><span title="지금 값">' + won(x.value) + '</span><span class="dim" title="산 값">' + I('cart', '', 's') + won(x.cost) + '</span><span class="' + cls(x.pnl) + '" title="평가 손익">' + sign(x.pnl) + ' (' + pct(x.pct) + ')</span>' : '<span class="dim">가진 것 없음 · 현금 ' + won(S.cash) + ' — 최대 ' + num(x.max) + '주</span>') + '</div>' +
+      '<div class="order2"><span class="olab" title="몇 주를 사고팔지">수량</span><div class="seg qty">' + st('-10', '−10', '10주 줄이기', q <= 1) + st('-1', '−1', '1주 줄이기', q <= 1) +
+      '<input id="qty" class="qin" inputmode="numeric" maxlength="7" autocomplete="off" value="' + q + '" title="주 수를 직접 적습니다" aria-label="주 수">' + st('+1', '+1', '1주 늘리기') + st('+10', '+10', '10주 늘리기') + '</div>' +
+      '<div class="seg pre">' + st('q25', '25%', '살 수 있는 만큼의 25% — ' + num(Math.floor(x.max / 4)) + '주', x.max < 4) + st('q50', '50%', '살 수 있는 만큼의 절반 — ' + num(Math.floor(x.max / 2)) + '주', x.max < 2) + st('max', '최대', '현금으로 살 수 있는 만큼 — ' + num(x.max) + '주', x.max < 1) + st('all', '보유', '가진 만큼 — ' + unitsText(h.units), h.units <= 0) + '</div>' +
+      (no ? lockBtn(no, 'btn up ob', I('lock') + '사기') : '<button class="btn up ob" data-do="buyq"' + (cost > S.cash ? ' disabled' : '') + ' title="' + num(q) + '주 사기 — ' + won(cost) + ' (수수료 포함)' + (cost > S.cash ? ' · 현금이 모자랍니다' : '') + '"><b>사기</b><i id="buyamt">' + num(cost) + '</i></button>') +
+      '<button class="btn down ob" data-do="sellq"' + (h.units > 0 ? '' : ' disabled') + ' title="' + (h.units > 0 ? unitsText(sq) + ' 팔기 — ' + won(get) + ' (수수료 뺌)' : '가진 것이 없습니다') + '"><b>팔기</b><i id="sellamt">' + (h.units > 0 ? num(get) : '—') + '</i></button></div></div>';
+  }
+  function qtyTyped(el, done) { // 수량 칸에 직접 적는 동안: 다시 그리지 않고 금액만 바꾼다 (글자 넣는 자리가 날아가지 않게). done = 칸에서 손을 뗌 — 살 수 있는 · 가진 만큼 안으로 맞춰 적는다
+    const h = S.hold[ui.sel], px = S.market.px[ui.sel], fr = feeRate(), n = Math.floor(Number(String(el.value).replace(/[^0-9]/g, ''))) || 0;
+    ui.qty = Math.max(1, n);
+    if (done) { ui.qty = clamp(ui.qty, 1, Math.max(1, R.maxUnits(S, ui.sel), Math.floor(h.units))); el.value = ui.qty; for (const q of document.querySelectorAll('#board [data-do="qty"]')) if (q.dataset.arg === '-1' || q.dataset.arg === '-10') q.disabled = ui.qty <= 1; }
+    const b = $('buyamt'), s = $('sellamt'), qt = R.quote(S, ui.sel, ui.qty), cost = qt.buy;
+    if (b) { b.textContent = num(cost); b.parentNode.disabled = cost > S.cash; }
+    if (s && h.units > 0) s.textContent = num(qt.sell);
+  }
+  // ── 코인 탭: 왼쪽 = 주문 칸(또는 내 포지션), 오른쪽 = 차트와 버튼. 정리 버튼은 롱 · 숏과 다른 자리에 둔다 ──
+  function coinHtml() {
+    const a = R.ASSETS.find(x => x.id === 'coin'), c = todayChg('coin'), l = S.lev, fund = n => (n * tune.lev_fund * 100).toFixed(1) + '%';
+    let left, main;
+    if (l) {
+      const v = R.levValue(S), p = v - l.put, side = l.dir > 0 ? '<b class="up">롱</b>' : '<b class="down">숏</b>';
+      left = '<div class="levform"><div class="pos"><span title="' + (l.dir > 0 ? '롱: 오르면 이익' : '숏: 내리면 이익') + '">' + I(l.dir > 0 ? 'up' : 'down') + side + ' ' + l.lev + '배</span><span title="건 돈(증거금)"><i>건 돈</i>' + won(l.put) + '</span>' +
+        '<span title="지금 정리하면 돌려받는 돈" class="' + cls(p) + '"><i>지금</i>' + won(v) + '</span><span title="청산가: 시세가 여기에 닿으면 증거금을 전부 잃습니다" class="bad"><i>청산</i>' + Math.round(R.levLiq(l)).toLocaleString('en-US') + '원</span>' +
+        '<span title="유지비: 들고 있으면 칸마다 증거금에서 나갑니다" class="dim"><i>유지비</i>칸마다 −' + fund(l.lev) + '</span></div></div>';
+      main = '<div class="mine-line"><span>' + side + ' ' + l.lev + '배</span><span class="' + cls(p) + '"><b>' + sign(p) + '</b> (' + pct(p / l.put) + ')</span></div>' +
+        '<div class="order" style="justify-content:flex-end"><button class="btn warm" data-do="close" title="포지션을 정리해 현금으로 돌려받습니다">' + I('check') + '정리</button></div>';
     } else {
-      const hv = R.holdings(S), tot = hv.total, lv = hv.lev; // 보유 한눈에: 줄마다 평가액 · 손익률, 그 위에 합계 한 줄 (코인 포지션 포함)
-      sum = '<div class="hsum" title="내가 든 것 전부 — 지금 값과 산 값 대비 손익">' + I('wallet', '', 's') + '<i>보유 합계</i>' +
-        (tot.cost ? '<b>' + won(tot.value) + '</b><span class="' + cls(tot.pnl) + '">' + sign(tot.pnl) + ' (' + pct(tot.pct) + ')</span>' : '<span class="dim">없음 — 종목을 골라 금액을 누르면 삽니다</span>') +
-        (lv ? '<span class="lv" title="코인 포지션 (합계에 들어 있음)">' + I('bolt', '', 's') + '<i>코인 ' + (lv.dir > 0 ? '롱' : '숏') + ' ' + lv.lev + '배</i>' + won(lv.value) + '<span class="' + cls(lv.pnl) + '">(' + pct(lv.pct) + ')</span></span>' : '') + '</div>';
-      left = hv.rows.map(x => {
-          const a2 = R.ASSETS.find(q => q.id === x.id), d = todayChg(x.id), f = ui.flash[x.id];
-          return '<button class="arow ' + (x.id === cur ? 'on' : '') + (f > 0 ? ' flash-up' : f < 0 ? ' flash-down' : '') + '" data-do="sel" data-arg="' + x.id + '" title="' + x.name + ' — ' + a2.hint + '"><span class="em">' + art('asset', x.id) + '</span><span class="bd">' +
-            '<span class="l1"><span class="nm">' + x.name + (x.id === 'hantang' && R.htAlert(S) ? '<i class="vol" title="오늘 거래량 알림 — 누군가 사 모으는 중 (진짜면 급등, 아니면 폭락)">' + I('up', '', 's') + '거래량</i>' : '<i>' + x.tag + '</i>') + '</span><span class="px">' + pxText(x.id) + '</span></span>' +
-            '<span class="l2">' + (x.units > 0 ? '<span class="mine" title="내 보유: 지금 ' + won(x.value) + ' · 산 값 ' + won(x.cost) + ' · 내 손익 ' + sign(x.pnl) + '">내 손익 <em class="' + cls(x.pnl) + '">' + pct(x.pct) + '</em></span>' : '<span class="mine dim" title="이 종목은 가진 것이 없습니다">내 것 없음</span>') + // 내 손익(산 값 대비)과 오늘 시세를 이름표로 가름. 금액은 아래 보유 줄 · 합계에 (한 줄에 다 넣으면 넘침)
-            '<span class="chg ' + (d == null ? 'dim' : cls(d)) + '" title="오늘 시세 움직임 (내 손익 아님)">' + (d == null ? '' : '오늘 ' + pct(d)) + '</span></span></span></button>';
-        }).join('');
-      const h = S.hold[cur], v = R.holdValue(S, cur), dis = ok => (ok ? '' : ' disabled');
-      main = '<div class="mine-line">' + (h.units > 0 ? '<span title="보유 (지금 값)">' + I('wallet', '', 's') + '<b>' + won(v) + '</b></span><span class="dim" title="산 값">' + I('cart', '', 's') + won(h.cost) + '</span><span class="' + cls(v - h.cost) + '" title="평가 손익">' + sign(v - h.cost) + ' (' + pct(v / h.cost - 1) + ')</span>' + (v < h.cost && h.cost - v <= h.cost * tune.fee * 1.6 + 1 ? '<span class="dim" title="살 때 낸 수수료만큼 빠진 것 — 값이 오르면 메워집니다">수수료만큼</span>' : '') : '<span class="dim">' + a.hint + '</span>') + '</div>' +
-        '<div class="order' + (num(S.cash).length > 10 ? ' tight' : '') + '"><span class="olab" title="현금의 몇 %를 살지 — 누르면 바로 삽니다">' + I('cart', '', 's') + '<i>사기</i></span><div class="seg buys">' + [0.25, 0.5, 1].map(f => { const amt = Math.floor(S.cash * f), no = augWhy('coinonly'); return no ? lockBtn(no, '', '<b>' + I('lock', '', 's') + Math.round(f * 100) + '%</b><i>' + num(amt) + '</i>') : '<button data-do="buy" data-arg="' + f + '"' + dis(amt >= 10000) + ' title="현금의 ' + Math.round(f * 100) + '% — ' + won(amt) + '어치 사기"><b>' + Math.round(f * 100) + '%</b><i>' + num(amt) + '</i></button>'; }).join('') + '</div>' + // 코인 외길: 사기만 잠김 (팔기는 됨)
-        '<span style="flex:1"></span><span class="olab" title="가진 것의 절반 · 전부를 지금 값에 팝니다">' + I('sell', '', 's') + '<i>팔기</i></span><div class="seg"><button data-do="sell" data-arg="0.5"' + dis(h.units > 0) + '>절반</button><button data-do="sell" data-arg="1"' + dis(h.units > 0) + '>전부</button></div></div>';
+      const m = Math.floor(S.cash * ui.share), dis = m < 100000 ? ' disabled' : '';
+      const beast = augWhy('beast'), minLev = beast ? tune.beast_min_lev : 1;
+      if (ui.lev < minLev) ui.lev = [1, 2, 3, 5].find(n => n >= minLev) || 5; // 야수의 심장: 낮은 배율은 잠김
+      left = '<div class="levform"><div class="row" title="배율: 맞히면 움직임의 몇 배를 벌고, 틀리면 그만큼 잃습니다">' + I('bolt') + '<div class="seg pick">' + [1, 2, 3, 5].map(n => n < minLev ? lockBtn(beast, '', I('lock', '', 's') + n + '배') : '<button class="' + (ui.lev === n ? 'on' : '') + '" data-do="lev" data-arg="' + n + '">' + n + '배</button>').join('') + '</div></div>' +
+        '<div class="row" title="증거금: 현금에서 얼마를 걸지">' + I('cash') + '<div class="seg pick">' + [0.25, 0.5, 1].map(n => '<button class="' + (ui.share === n ? 'on' : '') + '" data-do="share" data-arg="' + n + '">' + Math.round(n * 100) + '%</button>').join('') + '</div></div>' +
+        '<div class="note" title="유지비: 들고 있으면 칸마다 증거금에서 나갑니다. 포지션은 한 번에 하나">' + I('bill', '', 's') + '유지비 칸마다 −' + fund(ui.lev) + '</div></div>';
+      main = '<div class="mine-line"><span title="걸 돈">' + I('cash', '', 's') + '<b>' + won(m) + '</b> ×' + ui.lev + '</span><span class="bad" title="반대로 ' + Math.round(100 / ui.lev) + '% 움직이면 증거금을 전부 잃습니다 (청산)">' + I('skull', '', 's') + '−' + Math.round(100 / ui.lev) + '%</span>' + (m < 100000 ? '<span class="dim">' + won(100000) + '부터</span>' : '') + '</div>' +
+        (augWhy('stockonly') ? '<div class="order">' + lockBtn(augWhy('stockonly'), 'btn up', I('lock') + '롱') + lockBtn(augWhy('stockonly'), 'btn down', I('lock') + '숏') + '</div>' // 주식 외길: 코인을 못 함
+          : '<div class="order"><button class="btn up" data-do="long"' + dis + ' title="롱: 오른다에 건다">' + I('up') + '롱</button><button class="btn down" data-do="short"' + dis + ' title="숏: 내린다에 건다">' + I('down') + '숏</button></div>');
     }
-    return newsHtml() + sum + '<div class="trade"><div class="alist">' + left + '</div><div class="tmain">' +
-      '<div class="thead"><b>' + a.name + '</b><span class="p">' + pxText(cur) + '</span><span class="' + (c == null ? 'dim' : cls(c)) + '" title="오늘 움직임">' + (c == null ? '' : pct(c)) + '</span>' +
-      '<span class="h" title="' + (coinTab ? '포지션을 열 때 수수료: 증거금 × 배율 × ' + (tune.lev_fee * 100).toFixed(1) + '%' : '사고팔 때 수수료') + '">' + I('percent', '', 's') + '수수료 ' + ((coinTab ? tune.lev_fee : tune.fee * (R.perk(S, 'stockonly') ? 0 : R.perk(S, 'vip') ? 0.5 : 1)) * 100).toFixed(2).replace(/0$/, '') + '%' + (coinTab ? ' × 배율' : '') + '</span></div>' +
+    const ns = R.todayNews(S).filter(n => n.asset === 'coin');
+    return '<div class="trade coin"><div class="alist">' + left + '<div class="dnews">' + (ns.length ? ns.map(newsLine).join('') : '<div class="nitem dim">' + I('news', '', 's') + '<span class="tx">오늘 코인 소식 없음</span></div>') + '</div></div><div class="tmain">' +
+      '<div class="thead"><span class="em">' + art('asset', 'coin') + '</span><b>' + a.name + '</b><span class="p">' + pxText('coin') + '</span><span class="' + (c == null ? 'dim' : cls(c)) + '" title="오늘 움직임">' + (c == null ? '' : pct(c)) + '</span>' +
+      '<span class="h" title="포지션을 열 때 수수료: 증거금 × 배율 × ' + (tune.lev_fee * 100).toFixed(1) + '%">' + I('percent', '', 's') + '수수료 ' + (tune.lev_fee * 100).toFixed(2).replace(/0$/, '') + '% × 배율</span></div>' +
       '<div class="chart"><canvas id="chart" width="1092" height="232"></canvas></div>' + main + '</div></div>';
   }
+  // ── 부동산 탭: 시세 · 내 집 · 상가와 건물 (사 두면 일요일 밤마다 임대수익) ──
+  function realtyHtml() {
+    const v = R.propView(S), up = v.idx - 1, home = R.HOMES[S.tier], lease = v.lease;
+    const fc = v.forecast ? '<span class="chip ' + (v.forecast.dir > 0 ? 'hot' : '') + '" title="공부 4단계: 다음 일요일에 시세가 어느 쪽으로 움직일지 (' + Math.round(v.forecast.acc * 100) + '% 맞음)">' + I('eye', '', 's') + '다음 주 ' + (v.forecast.dir > 0 ? '오르는' : '내리는') + ' 쪽</span>'
+      : '<span class="dim" title="투자 공부 4단계부터 다음 주 전망이 보입니다">' + I('lock', '', 's') + '전망은 공부 4단계부터</span>';
+    const mine = lease === 'own' ? '내 ' + home.name + ' 시세 <b>' + won(v.home) + '</b>' : lease ? home.name + ' ' + R.LEASE[lease] + ' · 보증금 <b>' + won(v.deposit) + '</b>' : '집 없음';
+    const row = r => {
+      const st = r.have ? (r.vacant ? '<span class="bad" title="세입자가 나갔습니다 — ' + r.vacant + '주 동안 임대수익 없음">' + I('warn', '', 's') + '공실 ' + r.vacant + '주</span>' : '<span class="good" title="세 든 가게가 있습니다 — 일요일 밤마다 임대수익">' + I('check', '', 's') + '임대 중</span>') + '<span class="' + cls(r.pnl) + '" title="산 값 ' + won(r.paid) + ' 대비 지금 시세 ' + sign(r.pnl) + '">' + (r.pnl >= 0 ? '+' : '') + cwon(r.pnl) + '</span>' : '';
+      const btn = r.have ? '<button class="btn small" data-do="propsell" data-arg="' + r.id + '" title="' + r.name + ' 팔기 — 중개비 · 세금을 떼고 ' + won(r.sellNet) + '">팔기</button>'
+        : r.ok ? '<button class="btn main small" data-do="propbuy" data-arg="' + r.id + '" title="' + r.name + ' 사기 — ' + won(r.buy) + ' + 취득세 · 중개비 ' + won(r.tax) + '">사기</button>'
+          : '<button class="btn small lock" data-do="why" data-arg="' + esc(r.why) + '" title="' + esc(r.why) + '">' + I('lock', '', 's') + (r.open ? '사기' : R.HOMES[r.tier].name + '부터') + '</button>';
+      return '<div class="prow' + (r.have ? ' have' : r.open ? '' : ' far') + '" title="' + esc(r.name + ' — ' + r.note) + '"><span class="em">' + art('prop', r.id, !r.open && !r.have) + '</span><span class="nm"><b>' + r.name + '</b><i>' + esc(r.note) + '</i></span>' +
+        '<span class="pp" title="지금 시세' + (r.have ? '' : ' (살 때는 취득세 · 중개비 ' + won(r.tax) + ' 더)') + '">' + num(r.price) + '</span><span class="pr" title="일요일 밤마다 들어오는 임대수익 ' + won(r.rent) + ' (비면 0)">' + I('coin', '', 's') + '주 +' + shortWon(r.rent) + '</span><span class="ps">' + st + '</span>' + btn + '</div>';
+    };
+    return '<div class="retop"><div class="rechart" title="부동산 시세 — 일요일 밤마다 움직입니다. 집값 · 가진 집 · 상가 · 뚝딱건설이 따라갑니다"><canvas id="rechart" width="240" height="72"></canvas></div>' +
+      '<div class="reinfo"><div><span class="lab">' + I('building', '', 's') + '부동산 시세</span><b class="' + cls(up) + '">' + pct(up) + '</b><span class="dim">처음 대비</span>' + (v.hist.length > 1 ? '<span class="' + cls(v.last) + '" title="지난 일요일에 움직인 만큼">지난주 ' + pct(v.last) + '</span>' : '') + fc + '</div>' +
+      '<div><span class="lab">' + I('door', '', 's') + mine + '</span><span class="lab">' + I('coin', '', 's') + '임대수익 주 <b class="gold">+' + num(v.rent) + '</b></span><span class="dim" title="상가 값은 순자산에 그대로 들어갑니다">가진 건물 ' + won(v.value) + '</span></div></div></div>' +
+      '<div class="plist">' + v.rows.map(row).join('') + '</div>';
+  }
+  function drawRe(cv) { // 부동산 시세의 작은 차트 (처음 = 1)
+    if (!cv) return;
+    fitCanvas(cv);
+    const c = cv.getContext('2d'), Wc = cv.width, Hc = cv.height, h = (S.re && S.re.hist ? S.re.hist : [1]).slice(-24), pts = h.length > 1 ? h : [h[0], h[0]];
+    c.clearRect(0, 0, Wc, Hc);
+    let lo = Math.min.apply(null, pts.concat([1])), hi = Math.max.apply(null, pts.concat([1])); const pad = (hi - lo) * 0.2 || 0.02; lo -= pad; hi += pad;
+    const X = i => 8 + (Wc - 24) * i / (pts.length - 1), Y = v => Hc - 8 - (Hc - 16) * (v - lo) / (hi - lo), up = pts[pts.length - 1] >= 1;
+    pxDash(c, Y(1), 8, Wc - 8, PX.E);
+    pxLine(c, pts.map((v, i) => [X(i), Y(v)]), Hc, up ? PX.r : PX.b, up ? PX.R : PX.B, true);
+  }
+  // ── 은행 탭: 신용등급 · 마이너스 통장 · 이번 일요일 정산 (주담대 미리 갚기) ──
+  function bankHtml() {
+    const v = R.creditView(S), b = v.bill, l = R.loanView(S), g = v.grade, bar = g > 1 ? clamp((v.score - (g >= 7 ? 300 : v.next - 100)) / 100, 0, 1) : 1;
+    ui.bamt = clamp(ui.bamt, 0, Math.max(v.room, v.balance, 0));
+    const line = (name, amt, c, tip) => '<div class="bl' + (c ? ' ' + c : '') + '"' + (tip ? ' title="' + tip + '"' : '') + '><span>' + name + '</span><b>' + amt + '</b></div>';
+    const credit = '<div class="bcol"><h4>' + I('shield', '', 's') + '신용</h4><div class="grade g' + g + '" title="신용점수 ' + v.score + '점 — 900 · 800 · 700 · 600 · 500 · 400점이 1 ~ 6등급의 문턱, 그 아래(7등급)는 대출이 안 나옵니다"><b>' + g + '</b><i>등급</i><span>' + v.score + '점</span></div>' +
+      '<div class="kbar" title="' + (g > 1 ? '다음 등급(' + (g - 1) + '등급)까지 ' + v.toNext + '점' : '가장 높은 등급입니다') + '"><div class="bar"><div style="width:' + (bar * 100).toFixed(0) + '%"></div></div><b>' + (g > 1 ? (g - 1) + '등급까지 ' + v.toNext + '점' : '최고 등급') + '</b></div>' +
+      line('정산을 제때 내면', '+' + tune.credit_ontime, 'good', '일요일 밤 정산(고정비 · 원리금 · 이자)을 제때 낼 때마다') + line('못 내면', '−' + tune.credit_late, 'bad', '연체 한 번에. 쫓겨나거나 압류되면 −' + tune.credit_evict) +
+      line('주담대', g >= 7 ? '안 나옴' : '값의 ' + Math.round(v.ltv * 100) + '% · 주 ' + pct1(v.mort), '', '아파트부터. 빌릴 수 있는 몫과 이자는 빌릴 때의 등급으로 정해집니다') + '</div>';
+    const step = (arg, t, tip, dis) => '<button data-do="bamt" data-arg="' + arg + '"' + (dis ? ' disabled' : '') + ' title="' + tip + '">' + t + '</button>';
+    const cl = '<div class="bcol"><h4>' + I('bank', '', 's') + '마이너스 통장</h4>' + line('한도', won(v.limit), '', '사는 곳이 올라갈수록, 등급이 좋을수록 커집니다') + line('쓴 돈', won(v.balance), v.balance ? 'bad' : '') + line('한 주 이자', pct1(v.rate) + (v.balance ? ' = ' + num(v.week) : ''), '', '이자만 일요일 밤마다 나가고, 원금은 아무 때나 갚습니다. 정산 때 현금이 모자라면 남은 한도에서 자동으로 빌려 냅니다') +
+      (v.limit || v.balance ? '<div class="seg qty bq">' + step('-1', '−', '줄이기', ui.bamt <= 0) + '<span class="bamt" id="bamt" title="빌리거나 갚을 금액">' + num(ui.bamt) + '</span>' + step('1', '+', '늘리기') + '</div><div class="seg bq2">' + step('half', '한도 절반', '남은 한도의 절반', v.room <= 0) + step('room', '한도까지', '남은 한도 ' + won(v.room) + ' 전부', v.room <= 0) + step('bal', '빚 전부', '갚을 수 있는 만큼 (빚 ' + won(v.balance) + ')', v.balance <= 0) + '</div>' +
+        '<div class="brow"><button class="btn warm small" data-do="borrow"' + (ui.bamt > 0 && ui.bamt <= v.room ? '' : ' disabled') + ' title="' + won(ui.bamt) + ' 빌리기 — 현금이 늘고 빚이 생깁니다 (순자산은 그대로)">빌리기</button><button class="btn main small" data-do="repaycl"' + (v.balance > 0 && S.cash > 0 ? '' : ' disabled') + ' title="' + (ui.bamt ? won(Math.min(ui.bamt, v.balance)) : '전부') + ' 갚기">갚기</button></div>'
+        : '<div class="bl dim"><span>' + (g >= 7 ? '6등급(400점)부터 쓸 수 있습니다' : '고시원부터 쓸 수 있습니다') + '</span></div>') + '</div>';
+    const due = b ? '<div class="bcol"><h4>' + I('calendar', '', 's') + '이번 일요일 정산' + (b.inDays ? '<i>' + b.inDays + '일 뒤</i>' : '<i class="bad">오늘 밤</i>') + '</h4>' +
+      (b.week ? line('고정비' + (b.days < 7 ? ' (' + b.days + '일치)' : ''), '−' + num(b.week)) : '') + (b.loan ? line('주담대 원리금', '−' + num(b.loan), '', '이자 ' + won(b.interest) + ' + 원금 ' + won(b.principal) + (l ? ' · 남은 ' + l.left + '회' : '')) : '') + (b.credit ? line('마이너스 통장 이자', '−' + num(b.credit)) : '') + (b.arrears ? line('밀린 돈', '−' + num(b.arrears), 'bad') : '') +
+      (b.rent ? line('임대수익', '+' + num(b.rent), 'good') : '') + (b.div ? line('배당', '+' + num(b.div), 'good') : '') + line('합계', (b.net > 0 ? '−' : '+') + num(Math.abs(b.net)), 'sum ' + (b.net > S.cash ? 'bad' : ''), '나갈 돈에서 들어올 돈을 뺀 것. 지금 현금 ' + won(S.cash)) +
+      (l ? '<div class="brow"><span class="dim" title="주담대 잔액">' + '주담대 ' + shortWon(l.balance) + '</span><button class="btn small" data-do="repay" title="주담대 미리 갚기 — 칸을 쓰지 않습니다. 잔액이 줄면 다음 주 이자가 줍니다">미리 갚기</button></div>' : '') + '</div>'
+      : '<div class="bcol"><h4>' + I('calendar', '', 's') + '일요일 정산</h4><div class="bl dim"><span>아직 매주 나가는 돈이 없습니다. 고시원부터 일요일 밤마다 고정비가 나갑니다.</span></div></div>';
+    return '<div class="bank3">' + credit + cl + due + '</div>';
+  }
+  // ── 가게 탭: 사 먹기(하루 한 번) · 옷(입은 한 벌만 효과) · 살림 · 사치품 ──
+  function shopHtml() {
+    const v = R.shopView(S), FIC = { kimbap: 'kimbap', gukbap: 'gukbap', feast: 'feast' }, IIC = { mat: 'bed', ginseng: 'ginseng', chair: 'chair', watch: 'watch', car: 'car' };
+    const food = f => '<div class="sitem food' + (f.ok ? '' : ' off') + '" title="' + esc(f.name + ' — 체력 +' + f.hp + (f.why ? ' · ' + f.why : '')) + '"><span class="em">' + I(FIC[f.id], '', 'l') + '</span><span class="nm"><b>' + f.name + '</b><i>' + I('hp', '', 's') + '체력 +' + f.hp + '</i></span>' +
+      (f.ok ? '<button class="btn main small" data-do="eat" data-arg="' + f.id + '">' + num(f.cost) + '</button>' : '<button class="btn small lock" data-do="why" data-arg="' + esc(f.why) + '">' + (v.ate ? I('check', '', 's') + '먹음' : num(f.cost)) + '</button>') + '</div>';
+    const item = it => {
+      const wear = it.cat === 'wear', pic = wear ? art('hero', it.id, v.look) : I(IIC[it.id] || 'gift', '', 'l');
+      const btn = it.have ? (wear ? (it.on ? '<span class="chip hot" title="지금 입은 옷">입는 중</span>' : '<button class="btn small" data-do="wear" data-arg="' + it.id + '" title="갈아입기 — 효과는 입은 한 벌만">입기</button>') : '<span class="chip" title="가지고 있습니다">' + I('check', '', 's') + '있음</span>')
+        : it.ok ? '<button class="btn warm small" data-do="item" data-arg="' + it.id + '" title="' + it.name + ' 사기 — ' + won(it.cost) + '">' + cwon(it.cost) + '</button>'
+          : '<button class="btn small lock" data-do="why" data-arg="' + esc(it.why) + '" title="' + esc(it.why) + '">' + (it.open ? cwon(it.cost) : I('lock', '', 's') + R.HOMES[it.needTier].name) + '</button>';
+      return '<div class="sitem ' + it.cat + (it.have ? ' have' : it.open ? '' : ' far') + '" title="' + esc(it.name + ' — ' + it.desc + ' · ' + won(it.cost)) + '"><span class="em' + (wear ? ' hero' : '') + '">' + pic + '</span><span class="nm"><b>' + it.name + '</b><i>' + esc(it.desc) + '</i></span>' + btn + '</div>';
+    };
+    const base = '<div class="sitem wear have" title="후드티 — 처음부터 입던 옷 (효과 없음)"><span class="em hero">' + art('hero', '', v.look) + '</span><span class="nm"><b>후드티</b><i>처음부터 입던 옷</i></span>' + (v.wear ? '<button class="btn small" data-do="wear" data-arg="">입기</button>' : '<span class="chip hot">입는 중</span>') + '</div>';
+    return '<div class="shop">' + v.foods.map(food).join('') + base + v.items.map(item).join('') + '</div>';
+  }
+
   function pxLine(c, pts, Hc, col, dark, noFill) { // 차트 선을 2px 점으로: 점과 점 사이를 계단으로 잇고, 아래는 옅은 색으로 칠함 (그라디언트 · 흐림 없이)
     const u = 4, q = v => Math.round(v / u) * u;
     if (!noFill) { c.fillStyle = PX.C; for (let i = 1; i < pts.length; i++) { const x0 = q(pts[i - 1][0]), x1 = q(pts[i][0]); for (let x = x0; x < x1; x += u) { const y = q(pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * (x - x0) / Math.max(1, x1 - x0)); c.fillRect(x, y, u, Hc - y); } } }
@@ -1393,14 +1630,18 @@
       return;
     }
     if (m.type === 'roadmap') {
-      v.innerHTML = '<div class="win book road corner"><h2>' + I('map', '', 's') + '로드맵</h2><h3>서울역에서 한국 최고 부자까지 <span class="dim">지금: ' + R.HOMES[S.tier].name + '</span></h3><p class="road-note">원룸까지는 순자산 기준만 넘으면 들어갑니다(돈을 가져가지 않음). 내 집부터는 사서 들어가고, 아파트부터는 대출을 낄 수 있습니다. 고정비는 매주 일요일 밤.</p>' +
+      v.innerHTML = '<div class="win book road corner"><h2>' + I('map', '', 's') + '로드맵</h2><h3>서울역에서 한국 최고 부자까지 <span class="dim">지금: ' + R.HOMES[S.tier].name + '</span></h3><p class="road-note">고시원 · 원룸은 보증금을 걸고 들어갑니다(나갈 때 돌려받는 돈). 내 집은 현금으로 사고, 아파트부터는 전세로 들어가거나 대출을 끼고 삽니다. 고정비는 매주 일요일 밤.</p>' +
         roadmapHtml(true) + okBtn('닫기') + '</div>';
       requestAnimationFrame(() => roadDraw(v)); roadDraw(v);
     } else if (m.type === 'intro') {
-      const road = [0, 1, 2, 3, 4, 9]; // 첫 창의 한 줄: 원룸 · 내 집까지 보이고, 그 뒤는 줄여서 끝(한국 최고 부자)만
-      v.innerHTML = '<div class="win pop corner"><h2>' + I('quest', '', 's') + '시스템</h2><h3>상태창이 열렸습니다</h3><p>' + esc(S.name) + ' 님, 각성을 축하합니다. 현금 0원. 주소 없음. 이 창은 당신에게만 보입니다.</p>' +
+      const road = [0, 1, 2, 3, 4, 9], dreams = R.dreamList(); // 첫 창의 한 줄: 원룸 · 내 집까지 보이고, 그 뒤는 줄여서 끝(한국 최고 부자)만
+      if (!m.dream) m.dream = dreams[0].id;
+      const dr = dreams.find(d => d.id === m.dream) || dreams[0];
+      v.innerHTML = '<div class="win pop intro corner"><h2>' + I('quest', '', 's') + '시스템</h2><h3>상태창이 열렸습니다</h3><p>' + esc(S.name) + ' 님, 각성을 축하합니다. 현금 0원. 주소 없음. 이 창은 당신에게만 보입니다.</p>' +
         '<div class="rewardbox" title="이 판의 목표 — 기한은 없습니다">' + I('crown') + '<span>목표는 <b class="gold">한국 최고 부자</b>. 먼저 현금 ' + won(R.homePrice(S, 4)) + '으로 내 집부터. 기한은 없다.</span></div>' +
-          '<div class="introroad" title="로드맵: 퀘스트를 따라 한 칸씩 올라갑니다. 내 집 뒤로 아파트 · 주택 · 별장 · 호텔이 있습니다">' + road.map((t, i) => (i ? '<span class="arr' + (t === 9 ? ' far' : '') + '">' + I('up', '', 's') + '</span>' : '') + '<span class="st' + (t === 0 ? ' here' : '') + '"><span class="th">' + art('thumb', t) + '</span><i>' + (t === 9 ? '최고 부자' : R.HOMES[t].name) + '</i></span>').join('') + '</div>' + nextBox(m.next) + okBtn('시작') + '</div>';
+          '<div class="introroad" title="로드맵: 퀘스트를 따라 한 칸씩 올라갑니다. 내 집 뒤로 아파트 · 주택 · 별장 · 호텔이 있습니다">' + road.map((t, i) => (i ? '<span class="arr' + (t === 9 ? ' far' : '') + '">' + I('up', '', 's') + '</span>' : '') + '<span class="st' + (t === 0 ? ' here' : '') + '"><span class="th">' + art('thumb', t) + '</span><i>' + (t === 9 ? '최고 부자' : R.HOMES[t].name) + '</i></span>').join('') + '</div>' +
+        '<div class="dl" title="꿈 — 이 판의 이야기입니다. 조건이 되면 장면이 뜨고, 둘째 장면에서 작은 힘을 얻습니다">' + I('star', '', 's') + '꿈을 하나 고른다 <i>판마다 다른 이야기와 작은 힘</i></div><div class="dreams">' + dreams.map((d, i) => '<button class="dcard' + (d.id === m.dream ? ' on' : '') + '" data-do="dream" data-arg="' + d.id + '" title="' + esc(d.line + ' — 둘째 장면에서: ' + d.gain) + '"><span class="key">' + (i + 1) + '</span><b>' + esc(d.name) + '</b></button>').join('') + '</div>' +
+        '<p class="dintro">' + esc(dr.intro) + ' <i>' + esc(dr.line) + '.</i></p>' + nextBox(m.next) + okBtn('시작') + '</div>';
     } else if (m.type === 'shock') { // 속보: 머리글 · 종목 · 몇 %. 든 종목이면 내 손익을 크게
       const e = m.e, a = R.ASSETS.find(x => x.id === e.asset), tone = e.held ? cls(e.delta) || 'dim' : 'calm';
       v.innerHTML = '<div class="win shock ' + tone + ' corner"><div class="sh-tag">' + I('news') + '<b>속보</b></div>' +
@@ -1424,9 +1665,10 @@
         (m.done ? evFx(m.fx) + okBtn() : '<div class="evt-btns"><button class="btn" data-do="ev" data-arg="a"' + (e.a.ok ? '' : ' disabled') + '><span class="key">1</span>' + esc(e.a.label) + cost(e.a) + '</button><button class="btn" data-do="ev" data-arg="b"><span class="key">2</span>' + esc(e.b.label) + cost(e.b) + '</button></div>') + '</div>';
     } else if (m.type === 'tier') {
       const e = m.e, row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
-      v.innerHTML = '<div class="win pop corner"><h2>' + I('door', '', 's') + '주거 변경</h2><h3>' + esc(e.name) + '</h3><div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(e.unlock || '') + '</b> 열림</div>' +
+      v.innerHTML = '<div class="win pop corner"><h2>' + I('door', '', 's') + '주거 변경</h2><h3>' + esc(e.name) + (e.lease ? ' · ' + R.LEASE[e.lease] : '') + '</h3>' + (e.unlock ? '<div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(e.unlock) + '</b> 열림</div>' : '') +
+        (e.deposit ? '<div class="crows">' + row('wallet', (e.to === 2 ? '예치금 ' : '보증금 ') + '<b>' + won(e.deposit) + '</b> <span class="dim">나갈 때 돌려받는 돈 — 순자산은 그대로</span>' + (e.refund ? ' <span class="dim">살던 곳의 ' + won(e.refund) + '은 돌려받음</span>' : ''), 'good') + row('bill', '일요일 밤마다 고정비 <b class="gold">' + won(R.weekCost(S, e.to)) + '</b>' + (e.to >= 5 ? '' : ' <span class="dim">끼니 포함</span>')) + '</div>' : '') +
         (e.price ? '<div class="crows">' + row('key', '값 <b>' + won(e.price) + '</b>' + (e.sold ? ' <span class="dim">살던 집 ' + won(e.sold) + '에 팔림</span>' : '')) +
-          (e.loan ? row('bill', '주담대 <b>' + won(e.loan) + '</b> — 일요일 밤마다 고정비와 함께 <b class="gold">' + won(R.weekCost(S, e.to) + loanWeekly(e.loan)) + '</b>', 'gold') : row('check', '대출 없음 — 일요일 밤 고정비 <b>' + won(R.weekCost(S, e.to)) + '</b>만', 'good')) + '</div>' : '') + okBtn() + '</div>';
+          (e.loan ? row('bill', '주담대 <b>' + won(e.loan) + '</b> <span class="dim">한 주 이자 ' + pct1(e.rate) + '</span> — 일요일 밤마다 고정비와 함께 <b class="gold">' + won(R.weekCost(S, e.to) + r1k(e.loan * e.rate) + Math.min(e.loan, r1k(e.loan / tune.loan_weeks))) + '</b>', 'gold') : row('check', '대출 없음 — 일요일 밤 고정비 <b>' + won(R.weekCost(S, e.to)) + '</b>만', 'good')) + '</div>' : '') + okBtn() + '</div>';
     } else if (m.type === 'act1') { // 1막 끝: 내 집을 처음 산 순간. 등급 · 결과 카드 복사 · 계속한다
       const a = S.act1 || { day: m.e.day, rank: m.e.rank };
       v.innerHTML = '<div class="win act1 corner"><h2>' + I('key', '', 's') + '1막 끝</h2><h3>내 집 마련</h3><div class="rank" title="며칠째에 샀는지로 정해지는 등급 (' + tune.act1_s + '일까지 S · ' + tune.act1_a + '일까지 A · ' + tune.act1_b + '일까지 B)">' + a.rank + '</div>' +
@@ -1440,18 +1682,30 @@
     } else if (m.type === 'foreclose') { // 압류: 무슨 일이 일어났는지 숫자로
       const e = m.e, row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
       v.innerHTML = '<div class="win pop corner bad"><h2>' + I('skull', '', 's') + '압류</h2><h3>' + R.HOMES[e.from].name + ' → ' + R.HOMES[e.to].name + '</h3><p>원리금 · 고정비를 두 번 연속 못 내 ' + R.HOMES[e.from].name + jo(R.HOMES[e.from].name, '이', '가') + ' 압류되었습니다.</p><div class="crows">' +
-        row('key', '산 값의 ' + Math.round(tune.foreclose_rate * 100) + '%에 팔림 <b>' + won(e.sold) + '</b>') +
+        row('key', '시세의 ' + Math.round(tune.foreclose_rate * 100) + '%에 팔림 <b>' + won(e.sold) + '</b>') +
         row('bill', '그 돈으로 갚은 대출 · 빚 <b>' + won(e.repaid) + '</b>') +
         (e.carried ? row('warn', '판 돈으로 다 못 갚은 빚 <b>' + won(e.carried) + '</b> — 아래 집(' + R.HOMES[e.to].name + ') 대출로 넘어감', 'bad') : '') +
         (e.left ? row('check', '탕감 <b>' + won(e.left) + '</b>', 'good') : '') +
         (e.loan ? row('bill', R.HOMES[e.to].name + ' 대출 <b>' + won(e.loan) + '</b> <span class="dim">= 넘어온 빚 + ' + R.HOMES[e.to].name + ' 값 중 현금으로 못 낸 몫</span><br>일요일 밤마다 고정비와 함께 <b class="gold">' + won(R.weekCost(S, e.to) + loanWeekly(e.loan)) + '</b>', 'gold') : '') +
         row('door', '<b>' + R.HOMES[e.to].name + '</b>' + jo(R.HOMES[e.to].name, '으로', '로') + ' 내려갔습니다' + (e.to < 4 ? ' (빌려 사는 곳)' : '')) +
         row('wallet', '순자산 변화 <b class="down">−' + won(Math.max(0, e.lost)) + '</b> <span class="dim">압류 전과 견준 차이 · 지금 순자산 ' + won(R.worth(S)) + '</span>', 'bad') + '</div>' + okBtn() + '</div>';
+    } else if (m.type === 'collapse') { // 쓰러짐: 무슨 일이 일어났는지 숫자로
+      const e = m.e, row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
+      v.innerHTML = '<div class="win pop corner bad"><h2>' + I('clinic', '', 's') + '쓰러짐</h2><h3>눈을 뜨니 응급실</h3><p>체력이 모자란 채 일하다 쓰러졌습니다 <span class="dim">(쓰러질 확률 ' + Math.round(e.risk * 100) + '%)</span>.</p><div class="crows">' +
+        row('cash', '응급실비 <b>' + won(e.fee) + '</b>' + (e.owe ? ' <span class="dim">못 낸 ' + won(e.owe) + '은 외상 — 일요일 정산에</span>' : e.paid < e.fee ? ' <span class="dim">가진 ' + won(e.paid) + '만 냄</span>' : ''), 'bad') +
+        row('clock', (e.lost ? '오늘 남은 <b>' + e.lost + '칸</b>과 ' : '') + '<b>내일 오전</b>을 병원에서 보냅니다', 'bad') +
+        row('bed', '오늘 밤은 병원에서 — 체력 <b>+' + R.sleepGain(S) + '</b> <span class="dim">찜질방 요금 · 끼니는 안 나감</span>') +
+        row('meal', '체력이 모자라면 <b>쉬거나 가게에서 사 먹고</b> 일하세요. 집이 좋을수록 밤에 더 많이 돌아옵니다', 'good') + '</div>' + okBtn() + '</div>';
+    } else if (m.type === 'story') { // 꿈의 장면
+      const e = m.e;
+      v.innerHTML = '<div class="win pop story corner"><h2>' + I('star', '', 's') + '꿈 · ' + e.n + ' / ' + e.of + '</h2><h3>' + esc(e.name) + '</h3><p class="st">' + esc(e.text) + '</p>' +
+        (e.gain ? '<div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(e.gain) + '</b></div>' : '') + okBtn() + '</div>';
     } else if (m.type === 'study') { // 공부: 종목 고르기
-      v.innerHTML = '<div class="win pop corner"><h2>' + I('book', '', 's') + '공부</h2><h3>어느 종목의 내일을 볼까요?</h3><p class="sub">한 칸과 체력 ' + tune.study_hp + '을 써서 고른 종목 하나의 내일 소식이 오르는 쪽인지 내리는 쪽인지 봅니다 (' + R.accText(R.studyAcc(S)) + ' — 내일 밤에 맞았는지 알려 줌).' + (m.auto ? ' 공부하는 동안에도 사업 매출 ' + won(m.auto) + '.' : '') + '</p>' +
-        '<div class="spick">' + m.assets.map((a, i) => { const ar = R.ASSETS.find(x => x.id === a.id); return '<button class="sbtn" data-do="studyasset" data-arg="' + a.id + '" title="' + esc(a.name + ' — ' + ar.hint) + '"><span class="key">' + (i + 1) + '</span><span class="em">' + art('asset', a.id) + '</span><b>' + a.name + '</b><i>' + ar.tag + '</i></button>'; }).join('') + '</div>' +
-        '<div class="foot"><button class="btn" data-do="no">돌아가기 <span class="key">Space</span></button></div></div>';
-    } else if (m.type === 'buy' || m.type === 'repay') v.innerHTML = optsHtml(m);
+      const k = R.knowView(S), two = m.picks > 1;
+      v.innerHTML = '<div class="win pop corner"><h2>' + I('book', '', 's') + '공부 · ' + k.lv + '단계 ' + k.name + '</h2><h3>어느 종목의 내일을 볼까요?' + (two ? ' <span class="dim" style="font-size:16px">둘까지 (' + m.sel.length + ' / 2)</span>' : '') + '</h3><p class="sub">한 칸과 체력 ' + tune.study_hp + '을 써서 고른 종목' + (two ? ' 둘' : ' 하나') + '의 내일 소식이 오르는 쪽인지 내리는 쪽인지 봅니다 (' + Math.round(k.acc * 100) + '% 맞음 — 맞았는지는 밤에 알려 줌). 공부 횟수가 쌓이면 단계가 오릅니다' + (k.next ? ' (' + k.xp + ' / ' + k.next + ')' : '') + '.' + (m.auto ? ' 공부하는 동안에도 사업 매출 ' + won(m.auto) + '.' : '') + '</p>' +
+        '<div class="spick">' + m.assets.map((a, i) => { const ar = R.ASSETS.find(x => x.id === a.id); return '<button class="sbtn' + (m.sel.indexOf(a.id) >= 0 ? ' on' : '') + '" data-do="studyasset" data-arg="' + a.id + '" title="' + esc(a.name + ' — ' + ar.hint) + '"><span class="key">' + (i + 1) + '</span><span class="em">' + art('asset', a.id) + '</span><b>' + a.name + '</b><i>' + ar.tag + '</i></button>'; }).join('') + '</div>' +
+        '<div class="foot"><button class="btn" data-do="no">돌아가기 <span class="key">Space</span></button>' + (two ? '<button class="btn main" data-do="studygo"' + (m.sel.length ? '' : ' disabled') + '>공부한다 <span class="key">Enter</span></button>' : '') + '</div></div>';
+    } else if (m.type === 'buy' || m.type === 'repay' || m.type === 'lease') v.innerHTML = optsHtml(m);
     else if (m.type === 'liq') {
       v.innerHTML = '<div class="win pop corner bad"><h2>' + I('skull', '', 's') + '청산</h2><h3>증거금 ' + won(m.e.lost) + '이 사라졌습니다</h3><p>' + m.e.lev + '배 ' + (m.e.dir > 0 ? '롱' : '숏') + '이 반대로 갔습니다.' + (m.e.saved ? ' 강심장으로 ' + won(m.e.saved) + '은 건졌습니다.' : '') + ' 배율을 낮추거나, 확실할 때만 크게 거세요.</p>' + okBtn() + '</div>';
     } else if (m.type === 'confirm') {
@@ -1459,8 +1713,8 @@
         const h = R.HOMES[m.to], wk = R.weekCost(S, m.to), after = S.cash - m.info.pay, tonight = S.day % 7 === 0 ? Math.round(wk / 7 / 1000) * 1000 : 0;
         const row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
         v.innerHTML = '<div class="win pop corner"><h2>' + I('door', '', 's') + '입주 확인</h2><h3>' + h.name + '에 입주할까요?</h3><div class="crows">' +
-          row('wallet', '입주 기준 순자산 <b>' + won(m.info.need) + '</b> <span class="dim">(지금 ' + won(m.info.have) + ')</span>') +
-          row('check', '<b>돈은 가져가지 않습니다</b> — 기준만 넘으면 들어갑니다', 'good') +
+          row('wallet', (m.to === 2 ? '예치금 ' : '보증금 ') + '<b>' + won(m.info.need) + '</b> <span class="dim">걸어 두는 돈</span>') +
+          row('check', '<b>나갈 때 돌려받습니다</b> — 순자산은 그대로입니다', 'good') +
           (S.arrears ? row('warn', '밀린 고정비 <b>' + won(S.arrears) + '</b>을 갚고 나갑니다', 'bad') : '') +
           (m.info.settle ? row('bill', '살던 ' + R.HOMES[S.tier].name + ' 정산 <b>' + won(m.info.settle) + '</b> <span class="dim">이번 주에 산 날만큼</span>') : '') +
           row('bill', '매주 일요일 밤 고정비 <b class="gold">' + won(wk) + '</b> <span class="dim">끼니 포함 · 두 번 밀리면 쫓겨남</span>') +
@@ -1468,10 +1722,29 @@
           row('wallet', '입주 뒤 현금 <b>' + won(after) + '</b>') +
           row('gift', '<b class="gold">' + h.unlock + '</b> 열림') + '</div>' +
           '<div class="foot"><button class="btn" data-do="no">아직 <span class="key">Space</span></button><button class="btn main" data-do="ok">입주 <span class="key">Enter</span></button></div></div>';
+      } else if (m.kind === 'swap') { // 원룸 월세 → 전세
+        const i = m.info, row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
+        v.innerHTML = '<div class="win pop corner"><h2>' + I('key', '', 's') + '계약 바꾸기</h2><h3>원룸을 전세로 바꿀까요?</h3><div class="crows">' +
+          row('wallet', '전세 보증금 <b>' + won(i.need) + '</b> <span class="dim">나갈 때 돌려받는 돈</span>') +
+          (i.refund ? row('gift', '월세 보증금 <b class="good">' + won(i.refund) + '</b>은 돌려받아 보탭니다', 'good') : '') +
+          (i.settle ? row('bill', '어제까지의 월세 정산 <b>' + won(i.settle) + '</b>') : '') +
+          row('cash', '지금 나가는 현금 <b class="gold">' + won(i.pay) + '</b> <span class="dim">순자산은 그대로</span>') +
+          row('bill', '일요일 밤마다 고정비 <b>' + won(R.weekCost(S, 3, 'rent')) + '</b> → <b class="good">' + won(i.week) + '</b>', 'good') +
+          row('shield', '신용점수 <b>+' + tune.credit_contract + '</b>') + '</div>' +
+          '<div class="foot"><span class="dim fl">현금 ' + won(S.cash) + '</span><button class="btn" data-do="no">아직 <span class="key">Space</span></button><button class="btn main" data-do="ok">바꾼다 <span class="key">Enter</span></button></div></div>';
+      } else if (m.kind === 'propbuy' || m.kind === 'propsell') { // 상가 사기 · 팔기
+        const r = m.v, buy = m.kind === 'propbuy', row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
+        v.innerHTML = '<div class="win pop corner"><h2>' + I('building', '', 's') + '부동산</h2><h3>' + esc(r.name) + jo(r.name, '을', '를') + (buy ? ' 살까요?' : ' 팔까요?') + '</h3><div class="crows">' +
+          (buy ? row('key', '값 <b>' + won(r.buy) + '</b>' + eokTag(r.buy) + ' <span class="dim">자산으로 남음 — 시세를 따라 오르내림</span>') + row('bill', '취득세 · 중개비 <b>' + won(r.tax) + '</b> <span class="dim">쓴 돈 (순자산이 그만큼 줆)</span>', 'bad') +
+            row('coin', '일요일 밤마다 임대수익 <b class="gold">+' + won(r.rent) + '</b> <span class="dim">세입자가 나가면 1~2주는 0</span>', 'good') + row('wallet', '산 뒤 현금 <b>' + won(S.cash - r.cost) + '</b>')
+            : row('key', '지금 시세 <b>' + won(r.price) + '</b>' + eokTag(r.price) + ' <span class="dim">산 값 ' + won(r.paid) + '</span>') + row('bill', '중개비 · 세금 <b>' + won(r.price - r.sellNet) + '</b>', 'bad') +
+            row('cash', '받는 돈 <b class="gold">' + won(r.sellNet) + '</b> <span class="' + cls(r.sellNet - r.paid) + '">손익 ' + sign(r.sellNet - r.paid) + '</span>') + row('coin', '임대수익 주 ' + won(r.rent) + '은 더 들어오지 않습니다', 'bad')) + '</div>' +
+          '<div class="foot"><button class="btn" data-do="no">아직 <span class="key">Space</span></button><button class="btn ' + (buy ? 'warm' : 'main') + '" data-do="ok">' + (buy ? '산다' : '판다') + ' <span class="key">Enter</span></button></div></div>';
       } else if (m.kind === 'sleep') {
-        const own = S.tier >= 4;
-        v.innerHTML = '<div class="win pop corner bad"><h2>' + I('warn', '', 's') + '확인</h2><h3>' + (m.b.loan ? '원리금을 못 냅니다' : '고정비를 못 냅니다') + '</h3><p>' +
-          '오늘 밤 ' + (m.b.loan ? '고정비 · 원리금' : '고정비') + ' <b class="gold">' + won(m.b.amt) + '</b>인데 현금이 ' + won(m.b.amt - S.cash) + ' 모자랍니다. 주식 · 코인을 팔면 현금이 됩니다. 그냥 자면 연체료가 붙고, 두 번 연속이면 ' + (own ? '집이 압류되어 한 단계 아래로 내려갑니다.' : '쫓겨납니다.') + (S.missed ? ' <b class="bad">지난번에도 밀렸습니다 — 오늘이 두 번째입니다.</b>' : '') + '</p>' +
+        const own = S.tier >= 4 && R.leaseOf(S) === 'own';
+        v.innerHTML = '<div class="win pop corner bad"><h2>' + I('warn', '', 's') + '확인</h2><h3>' + (m.auto ? '정산에 현금이 모자랍니다' : '정산을 못 냅니다') + '</h3><p>' +
+          '오늘 밤 ' + R.billName(m.b) + ' <b class="gold">' + won(m.b.amt) + '</b>인데 현금이 ' + won(m.lack) + ' 모자랍니다' + (m.b.income ? ' (들어올 임대수익 · 배당 ' + won(m.b.income) + '을 쳐도)' : '') + '. 주식 · 코인을 팔면 현금이 됩니다. ' +
+          (m.auto ? '그냥 자면 모자란 만큼을 <b>마이너스 통장에서 자동으로 빌려</b> 냅니다 (한 주 이자 ' + pct1(R.creditView(S).rate) + ').' : '그냥 자면 연체료가 붙고 신용점수가 깎이며, 두 번 연속이면 ' + (S.tier < 2 ? '빚이 계속 불어납니다.' : own ? '집이 압류되어 한 단계 아래로 내려갑니다.' : '쫓겨납니다.') + (S.missed ? ' <b class="bad">지난번에도 밀렸습니다 — 오늘이 두 번째입니다.</b>' : '')) + '</p>' +
           '<div class="foot"><button class="btn" data-do="ok">그래도 잔다 <span class="key">Enter</span></button><button class="btn main" data-do="no">돌아가기 <span class="key">Space</span></button></div></div>';
       } else if (m.kind === 'biz') {
         const n = m.v.next, auto = Math.round((tune['biz_auto_' + Math.min(n.lv, Math.max(0, S.tier - 3))] || 0) * 100);
@@ -1508,7 +1781,9 @@
       I('wallet', '순자산') + '<i>순자산</i><b>' + won(n.worthStart) + ' → ' + won(n.worthEnd) + ' <span class="' + cls(d) + '" style="font-size:16px">(' + sign(d) + ')</span></b>' +
       I('hp', '체력') + '<i>체력</i><b>' + Math.round(n.hp.mid) + ' → ' + Math.round(n.hp.after) + ' <span class="good" style="font-size:16px">(' + I('zzz', '', 's') + '+' + Math.round(n.hp.sleep) + ')</span></b></div>' +
       (reps ? '<div class="n-notes n-reps">' + reps + '</div>' : '') +
-      (n.billed && n.billed.paid ? '<div class="n-notes good">' + (n.billed.loan ? '고정비 · 원리금 ' : '고정비 ') + won(n.billed.amt) + '을 냈습니다' + (n.billed.days < 7 ? ' (' + n.billed.days + '일치 — 이번 주는 ' + n.billed.days + '일만 살아서)' : '') + '.</div>' : '') +
+      (n.billed && n.billed.paid ? '<div class="n-notes good">' + (n.billed.name || '고정비') + ' ' + won(n.billed.amt) + '을 냈습니다' + (n.billed.days < 7 && n.billed.amt ? ' (' + n.billed.days + '일치 — 이번 주는 ' + n.billed.days + '일만 살아서)' : '') + '.</div>' : '') +
+      (n.credit && n.credit.to !== n.credit.from ? '<div class="n-notes ' + (n.credit.to > n.credit.from ? 'good' : 'bad') + '">' + I('shield', '', 's') + ' 신용점수 ' + n.credit.from + ' → <b>' + n.credit.to + '</b> (' + n.credit.grade + '등급)</div>' : '') +
+      (n.re ? '<div class="n-notes ' + cls(n.re.pct) + '" title="부동산 시세는 일요일 밤마다 움직입니다 — 집값 · 가진 집 · 상가 · 뚝딱건설이 따라갑니다">' + I('building', '', 's') + ' 부동산 시세 ' + pct(n.re.pct) + ' <span class="dim">(처음 대비 ' + pct(n.re.idx - 1) + ')</span></div>' : '') +
       (n.notes.length ? '<div class="n-notes">' + n.notes.map(x => '<div class="' + x.tone + '">' + esc(x.text) + '</div>').join('') + '</div>' : '') +
       '<div class="n-house" title="다음 목표까지 온 만큼">' + I(g.kind === 'top' ? 'crown' : 'key') + '<span class="gn">' + g.name + '</span><div class="bar"><div style="width:' + (clamp(g.pct, 0, 1) * 100).toFixed(1) + '%"></div></div><b>' + Math.floor(g.pct * 100) + '%</b><span class="dim">' + won(g.price) + '</span></div>' +
       (next.length ? '<div class="n-next">' + next.join('') + '</div>' : '') + okBtn('다음 날') + '</div>';
@@ -1516,28 +1791,47 @@
   function optsHtml(m) { // 집 사기(대출 고르기) · 미리 갚기: 고를 것 한 줄씩, 숫자 키로 고르고 Enter
     const row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
     const opt = (o, i, body) => '<button class="opt' + (i === m.pick ? ' on' : '') + (o.ok ? '' : ' no') + '" data-do="opt" data-arg="' + i + '"><span class="key">' + (i + 1) + '</span><span class="ob"><b>' + body[0] + '</b><span>' + body[1] + '</span>' + (body[2] ? '<span>' + body[2] + '</span>' : '') + (body[3] ? '<span>' + body[3] + '</span>' : '') + (o.ok ? '' : '<span class="bad lk">' + I('lock', '잠김', 's') + esc(o.why) + '</span>') + '</span></button>';
+    if (m.type === 'lease') { // 원룸 입주: 월세 · 전세
+      const body = o => [o.name + (o.lease === 'jeonse' ? ' — 목돈을 걸고 월세가 없다' : ' — 보증금이 작고 매주 월세가 나간다'),
+        '보증금 ' + won(o.info.need) + ' <i>나갈 때 돌려받음</i> · 지금 나갈 현금 <b class="gold">' + won(Math.max(0, o.info.pay)) + '</b>',
+        '일요일 밤마다 고정비 <b class="' + (o.lease === 'jeonse' ? 'good' : 'gold') + '">' + won(o.info.week) + '</b> <i>끼니 포함</i>'];
+      const i0 = m.opts[0].info;
+      return '<div class="win pop wide corner"><h2>' + I('door', '', 's') + '입주</h2><h3>원룸에 어떻게 들어갈까요?</h3><div class="crows">' +
+        row('gift', '<b class="gold">' + R.HOMES[3].unlock + '</b> 열림') +
+        (i0.refund ? row('wallet', '고시원 예치금 <b class="good">' + won(i0.refund) + '</b>은 돌려받아 보탭니다', 'good') : '') +
+        (i0.settle ? row('bill', '살던 고시원의 이번 주 고정비 <b>' + won(i0.settle) + '</b> <span class="dim">산 날만큼 — 나가면서 냄</span>') : '') +
+        (S.arrears ? row('warn', '밀린 돈 <b>' + won(S.arrears) + '</b>을 갚고 나갑니다', 'bad') : '') + '</div>' +
+        '<div class="opts">' + m.opts.map((o, i) => opt(o, i, body(o))).join('') + '</div>' +
+        '<div class="crows">' + (() => { const we = dayEarn() * 7, sh = o => (we > 0 ? Math.round(o.info.week / we * 100) : 0), a = sh(m.opts[0]), b = sh(m.opts[1]);
+          const hot = n => (n >= 60 ? ' class="bad" title="벌이의 절반을 훌쩍 넘습니다 — 빠듯합니다"' : ''); // 고정비가 벌이의 60%를 넘으면 빨갛게 (대충만 누르면 적자가 되는 선)
+          return row(a >= 60 ? 'warn' : 'coin', '<span title="하루 세 칸을 돈 많이 주는 알바부터 보통으로 했을 때 (같은 알바는 하루 한 번)">지금 벌이는 주 약 <b>' + won(we) + '</b></span> — 고정비가 그중 월세 <b' + hot(a) + '>' + a + '%</b> · 전세 <b' + hot(b) + '>' + b + '%</b>'); })() +
+          row('check', '보증금은 걸어 두는 돈이라 <b>순자산은 그대로</b>입니다. 월세로 들어갔다가 나중에 전세로 갈아탈 수 있습니다', 'good') + '</div>' +
+        '<div class="foot"><span class="dim fl">현금 ' + won(S.cash) + '</span><button class="btn" data-do="no">아직 <span class="key">Space</span></button><button class="btn main" data-do="ok">입주 <span class="key">Enter</span></button></div></div>';
+    }
     if (m.type === 'buy') {
       const h = R.HOMES[m.to], info = m.info, from = R.HOMES[S.tier].name;
       const days = (7 - (S.day % 7)) % 7 + 1, f = days / 7; // 첫 일요일은 산 날만큼만 (대출 줄 · 미리 갚기 창과 같은 셈)
-      const first = r1k(m.opts[m.pick].fixed * f) + (m.opts[m.pick].loan ? r1k(m.opts[m.pick].loan * tune.loan_rate * f) + Math.min(m.opts[m.pick].loan, r1k(m.opts[m.pick].loan / tune.loan_weeks * f)) : 0); // 고른 것의 첫 일요일
-      const body = o => [o.name + (o.loan && o.loan === info.loanMax ? ' (현금 ' + won(o.cash) + '만 있으면 됨)' : ''),
-        (o.loan ? '대출 ' + won(o.loan) + ' · ' : '') + '지금 낼 현금 <b class="gold">' + won(o.cash) + '</b>',
-        o.loan ? '일요일 밤마다 <b class="gold">' + won(o.fixed + o.weekly) + '</b> <i>고정비 ' + num(o.fixed) + ' + 원리금 ' + num(o.weekly) + ' × ' + tune.loan_weeks + '회</i>' : '일요일 밤마다 고정비 <b>' + won(o.fixed) + '</b> <i>관리비 · 세금' + (R.perk(S, 'thrift') ? ' · 짠돌이 −' + Math.round(tune.perk_thrift * R.perk(S, 'thrift') * 100) + '% 적용' : '') + '</i>']; // 특성으로 줄어든 값이면 그 까닭도
-      const job = R.acts(S).filter(a => a.kind === 'job').reduce((x, a) => Math.max(x, a.pay), 0), earn = r1k(job * tune.mult_ok * 3); // 지금 벌이 (견줄 숫자)
-      return '<div class="win pop wide corner"><h2>' + I('key', '', 's') + '집 사기</h2><h3>' + h.name + jo(h.name, '을', '를') + ' 살까요?</h3><div class="crows">' +
-        row('key', '값 <b>' + won(info.price) + '</b>' + eokTag(info.price) + (m.to === 4 ? ' <span class="dim">현금으로만</span>' : '')) +
-        (info.sell ? row('gift', '살던 ' + from + jo(from, '이', '가') + ' 팔려 보태지는 돈 <b class="good">' + won(info.sell) + '</b> <span class="dim">산 값 − 대출</span>', 'good') : '') +
+      const first = r1k(m.opts[m.pick].fixed * f) + (m.opts[m.pick].loan ? r1k(m.opts[m.pick].loan * info.rate * f) + Math.min(m.opts[m.pick].loan, r1k(m.opts[m.pick].loan / tune.loan_weeks * f)) : 0); // 고른 것의 첫 일요일
+      const body = o => o.lease === 'jeonse' ? [o.name + ' — 대출 없이, 집값이 올라도 내 것은 아니다', '보증금 ' + won(o.deposit) + ' <i>나갈 때 돌려받음</i> · 지금 낼 현금 <b class="gold">' + won(o.cash) + '</b> · 일요일 밤마다 고정비 <b>' + won(o.fixed) + '</b>']
+        : [o.name + (o.loan && o.loan === info.loanMax ? ' (현금 ' + won(o.cash) + '만 있으면 됨)' : ''),
+          (o.loan ? '<span title="빌리는 돈 ' + won(o.loan) + '">대출 ' + cwon(o.loan) + '</span> · ' : '') + '지금 낼 현금 <b class="gold">' + won(o.cash) + '</b> · 일요일 밤마다 ' + (o.loan ? '<b class="gold">' + won(o.fixed + o.weekly) + '</b> <i title="고정비 ' + won(o.fixed) + ' + 원리금 ' + won(o.weekly) + ' (' + tune.loan_weeks + '회에 나눠 갚음)">고정비 ' + cwon(o.fixed) + ' + 원리금 ' + cwon(o.weekly) + ' × ' + tune.loan_weeks + '회</i>' : '고정비 <b' + (R.perk(S, 'thrift') ? ' title="짠돌이 −' + Math.round(tune.perk_thrift * R.perk(S, 'thrift') * 100) + '% 적용"' : '') + '>' + won(o.fixed) + '</b>')]; // 한 줄에: 빌리는 돈 · 지금 낼 현금 · 매주 나갈 돈 (짠돌이로 깎인 것은 설명에)
+      const earn = dayEarn(); // 지금 벌이 (견줄 숫자)
+      const sold = R.leaseOf(S) === 'own' && S.tier >= 4;
+      return '<div class="win pop wide' + (m.to > 4 ? ' buy' : '') + ' corner"><h2>' + I('key', '', 's') + (m.jeonse ? '집 들어가기' : '집 사기') + '</h2><h3>' + h.name + (m.jeonse ? '에 어떻게 들어갈까요?' : jo(h.name, '을', '를') + ' 살까요?') + '</h3><div class="crows">' +
+        row('key', '값 <b>' + won(info.price) + '</b>' + eokTag(info.price) + (m.to === 4 ? ' <span class="dim">현금으로만</span>' : ' <span class="dim">부동산 시세를 따라 오르내림</span>')) +
+        (m.to > 4 ? row('shield', '신용 <b>' + info.grade + '등급</b> — ' + (info.loanMax ? '값의 ' + Math.round(info.ltv * 100) + '%(' + won(info.loanMax) + ')까지 빌릴 수 있고 한 주 이자 ' + pct1(info.rate) : '대출이 나오지 않습니다 (6등급 = 400점부터)'), info.loanMax ? '' : 'bad') : '') +
+        (info.sell > 0 ? row('gift', (sold ? '살던 ' + from + jo(from, '이', '가') + ' 팔려' : '살던 ' + from + '의 보증금을 돌려받아') + ' 보태지는 돈 <b class="good">' + won(info.sell) + '</b>' + (sold ? ' <span class="dim">지금 시세 − 대출</span>' : ''), 'good')
+          : info.sell < 0 ? row('warn', '살던 ' + from + jo(from, '을', '를') + ' 팔아도 대출이 <b>' + won(-info.sell) + '</b> 남습니다 <span class="dim">들어가면서 함께 갚음 (지금 낼 현금에 들어 있음)</span>', 'bad') : '') +
         (S.arrears ? row('warn', '밀린 고정비 <b>' + won(S.arrears) + '</b> — 사면서 먼저 갚습니다', 'bad') : '') +
         (info.settle ? row('bill', '살던 ' + from + '의 이번 주 고정비 <b>' + won(info.settle) + '</b> <span class="dim">산 날만큼 — 나가면서 냄</span>') : '') + '</div>' +
         '<div class="opts">' + m.opts.map((o, i) => opt(o, i, body(o))).join('') + '</div>' +
         '<div class="crows">' + (days < 7 ? row('calendar', '첫 일요일은 산 날만큼(' + days + '일치)만: 고른 것이면 ' + won(first) + ' — 그다음부터 위의 금액') : '') +
-        (info.canLoan ? row('coin', '<span title="가장 많이 주는 알바를 세 칸 모두 보통으로 했을 때">지금 벌이: 세 칸 다 일하면 하루 약 <b>' + won(earn) + '</b> · 주 약 ' + won(earn * 7) + '</span>') +
-          row('warn', '남은 대출에 한 주 ' + (Math.round(tune.loan_rate * 1000) / 10) + '% 이자. <b>두 번 연속 못 내면 압류되어 한 단계 아래로</b> 내려갑니다.', 'bad') : row('check', '내 집을 사면 <b>1막 끝</b> — 축하 뒤 계속합니다', 'good')) + '</div>' +
-        '<div class="foot"><span class="dim fl">현금 ' + won(S.cash) + '</span><button class="btn" data-do="no">아직 <span class="key">Space</span></button><button class="btn warm" data-do="ok">산다 <span class="key">Enter</span></button></div></div>';
+        (m.to > 4 ? row('warn', '<span title="하루 세 칸을 돈 많이 주는 알바부터 보통으로 했을 때 (같은 알바는 하루 한 번)">지금 벌이는 주 약 <b>' + won(earn * 7) + '</b>.</span> 대출 이자 한 주 ' + pct1(info.rate) + ' — <b>두 번 연속 못 내면 압류되어 한 단계 아래로</b>', 'bad') : m.to === 4 ? row('check', '내 집을 사면 <b>1막 끝</b> — 축하 뒤 계속합니다', 'good') : '') + '</div>' +
+        '<div class="foot"><span class="dim fl">현금 ' + won(S.cash) + '</span><button class="btn" data-do="no">아직 <span class="key">Space</span></button><button class="btn warm" data-do="ok">' + (m.jeonse ? '들어간다' : '산다') + ' <span class="key">Enter</span></button></div></div>';
     }
     const l = m.l, body = o => [o.name + ' 갚기 — ' + won(o.amt), '갚은 뒤 잔액 ' + won(o.bal) + ' · 남은 회 ' + l.left + ' → <b>' + o.left + '</b> · 앞으로 낼 이자 <b class="good">−' + won(o.saved) + '</b>', '이번 일요일 원리금 <b class="gold">' + won(o.next) + '</b> <i>안 갚으면 ' + num(m.due) + '</i>'];
     return '<div class="win pop wide corner"><h2>' + I('bill', '', 's') + '미리 갚기</h2><h3>대출을 얼마나 갚을까요?</h3><div class="crows">' +
-      row('bill', '잔액 <b>' + won(l.balance) + '</b> · 남은 ' + l.left + '회 · 한 주 이자 ' + (Math.round(tune.loan_rate * 1000) / 10) + '%') +
+      row('bill', '잔액 <b>' + won(l.balance) + '</b> · 남은 ' + l.left + '회 · 한 주 이자 ' + pct1(l.rate)) +
       row('calendar', '이번 일요일 원리금 <b>' + won(m.due) + '</b>' + (m.days < 7 ? ' (' + m.days + '일치 — 이사한 주는 산 날만큼)' : '') + ' · 한 주 전체로는 ' + won(l.weekly)) +
       row('check', '칸을 쓰지 않습니다. 원금은 매주 같은 몫이라, 미리 갚으면 남은 회가 줄고 앞으로 낼 이자가 줍니다', 'good') + '</div>' +
       '<div class="opts">' + m.opts.map((o, i) => opt(o, i, body(o))).join('') + '</div>' +
@@ -1561,22 +1855,25 @@
     const dots = (n, t) => '<span><span class="rel">' + [1, 2, 3].map(k => '<i class="' + (n >= k ? 'on' : '') + '"></i>').join('') + '</span>' + t + '</span>';
     const sec = (ic, name, chips, note) => '<div class="hz"><b>' + I(ic, '', 's') + name + '</b><div>' + chips.join('') + (note ? '<em>' + note + '</em>' : '') + '</div></div>';
     return '<div class="win book help corner"><h2>' + I('help', '', 's') + '도움말</h2><h3>아이콘 읽는 법</h3><div class="hzs">' +
-      sec('calendar', '위쪽 띠', [c('calendar', '며칠째 (이번 주 일곱 칸)'), c('bill', '일요일 칸: 고정비 날'), c('sun', '오전'), c('noon', '오후'), c('moon', '저녁'), c('fire', '콤보'), c('cash', '현금'), c('wallet', '순자산'), c('key', '다음 목표와 거기까지 온 만큼 (되면 버튼)'), c('crown', '한국 최고 부자 (선언)'), c('trophy', '업적'), c('sound', '소리'), c('home', '제목으로 (저장됨)')], '기한은 없습니다. 내 집을 사면 1막 끝, 호텔에서 한국 최고 부자를 선언하면 엔딩') +
-      sec('door', '나', [c('door', '지금 사는 곳'), c('map', '로드맵 (투자가 열린 뒤)'), c('star', '레벨과 경험치'), c('hp', '체력'), c('rocket', '사업 · 키우기 (내 집부터)'), c('bill', '대출 · 미리 갚기 (있을 때만)'), c('plus', '고른 특성이 쌓이는 줄'), c('lock', '주황 테두리 = 양날 특성')], '사업을 키우면 같은 알바의 일당이 몇 배가 되고, 가게부터는 쉬기 · 공부 칸에도 매출이 들어옵니다(자동 수입). 대출은 일요일 밤 원리금 · 미리 갚기는 칸을 안 씀. 양날 특성은 크게 얻는 대신 못 하게 되는 것이 있고, 그 버튼은 잠깁니다') +
-      sec('quest', '상태창', [c('quest', '지금 할 퀘스트'), c('gift', '끝내면 받는 것'), c('door', '옮기기 · 사기 · 차리기 버튼'), c('bill', '고정비 · 원리금 (전날 · 당일 알림)'), c('news', '오늘 소식 수')], '고정비(대출이 있으면 원리금도)는 일요일 밤에 현금에서 나갑니다. 두 번 연속 못 내면 한 단계 내려갑니다 — 집이면 압류') +
-      sec('sun', '오늘', [c('coin', '일당'), c('hp', '드는 체력'), c('skip', '대충'), c('swap', '대타 (다음 일당 1.5배)'), c('book', '공부: 종목 하나를 골라 내일을 봄'), c('rocket', '쉬어도 + : 사업 매출')], '대충 = 미니게임 없이 일당의 일부만 받습니다. 직접 하면 실수해도 대충보다 덜 받지 않고, 숙련도(카드 위 네모 셋)와 콤보는 직접 해야 오릅니다. 강도(그림 옆 딱지: 하 · 중 · 상 · 최상)는 시작 전 화면에서 고릅니다 — 올릴수록 미니게임이 빨라지고 일당 ×' + tune.int_pay_0 + '~×' + tune.int_pay_3 + ' · 체력이 조금 더 듭니다. 실수하면 강도 보너스가 없습니다') +
-      sec('map', '로드맵', [c('cash', '하룻밤 요금'), c('bill', '주 고정비'), c('meal', '하루 끼니값'), c('bed', '자면 돌아오는 체력'), c('wallet', '입주 기준 순자산'), c('key', '집 값'), c('rocket', '열리는 사업'), c('lock', '아직 잠김')], '원룸까지는 순자산 기준만 넘으면 들어갑니다(돈을 가져가지 않음). 내 집은 현금으로, 아파트부터는 값의 ' + Math.round(tune.loan_ltv * 100) + '%까지 대출을 낄 수 있습니다') +
-      sec('news', '소식', [dots(3, '공시 (거의 확실)'), dots(2, '기사 (대체로)'), dots(1, '찌라시 (반반)'), c('up', '호재 · 오름'), c('down', '악재 · 내림'), c('book', '리포트가 본 방향')], '밤사이 갭: 오늘 소식은 아침 장 전에 이미 값에 들어가 있습니다 (든 종목이면 아침에 내 손익 알림). 속보 = 예고 없이 한 종목이 크게 움직이는 일 — 공부로도 안 보이고, 위쪽 띠로 뜹니다. 공부 = 한 칸과 체력을 써서 고른 종목 하나의 내일을 미리 봅니다 (' + Math.round(tune.study_acc * 100) + '% 맞는 단서)') +
-      sec('chart', '주식 · 코인', [c('cart', '사기 · 산 값'), c('sell', '팔기'), c('wallet', '보유 (평가액 · 손익률)'), c('percent', '수수료'), c('bolt', '배율'), c('skull', '청산'), c('bill', '유지비'), c('play', '연습 (진짜 돈 아님)')], '청산 = 반대로 크게 움직이면 건 돈을 전부 잃습니다. 배율이 높을수록 가깝습니다. 코인 탭의 "연습"에서 롱 · 숏 · 청산을 직접 눌러 볼 수 있습니다') +
-      '</div><div class="foot"><button class="btn small" data-do="fxtoggle" title="폭죽 · 흔들림 · 도장을 끕니다">' + I(meta.fxOff ? 'check' : 'sparkle', '', 's') + '효과 줄이기: ' + (meta.fxOff ? '켜짐' : '꺼짐') + '</button><span style="flex:1"></span><button class="btn main" data-do="ok">닫기 <span class="key">Space</span></button></div></div>';
+      sec('calendar', '위쪽 띠', [c('calendar', '며칠째 (이번 주 일곱 칸)'), c('bill', '일요일 칸: 정산 날과 나갈 돈'), c('sun', '오전'), c('noon', '오후'), c('moon', '저녁'), c('fire', '콤보'), c('cash', '현금'), c('wallet', '순자산'), c('key', '다음 목표 (되면 버튼)'), c('trophy', '업적'), c('home', '제목으로 (저장됨)')], '기한은 없습니다. 내 집을 사면 1막 끝, 호텔에서 한국 최고 부자를 선언하면 엔딩') +
+      sec('door', '나', [c('door', '사는 곳 · 계약(월세 · 전세 · 매매)'), c('star', '레벨과 경험치'), c('hp', '체력 · 컨디션'), c('rocket', '사업 · 키우기 (내 집부터)'), c('bill', '빚 (주담대 + 마이너스 통장)'), c('plus', '고른 특성')], '체력: 집이 좋을수록 밤에 많이 돌아옵니다 (서울역 ' + tune.sleep_station + ' → 호텔 ' + tune.sleep_hotel + '). 체력이 넉넉하면 "쌩쌩"(일당 +' + Math.round(tune.cond_good_pay * 100) + '%), 바닥이면 "지침"(−' + Math.round(tune.cond_tired_cut * 100) + '%). 모자란 채 일하면(무리) 끝나고 쓰러질 수 있습니다 — 응급실비 · 남은 칸 · 다음 날 오전을 잃습니다') +
+      sec('quest', '상태창', [c('quest', '지금 할 퀘스트'), c('gift', '끝내면 받는 것'), c('door', '옮기기 · 사기 · 차리기 버튼'), c('bill', '정산 알림 (전날 · 당일)'), c('star', '고른 꿈과 본 장면')], '정산(고정비 · 원리금 · 이자)은 일요일 밤에 현금에서 나갑니다. 모자라면 마이너스 통장에서 자동으로 빌려 내고, 그래도 안 되면 연체 — 신용점수가 깎이고, 두 번 연속이면 한 단계 내려갑니다') +
+      sec('sun', '오늘', [c('coin', '일당'), c('hp', '드는 체력'), c('skip', '대충'), c('check', '오늘 마감'), c('warn', '무리 (쓰러질 확률)'), c('book', '공부'), c('rocket', '쉬어도 + : 사업 매출')], '같은 알바는 하루 한 번입니다. 대충 = 미니게임 없이 일당의 일부. 강도(하 · 중 · 상 · 최상)는 시작 전 화면에서 고릅니다 — 올릴수록 빠르고 일당 ×' + tune.int_pay_0 + '~×' + tune.int_pay_3 + ' · 체력이 더 듭니다. 미니게임은 천천히 시작해 점점 빨라집니다') +
+      sec('map', '로드맵', [c('cash', '하룻밤 요금'), c('wallet', '보증금 (돌려받는 돈)'), c('bill', '주 고정비'), c('bed', '자면 돌아오는 체력'), c('key', '집 값'), c('rocket', '열리는 사업'), c('lock', '아직 잠김')], '고시원은 예치금, 원룸은 월세(보증금 작음 · 고정비 큼) 또는 전세(보증금 큼 · 고정비 작음), 내 집은 현금으로 삽니다. 아파트 · 주택은 전세로 들어가거나 주담대를 끼고 삽니다. 지금 사는 칸에는 내 모습이 서 있습니다') +
+      sec('chart', '주식 · 코인', [c('chart', '장 보기'), c('wallet', '내 보유'), c('cart', '사기'), c('sell', '팔기'), c('percent', '수수료'), c('bolt', '배율'), c('skull', '청산'), c('play', '코인 연습')], '주식은 찜질방부터. 종목을 누르면 차트가 뜨고 몇 주를 살지 골라 삽니다(직접 적어도 됩니다). 종목은 사는 곳을 따라 늘어납니다 — 튼튼은행은 일요일마다 배당, 꿀잼게임즈는 신작 출시 날 급등 · 급락, 뚝딱건설은 부동산 시세를 따라갑니다') +
+      sec('news', '뉴스·공부', [dots(3, '공시'), dots(2, '기사'), dots(1, '찌라시'), c('up', '호재'), c('down', '악재'), c('eye', '리포트가 본 방향'), c('book', '투자 공부 단계')], '오늘 소식은 아침 장 전에 이미 값에 들어가 있습니다. 공부 = 한 칸과 체력을 써서 고른 종목의 내일을 미리 봅니다. 공부가 쌓이면 단계가 올라 더 잘 맞고(' + Math.round(tune.study_acc * 100) + '% → ' + Math.round((tune.study_acc + 3 * tune.know_acc_step) * 100) + '%), 두 종목을 읽고, 부동산 전망 · 속보 경보가 열립니다') +
+      sec('building', '부동산 · 은행 · 가게', [c('building', '상가 · 건물'), c('coin', '임대수익'), c('shield', '신용등급'), c('bank', '마이너스 통장'), c('cart', '사 먹기 · 옷 · 살림')], '상가를 사 두면 일요일 밤마다 임대수익이 들어옵니다(세입자가 나가면 잠시 0). 신용등급은 정산을 제때 내면 오르고, 대출 한도 · 이자 · 주담대로 빌릴 수 있는 몫을 정합니다. 가게에서는 하루 한 번 사 먹어 체력을 채우고, 옷(입은 한 벌만 효과)과 살림을 삽니다') +
+      '</div><div class="foot"><button class="btn small" data-do="fxtoggle" title="폭죽 · 흔들림 · 도장 · 동전을 끕니다">' + I(meta.fxOff ? 'check' : 'sparkle', '', 's') + '효과 줄이기: ' + (meta.fxOff ? '켜짐' : '꺼짐') + '</button><span style="flex:1"></span><button class="btn main" data-do="ok">닫기 <span class="key">Space</span></button></div></div>';
   }
+
 
   // ── 제목 · 결과 · 등장물 ──
   function renderTitle() {
     const s = hasSave(), total = R.achList().length;
     $('s-title').innerHTML = '<div class="bg">' + art('title') + '</div><div class="t-box"><div class="tag">무일푼에서 한국 최고 부자까지</div><h1>서울역<br>상태창</h1>' +
-      '<div class="lead">서울역 벤치에서 눈을 떴더니 나에게만 보이는 상태창이 떴다. 알바로 버티고, 방을 구하고, 내 집을 사고, 사업을 키워 한국 최고 부자가 되어라.</div>' +
+      '<div class="lead">서울역 벤치에서 눈을 떴더니 나에게만 보이는 상태창이 떴다. 꿈 하나를 품고 알바로 버티고, 방을 구하고, 내 집을 사고, 사업과 건물을 키워 한국 최고 부자가 되어라.</div>' +
       '<div class="t-form"><label for="name">이름</label><input id="name" maxlength="8" placeholder="나" value="' + esc(ui.name) + '" autocomplete="off"><label for="code" title="같은 코드면 같은 시세의 판이 시작됩니다">' + I('dice', '', 's') + '판 코드</label><input id="code" maxlength="7" placeholder="비우면 새 판" autocomplete="off"></div>' +
+      '<div class="t-looks" title="후드 색 — 꾸미기만 (효과 없음). 옷은 판 안의 가게에서 삽니다"><label>후드 색</label>' + [0, 1, 2, 3].map(n => '<button class="look' + ((meta.look || 0) === n ? ' on' : '') + '" data-do="look" data-arg="' + n + '" title="' + ['파랑', '빨강', '초록', '회색'][n] + '">' + art('hero', '', n) + '</button>').join('') + '</div>' +
       '<div class="t-hint">판 코드: 같은 코드면 같은 시세의 판 (결과 카드에 적힘) · 오늘의 판: 오늘은 누구나 같은 판</div>' +
       '<div class="t-btns">' + (s ? '<button class="btn main" data-do="continue">이어하기 (' + s.day + '일째) <span class="key">Enter</span></button>' : '') +
       '<button class="btn' + (s ? (ui.askNew === 'new' ? ' warm' : '') : ' main') + '" data-do="new">' + (ui.askNew === 'new' ? '하던 판을 지우고 새로 시작' : '새로 시작') + (s ? '' : ' <span class="key">Enter</span>') + '</button>' +
@@ -1592,6 +1889,7 @@
       '<h2>최종 퀘스트 완료</h2><h1>한국 최고 부자</h1><div class="rank" title="며칠 만에 선언했는지로 정해지는 등급 (' + tune.rank_s + '일까지 S · ' + tune.rank_a + '일까지 A · ' + tune.rank_b + '일까지 B)">' + e.rank + '</div>' +
       '<p class="grades">등급: S ' + tune.rank_s + '일 · A ' + tune.rank_a + '일 · B ' + tune.rank_b + '일 안, 그 뒤는 C</p>' +
       '<p>' + esc(S.name) + ' 님은 <b class="gold">' + e.day + '일 만에</b> 순자산 ' + won(e.worth) + eokTag(e.worth) + '으로 한국 최고 부자를 선언했습니다.' + (a ? ' 서울역 벤치에서 내 집까지 ' + a.day + '일(' + a.rank + '), 거기서 호텔 맨 위층까지 ' + (e.day - a.day) + '일.' : '') + '</p>' +
+      (S.dream ? '<p class="epi" title="꿈: ' + esc(R.dreamView(S).name) + '">' + I('star', '', 's') + ' ' + esc(R.dreamView(S).end) + '</p>' : '') +
       '<div class="e-stats">' + stat('coin', '알바 · 사업', won(st.alba)) + stat('chart', '투자', sign(st.trade), cls(st.trade)) + stat('bill', '고정비', won(st.fixed)) +
       stat('rocket', '사업', R.BIZ[S.biz || 0].name) + stat('skull', '압류', (st.foreclosed || 0) + '번') + stat('star', '레벨', 'Lv.' + S.lv) + '</div>' +
       '<div class="e-card"><pre>' + esc(R.resultCard(S, 'end')) + '</pre><button class="btn" data-do="copy" title="결과 카드를 복사해 붙여 넣을 수 있습니다">' + I('copy') + '복사</button></div>' +

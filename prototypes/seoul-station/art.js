@@ -757,5 +757,5 @@
     return out;
   }
 
-  window.Art = { scene, thumb, job, act, asset, icon, icons, title, ending, figures, die, cup };
+  window.Art = { scene, thumb, job, act, asset, icon, icons, title, ending, figures, die, cup, prop: () => '', hero: () => '' }; // prop · hero 는 픽셀 그림만 있다 (pxart.js)
 })();

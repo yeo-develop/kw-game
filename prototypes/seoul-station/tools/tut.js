@@ -104,11 +104,14 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.shot('tut04_slots');
   want((await p.st()).cash >= 15000, '이 검사는 찜질방 요금이 있을 때만 뜻이 있음: 현금 ' + (await p.st()).cash);
   await p.G(() => window.game.run('move', '1')); await p.step(10); want((await p.st()).tier === 0, '오늘 칸을 짚는 동안 이사가 됨 (찜질방 안내를 건너뛰게 됨)');
-  // 두 번째 전단지는 하는 법 없이 바로
+  // 같은 알바는 하루 한 번: 오늘 한 전단지는 "오늘 마감"으로 닫히고, 눌러도 시작 전 화면이 아니라 이유가 뜬다
+  { const c = await p.G(() => { const e = document.querySelector('#today .card.closed'); return e ? { t: e.textContent, why: e.dataset.do + ':' + e.dataset.arg, skip: !!e.querySelector('[data-do="skip"]') } : null; });
+    want(c && /전단지/.test(c.t) && /오늘 마감/.test(c.t) && /^why:오늘은 이 알바를 마쳤습니다/.test(c.why) && !c.skip, '오늘 한 전단지 카드가 "오늘 마감"으로 닫히지 않음: ' + JSON.stringify(c)); }
   await p.G(() => window.game.run('job', 'flyer')); await p.step(4);
-  s = await p.st(); want(s.modal === 'mg' && s.pre && !(await p.G(() => /처음 하는 알바/.test(document.querySelector('.mg-how').textContent))), '해 본 알바인데 시작 전 화면이 없거나 "처음 하는 알바"가 또 붙음');
-  await p.G(() => window.game.press('Space')); await p.step(4); await finishMg(p); await p.step(60); await p.closeAll();
-  want((await p.st()).coach === 'slots', '둘째 칸 뒤에도 "세 칸" 안내여야 함');
+  s = await p.st(); want(!s.modal && s.slot === 1 && /오늘은 이 알바를 마쳤습니다/.test(await p.page.textContent('#toasts')), '오늘 이미 한 전단지가 또 열리거나 이유가 안 뜸: ' + JSON.stringify(s));
+  await p.G(() => window.game.run('skip', 'flyer')); await p.step(4); want((await p.st()).slot === 1, '오늘 이미 한 전단지가 "대충"으로 또 됨');
+  await p.G(() => window.game.run('rest')); await p.step(30); await p.closeAll();
+  want((await p.st()).coach === 'slots' && (await p.st()).slot === 2, '둘째 칸 뒤에도 "세 칸" 안내여야 함');
   await p.G(() => window.game.run('rest')); await p.step(30); await p.closeAll();
   s = await p.st(); b = await p.box();
   want(s.coach === 'endday' && s.slot === 3, '세 칸을 쓴 뒤 안내가 "하루 마치기"가 아님: ' + JSON.stringify(s)); geometry(b, 'endday'); log.push('3 ' + b.label + ' — ' + b.text);
@@ -141,6 +144,11 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   want(!s.coach && !s.tut && b.hidden, '마무리 뒤에도 안내가 남아 있음: ' + JSON.stringify(s));
   want(await p.G(() => window.game.meta.tut === 2), '안내를 끝낸 것이 기록되지 않음');
   await p.shot('tut08_free');
+  // 해 본 알바(전단지)는 날이 바뀌면 다시 열리고, "처음 하는 알바" 머리글 없이 바로
+  await p.G(() => window.game.run('job', 'flyer')); await p.step(4);
+  s = await p.st(); want(s.modal === 'mg' && s.pre && !(await p.G(() => /처음 하는 알바/.test(document.querySelector('.mg-how').textContent))), '해 본 알바인데 (둘째 날) 시작 전 화면이 없거나 "처음 하는 알바"가 또 붙음: ' + JSON.stringify(s));
+  await p.G(() => window.game.press('Space')); await p.step(4); await finishMg(p); await p.step(60); await p.closeAll();
+  want((await p.st()).slot === 1, '둘째 날 전단지를 했는데 칸이 안 쓰임');
   // 처음 하는 다른 알바: 하는 법이 뜨고, 눌러서(마우스) 시작
   await p.G(() => window.game.run('job', 'loading')); await p.step(30);
   want((await p.st()).pre, '처음 하는 상하차에 시작 전 화면이 안 뜸'); await p.shot('tut09_pre_loading');
@@ -290,10 +298,13 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     await r.load(); await r.resume(); // 시작한 뒤에 새로 고침: 예전처럼 "대충" 처리
     s = await r.st(); want(s.slot === 1, '시작한 알바를 하다가 새로 고쳤는데 칸이 그대로: ' + JSON.stringify(s));
     await r.clear();
+    const again = () => r.page.evaluate(() => { const g = window.game; g.state.raw.did = null; g.render(); }); // 같은 알바는 하루 한 번 — 이 검사는 같은 날 다시 열어 봐야 하므로 오늘 한 것을 지운다
+    want(await r.page.evaluate(() => !!document.querySelector('#today .card.closed')), '시작한 뒤 새로 고쳐 "대충" 처리된 전단지가 오늘 마감으로 닫히지 않음'); await again();
     await r.page.click('#today [data-arg="flyer"]', { position: { x: 30, y: 80 } }); await r.wait(500);
     s = await r.st(); want(s.modal === 'mg' && s.pre && !s.first, '해 본 알바에 새로 고친 뒤 "처음 하는 알바"가 또 붙음 (본 것이 남지 않음): ' + JSON.stringify(s));
     await r.load(); await r.resume(); await r.clear();
     { // 하만 되는 체력으로 하로 시작 → 하는 중에 새로 고침: 공짜로 다시 하지 않게 칸 · 체력(하만큼)이 쓰인다
+      await again();
       const b0 = await r.page.evaluate(() => { const S = window.game.state.raw, L = window.Rules.acts(S).find(a => a.id === 'flyer').levels; S.hp = L[0].hp; window.game.render(); return { slot: S.slot, hp: S.hp, cash: S.cash, ok: window.Rules.acts(S).find(a => a.id === 'flyer').ok }; }); // ok = 중(대충)을 할 체력
       await r.page.click('#today [data-arg="flyer"]', { position: { x: 30, y: 80 } }); await r.wait(600);
       want((await r.st()).int === 0 && !b0.ok, '하만 되는 체력인데 시작 전 화면이 하로 열리지 않음: ' + JSON.stringify(await r.st()));

@@ -9,6 +9,8 @@
 // 결정적: 난수는 opts.rng 만, 시간은 update(dt) 로만 흐른다. 같은 씨앗 + 같은 입력이면 같은 result.
 // 숙련도(level): 판 전체가 (1 + levelSpeed x level) 배 빨라진다 (levelSpeed 기본 0.16) = 같은 7초에 더 빨리, 더 많이 온다.
 // 점점 빨라짐(ramp): 한 판 안에서도 시작 -> 끝으로 갈수록 빨라진다 (ramp 기본 0.4 = 끝에서 약 +40%). 처음 1~2초는 거의 그대로.
+// 느린 시작(2026-11-19 "시작이 너무 빠름 키보드로 손 가다가 몇개 놓침 — 천천히 가다가 점점 빨라지는 방식"): opts.ready = "준비" 시간(초, 기본 0.8),
+//   opts.warm = 시작할 때의 빠르기(본래의 몇 배, 기본 1 = 없음) · opts.warmSec = 그 빠르기가 1 로 올라오는 데 걸리는 판 안의 시간. 판의 시계 자체를 늦추므로 네 게임에 똑같이 듣는다 (그만큼 한 판이 조금 길어진다).
 // 빨라져도 등장물이 판정 자리에 머무는 시간은 강도별 바닥(STAY: 하 0.18 · 중 0.13 · 상 0.105 · 최상 0.09초) 아래로 내려가지 않게,
 // 그리고 한 번 누른 뒤 다음 것까지의 틈도 강도별 바닥(게임마다) 아래로 내려가지 않게 각 게임이 속도 위쪽을 눌러 둔다 (사람 손으로 만점이 가능한 선).
 // 자동 점검용으로 game._state (내부 상태, 읽기만) 를 내놓는다.
@@ -309,6 +311,8 @@
     const intensity = opts.intensity == null ? 1 : clamp(Math.round(+opts.intensity) || 0, 0, 3);              // 알바 강도 0 하 · 1 중 · 2 상 · 3 최상
     const pace = +opts.pace > 0 ? Math.min(+opts.pace, 2.5) : 1;                                                    // 강도의 속도 배율 (안 주면 1)
     const rng = typeof opts.rng === 'function' ? opts.rng : spareRng(1);
+    const ready = +opts.ready > 0 ? Math.min(+opts.ready, 3) : READY;                                                 // "준비"가 떠 있는 시간
+    const warm = opts.warm == null || !(+opts.warm > 0) ? 1 : clamp(+opts.warm, 0.3, 1), warmSec = +opts.warmSec > 0 ? Math.min(+opts.warmSec, 6) : 0;   // 느린 시작
     const fx = makeFx(P);
     const env = {
       P: P, font: font, seconds: seconds, level: level, speed: (1 + levelSpeed * level) * pace, intensity: intensity, ramp: ramp, rng: rng, fx: fx,
@@ -318,7 +322,7 @@
     };
     const impl = make(env);
     let t = 0, phase = 'ready', endT = 0, pending = null;
-    impl.state.wt = -READY; impl.state.phase = phase;
+    impl.state.wt = -ready; impl.state.phase = phase; impl.state.slow = 1;
     const game = {
       w: W, h: H, title: impl.title, howto: impl.howto, how: impl.how || [impl.howto], controls: impl.controls,   // howto = 창 머리의 한 줄, how = 처음 할 때 보여 주는 하는 법
       done: false, result: null,
@@ -326,19 +330,20 @@
       update: function (dt) {
         dt = +dt || 0;
         if (game.done || dt <= 0) return;
-        t += dt;
-        const wt = t - READY;                       // 본 게임 시각 (준비 동안은 음수)
+        const w0 = t - ready, k = phase === 'play' && warmSec > 0 && w0 < warmSec ? warm + (1 - warm) * clamp(w0 / warmSec, 0, 1) : 1, gd = dt * k;   // 느린 시작: 판의 시계가 warm 배로 시작해 warmSec 에 걸쳐 1 배로
+        t += gd;
+        const wt = t - ready;                       // 본 게임 시각 (준비 동안은 음수)
         if (phase === 'ready' && wt >= -EPS) phase = 'play';
-        impl.tick(dt, wt, phase === 'play');
+        impl.tick(gd, wt, phase === 'play');
         fx.update(dt);
         if (phase === 'play' && wt >= seconds - EPS) { phase = 'end'; pending = impl.finish(); }
         else if (phase === 'end') { endT += dt; if (endT >= OUTRO - EPS) { game.done = true; game.result = pending; } }
-        impl.state.wt = wt; impl.state.phase = game.done ? 'done' : phase;
+        impl.state.wt = wt; impl.state.phase = game.done ? 'done' : phase; impl.state.slow = k;
       },
       press: function (code) { if (phase === 'play' && !game.done) impl.press(code); },
       draw: function (ctx) {
         if (typeof document === 'undefined') return;
-        const wt = t - READY, o = fx.offset();
+        const wt = t - ready, o = fx.offset();
         if (!FB) FB = mkc(LW, LH);
         const g = FB[1], ox = Math.round(o[0] / SC), oy = Math.round(o[1] / SC);   // 흔들림도 점 단위로
         g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.imageSmoothingEnabled = false;
@@ -1439,7 +1444,7 @@
       o.rng = spareRng(seed);
       game = build(o, MAKERS[id]); hand = makeHand(id, DEMO_HAND, spareRng(seed * 31 + 7)); rest = 0;
       game.idle = true;
-      for (let i = 0; i < 60 && game._state.phase === 'ready'; i++) game.update(1 / 60);   // 준비 시간을 건너뛴다: 열거나 강도를 바꾸자마자 하는 장면이 보이게
+      for (let i = 0; i < 240 && game._state.phase === 'ready'; i++) game.update(1 / 60);   // 준비 시간을 건너뛴다: 열거나 강도를 바꾸자마자 하는 장면이 보이게
       self.title = game.title; self.howto = game.howto; self.how = game.how; self.controls = game.controls; self._state = game._state;
     }
     self.update = function (dt) {

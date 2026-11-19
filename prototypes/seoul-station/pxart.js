@@ -25,7 +25,17 @@
     // ───── 점 찍는 도구 ─────
     let MAP = null; // 색 바꾸기 표(밤 · 회색판). null 이면 그대로
     function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; return [c, g]; }
-    function P(g, x, y, w, h, k) { const kk = (MAP && MAP[k]) || k; g.fillStyle = COL[kk] || kk; g.fillRect(x, y, w, h); }
+    // 주인공의 옷: 산 옷(WEAR) > 그 장면의 옷(찜질복 · 집 옷 — MAP.outfit) > 고른 후드 색(LOOK). 그 위에 밤 색 바꾸기(MAP)가 덮인다
+    let HERO_ON = false, WEAR = null, LOOK = null, WKEY = '_0';
+    const LOOKS = [null, { b: 'R', l: 'r' }, { b: 'G', l: 'g' }, { b: 'E', l: 'e' }]; // 후드 색: 파랑(처음) · 빨강 · 초록 · 회색
+    const WEARS = { vest: { b: 'O', l: 'o' }, padding: { b: 'k', l: 'E', E: 'k' }, suit: { b: 'k', l: 'B', E: 'B' }, gold: { b: 'O', l: 'y', E: 'o' } }; // 작업 조끼 · 롱패딩 · 정장 · 금빛 운동복
+    function setWear(id, look) { WEAR = WEARS[id] || null; LOOK = LOOKS[look | 0] || null; WKEY = (WEAR ? id : '') + '_' + (look | 0); }
+    function P(g, x, y, w, h, k) {
+      let kk = k;
+      if (HERO_ON) { const o = WEAR || (MAP && MAP.outfit ? MAP : LOOK); if (o && o[kk]) kk = o[kk]; if (MAP && !MAP.outfit && MAP[kk]) kk = MAP[kk]; }
+      else if (MAP && MAP[kk]) kk = MAP[kk];
+      g.fillStyle = COL[kk] || kk; g.fillRect(x, y, w, h);
+    }
     function box(g, x, y, w, h, f, o) { P(g, x, y, w, h, o || 'k'); P(g, x + 1, y + 1, w - 2, h - 2, f); }
     function map(g, ox, oy, rows, flip) {
       rows.forEach((r, y) => { const s = flip ? [...r].reverse() : [...r]; s.forEach((ch, x) => { if (ch !== '.') P(g, ox + x, oy + y, 1, 1, ch); }); });
@@ -86,8 +96,8 @@
       return r;
     }
     function heroAhoge(g, x, y) { P(g, x + 11, y - 2, 1, 2, 'k'); P(g, x + 12, y - 3, 2, 1, 'k'); P(g, x + 10, y - 1, 1, 1, 'k'); }
-    function drawHeroTop(g, x, y, face) { heroAhoge(g, x, y); map(g, x, y, heroRows(face).slice(0, 25)); }
-    function drawHeroLegs(g, x, y) { map(g, x, y + 25, HERO.slice(25)); }
+    function drawHeroTop(g, x, y, face) { HERO_ON = true; try { heroAhoge(g, x, y); map(g, x, y, heroRows(face).slice(0, 25)); } finally { HERO_ON = false; } }
+    function drawHeroLegs(g, x, y) { HERO_ON = true; try { map(g, x, y + 25, HERO.slice(25)); } finally { HERO_ON = false; } }
     function drawHero(g, x, y, face) { drawHeroTop(g, x, y, face); drawHeroLegs(g, x, y); } // 선 모습
 
     // ───── 떠 있는 상태창 (w×h, 꼬리 점은 왼쪽 아래로) ─────
@@ -526,6 +536,75 @@
         P(g, 10, 15, 2, 3, 'w'); P(g, 9, 17, 1, 2, 'w');
         disc(g, 13, 23, 1, 'h', 'h'); P(g, 19, 21, 2, 2, 'h'); P(g, 17, 26, 1, 1, 'h'); P(g, 21, 9, 2, 2, 'h'); P(g, 23, 6, 1, 1, 'h'); P(g, 21, 9, 1, 1, 'G');
       },
+      bank: g => { // 튼튼은행: 박공지붕 아래 기둥 넷
+        map(g, 4, 4, [
+          '...........kk...........',
+          '.........kkBBkk.........',
+          '.......kkBBllBBkk.......',
+          '.....kkBBllyyllBBkk.....',
+          '...kkBBllllyyllllBBkk...',
+          '.kkBBllllllllllllllBBkk.',
+          'kkkkkkkkkkkkkkkkkkkkkkkk',
+          'kwwwwwwwwwwwwwwwwwwwwwwk',
+          'kkkkkkkkkkkkkkkkkkkkkkkk',
+          '.kwLk.kwLk....kwLk.kwLk.',
+          '.kwLk.kwLk....kwLk.kwLk.',
+          '.kwLk.kwLk.kk.kwLk.kwLk.',
+          '.kwLk.kwLkkNNkkwLk.kwLk.',
+          '.kwLk.kwLkkNNkkwLk.kwLk.',
+          '.kwLk.kwLkkNNkkwLk.kwLk.',
+          '.kwLk.kwLkkNykkwLk.kwLk.',
+          '.kwLk.kwLkkNNkkwLk.kwLk.',
+          'kkkkkkkkkkkkkkkkkkkkkkkk',
+          'kwwwwwwwwwwwwwwwwwwwwwwk',
+          'kLLLLLLLLLLLLLLLLLLLLLLk',
+          'kkkkkkkkkkkkkkkkkkkkkkkk',
+        ]);
+        P(g, 2, 25, 28, 1, 'd'); P(g, 3, 26, 26, 1, 'd');
+      },
+      battery: g => { // 번쩍배터리: 초록 전지 + 번개
+        P(g, 4, 28, 24, 1, 'd');
+        box(g, 3, 9, 23, 15, 'g'); P(g, 4, 10, 21, 2, 'h'); P(g, 4, 21, 21, 2, 'G'); P(g, 4, 12, 1, 9, 'h');
+        box(g, 25, 13, 4, 7, 'L'); P(g, 26, 14, 2, 1, 'w');
+        P(g, 9, 12, 1, 9, 'G'); P(g, 20, 12, 1, 9, 'G');
+        map(g, 11, 11, ['....kk.', '...kyk.', '..kyyk.', '.kyyykk', 'kyyyyyk', 'kkyyyk.', '.kyyk..', '.kyk...', '.kk....']);
+        P(g, 12, 15, 1, 1, 'Y'); sparkle(g, 27, 6, 'y'); P(g, 6, 5, 1, 1, 'y');
+      },
+      game: g => { // 꿀잼게임즈: 게임패드
+        P(g, 6, 26, 20, 1, 'd');
+        map(g, 4, 9, [
+          '....kkkkkkkkkkkkkkkk....',
+          '..kkbbbbbbbbbbbbbbbbkk..',
+          '.kbbllllllllllllllllbbk.',
+          'kbblbbbbbbbbbbbbbbbblbbk',
+          'kbbbbkkbbbbbbbbbbrrbbbbk',
+          'kbbkkkkkkbbbbbbyybrrbbbk',
+          'kbbkkkkkkbbbbbbyybbbbbbk',
+          'kbbbbkkbbbbwwbbbbbbbbbbk',
+          'kbbbbbbbbbbbbbbbbbbbbbbk',
+          'kbbbBBBBkkkkkkkkBBBBbbbk',
+          '.kbBBBBk........kBBBBbk.',
+          '.kkBBkk..........kkBBkk.',
+          '..kkkk............kkkk..',
+        ]);
+        sparkle(g, 26, 6, 'y'); P(g, 5, 6, 1, 1, 'y');
+      },
+      build: g => { // 뚝딱건설: 안전모 + 벽돌
+        map(g, 5, 5, [
+          '.......kkkkkkkk.......',
+          '.....kkyyyyyyyykk.....',
+          '....kyyYYyykkyyyyk....',
+          '...kyyYYyyykkyyyyyk...',
+          '...kyyYyyyykkyyyyyk...',
+          '..kyyyyyyyykkyyyyyyk..',
+          '..kyyyyyyyyyyyyyyyyk..',
+          '.kkkkkkkkkkkkkkkkkkkk.',
+          'koooooooooooooooooooOk',
+          '.kkkkkkkkkkkkkkkkkkkk.',
+        ]);
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { const x = 4 + c * 6 + (r % 2 ? 3 : 0), y = 18 + r * 4; if (x + 6 <= 29) box(g, x, y, 6, 4, r === 1 ? 'N' : 'o'); }
+        P(g, 3, 30, 26, 1, 'd');
+      },
       coin: g => { // 달나라코인: 초승달이 새겨진 금화
         disc(g, 16, 16, 13, 'y', 'k');
         for (let y = -14; y <= 14; y++) for (let x = -14; x <= 14; x++) { const d = Math.hypot(x, y); if (d > 10.5 && d <= 12.5 && x + y > 4) P(g, 16 + x, 16 + y, 1, 1, 'O'); }
@@ -539,6 +618,29 @@
         sparkle(g, 20, 19, 'O'); P(g, 22, 13, 1, 1, 'O'); P(g, 23, 7, 1, 1, 'w'); P(g, 22, 8, 3, 1, 'w'); P(g, 23, 9, 1, 1, 'w'); P(g, 9, 9, 2, 1, 'w'); P(g, 8, 10, 1, 2, 'w');
       },
     };
+
+    // ───── 상가 · 건물 다섯 (32×32): 몸통 · 창 · 차양 · 지붕 ─────
+    function drawProp(g, o) {
+      const base = 28;
+      P(g, 1, base + 1, 30, 2, 'e'); P(g, 1, base + 1, 30, 1, 'L');
+      box(g, o.x, o.top, o.w, base - o.top + 1, o.wall); P(g, o.x + 1, o.top + 1, o.w - 2, 1, 'w'); P(g, o.x + o.w - 2, o.top + 2, 1, base - o.top - 2, sh(o.wall));
+      const step = Math.floor((o.w - 3) / o.cols);
+      for (let wy = o.top + 3, f = 0; wy + 3 <= base - (o.awning ? 9 : 7); wy += 4, f++) for (let c = 0; c < o.cols; c++) box(g, o.x + 2 + c * step, wy, 3, 3, (f + c) % 3 === 1 ? 'Y' : 'S');
+      if (o.awning) { for (let i = 0; i < o.w + 2; i++) P(g, o.x - 1 + i, base - 7, 1, 2, i % 4 < 2 ? o.awning : 'w'); P(g, o.x - 1, base - 5, o.w + 2, 1, 'k'); P(g, o.x - 1, base - 8, o.w + 2, 1, 'k'); }
+      box(g, o.x + (o.w >> 1) - 2, base - 4, 5, 5, 'N'); P(g, o.x + (o.w >> 1) + 1, base - 2, 1, 1, 'y');
+      if (o.awning) { box(g, o.x + 1, base - 4, 4, 3, 'S'); box(g, o.x + o.w - 5, base - 4, 4, 3, 'S'); }
+      P(g, o.x - 1, o.top - 2, o.w + 2, 3, 'k'); P(g, o.x, o.top - 1, o.w, 1, o.roof);
+      if (o.ant) { P(g, o.x + (o.w >> 1), o.top - 7, 1, 5, 'k'); P(g, o.x + (o.w >> 1) - 1, o.top - 8, 3, 1, 'r'); }
+      if (o.sign) { box(g, o.x + 2, o.top + 2, o.w - 4, 4, o.sign); P(g, o.x + 4, o.top + 3, o.w - 8, 1, 'w'); }
+    }
+    const PROP = {
+      stall: g => drawProp(g, { x: 8, w: 16, top: 15, wall: 'c', cols: 3, awning: 'r', roof: 'N', sign: 'r' }),
+      shop: g => drawProp(g, { x: 5, w: 22, top: 10, wall: 'C', cols: 4, awning: 'b', roof: 'n' }),
+      bldg: g => drawProp(g, { x: 8, w: 16, top: 5, wall: 'L', cols: 3, awning: 'g', roof: 'E' }),
+      office: g => drawProp(g, { x: 4, w: 24, top: 4, wall: 's', cols: 5, roof: 'B' }),
+      tower: g => drawProp(g, { x: 10, w: 13, top: 9, wall: 'l', cols: 2, roof: 'B', ant: true }),
+    };
+    const PROP_NAME = { stall: '골목 상가 한 칸', shop: '역 앞 상가', bldg: '꼬마빌딩', office: '오피스 빌딩', tower: '랜드마크 타워' };
 
     // ───── 주사위 (16×16) · 컵 (32×32) ─────
     const PIP = { 1: [[7, 6]], 2: [[4, 3], [10, 9]], 3: [[3, 3], [7, 6], [11, 9]], 4: [[4, 3], [10, 3], [4, 9], [10, 9]],
@@ -673,7 +775,7 @@
     function drawHeroLying(g, x, y, blanket, len) {
       const b = blanket || 'l', L = len || 30;
       box(g, x - 2, y + 7, 26, 9, 'w'); P(g, x - 1, y + 14, 24, 1, 'L');
-      map(g, x, y, HERO.slice(0, 15));
+      HERO_ON = true; try { map(g, x, y, HERO.slice(0, 15)); } finally { HERO_ON = false; }
       box(g, x + 17, y + 9, L, 10, b); P(g, x + 18, y + 10, L - 2, 2, 'w'); P(g, x + 18, y + 17, L - 2, 1, sh(b));
       for (let i = x + 24; i < x + 17 + L - 2; i += 7) P(g, i, y + 13, 1, 3, sh(b));
     }
@@ -682,6 +784,7 @@
       home: { b: 'G', l: 'g', w: 'h' },
       suit: { b: 'k', l: 'E', E: 'k' },
     };
+    for (const k in OUTFIT) Object.defineProperty(OUTFIT[k], 'outfit', { value: true }); // 장면의 옷이라는 표시 (산 옷이 있으면 그쪽이 먼저)
     function drawKey(g, x, y) { map(g, x, y, ['.kkk...', 'kyYyk..', 'kykykkk', 'kyyyyOk', '.kkk.k.']); }
 
     // 김 (위로 오르는 점 두 줄)
@@ -868,7 +971,7 @@
     const THUMB_NAME = ['서울역', '찜질방', '고시원', '원룸', '내 집', '아파트', '주택', '별장', '호텔', '한국 최고 부자'];
     const JOB_NAME = { flyer: '전단지 알바', loading: '상하차 알바', store: '편의점 알바', delivery: '배달 알바' };
     const ACT_NAME = { rest: '쉬기', study: '공부' };
-    const ASSET_NAME = { daejang: '대장전자', buldak: '화끈식품', hantang: '한탕바이오', coin: '달나라코인' };
+    const ASSET_NAME = { daejang: '대장전자', buldak: '화끈식품', hantang: '한탕바이오', coin: '달나라코인', bank: '튼튼은행', battery: '번쩍배터리', game: '꿀잼게임즈', build: '뚝딱건설' };
 
     const old = { scene: Old.scene, thumb: Old.thumb, job: Old.job, act: Old.act, asset: Old.asset, die: Old.die, cup: Old.cup };
     const safe = (name, fn) => function () { try { const r = fn.apply(this, arguments); if (r != null) return r; } catch (e) { if (window.console) console.warn('pxart', name, e); } return old[name] ? old[name].apply(this, arguments) : ''; };
@@ -879,7 +982,7 @@
       if (t > 4) return null; // 5~8 은 pxhomes.js (없으면 예전 그림)
       const key = Object.prototype.hasOwnProperty.call(PHASES, phase) ? phase : 'day'; // 'constructor' 같은 이름이 들어와도 낮으로
       const alt = t === 0 ? SCENE_ALT[key] : SCENE_NAME[t];
-      return img('scene' + t + '_' + key, 128, 72, alt, g => { MAP = null; try { SCENES[t](g, key); } finally { MAP = null; } });
+      return img('scene' + t + '_' + key + '_' + WKEY, 128, 72, alt, g => { MAP = null; try { SCENES[t](g, key); } finally { MAP = null; } }); // 옷이 바뀌면 다시 그린다
     });
     Old.thumb = safe('thumb', (tier, gray) => {
       const t = Math.max(0, Math.min(9, Math.round(Number(tier) || 0)));
@@ -888,13 +991,21 @@
     Old.job = safe('job', id => JOB[id] ? img('job_' + id, 32, 32, JOB_NAME[id], JOB[id]) : null);
     Old.act = safe('act', id => ACT[id] ? img('act_' + id, 32, 32, ACT_NAME[id], ACT[id]) : null);
     Old.asset = safe('asset', id => ASSET[id] ? img('asset_' + id, 32, 32, ASSET_NAME[id], ASSET[id]) : null);
+    old.prop = old.hero = () => '';
+    Old.prop = safe('prop', (id, gray) => PROP[id] ? img('prop_' + id + (gray ? 'g' : ''), 32, 32, PROP_NAME[id] + (gray ? ' (잠김)' : ''), g => { MAP = gray ? GRAY : null; try { PROP[id](g); } finally { MAP = null; } }) : null);
+    // 주인공만 (22×34, 머리 삐침까지): wear 를 주면 그 옷을 입은 모습 (가게의 옷 그림), 안 주면 지금 입은 대로 (로드맵의 "지금 여기")
+    Old.hero = safe('hero', (wear, look) => {
+      const w0 = WEAR, l0 = LOOK, k0 = WKEY;
+      if (wear != null) setWear(wear, look);
+      try { return img('hero_' + WKEY, 22, 34, '나', g => { MAP = null; drawHero(g, 0, 3, 'open'); }); } finally { WEAR = w0; LOOK = l0; WKEY = k0; }
+    });
     Old.die = safe('die', v => { const k = Math.max(1, Math.min(6, Math.round(Number(v) || 1))); return img('die' + k, 16, 16, '주사위 ' + k, g => drawDie(g, k)); });
     Old.cup = safe('cup', () => img('cup', 32, 32, '주사위 컵', drawCup));
 
     // 2단계에서 다시 쓸 그리는 함수들
     window.PxArt = {
       COL, XC, GRAY, PHASES, HERO, mk, P, box, map, disc, line, dither, sparkle,
-      setMap: m => { MAP = m || null; },
+      setMap: m => { MAP = m || null; }, setWear, wearKey: () => WKEY, PROP, LOOKS, WEARS,
       drawHero, drawHeroTop, drawHeroLegs, drawStatusWin, drawBenchBack, drawBenchSeat, drawLamp, lightPool,
       drawPigeon, drawTree, drawFlyers, drawCloud, drawSky, drawStars, drawMoon, drawStation, drawTower, drawFar,
       sceneStation, drawBuilding: (g, t) => BUILD[t](g), drawDie, drawCup, JOB, ACT, ASSET,

@@ -94,9 +94,13 @@ fs.mkdirSync(out, { recursive: true });
   await clear();
   s = await note('상하차 뒤');
   await clear();
-  // "대충"을 빠르게 세 번: 한 칸만 써야 하고, 같은 자리에 생긴 "하루 마치기"까지 눌리면 안 됨
-  { const b = await page.locator('[data-do="skip"][data-arg="flyer"]').boundingBox(); for (let i = 0; i < 3; i++) { await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await wait(90); } }
-  await wait(500); s = await note('대충 세 번 연타');
+  // 같은 알바는 하루 한 번: 오늘 한 전단지 · 상하차는 "오늘 마감"으로 닫히고 대충 버튼도 없다 — 남은 칸은 쉰다
+  if (await page.locator('#today .card.closed').count() !== 2 || await page.locator('#today [data-do="skip"]').count()) errs.push('오늘 한 알바 둘이 "오늘 마감"으로 닫히지 않거나 대충 버튼이 남음');
+  await page.click('#today .card.closed', { position: { x: 30, y: 80 } }); await wait(300);
+  if ((await st()).modal || (await st()).slot !== 2 || !/오늘은 이 알바를 마쳤습니다/.test(await page.textContent('#toasts'))) errs.push('오늘 마감인 알바를 눌렀는데 열리거나 이유가 안 뜸');
+  // 쉬기를 빠르게 세 번: 한 칸만 써야 하고, 같은 자리에 생긴 "하루 마치기"까지 눌리면 안 됨
+  { const b = await page.locator('#today [data-do="rest"]').boundingBox(); for (let i = 0; i < 3; i++) { await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await wait(90); } }
+  await wait(500); s = await note('쉬기 세 번 연타');
   if (s.slot !== 3 || s.modal === 'night') errs.push('연타가 칸을 여러 개 쓰거나 밤으로 넘어감: slot ' + s.slot + ' modal ' + s.modal);
   await clear();
   await wait(300); await coach('endday', '세 칸을 쓴 뒤');
@@ -129,8 +133,55 @@ fs.mkdirSync(out, { recursive: true });
   if (!(await page.locator('[data-do="continue"]').count())) errs.push('이어하기 버튼이 없음');
   else { await page.click('[data-do="continue"]'); await wait(600); const r = await note('이어하기'); if (r.day !== 2) errs.push('이어하기가 2일째가 아님: ' + r.day); }
   await shot('rt14_continued'); await coach('goal', '이어하기 (하다 만 안내)');
-  await wait(700); await page.click('[data-do="coachok"]'); await wait(400); await coach('', '마무리 안내를 읽은 뒤');
+  await wait(700); await page.click('[data-do="coachok"]'); await wait(400);
+  { const c = (await st()).coach; // 이어하기로 열면 판이 주식 탭(찜질방부터 열림)이라, 마무리 안내 다음에 주식 설명이 한 번 뜬다
+    if (c === 'stock') { await wait(400); await shot('rt14w_stock_coach'); await page.click('[data-do="coachok"]'); await wait(400); log.push('마무리 안내 뒤 주식 설명이 이어서 뜸 (판이 주식 탭)'); }
+    await coach('', '마무리 안내(와 주식 설명)를 읽은 뒤'); }
   if (await page.evaluate(() => window.game.meta.tut) !== 2) errs.push('안내를 끝낸 것이 기록되지 않음');
+  // "대충"을 빠르게 세 번: 한 칸만 쓴다 (한 번 하면 오늘 마감이라 뒤의 누름은 이유만 띄운다)
+  { const b = await page.locator('[data-do="skip"][data-arg="flyer"]').boundingBox(); for (let i = 0; i < 3; i++) { await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await wait(90); } }
+  await wait(500); s = await note('대충 세 번 연타');
+  if (s.slot !== 1 || s.modal === 'night') errs.push('"대충" 연타가 칸을 여러 개 씀: slot ' + s.slot + ' modal ' + s.modal);
+  await clear();
+  // ── 새 화면을 실제 클릭 · 실제 타자로: 주식(찜질방부터 · 원하는 수량) · 내 보유 · 가게(사 먹기) ──
+  await page.evaluate(() => { const S = window.game.state.raw; S.cash = Math.max(S.cash, 400000); window.game.render(); });
+  await page.click('#board .tabs [data-arg="stock"]'); await wait(600);
+  if ((await st()).coach === 'stock') { await shot('rt14w_stock_coach'); await page.click('[data-do="coachok"]'); await wait(400); } else if (!(await page.evaluate(() => window.game.meta.seen.stock))) errs.push('찜질방에서 주식 탭을 처음 열 때 설명이 안 뜸: ' + (await st()).coach);
+  if (!(await page.evaluate(() => !!window.game.meta.seen.stock))) errs.push('주식 설명을 읽었는데 본 것으로 남지 않음');
+  await shot('rt14w_stock_market');
+  await page.click('#board .arow[data-arg="buldak"]'); await wait(400);
+  if (!(await page.locator('#qty').count())) errs.push('종목을 눌렀는데 주문 칸(수량)이 안 뜸');
+  await page.click('[data-do="qty"][data-arg="+1"]'); await wait(120); await page.click('[data-do="qty"][data-arg="+1"]'); await wait(200);
+  if (await page.inputValue('#qty') !== '3') errs.push('+1 을 두 번 눌렀는데 수량이 3 이 아님: ' + await page.inputValue('#qty'));
+  const typeQty = async t => { await page.click('#qty'); await page.evaluate(() => document.getElementById('qty').select()); await page.keyboard.type(t, { delay: 60 }); await wait(150); }; // 칸을 눌러 전부 고른 뒤 실제 타자로 적는다
+  await typeQty('7'); // 숫자 키가 오늘 칸의 카드(1 ~ 6)를 누르면 안 됨
+  if ((await st()).modal || (await st()).slot !== 1) errs.push('수량 칸에 숫자를 적는데 오늘 칸의 카드가 눌림: ' + JSON.stringify(await st()));
+  { const q = await page.evaluate(() => { const S = window.game.state.raw, px = S.market.px.buldak, R = window.Rules; return { val: document.getElementById('qty').value, shown: document.getElementById('buyamt').textContent, max: R.maxUnits(S, 'buldak'), cash: S.cash, px }; });
+    if (q.val !== '7' || q.max < 7) errs.push('수량 칸에 7 을 적지 못함(또는 살 돈이 모자람): ' + JSON.stringify(q));
+    await page.click('[data-do="buyq"]'); await wait(500); await clear(); // 칸에 적은 바로 뒤에 "사기": 누름이 씹히지 않아야 한다
+    const a = await page.evaluate(() => { const S = window.game.state.raw; return { units: S.hold.buldak.units, cash: S.cash }; });
+    if (a.units !== 7) errs.push('수량 칸에 7 을 적고 바로 "사기"를 눌렀는데 7주가 아님: ' + a.units);
+    if (q.cash - a.cash !== Number(q.shown.replace(/[^0-9]/g, ''))) errs.push('버튼에 적힌 금액과 실제로 나간 돈이 다름: ' + q.shown + ' ≠ ' + (q.cash - a.cash));
+    log.push('주식: 화끈식품 7주 사기 ' + q.shown + '원 (한 주 ' + Math.round(q.px) + ')'); }
+  await typeQty('3');
+  await page.click('[data-do="sellq"]'); await wait(500); await clear();
+  { const u = await page.evaluate(() => window.game.state.raw.hold.buldak.units); if (u !== 4) errs.push('3 을 적고 "팔기"를 눌렀는데 4주가 남지 않음: ' + u); }
+  await typeQty('99999');
+  if (!(await page.evaluate(() => document.querySelector('[data-do="buyq"]').disabled))) errs.push('살 수 없는 수량을 적었는데 "사기"가 켜져 있음');
+  await page.keyboard.press('Enter'); await wait(200); // Enter = 적은 수를 확정: 살 수 있는(또는 가진) 만큼으로 맞춰진다
+  { const q = await page.evaluate(() => { const S = window.game.state.raw, R = window.Rules; return { val: document.getElementById('qty').value, top: Math.max(1, R.maxUnits(S, 'buldak'), Math.floor(S.hold.buldak.units)), modal: window.game.state.modal }; }); if (Number(q.val) !== q.top || q.modal) errs.push('너무 큰 수량이 살 수 있는 만큼으로 맞춰지지 않음: ' + JSON.stringify(q)); }
+  await shot('rt14w_stock_detail');
+  await page.click('#board [data-do="sview"][data-arg="market"]'); await wait(300); await page.click('#board .svtabs [data-arg="mine"]'); await wait(300);
+  if (await page.locator('#board .mlist.own .arow').count() !== 1) errs.push('내 보유에 가진 종목 하나가 안 보임');
+  await shot('rt14w_stock_mine');
+  await page.click('#board .tabs [data-arg="shop"]'); await wait(400);
+  { const b0 = await page.evaluate(() => { const S = window.game.state.raw; S.hp = Math.min(S.hp, 30); window.game.render(); return { hp: S.hp, cash: S.cash }; }); await wait(200);
+    await page.click('#board [data-do="eat"][data-arg="kimbap"]'); await wait(500); await clear();
+    const b1 = await page.evaluate(() => { const S = window.game.state.raw; return { hp: S.hp, ate: S.ate === S.day, meals: S.stats.meals || 0, eats: document.querySelectorAll('#board [data-do="eat"]').length, done: document.querySelectorAll('#board .sitem.food.off').length }; });
+    if (!(b1.hp > b0.hp && b1.ate && b1.meals === 1) || b1.eats || b1.done !== 3) errs.push('가게에서 김밥을 사 먹었는데 체력이 안 오르거나 오늘 또 먹을 수 있음: ' + JSON.stringify({ b0, b1 }));
+    log.push('가게: 김밥 체력 ' + b0.hp + ' → ' + b1.hp); }
+  await shot('rt14w_shop');
+  await page.click('#board .tabs [data-arg="road"]'); await wait(300);
   // 업적 · 기록은 판 저장과 따로 남는다: 새로 고친 뒤에도 있고, 도감에서 보인다
   const metaAch = await page.evaluate(() => Object.keys(window.game.meta.ach).length);
   if (metaAch < 1) errs.push('새로 고친 뒤 업적이 남아 있지 않음'); log.push('남아 있는 업적 ' + metaAch + '개');

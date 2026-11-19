@@ -409,7 +409,7 @@
 
     const cache = {};
     function draw(t, key) {
-      const id = 'home' + t + '_' + key;
+      const id = 'home' + t + '_' + key + '_' + (A.wearKey ? A.wearKey() : ''); // 옷이 바뀌면 다시 그린다
       if (!cache[id]) {
         const c = document.createElement('canvas'); c.width = 128; c.height = 72;
         const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
