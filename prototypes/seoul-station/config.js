@@ -8,17 +8,19 @@ window.CONFIG = {
   volume: { value: 0.5, min: 0, max: 1, step: 0.05 },
 
   // ── 한 판의 목표: 기한 없음. 내 집(1막 끝) → 아파트 → 주택 → 별장 → 호텔 → 한국 최고 부자(엔딩). 값은 오르지 않는다 ──
+  // 2026-11-21: 집을 올릴 때마다 새 알바가 열려 2막의 벌이가 늘었다(보통 손의 하루 벌이: 아파트 +24% · 주택 +35% · 별장 +50% · 호텔 +63%).
+  //   그대로 두면 호텔에 4.5일만 머물고 정산이 벌이의 6%로 가벼워져서, 아파트부터의 집값 · 주 고정비 · 사업 값 · 엔딩 기준을 그 벌이에 맞춰 올렸다 (봇의 단계별 날짜 · 정산의 몫이 2026-11-20 과 같게)
   price_home: { value: 11000000, min: 5000000, max: 100000000, step: 1000000 }, // 내 집 (현금으로만). 봇 biz 중앙 24일째. 그 위는 사업 배수와 같은 5배 간격
-  price_apt: { value: 52000000, min: 20000000, max: 600000000, step: 5000000 }, // 아파트 (주담대는 여기부터)
-  price_house: { value: 240000000, min: 100000000, max: 3000000000, step: 50000000 }, // 주택
-  price_villa: { value: 1100000000, min: 500000000, max: 10000000000, step: 100000000 }, // 별장
-  price_hotel: { value: 5400000000, min: 2000000000, max: 40000000000, step: 500000000 }, // 호텔
-  top_worth: { value: 18000000000, min: 10000000000, max: 200000000000, step: 1000000000 }, // 한국 최고 부자: 호텔에서 순자산이 이만큼이면 선언 = 엔딩
-  week_home: { value: 2200000, min: 0, max: 5000000, step: 50000 }, // 주 고정비 (관리비 · 세금). 일요일 밤, 그 주에 산 날만큼
-  week_apt: { value: 10000000, min: 0, max: 20000000, step: 100000 },
-  week_house: { value: 49000000, min: 0, max: 100000000, step: 500000 },
-  week_villa: { value: 230000000, min: 0, max: 500000000, step: 5000000 },
-  week_hotel: { value: 1100000000, min: 0, max: 2500000000, step: 25000000 },
+  price_apt: { value: 55000000, min: 20000000, max: 600000000, step: 5000000 }, // 아파트 (주담대는 여기부터)
+  price_house: { value: 300000000, min: 100000000, max: 3000000000, step: 50000000 }, // 주택
+  price_villa: { value: 1500000000, min: 500000000, max: 10000000000, step: 100000000 }, // 별장
+  price_hotel: { value: 8000000000, min: 2000000000, max: 40000000000, step: 500000000 }, // 호텔
+  top_worth: { value: 30000000000, min: 10000000000, max: 200000000000, step: 1000000000 }, // 한국 최고 부자: 호텔에서 순자산이 이만큼이면 선언 = 엔딩
+  week_home: { value: 2400000, min: 0, max: 5000000, step: 50000 }, // 주 고정비 (관리비 · 세금). 일요일 밤, 그 주에 산 날만큼
+  week_apt: { value: 12500000, min: 0, max: 20000000, step: 100000 },
+  week_house: { value: 66000000, min: 0, max: 100000000, step: 500000 },
+  week_villa: { value: 345000000, min: 0, max: 500000000, step: 5000000 },
+  week_hotel: { value: 1800000000, min: 0, max: 2500000000, step: 25000000 },
   act1_s: { value: 21, min: 5, max: 60, step: 1 }, // 1막 끝(내 집) 등급: 이 날까지 S · 다음 A · 다음 B · 그 뒤 C
   act1_a: { value: 25, min: 5, max: 80, step: 1 },
   act1_b: { value: 31, min: 5, max: 100, step: 1 },
@@ -39,10 +41,10 @@ window.CONFIG = {
   biz_auto_4: { value: 0.7, min: 0, max: 1, step: 0.05 },
   biz_auto_5: { value: 0.85, min: 0, max: 1, step: 0.05 },
   biz_cost_1: { value: 2800000, min: 1000000, max: 50000000, step: 1000000 }, // 가게 (쓴 돈은 자산으로 안 남는다)
-  biz_cost_2: { value: 13000000, min: 5000000, max: 300000000, step: 5000000 }, // 법인
-  biz_cost_3: { value: 61000000, min: 20000000, max: 1000000000, step: 10000000 }, // 그룹
-  biz_cost_4: { value: 290000000, min: 50000000, max: 5000000000, step: 50000000 }, // 대기업
-  biz_cost_5: { value: 1300000000, min: 200000000, max: 30000000000, step: 100000000 }, // 재벌
+  biz_cost_2: { value: 15000000, min: 5000000, max: 300000000, step: 5000000 }, // 법인
+  biz_cost_3: { value: 80000000, min: 20000000, max: 1000000000, step: 10000000 }, // 그룹
+  biz_cost_4: { value: 450000000, min: 50000000, max: 5000000000, step: 50000000 }, // 대기업
+  biz_cost_5: { value: 2100000000, min: 200000000, max: 30000000000, step: 100000000 }, // 재벌
   // 돈의 크기: 정해진 금액(돌발 사건 · 퀘스트 보상 · 도박장 판돈)에 사는 곳마다 곱하는 배수 (원룸까지는 1)
   tier_scale_4: { value: 3, min: 1, max: 20, step: 1 },
   tier_scale_5: { value: 15, min: 1, max: 100, step: 1 },
@@ -143,7 +145,7 @@ window.CONFIG = {
   h_dump_base: { value: 0.12, min: 0, max: 0.4, step: 0.01 }, // 폭락 = 매집 뒤 오른 만큼(로그) + 이만큼, 두 칸에 나눠
   h_dump_first: { value: 0.75, min: 0.5, max: 1, step: 0.05 }, // 폭락 첫 칸에 몰리는 몫
   c_sigma: { value: 0.05, min: 0, max: 0.15, step: 0.005 }, // 달나라코인
-  c_momentum: { value: 0.12, min: 0, max: 0.8, step: 0.05 }, // 직전 움직임이 이어지는 정도
+  c_momentum: { value: 0.05, min: 0, max: 0.8, step: 0.01 }, // 직전 움직임이 이어지는 정도 (2026-11-21 독립 검토: 0.12 면 직전 방향으로 5배를 걸기만 해도 수수료를 빼고 한 칸에 +4% — 이어지는 몫 × 평균 움직임이 수수료 + 유지비(포지션의 0.2%)를 넘지 않게 낮춤)
   // 뉴스: 아침마다 종목별로 나올 확률, 하루 동안 움직이는 크기, 출처별로 사실일 확률
   news_p_buldak: { value: 0.8, min: 0, max: 1, step: 0.05 },
   news_p_daejang: { value: 0.5, min: 0, max: 1, step: 0.05 },
@@ -157,6 +159,8 @@ window.CONFIG = {
   fake_back: { value: 0.6, min: 0, max: 1.5, step: 0.1 }, // 거짓 뉴스일 때 반대로 가는 크기 (뉴스 크기 대비)
   study_acc: { value: 0.56, min: 0.5, max: 1, step: 0.01 }, // 공부(리포트)가 맞을 확률 — 1단계. 2 · 4 · 6단계에서 know_acc_step 씩 오른다 (6단계 0.68 — 예전의 고정 0.62 는 그 사이). 확신이 아니라 한쪽으로 기울여 주는 단서
   study_hp: { value: 8, min: 0, max: 30, step: 1 }, // 공부 한 번에 드는 체력 (가벼운 알바 수준)
+  news_am: { value: 1, min: 0, max: 1, step: 0.1 }, // 소식의 참 · 거짓이 오전 칸에 드러나는 몫 (나머지는 오후 · 저녁에 6:4). 0.5 였을 때는 오전의 움직임을 보고 따라 사면 남은 절반을 거의 위험 없이 먹었다 (코인 5배로 한 칸에 +6% — 2026-11-21 독립 검토). 1 이면 아침에 믿고 사는 것만 남는다
+  news_priced_coin: { value: 1, min: 0, max: 1, step: 0.05 }, // 코인 소식이 아침 장 전에 값에 먼저 들어가는 몫. 0.9 였을 때는 공부 없이 공시 방향으로 사서 오전 칸 뒤에 팔면 1배 +0.8% · 5배 +4% 가 남았다 (2026-11-21 독립 검토) — 1 이면 소식만 보고는 못 먹고, 공부해서 미리 아는 사람만 번다
   news_priced: { value: 0.9, min: 0, max: 1, step: 0.05 }, // 밤사이 갭: 아침 장 전에 값에 먼저 들어가는 몫 (소식의 기대 움직임 대비). 1이면 소식만 보고 사서는 못 먹는다
   chat_acc: { value: 0.62, min: 0.5, max: 1, step: 0.01 }, // 리딩방 방장이 맞을 확률
   // 속보: 예고 없이(공부로도 안 보임) 한 종목이 한 칸에 크게 움직인다. 종목별 크기는 rules.js 의 표, 여기는 전체 배율
@@ -322,4 +326,46 @@ window.CONFIG = {
   mg_ready: { value: 1.3, min: 0.5, max: 3, step: 0.1 }, // "준비" 가 떠 있는 시간(초)
   mg_warm: { value: 0.55, min: 0.3, max: 1, step: 0.05 }, // 시작할 때의 빠르기 (본래의 몇 배) — mg_warm_sec 동안 1 까지 올라간다
   mg_warm_sec: { value: 2.6, min: 0, max: 6, step: 0.2 },
+
+  // ── 2026-11-21 "알바 다각화해, 집 업그레이드 될수록 일할수있는 종목 늘려": 원룸부터 호텔까지 집을 올릴 때마다 새 일 하나 ──
+  pay_cafe: { value: 150000, min: 50000, max: 500000, step: 10000 }, hp_cafe: { value: 13, min: 0, max: 60, step: 1 }, // 카페 (원룸)
+  pay_tutor: { value: 190000, min: 50000, max: 600000, step: 10000 }, hp_tutor: { value: 15, min: 0, max: 60, step: 1 }, // 과외 (내 집)
+  pay_driver: { value: 230000, min: 50000, max: 800000, step: 10000 }, hp_driver: { value: 22, min: 0, max: 60, step: 1 }, // 대리 (아파트 · 저녁 칸에만)
+  pay_lecture: { value: 250000, min: 50000, max: 900000, step: 10000 }, hp_lecture: { value: 18, min: 0, max: 60, step: 1 }, // 강연 (주택)
+  pay_tv: { value: 270000, min: 50000, max: 1000000, step: 10000 }, hp_tv: { value: 20, min: 0, max: 60, step: 1 }, // 방송 (별장)
+  pay_advise: { value: 300000, min: 50000, max: 1200000, step: 10000 }, hp_advise: { value: 16, min: 0, max: 60, step: 1 }, // 자문 (호텔)
+  job_cafe_am: { value: 0.15, min: 0, max: 0.5, step: 0.05 }, // 카페: 오전 칸이면 일당 +
+  job_tutor_know: { value: 0.03, min: 0, max: 0.1, step: 0.01 }, // 과외: 투자 공부 단계(1단계 위로)마다 일당 +
+  job_lecture_suit: { value: 0.1, min: 0, max: 0.5, step: 0.05 }, // 강연: 정장을 입으면 일당 +
+  job_tv_promo: { value: 0.1, min: 0, max: 0.5, step: 0.05 }, // 방송: 잘함 이상이면 다음 날 사업 매출 +
+  job_advise_grade: { value: 0.03, min: 0, max: 0.1, step: 0.01 }, // 자문: 신용등급이 7등급에서 한 단계 좋아질 때마다 일당 + (1등급 = +18%)
+
+  // ── 2026-11-21 "천재지변같은 돌발이벤트같은거 많이 넣어": 세상 사건 (날씨는 전날 예보 · 재난 · 경제 사건은 예고 없음). 아침에 닥친다 ──
+  world_p: { value: 0.2, min: 0, max: 1, step: 0.02 }, // 세상 사건이 없는 날, 다음 날에 하나가 생길 확률 (닷새에 한 번꼴)
+  world_from: { value: 5, min: 2, max: 60, step: 1 }, // 세상 사건이 닥치기 시작하는 날 (첫 판 안내가 끝난 뒤)
+  world_acc: { value: 0.7, min: 0.5, max: 1, step: 0.05 }, // 날씨 예보가 맞을 확률
+  world_priced: { value: 0.9, min: 0, max: 1, step: 0.05 }, // 예보가 뜬 아침에 시세에 먼저 들어가는 몫 (예보의 기대 움직임 대비 — 소식의 news_priced 와 같은 뜻)
+  world_mag: { value: 1, min: 0, max: 2, step: 0.1 }, // 세상 사건의 시세 크기 배율
+  world_dmg: { value: 1, min: 0, max: 3, step: 0.1 }, // 가진 집 · 건물의 수리비 배율
+  season_days: { value: 14, min: 7, max: 56, step: 7 }, // 한 계절의 길이 (가을 → 겨울 → 봄 → 여름)
+
+  // ── 2026-11-21 "투자종목 늘려": 다담아ETF(평균) · 황금ETF · 든든보험 · 날개항공 · 훈훈에너지 · 방패방산 · 거꾸로ETF · 멍멍코인 ──
+  gd_drift: { value: 0, min: -0.01, max: 0.01, step: 0.0001 }, gd_sigma: { value: 0.004, min: 0, max: 0.05, step: 0.001 }, // 황금ETF: 평소엔 잠잠 (세상 사건에 움직인다 — 흉흉하면 오르고, 금리가 오르거나 증시가 뛰면 내린다. 들고만 있어도 오르지는 않게 흐름은 0)
+  in_drift: { value: 0.0016, min: -0.01, max: 0.01, step: 0.0001 }, in_sigma: { value: 0.007, min: 0, max: 0.05, step: 0.001 }, // 든든보험: 꾸준히 오르다 재난에 급락 (재난으로 잃는 몫보다 조금 더 오르게 — 0.0009 면 길게 들수록 손해였다)
+  ar_drift: { value: 0.001, min: -0.01, max: 0.01, step: 0.0001 }, ar_sigma: { value: 0.02, min: 0, max: 0.08, step: 0.002 }, // 날개항공: 평소엔 조금씩 오르다 날씨 · 유가에 꺾인다 (흐름이 0 이면 궂은 날씨만큼 내리기만 했다)
+  en_drift: { value: 0.0004, min: -0.01, max: 0.01, step: 0.0001 }, en_sigma: { value: 0.012, min: 0, max: 0.05, step: 0.001 }, // 훈훈에너지
+  df_sigma: { value: 0.008, min: 0, max: 0.05, step: 0.001 }, // 방패방산: 평소엔 조용
+  iv_fee: { value: 0.0003, min: 0, max: 0.005, step: 0.0001 }, // 거꾸로ETF: 칸마다 깎이는 몫 (길게 들면 손해)
+  dg_sigma: { value: 0.085, min: 0, max: 0.2, step: 0.005 }, dg_momentum: { value: 0.03, min: 0, max: 0.8, step: 0.01 }, // 멍멍코인 (이어지는 몫은 달나라코인과 같은 까닭으로 작게)
+  news_p_air: { value: 0.35, min: 0, max: 1, step: 0.05 }, news_mag_air: { value: 0.07, min: 0, max: 0.3, step: 0.01 },
+  news_p_energy: { value: 0.3, min: 0, max: 1, step: 0.05 }, news_mag_energy: { value: 0.05, min: 0, max: 0.3, step: 0.01 },
+  news_p_insure: { value: 0.2, min: 0, max: 1, step: 0.05 }, news_mag_insure: { value: 0.04, min: 0, max: 0.2, step: 0.005 },
+  news_p_defense: { value: 0.15, min: 0, max: 1, step: 0.05 }, news_mag_defense: { value: 0.06, min: 0, max: 0.3, step: 0.01 },
+  news_p_doge: { value: 0.5, min: 0, max: 1, step: 0.05 }, news_mag_doge: { value: 0.16, min: 0, max: 0.5, step: 0.01 },
+
+  // ── 2026-11-21 "신용등급 구체화해": 점수의 다섯 항목(상환 이력 · 부채 수준 · 거래 기간 · 소득과 자산 · 계약과 소비)에 더해지는 규칙 ──
+  credit_streak_n: { value: 4, min: 2, max: 12, step: 1 }, credit_streak: { value: 10, min: 0, max: 50, step: 1 }, // 정산을 이만큼 연속으로 제때 낼 때마다 +
+  credit_age_n: { value: 4, min: 1, max: 12, step: 1 }, credit_age: { value: 5, min: 0, max: 30, step: 1 }, credit_age_max: { value: 6, min: 0, max: 20, step: 1 }, // 주소가 생긴 뒤 이만큼의 주마다 + (몇 번까지)
+  credit_use_hi: { value: 0.8, min: 0.3, max: 1, step: 0.05 }, credit_use_pen: { value: 10, min: 0, max: 50, step: 1 }, // 일요일 밤, 마이너스 통장을 한도의 이만큼 넘게 쓰고 있으면 −
+  credit_spend: { value: 8, min: 0, max: 30, step: 1 }, // 가게에서 쓴 돈이 10만 · 100만 · 1,000만 · 1억 · 10억 원을 넘을 때마다 +
 };

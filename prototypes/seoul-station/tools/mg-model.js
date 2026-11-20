@@ -1,6 +1,6 @@
 // 미니게임 난이도를 사람 손 모형으로 잰다 (브라우저 없이).
 // 쓰는 법: node tools/mg-model.js [폴더] [씨앗 수] [pace 넷을 쉼표로]   예) node tools/mg-model.js . 40 1.2,1.6,2,2.4 (안 주면 config.js 의 mg_int_0..3)
-//          node tools/mg-model.js [폴더] demo [pace 넷]   — 시연 확인: 게임 넷 × 강도 넷 × 숙련 0 · 3. 30초에 오류 · 누름 · loops · rng 를 보고,
+//          node tools/mg-model.js [폴더] demo [pace 넷]   — 시연 확인: 게임 열 × 강도 넷 × 숙련 0 · 3. 30초에 오류 · 누름 · loops · rng 를 보고,
 //          점수 평균은 같은 시연을 5분까지 이어서 (30초 = 세 판이라 한 판의 실수에 너무 흔들림)
 // 손 셋: 완벽한 손 · 잘하는 사람 · 보통 사람. 손은 minigames.js 의 Minigames._hand (시연과 같은 손, 화면에 보이는 것만 읽음)에
 // 반응 · 박자 오차 · 헷갈림을 입힌 것. 손의 난수는 판의 난수와 따로.
@@ -20,6 +20,7 @@ vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 const M = ctx.Minigames;
 function mulberry(seed) { let a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const INT = ['하', '중', '상', '최상'], DT = 1 / 60;
+if (process.env.ONLY) M.list = M.list.filter(function (id) { return process.env.ONLY.split(',').indexOf(id) >= 0; });   // ONLY=cafe,tutor 처럼 일부만 잰다
 
 if (demoMode) {
   let bad = 0;
@@ -57,7 +58,7 @@ const HANDS = [
 const GR = ['grade_ok', 'grade_good', 'grade_perfect'].map(k => window.CONFIG[k].value);   // 등급 기준은 config.js 에서
 function grade(x) { return x >= GR[2] - 1e-9 ? 3 : x >= GR[1] - 1e-9 ? 2 : x >= GR[0] - 1e-9 ? 1 : 0; }
 function run(id, n, level, prof, seed) {
-  const g = M.create(id, Object.assign({ rng: mulberry(seed), intensity: n, pace: paces[n], level: level, font: 'x' }, START));
+  const g = M.create(id, Object.assign({ rng: mulberry(seed), intensity: n, pace: paces[n], level: level, font: 'x', perfect: GR[2] }, START));
   const hand = M._hand(id, prof, mulberry(seed * 977 + 13));
   for (let f = 0; !g.done && f < 60 * 20; f++) {
     const code = hand(g._state, DT);
@@ -80,5 +81,5 @@ for (const id of M.list) for (let n = 0; n < 4; n++) for (const level of [0, 3])
   });
   console.log([id, INT[n], level].concat(cells).join('\t'));
 }
-console.log('-- 네 게임 평균');
+console.log('-- 모든 게임 평균');
 for (let n = 0; n < 4; n++) for (const level of [0, 3]) console.log(['평균', INT[n], level].concat(HANDS.map(function (h, hi) { return sum[hi + '/' + n + '/' + level].toFixed(2); })).join('\t'));

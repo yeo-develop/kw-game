@@ -58,7 +58,9 @@ fs.mkdirSync(out, { recursive: true });
       S.market.shocks = S.market.shocks.filter(x => x.id !== 990).concat([{ id: 990, day: S.day, slot: 2, asset: 'daejang', pct: -0.12, head: '대장전자 공장 정전' }]); // 공부 5단계의 속보 경보 한 줄 (하루에 속보는 많아야 하나)
       S.market.brief = { day: S.day, madeOn: S.day - 1, assets: ['buldak', 'daejang', 'coin'], items: [{ nid: 901, asset: 'buldak', dir: 1 }, { nid: 902, asset: 'daejang', dir: -1 }, { nid: 903, asset: 'coin', dir: 1 }], ht: null };
       S.market.intel = { day: S.day + 1, madeOn: S.day, assets: ['buldak', 'hantang', 'game'], items: [{ nid: 1, asset: 'buldak', dir: 1 }], ht: { state: 'lean', lean: -1 }, gm: { state: 'lean', lean: 1 } }; // 리포트: 공부 두 종목 + 귀띔 하나. 가장 긴 글은 한탕바이오 · 꿀잼게임즈의 기울기
-      for (const id of ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'game', 'build']) { const u = id === 'hantang' ? 30000 : 12345; S.hold[id] = { units: u, cost: Math.round(u * S.market.px[id] * 1.31), min: u }; }
+      for (const id of ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'game', 'build', 'etf', 'gold']) { const u = id === 'hantang' ? 30000 : 12345; S.hold[id] = { units: u, cost: Math.round(u * S.market.px[id] * 1.31), min: u }; }
+      S.market.world = [{ id: 9701, type: 'flu', day: S.day - 1, days: 3, warn: false, truth: true, done: 1 }, { id: 9702, type: 'holiday', day: S.day + 1, days: 2, warn: true, truth: true, told: 1, pre: 1 }]; // 2026-11-21: 오늘의 세상 사건(이름이 가장 긴 재난) + 내일 예보 — 오늘 칸 머리줄의 칩 둘 · 뉴스 탭의 두 줄
+      S.crLog = [7, 14, 21, 28, 35, 42, 49].map((d, i) => ({ day: d, n: i % 3 === 2 ? -150 : 15, why: i % 3 === 2 ? '통장을 한도 가까이 씀' : '정산을 12번 연속 제때 냄', cat: 'pay' })); S.cr = { pay: -150, debt: -40, age: 130, asset: 200, mix: 120 }; S.crStreak = 12; S.crWeeks = 24; S.rentPaid = 24; S.addr = 1;
       S.market.px.hantang = 3894.4; S.market.ht = { phase: 'pump', left: 2, real: true }; S.market.gm = Object.assign({}, S.market.gm, { phase: 'hype', left: 2 });
     } else {
       S.tier = 8; S.lease = 'own'; S.deposit = 0; S.cash = 98765432100; S.day = 153; S.arrears = 0; S.know = 20; S.credit = 915; S.cl = 2450000000; S.biz = 5; S.homeVal = 6800000000;
@@ -66,13 +68,19 @@ fs.mkdirSync(out, { recursive: true });
       S.loan = { balance: 2160000000, orig: 2700000000, day: 150, rate: 0.0288 };
       S.props = {}; for (const p of R.PROPS) S.props[p.id] = { cost: 1234567000, day: 100, vacant: p.id === 'office' ? 2 : 0 };
       S.items = {}; for (const it of R.ITEMS) S.items[it.id] = 1; S.wear = 'gold'; S.ate = 0;
-      for (const id of ['daejang', 'bank']) S.hold[id] = { units: 99999, cost: 99999 * S.market.px[id], min: 99999 };
+      for (const a of R.ASSETS) if (a.kind === 'stock') S.hold[a.id] = { units: 99999, cost: 99999 * S.market.px[a.id] * 1.31, min: 99999 }; // 2026-11-21: 종목 열넷을 전부 (장 보기 · 내 보유의 세 줄 칸)
+      S.lev = { dir: -1, lev: 3, put: 2400000000, margin: 2400000000, entry: S.market.px.doge, day: S.day, id: 'doge' };
+      S.market.news = ['buldak', 'daejang', 'coin', 'battery', 'bank', 'build', 'air', 'energy', 'insure', 'defense', 'doge'].map((asset, i) => ({ id: 930 + i, day: S.day, asset, dir: i % 2 ? 1 : -1, src: ['official', 'article', 'rumor'][i % 3], truth: true, mag: 0.1, pre: 0.03, head: (R.ASSETS.find(a => a.id === asset) || {}).name + ', 하루 만에 사상 최대 규모 계약 체결설' })); // 소식이 가장 많은 날 (열한 건)
+      S.market.world = [{ id: 9703, type: 'ease', day: S.day, days: 1, warn: false, truth: true, done: 1 }, { id: 9704, type: 'holiday', day: S.day + 1, days: 2, warn: true, truth: true, told: 1, pre: 1 }];
+      S.crLog = [7, 14, 21, 28, 35, 42, 49].map((d, i) => ({ day: 100 + d, n: i % 3 === 2 ? -150 : 15, why: i % 3 === 2 ? '통장을 한도 가까이 씀' : '정산을 12번 연속 제때 냄', cat: 'pay' })); S.cr = { pay: 300, debt: -40, age: 130, asset: 225, mix: 290 }; S.crStreak = 12; S.crWeeks = 24; S.rentPaid = 24; S.addr = 1; S.title = '재계 인사';
+      S.inten = {}; for (const j of R.JOBS) S.inten[j.id] = 3; for (const id in S.jobs) S.jobs[id] = 99;
     }
     g.render();
   };
   const VIEWS = [['A', 'stock', g => { g.run('tab', 'stock'); g.run('sview', 'market'); }], ['A', 'stock-detail', g => { g.run('tab', 'stock'); g.run('sel', 'hantang'); g.run('qty', 'max'); }], ['A', 'stock-mine', g => { g.run('tab', 'stock'); g.run('sview', 'mine'); }],
     ['A', 'info', g => g.run('tab', 'info')], ['A', 'coin', g => g.run('tab', 'coin')], ['A', 'coin-open', g => { g.run('tab', 'coin'); if (!g.state.raw.lev) { g.run('lev', '5'); g.run('share', '1'); g.step(40, false); g.run('long'); g.step(40, false); } g.run('tab', 'coin'); }],
     ['A', 'realty', g => g.run('tab', 'realty')], ['A', 'bank', g => { g.run('tab', 'bank'); g.run('bamt', 'room'); }], ['A', 'shop', g => g.run('tab', 'shop')], ['A', 'road', g => g.run('tab', 'road')],
+    ['B', 'B-stock', g => { g.run('tab', 'stock'); g.run('sview', 'market'); }], ['B', 'B-info', g => g.run('tab', 'info')], ['B', 'B-coin', g => g.run('tab', 'coin')], ['B', 'B-jobs-old', g => { g.run('tab', 'road'); g.run('jpage', '-1'); g.run('jpage', '-1'); }],
     ['B', 'B-realty', g => g.run('tab', 'realty')], ['B', 'B-bank', g => { g.run('tab', 'bank'); g.run('bamt', 'room'); }], ['B', 'B-shop', g => g.run('tab', 'shop')], ['B', 'B-stock-mine', g => { g.run('tab', 'stock'); g.run('sview', 'mine'); }], ['B', 'B-stock-detail', g => { g.run('tab', 'stock'); g.run('sel', 'daejang'); g.run('qty', 'max'); }], ['B', 'B-road', g => g.run('tab', 'road')]];
   const cuts = {};
   for (const [which, name, open] of VIEWS) {
@@ -85,6 +93,27 @@ fs.mkdirSync(out, { recursive: true });
     report[name] = r.bad; if (r.cut.length) cuts[name] = r.cut;
   }
   report.views = VIEWS.length === Object.keys(report).length ? [] : ['본 화면 수가 다름'];
+  const WIN = () => {
+    const w = document.querySelector('#veil .win'), bad = [];
+    if (!w) return ['창이 안 뜸'];
+    const r = w.getBoundingClientRect(), st = document.getElementById('stage').getBoundingClientRect(), lab = e => ((e.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 22) || e.className || e.tagName);
+    if (r.top < st.top - 0.5 || r.bottom > st.bottom + 0.5 || r.left < st.left - 0.5 || r.right > st.right + 0.5) bad.push('창이 화면 밖: ' + [r.left, r.top, r.right, r.bottom].map(Math.round).join(','));
+    for (const e of w.querySelectorAll('*')) {
+      const q = e.getBoundingClientRect(), cs = getComputedStyle(e); if (!q.width || !q.height || cs.position === 'absolute') continue;
+      if (q.right > r.right + 0.5 || q.bottom > r.bottom + 0.5 || q.left < r.left - 0.5) { bad.push('창 밖: ' + lab(e)); break; }
+      if ((e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1) && (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') && !(cs.textOverflow === 'ellipsis' && e.scrollHeight <= e.clientHeight + 1)) bad.push('잘림: ' + lab(e));
+    }
+    return [...new Set(bad)];
+  };
+  const wins = [['A', 'win-credit-A', g => g.run('credit')], ['B', 'win-credit-B', g => g.run('credit')], ['B', 'win-study', g => g.run('study')], ['B', 'win-achs', g => g.run('achs')],
+    ['B', 'win-world', g => { const S = g.state.raw, R = window.Rules; S.ev.push({ t: 'world', type: 'quake', name: '부동산 규제 완화', icon: 'quake', kind: '재난', head: '중앙은행이 기준금리를 올렸습니다 그리고 새벽에 지진이 났습니다', sum: '편의점 · 카페 일당 −15% · 배달 +20% · 고시원 아래는 밤 회복 −5', days: 3, moved: R.ASSETS.map(a => ({ id: a.id, name: a.name, pct: -0.155 })), re: -0.0296, hp: -6, cost: 987654321000, owe: 123456789000, warn: false }); g.run('wear', S.wear); }]];
+  for (const [which, name, open] of wins) {
+    await page.evaluate(([w, fn]) => { const g = window.game; for (let i = 0; i < 6 && g.state.modal; i++) { g.press('Space'); g.step(40); } (0, eval)('(' + w + ')')(fn.which); g.state.raw.slot = 1; g.render(); (0, eval)('(' + fn.open + ')')(g); }, [WORST.toString(), { which, open: open.toString() }]);
+    await step(40); await page.screenshot({ path: path.join(out, name + '.png') });
+    report[name] = await page.evaluate('(' + WIN.toString() + ')()');
+    if (name === 'win-credit-B') { const t = await page.evaluate(() => (document.querySelector('#veil .win') || {}).textContent || ''); for (const k of ['신용 보고서', '상환 이력', '부채 수준', '거래 기간', '소득과 자산', '계약과 소비', '등급표', '최근 변동', '최우량', '대출 불가']) if (t.indexOf(k) < 0) report[name].push('신용 보고서에 "' + k + '"가 없음'); }
+    await page.evaluate(() => { const g = window.game; for (let i = 0; i < 6 && g.state.modal; i++) { g.press('Space'); g.step(40); } });
+  }
   // 도장: 든 종목이 한 칸에 크게 움직이면 찍힌다. 효과 줄이기를 켜면 폭죽 · 도장이 없다
   const page2 = await fresh();
   const fxr = await page2.evaluate(() => {
@@ -172,7 +201,7 @@ fs.mkdirSync(out, { recursive: true });
     const g = window.game, S = g.state.raw; let shakes = 0; const el = document.getElementById('s-play'), add = el.classList.add.bind(el.classList); el.classList.add = (...c) => { if (c.includes('shake')) shakes++; return add(...c); };
     Object.assign(S, { tier: 3, cash: 9000000, day: 23, movedDay: 22, slot: 0, hp: 50, offer: null, picks: 0, event: null, xp: 0, quest: 99 }); g.meta.seen.coin = 1;
     g.render(); g.run('tab', 'coin'); g.run('lev', '5'); g.run('share', '0.5'); g.run('long'); g.step(40);
-    S.market.shocks.push({ id: 9100, day: S.day, slot: S.slot, asset: 'coin', pct: -0.25, head: '달나라코인 거래소 해킹' }); g.run('rest');
+    S.market.shocks.push({ id: 9100, day: S.day, slot: S.slot, asset: 'coin', pct: -0.4, head: '달나라코인 거래소 해킹' }); g.run('rest'); // −40%: 그 칸의 평소 출렁임이 어느 쪽이든 5배 롱은 청산된다
     const seen = []; for (let i = 0; i < 6 && g.state.modal; i++) { seen.push(g.state.modal); g.step(40); g.press(g.state.modal === 'perk' ? 'Digit1' : 'Space'); g.step(40); }
     return { seen, shakes };
   });
@@ -190,7 +219,7 @@ fs.mkdirSync(out, { recursive: true });
     const pg = await fresh();
     const seen = await pg.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 3, lease: 'rent', deposit: 2000000, cash: 9000000, day: 23, movedDay: 22, slot: 0, hp: 50, offer: null, picks: 0, event: null, xp: 0, quest: 99 }); g.meta.seen.coin = 1;
       g.render(); g.run('tab', 'coin'); g.run('lev', '5'); g.run('share', '0.5'); g.run('long'); g.step(40);
-      S.market.shocks.push({ id: 9300, day: S.day, slot: S.slot, asset: 'coin', pct: -0.25, head: '달나라코인 거래소 해킹' }); g.run('rest');
+      S.market.shocks.push({ id: 9300, day: S.day, slot: S.slot, asset: 'coin', pct: -0.4, head: '달나라코인 거래소 해킹' }); g.run('rest');
       const seen = []; for (let i = 0; i < 6 && g.state.modal && g.state.modal !== 'liq'; i++) { seen.push(g.state.modal); g.step(40); g.press(g.state.modal === 'perk' ? 'Digit1' : 'Space'); g.step(40); } seen.push(g.state.modal); return seen; });
     await pg.waitForTimeout(450); await pg.screenshot({ path: path.join(out, 'liq.png') }); await pg.close();
     if (seen[seen.length - 1] !== 'liq') (report.liqShot = report.liqShot || []).push('청산 창을 찍지 못함: ' + seen.join(' → ')); }
@@ -235,18 +264,19 @@ fs.mkdirSync(out, { recursive: true });
   const pl = await fresh(), lp = { bad: [] };
   const fit = sel => pl.evaluate(sel => [...document.querySelectorAll(sel)].map(b => { const r = b.getBoundingClientRect(), cs = getComputedStyle(b), bw = parseFloat(cs.borderLeftWidth), bb = parseFloat(cs.borderBottomWidth), kids = [...b.querySelectorAll('.nm, .st, .st > span, .skip, .ich, b, span:not(.lv):not(.key)')].filter(e => e.getBoundingClientRect().width && !e.closest('.lv, .tag'));
     return { t: b.textContent.trim().slice(0, 40), over: kids.filter(e => { const q = e.getBoundingClientRect(); return q.right > r.right - bw + 0.5 || q.left < r.left + bw - 0.5 || q.bottom > r.bottom - bb + 0.5; }).map(e => e.className || e.tagName) }; }), sel); // 글 · 버튼이 틀(테두리) 안쪽에 다 들어오는지
-  lp.want = await pl.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 8, biz: 5, hp: 100, slot: 0, quest: 99, offer: null, picks: 0, event: null, xp: 0, perks: { hustle: 3, workaholic: 1 }, inten: { flyer: 3, loading: 3, store: 3, delivery: 3 } }); for (const id in S.jobs) S.jobs[id] = 99; g.render(); return window.Rules.acts(S).filter(a => a.kind === 'job').map(a => window.Rules.num(a.levels[3].pay)); });
+  lp.want = await pl.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 8, biz: 5, hp: 100, slot: 2, quest: 99, offer: null, picks: 0, event: null, xp: 0, perks: { hustle: 3, workaholic: 1 }, inten: {} }); for (const j of window.Rules.JOBS) S.inten[j.id] = 3; for (const id in S.jobs) S.jobs[id] = 99; S.market.world = []; g.render(); return window.Rules.acts(S).filter(a => a.kind === 'job').slice(-4).map(a => window.Rules.num(a.levels[3].pay)); }); // 오늘 칸에 보이는 넷(새로 열린 일부터) · 저녁 칸이라 대리도 열려 있다
   await pl.evaluate(() => window.game.step(10)); await pl.screenshot({ path: path.join(out, 'long-pay-cards.png') });
   lp.cards = await fit('#today .card');
   lp.cardPays = await pl.evaluate(() => [...document.querySelectorAll('#today .card .pay')].map(e => e.textContent));
-  await pl.evaluate(() => { const g = window.game; g.run('job', 'delivery'); g.step(30); });
+  lp.wantIb = await pl.evaluate(() => window.Rules.num(window.Rules.acts(window.game.state.raw).find(a => a.id === 'advise').levels[3].pay)); // 가장 많이 주는 일(자문)의 최상
+  await pl.evaluate(() => { const g = window.game; g.run('job', 'advise'); g.step(30); });
   await pl.waitForTimeout(300); await pl.screenshot({ path: path.join(out, 'long-pay-pre.png') });
   lp.ib = await fit('#veil .ib'); lp.head = await fit('#veil .mg-head'); lp.line = await fit('#veil .mg-line');
   lp.ibPays = await pl.evaluate(() => [...document.querySelectorAll('#veil .ib .p')].map(e => e.textContent));
   if (Math.max(...lp.want.map(s => s.length)) < 13) lp.bad.push('점검이 10억 단위 일당을 못 만듦: ' + lp.want.join(' · '));
   { const short = lp.want.some(t => t.length > 11), v = t => Number(t.replace(/,/g, '')) / 1e8, eok = t => (v(t) >= 10 ? Math.floor(v(t)) : Math.floor(v(t) * 10) / 10) + '억'; // 하나라도 10억이 넘으면 알바 카드 전부 줄임 ("13억" · "7.2억")
     if (!short || lp.cardPays.some((t, i) => t !== eok(lp.want[i]))) lp.bad.push('카드의 일당이 최상의 일당이 아니거나, 한 줄에 줄임 표기와 긴 숫자가 섞임: ' + lp.cardPays.join(' · ') + ' ≠ ' + lp.want.join(' · ')); }
-  if (lp.ibPays[3] !== lp.want[3]) lp.bad.push('최상 버튼의 일당이 다름: ' + lp.ibPays[3] + ' ≠ ' + lp.want[3]);
+  if (lp.ibPays[3] !== lp.wantIb) lp.bad.push('최상 버튼의 일당이 다름: ' + lp.ibPays[3] + ' ≠ ' + lp.wantIb);
   for (const k of ['cards', 'ib', 'head', 'line']) for (const x of lp[k]) if (x.over.length) lp.bad.push('긴 일당에서 틀 밖으로 나감(' + k + ' · ' + x.over.join() + '): ' + x.t);
   await pl.close();
   if (lp.bad.length) report.longPay = lp.bad;

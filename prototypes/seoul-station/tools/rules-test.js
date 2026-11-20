@@ -14,6 +14,9 @@ C.event_p.value = 0; C.tip_p.value = 0; // 아래 확인들은 정확한 금액�
 const BASE = { job_per_day: 0, cond_good_pay: 0, cond_tired_cut: 0, re_sigma: 0, re_boom: 0, re_flat: 0, re_slump: 0, credit_start: 900, cl_rate_1: 0.025, gosiwon_dep: 0, oneroom_dep: 0,
   cl_limit_2: 0, cl_limit_3: 0, cl_limit_4: 0, cl_limit_5: 0, cl_limit_6: 0, cl_limit_7: 0, cl_limit_8: 0 };
 const REAL = {}; for (const k in BASE) { REAL[k] = C[k].value; C[k].value = BASE[k]; }
+// 2026-11-21 에 들어온 것(세상 사건 · 신용의 새 규칙 · 알바마다의 덤)도 그 앞의 확인들이 보는 금액을 흔들지 않게 꺼 두고, 맨 아래의 새 확인들이 now(…) 로 진짜 값을 켜서 본다
+const OFF = { world_p: 0, credit_streak: 0, credit_age: 0, credit_use_pen: 0, credit_spend: 0, job_cafe_am: 0, job_tutor_know: 0, job_lecture_suit: 0, job_tv_promo: 0, job_advise_grade: 0 };
+const NOW = {}; for (const k in OFF) { NOW[k] = C[k].value; C[k].value = OFF[k]; }
 const M = 10000; let n = 0;
 const withTune = (over, fn) => { const old = {}; for (const k in over) { old[k] = C[k].value; C[k].value = over[k]; } try { fn(); } finally { for (const k in old) C[k].value = old[k]; } };
 const ok = (name, fn) => { try { fn(); n++; console.log('통과', name); } catch (e) { console.log('실패', name, '\n   ', e.message); process.exitCode = 1; } };
@@ -378,11 +381,11 @@ ok('예전 저장(v1, 보증금 있던 때)을 불러오면 보증금을 현금�
   const s = R.create(9); s.cash = 100 * M; R.move(s, 1); R.move(s, 2); const o = JSON.parse(R.save(s));
   o.v = 1; o.deposit = 150 * M; o.cash = 20 * M; for (const k of ['den', 'evDay']) delete o[k]; delete o.market.shocks;
   const w1 = Math.round(o.cash + o.deposit);
-  const t = R.load(JSON.stringify(o)); assert.ok(t); assert.equal(t.v, 4); assert.equal(t.deposit, 0); assert.equal(t.cash, 20 * M + 150 * M);
+  const t = R.load(JSON.stringify(o)); assert.ok(t); assert.equal(t.v, 5); assert.equal(t.deposit, 0); assert.equal(t.cash, 20 * M + 150 * M);
   assert.equal(R.worth(t), w1); assert.equal(t.den, null); assert.deepEqual(t.evDay, {}); assert.deepEqual(t.market.shocks, []);
   assert.ok(t.ev.some(e => e.t === 'sys' && /보증금/.test(e.text)));
   R.doJob(t, 'flyer', 0.8); R.doRest(t); R.doRest(t); R.endDay(t); R.nextDay(t); assert.ok(Number.isFinite(R.worth(t)));
-  assert.equal(JSON.parse(R.save(t)).v, 4); assert.equal(R.load(JSON.stringify(Object.assign(o, { v: 5 }))), null);
+  assert.equal(JSON.parse(R.save(t)).v, 5); assert.equal(R.load(JSON.stringify(Object.assign(o, { v: 6 }))), null);
 });
 ok('속보: 같은 씨앗이면 같은 속보, 내가 뭘 하든 같다 (공부 리포트에는 안 나옴)', () => {
   withTune({ shock_p: 1, event_p: 1 }, () => {
@@ -513,11 +516,11 @@ ok('고정비 알림은 전날과 당일에만, week 는 "N주차 M일"', () => 
 });
 ok('보유 한눈에: 주식 3종 줄(안 가진 것도) + 코인 포지션 + 합계', () => {
   const s = R.create(3); s.tier = 3; s.cash = 1000 * M;
-  let h = R.holdings(s); assert.deepEqual(h.rows.map(r => r.id), ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'game', 'build']); assert.ok(h.rows.every(r => r.units === 0 && r.value === 0 && r.pct === 0)); assert.equal(h.lev, null); assert.deepEqual(h.total, { value: 0, cost: 0, pnl: 0, pct: 0 });
+  let h = R.holdings(s); assert.deepEqual(h.rows.map(r => r.id), ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'game', 'build', 'etf', 'gold']); assert.ok(h.rows.every(r => r.units === 0 && r.value === 0 && r.pct === 0)); assert.equal(h.lev, null); assert.deepEqual(h.total, { value: 0, cost: 0, pnl: 0, pct: 0 });
   R.buy(s, 'daejang', 100 * M); R.levOpen(s, 1, 50 * M, 2); s.market.px.daejang *= 1.2;
   h = R.holdings(s); const d = h.rows[0]; assert.deepEqual(Object.keys(d), ['id', 'name', 'tag', 'hint', 'units', 'px', 'value', 'cost', 'pnl', 'pct', 'max']);
   assert.equal(d.cost, 100 * M); assert.equal(d.value, Math.round(R.holdValue(s, 'daejang'))); assert.equal(d.pnl, d.value - d.cost); assert.ok(d.pct > 0.18);
-  assert.deepEqual(Object.keys(h.lev), ['dir', 'lev', 'put', 'value', 'pnl', 'pct']); assert.equal(h.lev.put, 50 * M); assert.equal(h.total.value, d.value + h.lev.value); assert.equal(h.total.cost, 150 * M);
+  assert.deepEqual(Object.keys(h.lev), ['dir', 'lev', 'put', 'value', 'pnl', 'pct', 'id', 'name']); assert.equal(h.lev.put, 50 * M); assert.equal(h.total.value, d.value + h.lev.value); assert.equal(h.total.cost, 150 * M);
 });
 ok('퀘스트 바로 가기는 move · stock · coin · house · biz · top 만 (사다리 없음), 글에 화면 위치 말이 없다', () => {
   const s = R.create(1); const gos = new Set();
@@ -587,7 +590,7 @@ ok('밤사이 갭: 아침 값 = 어제 마지막 값 × 먼저 들어간 몫, �
     }
     assert.ok(checked > 30);
   });
-  withTune({ news_priced: 0 }, () => { const s = R.create(3); s.tier = 3; while (s.slot < 3) R.doRest(s); R.endDay(s); const px = Object.assign({}, s.market.px); R.nextDay(s); assert.deepEqual(s.market.px, px); assert.ok(!s.ev.some(e => e.t === 'gap')); });
+  withTune({ news_priced: 0, news_priced_coin: 0 }, () => { const s = R.create(3); s.tier = 3; while (s.slot < 3) R.doRest(s); R.endDay(s); const px = Object.assign({}, s.market.px); R.nextDay(s); assert.deepEqual(s.market.px, px); assert.ok(!s.ev.some(e => e.t === 'gap')); });
 });
 ok('밤사이 갭의 delta = 밤 정산 순자산 → 아침 순자산 차이 (주식 · 코인 포지션)', () => {
   let seen = 0;
@@ -603,7 +606,7 @@ ok('밤사이 갭의 delta = 밤 정산 순자산 → 아침 순자산 차이 (�
 ok('밤사이 갭으로 청산될 수 있다 (강심장도 적용, delta 에 포함)', () => {
   for (const guts of [0, 1]) {
     const s = R.create(5); s.tier = 3; s.quest = 99; s.cash = 300 * M; if (guts) s.perks.guts = 1;
-    R.levOpen(s, 1, 100 * M, 5); while (s.slot < 3) R.doRest(s); R.endDay(s); const night = s.last.worthEnd;
+    R.levOpen(s, 1, 100 * M, 5); while (s.slot < 3) R.doRest(s); s.lev.entry = s.market.px.coin; R.endDay(s); const night = s.last.worthEnd; // 낮 동안 얼마나 움직였든 연 값에서 다시 잰다 (갭만으로 청산되는지 보려고)
     s.market.news.push({ id: 9999, day: s.day + 1, asset: 'coin', dir: -1, src: 'official', truth: true, mag: 0.4, pre: -0.35, head: '시험' });
     R.nextDay(s);
     const gap = s.ev.find(e => e.t === 'gap'); assert.equal(s.lev, null); assert.ok(s.ev.some(e => e.t === 'liq')); assert.equal(gap.liq, true);
@@ -826,10 +829,10 @@ ok('퀘스트: 내 집 → 가게 → 첫 상가 → 아파트 → 원리금 →
 });
 ok('저장 v3: 대출 · 사업 · 집이 저장되고, v2 저장(28일 판)은 기한 없이 그대로 이어 간다', () => {
   const s = home(1e10); climb(s, 5); R.bizUp(s); const t = R.load(R.save(s));
-  assert.equal(t.v, 4); assert.deepEqual(t.loan, s.loan); assert.equal(t.biz, s.biz); assert.equal(t.homeVal, s.homeVal); assert.deepEqual(t.act1, s.act1); assert.equal(R.worth(t), R.worth(s));
+  assert.equal(t.v, 5); assert.deepEqual(t.loan, s.loan); assert.equal(t.biz, s.biz); assert.equal(t.homeVal, s.homeVal); assert.deepEqual(t.act1, s.act1); assert.equal(R.worth(t), R.worth(s));
   const a = R.create(9); a.cash = 100 * M; R.move(a, 1); R.move(a, 2); while (a.day < 27) day(a); const o = JSON.parse(R.save(a));
   o.v = 2; for (const k of ['biz', 'loan', 'homeVal', 'act1']) delete o[k]; for (const k of ['foreclosed', 'loanPaid', 'loanDone', 'bizSpent']) delete o.stats[k];
-  const b = R.load(JSON.stringify(o)); assert.ok(b); assert.equal(b.v, 4); assert.equal(b.biz, 0); assert.equal(b.loan, null); assert.equal(b.homeVal, 0); assert.equal(b.stats.foreclosed, 0); assert.equal(R.worth(b), R.worth(a));
+  const b = R.load(JSON.stringify(o)); assert.ok(b); assert.equal(b.v, 5); assert.equal(b.biz, 0); assert.equal(b.loan, null); assert.equal(b.homeVal, 0); assert.equal(b.stats.foreclosed, 0); assert.equal(R.worth(b), R.worth(a));
   while (b.day < 32) day(b); assert.equal(b.ended, null); assert.ok(Number.isFinite(R.worth(b)));
   const e = JSON.parse(R.save(a)); e.v = 2; e.ended = { kind: 'home', day: 20, worth: 3e7, price: 3e7, rank: 'S' }; const c = R.load(JSON.stringify(e)); assert.equal(c.ended.kind, 'home'); assert.ok(/내 집 마련/.test(R.resultCard(c)));
 });
@@ -1168,7 +1171,8 @@ ok('강도: 저장의 강도 값이 엉뚱해도(7 · -1 · 1.5 · "2" · null) 
 });
 
 // ── 2026-11-19: 체력(컨디션 · 무리 · 쓰러짐 · 사 먹기) · 신용과 대출 · 전세 · 부동산 시세와 상가 · 종목과 수량 매매 · 공부 성장 · 가게 · 꿈 ──
-const real = fn => withTune(REAL, fn); // 진짜 설정 값으로
+const real = fn => withTune(REAL, fn); // 진짜 설정 값으로 (2026-11-19 까지의 것)
+const now = fn => withTune(Object.assign({}, REAL, NOW), fn); // 2026-11-21 의 것까지 전부 진짜 값으로
 ok('컨디션: 체력이 70% 이상이면 쌩쌩(일당 +), 25% 아래면 지침(일당 −) — 일을 시작할 때의 체력으로, 사업 자동 수입에는 안 붙는다', () => real(() => {
   const pay = hp => jobA(jobS(1, hp), 'store').pay, r1k = v => Math.round(v / 1000) * 1000;
   assert.equal(R.condOf(jobS(1, 70)), 'good'); assert.equal(R.condOf(jobS(1, 69)), 'ok'); assert.equal(R.condOf(jobS(1, 25)), 'ok'); assert.equal(R.condOf(jobS(1, 24)), 'tired');
@@ -1269,17 +1273,17 @@ ok('상가: 사면 값은 자산으로 남고 취득세 · 중개비만 쓴 돈,
   const c3 = s.cash, w3 = R.worth(s), fee = r1(r.price * T.prop_fee); assert.ok(R.sellProp(s, 'stall')); assert.equal(s.cash, c3 + r.price - fee); assert.equal(R.worth(s), w3 - fee); assert.equal(R.sellProp(s, 'stall'), false); assert.equal(s.stats.propGain, -fee);
   withTune({ prop_vacant_p: 1 }, () => { const t = home(1e9); R.buyProp(t, 'stall'); toSunday(t); R.endDay(t); assert.ok(t.props.stall.vacant >= 1 && t.props.stall.vacant <= 2); assert.ok(t.last.notes.some(n => /세입자가 나갔습니다/.test(n.text))); });
 })));
-ok('주식: 종목은 사는 곳을 따라 열리고(찜질방 셋 → 고시원 다섯 → 원룸 일곱), 수량으로 사고판다 (한 주 값 + 수수료)', () => real(() => {
+ok('주식: 종목은 사는 곳을 따라 열리고(찜질방 셋 → 고시원 여섯 → 원룸 아홉), 수량으로 사고판다 (한 주 값 + 수수료)', () => real(() => {
   const s = R.create(5); s.cash = 100 * M; assert.deepEqual(R.holdings(s).rows.map(r => r.id), []); assert.equal(R.buyUnits(s, 'daejang', 1), false);
   R.move(s, 1); assert.deepEqual(R.holdings(s).rows.map(r => r.id), ['daejang', 'bank', 'buldak']); assert.equal(R.buyUnits(s, 'hantang', 1), false, '아직 안 보이는 종목'); assert.equal(R.visible(s, 'hantang'), false);
   const px = s.market.px.daejang, max = R.maxUnits(s, 'daejang'), c = s.cash; assert.equal(max, Math.floor(c / (px * (1 + T.fee)))); assert.equal(R.holdings(s).rows[0].max, max);
   assert.equal(R.buyUnits(s, 'daejang', max + 1), false); assert.equal(R.buyUnits(s, 'daejang', 0), false); assert.equal(R.buyUnits(s, 'daejang', 1.9), true, '소수는 내림'); assert.equal(s.hold.daejang.units, 1);
   const cost = Math.round(px + Math.round(px * T.fee)); assert.equal(s.cash, c - cost); assert.equal(s.hold.daejang.cost, cost);
   assert.ok(R.buyUnits(s, 'daejang', 6)); assert.equal(s.hold.daejang.units, 7); assert.ok(R.sellUnits(s, 'daejang', 3)); assert.equal(s.hold.daejang.units, 4); assert.ok(R.sellUnits(s, 'daejang', 99)); assert.equal(s.hold.daejang.units, 0); assert.equal(R.sellUnits(s, 'daejang', 1), false);
-  s.cash = 100 * M; R.move(s, 2); assert.deepEqual(R.holdings(s).rows.map(r => r.id), ['daejang', 'bank', 'buldak', 'battery', 'hantang']);
-  s.cash = 1000 * M; R.move(s, 3); assert.deepEqual(R.holdings(s).rows.map(r => r.id), ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'game', 'build']);
+  s.cash = 100 * M; R.move(s, 2); assert.deepEqual(R.holdings(s).rows.map(r => r.id), ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'etf']);
+  s.cash = 1000 * M; R.move(s, 3); assert.deepEqual(R.holdings(s).rows.map(r => r.id), ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'game', 'build', 'etf', 'gold']);
   for (let d = 0; d < 10; d++) { const t = R.create(40 + d); t.tier = 1; day(t); assert.ok(R.todayNews(t).every(n => n.asset === 'coin' || R.visible(t, n.asset)), '안 보이는 종목의 소식은 안 뜬다'); }
-  assert.equal(R.ASSETS.length, 8); assert.ok(R.SHOCKS.some(k => k.asset === 'battery') && R.SHOCKS.some(k => k.asset === 'game'));
+  assert.equal(R.ASSETS.length, 16); assert.ok(R.SHOCKS.some(k => k.asset === 'battery') && R.SHOCKS.some(k => k.asset === 'game'));
 }));
 ok('배당: 튼튼은행은 일요일 밤, 지난 정산 뒤로 내내 들고 있던 만큼만 준다 (일요일에 사서 받고 파는 길은 없다)', () => real(() => {
   const s = R.create(5); s.quest = 99; s.cash = 5000 * M; R.move(s, 1); R.move(s, 2);
@@ -1319,7 +1323,7 @@ ok('공부 = 성장: 공부한 횟수가 쌓여 단계가 오른다 — 정확�
   s.know = 0; assert.equal(R.propView(s).forecast, null); s.know = T.know_n4; const f = R.propView(s).forecast; assert.ok(f && Math.abs(f.dir) === 1 && f.acc === R.studyAcc(s));
   let right = 0, n = 0; for (let seed = 1; seed <= 300; seed++) { const t = R.create(seed); t.know = T.know_n6; const fc = R.propView(t).forecast; n++; if ((fc.dir > 0) === (t.re.next >= 0)) right++; }
   assert.ok(right / n > 0.6 && right / n < 0.77, '전망이 맞은 몫 ' + (right / n).toFixed(2));
-  const a = R.create(9); a.tier = 3; a.know = T.know_n5; a.quest = 99; let warned = 0; // 속보 경보: 속보가 있는 날 아침에 종목 이름만
+  const a = R.create(9); a.tier = 3; a.stats.maxTier = 3; a.know = T.know_n5; a.quest = 99; let warned = 0; // 속보 경보: 속보가 있는 날 아침에 종목 이름만 (돈이 없어 쫓겨나도 종목은 계속 보인다)
   for (let d = 0; d < 60; d++) { a.ev.length = 0; day(a); a.event = null; a.offer = null; const sh = a.market.shocks.filter(k => k.day === a.day && R.visible(a, k.asset)), al = a.ev.filter(x => x.t === 'alert'); assert.equal(al.length, sh.length); warned += al.length; }
   assert.ok(warned > 0); const b0 = R.create(9); b0.tier = 3; b0.quest = 99; for (let d = 0; d < 20; d++) { b0.ev.length = 0; day(b0); assert.ok(!b0.ev.some(x => x.t === 'alert'), '5단계 전에는 경보가 없다'); b0.event = null; b0.offer = null; }
 }));
@@ -1351,11 +1355,11 @@ ok('꿈: 판을 시작할 때 한 번 고르고, 장면은 차례로 한 번씩 
 }));
 ok('저장 v4: 새 칸(신용 · 계약 · 보증금 · 상가 · 공부 · 물건 · 꿈)이 저장되고, v3 저장을 불러오면 살던 곳 그대로 새 칸이 채워져 이어 갈 수 있다', () => real(() => {
   const s = home(1e9); R.setDream(s, 'sign'); R.move(s, 3, 'jeonse'); R.buyProp(s, 'stall'); R.buyItem(s, 'vest'); assert.ok(R.borrow(s, 10 * M)); s.know = 7;
-  const t = R.load(R.save(s)); assert.equal(t.v, 4); for (const k of ['credit', 'cl', 'lease', 'deposit', 'know', 'wear', 'dream']) assert.deepEqual(t[k], s[k], k); assert.deepEqual(t.props, s.props); assert.deepEqual(t.items, s.items); assert.deepEqual(t.re, s.re); assert.equal(R.worth(t), R.worth(s));
+  const t = R.load(R.save(s)); assert.equal(t.v, 5); for (const k of ['credit', 'cl', 'lease', 'deposit', 'know', 'wear', 'dream']) assert.deepEqual(t[k], s[k], k); assert.deepEqual(t.props, s.props); assert.deepEqual(t.items, s.items); assert.deepEqual(t.re, s.re); assert.equal(R.worth(t), R.worth(s));
   const o = JSON.parse(R.save(home(5e7))); o.v = 3; o.tier = 4; o.homeVal = 15000000; o.rentPaid = 3; o.studied = 6; o.loan = { balance: 1e6, orig: 6e6, day: 1 };
   for (const k of ['credit', 'cl', 'addr', 'lease', 're', 'props', 'know', 'items', 'wear', 'look', 'ate', 'sick', 'hosp', 'dream', 'dreamSet', 'beats']) delete o[k]; delete o.market.gm;
   for (const id of ['bank', 'battery', 'game', 'build']) { delete o.market.px[id]; delete o.market.hist[id]; delete o.market.chg[id]; delete o.hold[id]; }
-  const b = R.load(JSON.stringify(o)); assert.ok(b); assert.equal(b.v, 4); assert.equal(b.lease, 'own'); assert.equal(b.credit, T.credit_start + T.credit_addr + 3 * T.credit_ontime + T.credit_home); assert.equal(b.know, 6); assert.equal(b.dream, 'family'); assert.equal(b.loan.rate, T.loan_rate);
+  const b = R.load(JSON.stringify(o)); assert.ok(b); assert.equal(b.v, 5); assert.equal(b.lease, 'own'); assert.equal(b.credit, T.credit_start + T.credit_addr + 3 * T.credit_ontime + T.credit_home); assert.equal(b.know, 6); assert.equal(b.dream, 'family'); assert.equal(b.loan.rate, T.loan_rate);
   assert.equal(b.market.px.bank, R.ASSETS.find(a => a.id === 'bank').px); assert.ok(b.market.hist.game.length >= 4); assert.equal(b.re.idx, 1);
   b.quest = 99; for (let d = 0; d < 15; d++) { day(b, x => R.doJob(x, 'store', 0.8) || R.doRest(x)); while (b.offer) R.pickPerk(b, safePerk(b)); if (b.event) R.choose(b, 'b'); }
   assert.ok(Number.isFinite(R.worth(b))); b.cash = 1e7; assert.ok(R.buyUnits(b, 'bank', 1));
@@ -1372,7 +1376,7 @@ ok('보증금이 있는 셋집에서 쫓겨나면: 보증금을 돌려받아 밀
 ok('사건: 헬스장은 최대 체력을 올리고, 세입자의 부탁은 세 든 상가가 있을 때만 온다', () => {
   const s = R.create(1); s.tier = 2; s.cash = 100 * M; s.event = 'gym'; const mx = R.hpMax(s); R.choose(s, 'a'); assert.equal(R.hpMax(s), mx + 5);
   const e = R.EVENTS.find(x => x.id === 'tenant'), t = home(1e9); assert.equal(e.when(t), false); R.buyProp(t, 'stall'); assert.ok(e.when(t)); t.props.stall.vacant = 1; assert.equal(e.when(t), false);
-  assert.equal(R.EVENTS.length, 22);
+  assert.equal(R.EVENTS.length, 35);
 });
 ok('버튼에 적는 금액(quote) = 실제로 오가는 돈: 사기 · 팔기 모두 1원도 다르지 않다 (반올림 · 수수료 · 주식 외길의 덤)', () => real(() => {
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
@@ -1447,4 +1451,258 @@ ok('배당: 찜질방에서도(정산이 없어도) 일요일 밤마다 나오�
   assert.equal(t.hold.bank.units, 0); assert.equal(t.hold.bank.min, 0, '쫓겨나며 다 팔렸으면 배당 기준도 0'); R.nextDay(t);
   toSunday(t); t.cash = 500 * M; R.buyUnits(t, 'bank', 100); const d0 = t.stats.div || 0; R.endDay(t); assert.equal(t.stats.div || 0, d0, '일요일 낮에 다시 사도 그 밤 배당은 없다');
 }));
+// ── 2026-11-21: 알바 열 가지 · 세상 사건 · 종목 열여섯 · 신용 보고서 · 돌발 사건 서른다섯 (진짜 값으로) ──
+const r1k = v => Math.round(v / 1000) * 1000;
+const at = (tier, seed) => { const s = R.create(seed || 3); s.quest = 99; s.tier = tier; s.stats.maxTier = tier; s.movedDay = 1; s.lease = tier >= 4 ? 'own' : tier >= 2 ? 'rent' : ''; s.addr = tier >= 2 ? 1 : 0; s.cash = 1e12; s.hp = 50; return s; }; // 그 단계에 사는 판 (체력 50 = 컨디션 보통)
+const strike = (s, type, days) => { s.market.world = [{ id: 1, type, day: s.day, days: days || 1, warn: false, truth: true, done: 1 }]; return s; }; // 오늘 그 세상 사건이 닥쳐 있는 판
+const job = (s, id) => R.acts(s).find(a => a.id === id);
+const quiet = { news_p_buldak: 0, news_p_daejang: 0, news_p_coin: 0, news_p_battery: 0, news_p_bank: 0, news_p_build: 0, news_p_air: 0, news_p_energy: 0, news_p_insure: 0, news_p_defense: 0, news_p_doge: 0, shock_p: 0 }; // 소식 · 속보 없이 (세상 사건의 움직임만 보려고)
+ok('알바 열 가지: 집을 한 단계 올릴 때마다 새 일이 하나씩 열리고(원룸 카페 → 호텔 자문), 일마다 일당 · 체력 값이 있다', () => now(() => {
+  assert.deepEqual(R.JOBS.map(j => j.id), ['flyer', 'loading', 'store', 'delivery', 'cafe', 'tutor', 'driver', 'lecture', 'tv', 'advise']);
+  assert.deepEqual(R.JOBS.map(j => j.tier), [0, 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  for (let t = 0; t <= 8; t++) { const s = at(t), ids = R.acts(s).filter(a => a.kind === 'job').map(a => a.id); assert.deepEqual(ids, R.JOBS.filter(j => j.tier <= t).map(j => j.id), '단계 ' + t); assert.equal(ids.length, [2, 3, 4, 5, 6, 7, 8, 9, 10][t]); }
+  for (const j of R.JOBS) { assert.ok(T['pay_' + j.id] > 0 && T['hp_' + j.id] > 0, j.id); if (j.tier >= 1) assert.ok(R.HOMES[j.tier].unlock.indexOf(j.name) >= 0, R.HOMES[j.tier].name + ' 의 "열리는 것"에 ' + j.name); }
+  const pays = R.JOBS.filter(j => j.tier >= 3).map(j => T['pay_' + j.id]); assert.deepEqual(pays, pays.slice().sort((a, b) => a - b), '카페부터는 위 단계의 일이 더 많이 준다'); assert.ok(T.pay_advise > T.pay_delivery && T.pay_cafe < T.pay_delivery, '카페는 배달보다 덜 주고 가볍다'); assert.ok(T.hp_cafe < T.hp_delivery);
+  const s = at(8); for (const j of R.JOBS) { const a = job(s, j.id); assert.equal(a.levels.length, 4); assert.equal(a.tier, j.tier); assert.ok(a.note); } // 강도 넷은 모든 일에
+}));
+ok('알바마다의 성격: 카페는 오전 +15% · 과외는 공부 단계마다 +3% · 대리는 저녁 칸에만 · 강연은 정장 +10% · 자문은 신용등급만큼', () => now(() => {
+  const s = at(8); s.credit = 350; // 7등급 · 공부 1단계 · 후드티
+  assert.equal(job(s, 'cafe').pay, r1k(T.pay_cafe * (1 + T.job_cafe_am))); assert.ok(/오전/.test(job(s, 'cafe').mod.plus)); s.slot = 1; assert.equal(job(s, 'cafe').pay, T.pay_cafe); assert.equal(job(s, 'cafe').mod.plus, '');
+  assert.equal(job(s, 'tutor').pay, T.pay_tutor); s.know = T.know_n6; assert.equal(job(s, 'tutor').pay, r1k(T.pay_tutor * (1 + T.job_tutor_know * 5))); s.know = 0;
+  assert.equal(job(s, 'lecture').pay, T.pay_lecture); s.items.suit = 1; s.wear = 'suit'; assert.equal(job(s, 'lecture').pay, r1k(T.pay_lecture * (1 + T.job_lecture_suit))); s.wear = '';
+  assert.equal(job(s, 'advise').pay, T.pay_advise); s.credit = 900; assert.equal(job(s, 'advise').pay, r1k(T.pay_advise * (1 + T.job_advise_grade * 6))); s.credit = 650; assert.equal(job(s, 'advise').pay, r1k(T.pay_advise * (1 + T.job_advise_grade * 3)));
+  s.slot = 0; let d = job(s, 'driver'); assert.equal(d.ok, false); assert.equal(d.banned, true); assert.ok(/저녁/.test(d.why)); assert.equal(d.any, false); assert.equal(d.push, false); assert.equal(R.doJob(s, 'driver', 0.8), false, '오전에는 못 한다'); assert.equal(R.doJob(s, 'driver', null), false);
+  s.slot = 2; d = job(s, 'driver'); assert.ok(d.ok && !d.banned); const c = s.cash; assert.ok(R.doJob(s, 'driver', 0.8)); assert.equal(s.cash, c + r1k(T.pay_driver * T.mult_good)); assert.equal(s.hp, 50 - T.hp_driver);
+  assert.equal(job(at(8), 'cafe').pay0, T.pay_cafe, 'pay0(사업 자동 수입의 기준)에는 그날의 덤이 안 붙는다');
+}));
+ok('방송: 잘함 이상이면 다음 날 하루 사업 매출 +10% (그다음 날에는 없다), 새 일도 같은 알바는 하루 한 번 · 강도 · 숙련', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
+  const s = at(7); s.biz = 3; const a0 = R.acts(s).find(a => a.kind === 'rest').auto; assert.ok(a0 > 0);
+  assert.ok(R.doJob(s, 'tv', 0.8)); assert.equal(s.buff.promo, s.day + 1); assert.equal(R.acts(s).find(a => a.kind === 'rest').auto, a0, '오늘은 그대로');
+  assert.equal(job(s, 'tv').closed, true); assert.equal(R.doJob(s, 'tv', 0.8), false, '같은 알바는 하루 한 번');
+  s.ev.length = 0; day(s); assert.equal(R.acts(s).find(a => a.kind === 'rest').auto, r1k(a0 * (1 + T.job_tv_promo)), '다음 날 +10%'); assert.equal(s.ev.filter(e => e.t === 'promo').length, 1, '그날 아침에 한 번 알린다');
+  s.ev.length = 0; day(s); assert.equal(R.acts(s).find(a => a.kind === 'rest').auto, a0, '그다음 날은 그대로'); assert.equal(s.ev.filter(e => e.t === 'promo').length, 0);
+  const t = at(7); t.biz = 3; R.doJob(t, 'tv', 0.5); assert.equal(t.buff.promo, undefined, '보통이면 없다');
+  const nb = at(7); nb.biz = 0; assert.ok(R.doJob(nb, 'tv', 0.8)); nb.ev.length = 0; day(nb); assert.equal(nb.ev.filter(e => e.t === 'promo').length, 0, '사업이 없으면 알릴 것도 없다');
+  const u = at(3); u.slot = 1; const c = u.cash; assert.ok(R.doJob(u, 'cafe', 0.8, 2)); assert.equal(u.cash, c + r1k(T.pay_cafe * T.mult_good * T.int_pay_2)); assert.equal(u.hp, 50 - Math.round(T.hp_cafe * T.int_hp_2)); assert.equal(u.jobs.cafe, 1); assert.equal(u.ever.cafe, 1);
+  u.jobs.cafe = T.skill_n1; assert.equal(R.skill(u, 'cafe'), 1);
+})));
+ok('세상 사건: world_from 전에는 없고, 닷새에 한 번꼴, 겹치지 않고, 같은 판 코드면 내가 뭘 하든 같은 날 같은 일이 난다', () => now(() => withTune({ event_p: 0 }, () => {
+  const log = (seed, busy) => { const s = at(3, seed), out = []; for (let d = 0; d < 70; d++) { day(s, x => (busy ? R.doJob(x, 'cafe', 0.8) || R.doJob(x, 'store', 0.8) || R.doRest(x) : R.doRest(x))); s.offer = null; s.picks = 0; for (const e of s.ev) if (e.t === 'world') out.push(s.day + ':' + e.type + ':' + (e.miss ? 'x' : 'o')); s.ev.length = 0; if (busy && s.day % 3 === 0) R.buy(s, 'daejang', 100 * M); } return out; };
+  let total = 0;
+  for (const seed of [11, 12, 13, 14, 15, 16]) { const a = log(seed, false), b = log(seed, true); assert.deepEqual(a, b, '씨앗 ' + seed); total += a.length; assert.ok(a.every(x => Number(x.split(':')[0]) >= T.world_from)); }
+  assert.ok(total / 6 >= 7 && total / 6 <= 16, '70일에 ' + (total / 6).toFixed(1) + '번');
+  const s = at(3, 21); for (let d = 0; d < 120; d++) { day(s); s.offer = null; s.picks = 0; const w = s.market.world.filter(x => x.day <= s.day && x.day + x.days - 1 >= s.day); assert.ok(w.length <= 1, '한 번에 하나'); }
+  withTune({ world_p: 0 }, () => { const t = at(3, 11); for (let d = 0; d < 30; d++) day(t); assert.equal(t.market.world.length, 0); assert.equal(R.worldView(t).now, null); });
+})));
+ok('계절은 14일마다 돌고(가을 → 겨울 → 봄 → 여름), 날씨는 제철에만 온다. 예보는 전날 아침에 뜨고 열에 일곱 번쯤 맞는다', () => now(() => withTune({ event_p: 0 }, () => {
+  assert.deepEqual([1, 14, 15, 28, 29, 43, 57].map(d => R.SEASONS[R.seasonOf(d)]), ['가을', '가을', '겨울', '겨울', '봄', '여름', '가을']);
+  let warn = 0, hit = 0, told = 0, kinds = new Set();
+  for (let seed = 1; seed <= 60; seed++) {
+    const s = at(3, seed); let nextDay = null;
+    for (let d = 0; d < 60; d++) {
+      day(s); s.offer = null; s.picks = 0;
+      const f = s.ev.find(e => e.t === 'forecast'), w = s.ev.find(e => e.t === 'world');
+      if (w) { const def = R.WORLD.find(x => x.id === w.type); kinds.add(w.type); if (def.season) assert.ok(def.season.indexOf(R.seasonOf(s.day)) >= 0, w.type + ' 이 ' + R.SEASONS[R.seasonOf(s.day)] + '에'); if (def.warn) { assert.equal(nextDay, s.day, '예보가 전날에 떴어야'); if (!def.sure) { warn++; if (!w.miss) hit++; } } else assert.ok(!w.miss); }
+      if (f) { told++; nextDay = s.day + 1; assert.ok(f.name && f.sum && f.acc > 0); assert.equal(R.worldView(s).next.type, f.type); }
+      s.ev.length = 0;
+    }
+  }
+  assert.ok(told > 100 && warn > 100, '예보 ' + told); assert.ok(hit / warn > 0.6 && hit / warn < 0.8, '예보가 맞은 몫 ' + (hit / warn).toFixed(2));
+  assert.equal(R.WORLD.length, 20); assert.ok(kinds.size >= 16, '나온 사건 ' + kinds.size + '가지');
+  assert.deepEqual(['날씨', '재난', '경제'].map(k => R.WORLD.filter(w => w.kind === k).length), [7, 4, 9]);
+  assert.ok(R.WORLD.every(w => !!w.warn === (w.kind === '날씨')), '날씨만 예보가 있다');
+})));
+ok('세상 사건의 시세: 닥친 아침 값에 바로 들어가고(주식 전체 · 업종마다), 다담아ETF 는 담은 열 종목(작전주 한탕바이오는 뺌)의 평균 · 거꾸로ETF 는 그 반대로 간다', () => now(() => withTune(Object.assign({ event_p: 0, world_p: 0 }, quiet), () => {
+  const s = at(8, 5); day(s); s.market.world = [{ id: 1, type: 'crash', day: s.day + 1, days: 1, warn: false, truth: true }];
+  while (s.slot < 3) R.doRest(s); R.endDay(s); const px = Object.assign({}, s.market.px); s.ev.length = 0; R.nextDay(s);
+  const g = id => s.market.px[id] / px[id] - 1, close = (a, b) => Math.abs(a - b) < 1e-9;
+  for (const id of ['daejang', 'bank', 'buldak', 'battery', 'hantang', 'game', 'build', 'insure', 'air', 'energy', 'defense']) assert.ok(close(g(id), -0.08), id + ' ' + g(id));
+  assert.ok(close(g('etf'), -0.08)); assert.ok(close(g('inv'), 1 / 0.92 - 1), '거꾸로ETF 는 오른다'); assert.ok(close(g('gold'), 0.06)); assert.ok(close(g('coin'), -0.1)); assert.ok(close(g('doge'), -0.14));
+  const e = s.ev.find(x => x.t === 'world'); assert.ok(e && e.type === 'crash' && !e.miss && e.moved.length >= 10 && e.head); assert.equal(R.worldView(s).now.type, 'crash'); assert.equal(s.stats.world, 1);
+  const gap = s.ev.find(x => x.t === 'gap'); assert.ok(gap && close(gap.pct.etf, -0.08));
+  const t = at(8, 6); for (let i = 0; i < 12; i++) { R.doRest(t); const c = t.market.chg, mean = ['daejang', 'bank', 'buldak', 'battery', 'game', 'build', 'insure', 'air', 'energy', 'defense'].reduce((v, id) => v + c[id], 0) / 10; assert.ok(close(c.etf, mean)); assert.ok(close(c.inv, -mean - T.iv_fee)); if (t.slot >= 3) { R.endDay(t); R.nextDay(t); } }
+})));
+ok('날씨 예보는 뜬 아침에 값에 먼저 들어가고, 빗나가면 되돌아간다 — 예보를 보고 사서는 남지 않는다', () => now(() => withTune(Object.assign({ event_p: 0, world_p: 0 }, quiet), () => {
+  const run = (truth, seed) => { const s = at(8, seed); day(s); s.market.world = [{ id: 1, type: 'cold', day: s.day + 2, days: 2, warn: true, truth }]; while (s.slot < 3) R.doRest(s); R.endDay(s); const p0 = s.market.px.energy; R.nextDay(s); const p1 = s.market.px.energy; return { s, pre: Math.log(p1 / p0) }; };
+  const full = Math.log(1.08), want = T.world_priced * T.world_acc * full;
+  const a = run(true, 5); assert.ok(Math.abs(a.pre - want) < 1e-9, '예보가 뜬 아침: 기대 움직임의 ' + T.world_priced); assert.ok(a.s.ev.some(e => e.t === 'forecast' && e.type === 'cold')); assert.equal(R.worldView(a.s).next.type, 'cold'); assert.equal(R.worldView(a.s).now, null);
+  let s = a.s; while (s.slot < 3) R.doRest(s); R.endDay(s); let p = s.market.px.energy; R.nextDay(s); assert.ok(Math.abs(Math.log(s.market.px.energy / p) - (full - want)) < 1e-9, '닥친 아침: 나머지'); assert.equal(R.worldView(s).now.type, 'cold'); assert.equal(R.worldView(s).now.left, 1);
+  const b = run(false, 5); s = b.s; while (s.slot < 3) R.doRest(s); R.endDay(s); p = s.market.px.energy; s.ev.length = 0; R.nextDay(s); assert.ok(Math.abs(Math.log(s.market.px.energy / p) + want) < 1e-9, '빗나가면 되돌아간다'); assert.ok(s.ev.some(e => e.t === 'world' && e.miss)); assert.equal(R.worldView(s).now, null); assert.equal(s.stats.wmiss, 1); assert.ok(!s.stats.world);
+  let sum = 0, n = 0; // 예보가 뜬 아침에 사서 다음 날 아침에 판다 (수수료 빼고도)
+  for (let seed = 1; seed <= 300; seed++) { const r = run((seed * 7919 % 100) < T.world_acc * 100, seed), t = r.s, p0 = t.market.px.energy; while (t.slot < 3) R.doRest(t); R.endDay(t); R.nextDay(t); sum += Math.log(t.market.px.energy / p0); n++; }
+  assert.ok(sum / n < 0.012, '예보를 보고 산 하루 평균 ' + (sum / n * 100).toFixed(2) + '%');
+})));
+ok('세상 사건과 알바: 태풍엔 야외 일을 못 하고 · 폭우엔 전단지 불가에 배달 할증 · 정전엔 가게 일 불가 · 한파엔 야외 일의 체력 +30% · 명절엔 대목 (사업 자동 수입은 그대로)', () => now(() => {
+  const s = at(8); s.slot = 2; s.biz = 3; const auto0 = R.acts(s).find(a => a.kind === 'rest').auto;
+  strike(s, 'typhoon'); for (const id of ['flyer', 'delivery', 'driver']) { const a = job(s, id); assert.ok(a.banned && !a.ok && !a.any && !a.push && /태풍/.test(a.why), id); assert.equal(R.doJob(s, id, 0.8), false); } for (const id of ['loading', 'store', 'cafe', 'tutor', 'lecture', 'tv', 'advise']) assert.ok(job(s, id).ok, id);
+  assert.equal(R.acts(s).find(a => a.kind === 'rest').auto, auto0, '직원이 하는 일은 날씨와 무관');
+  strike(s, 'rain'); assert.ok(job(s, 'flyer').banned); let d = job(s, 'delivery'); assert.ok(d.ok); assert.equal(d.pay, r1k(T.pay_delivery * 125 * 1.3)); assert.equal(d.hp, Math.round(T.hp_delivery * 1.3)); assert.equal(d.mod.world, '폭우'); assert.equal(job(s, 'driver').hp, Math.round(T.hp_driver * 1.2));
+  const c = s.cash, h = s.hp; assert.ok(R.doJob(s, 'delivery', 0.5)); assert.equal(s.cash, c + r1k(T.pay_delivery * 125 * 1.3)); assert.equal(s.hp, h - Math.round(T.hp_delivery * 1.3));
+  const t = at(8); strike(t, 'blackout'); assert.ok(job(t, 'store').banned && job(t, 'cafe').banned && /정전/.test(job(t, 'cafe').why)); assert.ok(job(t, 'flyer').ok && job(t, 'tutor').ok);
+  strike(t, 'snow'); t.slot = 2; assert.ok(job(t, 'delivery').banned && job(t, 'driver').banned); assert.equal(job(t, 'flyer').hp, Math.round(T.hp_flyer * 1.3));
+  strike(t, 'cold', 2); assert.equal(job(t, 'flyer').hp, Math.round(T.hp_flyer * 1.3)); assert.equal(job(t, 'loading').hp, T.hp_loading); assert.equal(job(t, 'store').hp, T.hp_store);
+  strike(t, 'heat', 2); assert.equal(job(t, 'loading').hp, Math.round(T.hp_loading * 1.3));
+  strike(t, 'holiday', 2); t.slot = 1; for (const id of ['store', 'cafe', 'delivery']) assert.equal(job(t, id).pay, r1k(T['pay_' + id] * 1.2), id); assert.equal(job(t, 'flyer').pay, T.pay_flyer);
+  strike(t, 'flu', 3); assert.equal(job(t, 'store').pay, r1k(T.pay_store * 0.85)); assert.equal(job(t, 'delivery').pay, r1k(T.pay_delivery * 1.2));
+  t.market.world[0].truth = false; assert.equal(R.worldNow(t), null, '빗나간 예보는 아무 일도 없다'); assert.equal(job(t, 'store').pay, T.pay_store);
+}));
+ok('세상 사건과 밤: 한파 · 태풍의 서울역은 덜 회복하고(찜질방부터는 그대로), 독감은 고시원 아래까지. 이틀짜리는 이틀 밤', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
+  const base = t => { const s = at(t); return R.sleepGain(s); };
+  const a = strike(at(0), 'cold', 2); assert.equal(R.sleepGain(a), base(0) - 8); assert.equal(R.sleepGain(strike(at(1), 'cold', 2)), base(1));
+  assert.equal(R.sleepGain(strike(at(0), 'typhoon')), base(0) - 10); assert.equal(R.sleepGain(strike(at(2), 'flu', 3)), base(2) - 5); assert.equal(R.sleepGain(strike(at(3), 'flu', 3)), base(3));
+  a.cash = 1e6; a.hp = 20; while (a.slot < 3) R.doRest(a); const h = a.hp; R.endDay(a); assert.equal(a.hp, Math.min(100, h + base(0) - 8)); assert.ok(a.last.notes.some(n => /한파/.test(n.text) && /찜질방/.test(n.text)));
+  R.nextDay(a); assert.equal(R.worldView(a).now.type, 'cold'); assert.equal(R.worldView(a).now.sleepPen, 8); while (a.slot < 3) R.doRest(a); R.endDay(a); R.nextDay(a); assert.equal(R.worldView(a).now, null, '이틀 뒤에는 끝');
+  const v = R.worldView(at(3)); assert.deepEqual([v.season, v.seasonName, v.seasonLeft, v.nextSeason], [0, '가을', 14, '겨울']);
+})));
+ok('세상 사건과 재산: 지진이면 부동산 시세 −3%(집값 · 가진 집, 차트 점은 그대로) · 체력 −6 · 가진 집과 건물의 수리비(못 내면 외상)', () => now(() => withTune(Object.assign({ event_p: 0, world_p: 0, re_sigma: 0, re_boom: 0, re_flat: 0, re_slump: 0, prop_vacant_p: 0 }, quiet), () => {
+  let paidAny = 0, owedAny = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const poor = seed % 2 === 0, s = at(5, seed); s.homeVal = R.homePrice(s, 5); for (const id of ['stall', 'shop', 'bldg']) assert.ok(R.buyProp(s, id)); day(s); if (s.day % 7 === 0) day(s);
+    s.market.world = [{ id: 1, type: 'quake', day: s.day + 1, days: 1, warn: false, truth: true }]; while (s.slot < 3) R.doRest(s); R.endDay(s);
+    if (poor) s.cash = 50000; const c = s.cash, hv = s.homeVal, idx = s.re.idx, hl = s.re.hist.length, hp = s.hp, ar = s.arrears; s.ev.length = 0; R.nextDay(s);
+    const e = s.ev.find(x => x.t === 'world'); assert.ok(e && e.type === 'quake'); assert.ok(Math.abs(s.re.idx / idx - Math.exp(-0.03)) < 1e-9); assert.equal(s.re.hist.length, hl); assert.ok(Math.abs(e.re - (Math.exp(-0.03) - 1)) < 1e-9);
+    assert.ok(Math.abs(s.homeVal - hv * Math.exp(-0.03)) <= M); assert.equal(s.hp, Math.max(0, hp - 6)); assert.equal(R.homePrice(s, 6), Math.round(T.price_house * s.re.idx / 10000) * 10000);
+    assert.equal(e.cost % 1000, 0); assert.equal(c - s.cash, e.cost - e.owe); assert.equal(s.arrears - ar, e.owe); assert.equal(s.stats.repair || 0, e.cost);
+    if (e.cost > 0) { paidAny++; assert.ok(e.cost <= r1k((hv + 2e8) * 0.015) + 3000); if (poor) { owedAny += e.owe > 0 ? 1 : 0; assert.ok(s.cash >= 0); } else assert.equal(e.owe, 0); }
+  }
+  assert.ok(paidAny >= 12 && owedAny >= 3, '수리비 ' + paidAny + '번 · 외상 ' + owedAny + '번');
+  const r = at(3, 4); r.lease = 'rent'; day(r); r.market.world = [{ id: 1, type: 'quake', day: r.day + 1, days: 1, warn: false, truth: true }]; day(r); assert.equal(r.ev.find(x => x.t === 'world').cost, 0, '셋집은 집주인이 고친다');
+})));
+ok('세상 사건이 닥친 아침에는 돌발 사건이 겹치지 않고, 재난 뒤 사흘 안에는 복구 봉사 · 재난 지원금이 뜬다', () => now(() => withTune(Object.assign({ event_p: 1, world_p: 0 }, quiet), () => {
+  const s = at(3, 9); s.day = 6; s.market.world = [{ id: 1, type: 'typhoon', day: 7, days: 1, warn: true, truth: true, pre: 1, told: 1 }]; day(s); assert.equal(R.worldView(s).now.type, 'typhoon'); assert.equal(s.event, null, '세상 사건이 닥친 아침');
+  const vol = R.EVENTS.find(e => e.id === 'volunteer'), rel = R.EVENTS.find(e => e.id === 'relief'); assert.equal(vol.when(s), false, '그날은 아직'); let seen = 0;
+  for (let d = 0; d < 3; d++) { day(s); assert.ok((s.evDay.volunteer || vol.when(s)) && (s.evDay.relief || rel.when(s)), '한 번 뜬 것은 이레 동안 다시 안 뜬다'); assert.ok(s.event, '조용한 아침에는 돌발 사건'); if (s.event === 'volunteer' || s.event === 'relief') seen++; R.choose(s, 'b'); s.offer = null; s.picks = 0; }
+  day(s); assert.equal(vol.when(s), false, '나흘째에는 끝'); if (s.event) R.choose(s, 'b');
+  let hot = 0; for (let seed = 1; seed <= 40; seed++) { const t = at(3, seed); t.day = 9; t.wlast = { type: 'quake', day: 8 }; day(t); if (t.event === 'volunteer' || t.event === 'relief') hot++; }
+  assert.ok(hot >= 20, '재난 다음 날 40판 가운데 ' + hot + '판');
+  const u = at(3, 2); u.wlast = { type: 'cold', day: u.day - 1 }; assert.equal(vol.when(u), false, '한파는 재난 지원이 없다');
+})));
+ok('종목 열여섯: 주식 · ETF 열넷과 코인 둘이 사는 곳을 따라 열리고(찜질방 3 → 고시원 6 → 원룸 9 → 내 집 11 → 아파트 13 → 주택 14), ETF 는 공부할 것이 없다', () => now(() => {
+  assert.equal(R.ASSETS.length, 16); assert.equal(R.ASSETS.filter(a => a.kind === 'stock').length, 14); assert.equal(R.ASSETS.filter(a => a.kind === 'coin').length, 2);
+  const vis = t => { const s = at(t); return R.ASSETS.filter(a => R.visible(s, a.id)).map(a => a.id); };
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 8].map(t => R.holdings(at(t)).rows.length), [0, 3, 6, 9, 11, 13, 14, 14]);
+  assert.ok(vis(2).indexOf('etf') >= 0 && vis(2).indexOf('gold') < 0); assert.ok(vis(3).indexOf('gold') >= 0 && vis(3).indexOf('coin') >= 0 && vis(3).indexOf('doge') < 0 && vis(3).indexOf('insure') < 0);
+  assert.ok(vis(4).indexOf('insure') >= 0 && vis(4).indexOf('air') >= 0 && vis(4).indexOf('doge') >= 0); assert.ok(vis(5).indexOf('energy') >= 0 && vis(5).indexOf('defense') >= 0 && vis(5).indexOf('inv') < 0); assert.ok(vis(6).indexOf('inv') >= 0);
+  const s = at(6), st = R.acts(s).find(a => a.kind === 'study').assets.map(a => a.id); assert.ok(['etf', 'gold', 'inv'].every(id => st.indexOf(id) < 0)); assert.ok(['air', 'energy', 'insure', 'defense', 'doge', 'coin'].every(id => st.indexOf(id) >= 0)); assert.equal(st.length, 13);
+  assert.equal(R.buyUnits(at(3), 'insure', 1), false, '아직 안 보이는 종목'); const b = at(4); assert.ok(R.buyUnits(b, 'insure', 3) && R.buyUnits(b, 'etf', 3) && R.buyUnits(b, 'gold', 2)); assert.equal(b.hold.insure.units, 3); assert.ok(R.sellUnits(b, 'insure', 3));
+  for (const id of ['air', 'energy', 'insure', 'defense', 'doge']) assert.ok(R.SHOCKS.some(k => k.asset === id), id + ' 속보'); assert.ok(R.SHOCKS.every(k => R.ASSETS.some(a => a.id === k.asset)));
+  let heads = new Set(); for (let seed = 1; seed <= 30; seed++) { const t = at(6, seed); for (const n of t.market.news) { heads.add(n.asset); assert.ok(n.head && n.head.length > 3); } } assert.ok(['air', 'energy', 'insure', 'defense', 'doge'].every(id => heads.has(id)), '새 종목의 소식');
+}));
+ok('멍멍코인: 내 집부터, 포지션은 한 번에 한 코인, 값 · 청산 · 정리는 그 코인의 시세로 (달나라코인과 따로)', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
+  const a = at(3); assert.equal(R.levOpen(a, 1, 100 * M, 2, 'doge'), false); assert.ok(a.ev.some(e => e.t === 'deny' && /내 집/.test(e.why))); assert.equal(R.levOpen(a, 1, 100 * M, 2, 'daejang'), false);
+  const s = at(4); s.cash = 1000 * M; assert.ok(R.levOpen(s, 1, 100 * M, 2, 'doge')); assert.equal(s.lev.id, 'doge'); assert.equal(s.lev.entry, s.market.px.doge); assert.equal(R.levOpen(s, 1, 100 * M, 2, 'coin'), false, '한 번에 하나');
+  const v0 = R.levValue(s); s.market.px.coin *= 3; assert.equal(R.levValue(s), v0, '달나라코인이 움직여도 그대로'); s.market.px.doge *= 1.1; assert.ok(Math.abs(R.levValue(s) - s.lev.margin * 1.2) < 1);
+  const h = R.holdings(s); assert.equal(h.lev.id, 'doge'); assert.equal(h.lev.name, '멍멍코인');
+  const c = s.cash; assert.ok(R.levClose(s)); assert.ok(s.cash > c + 100 * M); assert.ok(s.stats.dogeGain > 0); assert.ok(s.ach.indexOf('doge') >= 0);
+  assert.ok(R.levOpen(s, 1, 100 * M, 5, 'doge')); assert.equal(s.lev.lev, 3, '멍멍코인은 3배까지'); s.market.px.doge *= 0.55; R.doRest(s); assert.equal(s.lev, null); assert.ok(s.ev.some(e => e.t === 'liq' && e.id === 'doge'));
+  assert.ok(R.levOpen(s, -1, 100 * M, 2)); assert.equal(s.lev.id, 'coin', '안 주면 달나라코인'); const o = at(3); o.lev = { dir: 1, lev: 2, put: 100, margin: 100, entry: o.market.px.coin, day: 1 }; assert.equal(R.levId(o.lev), 'coin'); assert.ok(Math.abs(R.levValue(o) - 100) < 1e-9, '예전 저장의 포지션(코인 이름 없음)');
+  const d = at(4); d.cash = 1000 * M; R.levOpen(d, 1, 100 * M, 2, 'doge'); d.tier = 3; assert.ok(R.visible(d, 'doge'), '든 코인은 내려가도 보인다'); assert.ok(R.levClose(d));
+})));
+ok('신용 보고서: 점수는 다섯 항목의 합이고(시작 점수 + 항목), 변동 내역 · 등급표 · 다음 등급의 숫자가 나온다', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
+  const s = R.create(4); s.quest = 99; s.cash = 3000 * M; R.move(s, 1); R.move(s, 2);
+  let v = R.creditView(s); assert.equal(v.score, T.credit_start + T.credit_addr + v.factors.find(f => f.id === 'asset').pts); assert.equal(v.factors.find(f => f.id === 'age').pts, T.credit_addr); assert.equal(v.grade, 6); assert.equal(v.name, '위험'); // 칭호가 오른 몫(소득과 자산)은 가진 돈에 따라 assert.deepEqual(v.factors.map(f => f.id), ['pay', 'debt', 'age', 'asset', 'mix']);
+  const sum = () => R.creditView(s).factors.reduce((a, f) => a + f.pts, 0);
+  for (let d = 0; d < 30; d++) { day(s, x => R.doJob(x, 'store', 0.8) || R.doRest(x)); s.offer = null; s.picks = 0; }
+  R.eat(s, 'gukbap'); R.buyItem(s, 'mat'); R.move(s, 3, 'jeonse'); v = R.creditView(s);
+  assert.equal(sum(), v.score - T.credit_start, '항목의 합 = 점수 − 시작 점수'); assert.equal(v.base, T.credit_start);
+  const f = id => v.factors.find(x => x.id === id);
+  assert.equal(f('pay').pts, 4 * T.credit_ontime + T.credit_streak); assert.equal(f('age').pts, T.credit_addr + T.credit_age); assert.equal(f('debt').pts, 0); assert.ok(f('asset').pts >= T.credit_title); assert.equal(f('mix').pts, T.credit_contract + 2 * T.credit_spend);
+  assert.equal(f('pay').state, 'good'); assert.ok(/제때 4번 · 연속 4번/.test(f('pay').line)); assert.equal(f('debt').state, 'good'); assert.ok(/4주/.test(f('age').line)); assert.ok(/전세/.test(f('mix').line)); for (const x of v.factors) assert.ok(x.name && x.line && x.tip && ['good', 'ok', 'bad'].indexOf(x.state) >= 0);
+  assert.ok(v.log.length >= 6 && v.log.length <= 12); assert.equal(v.log[0].day, s.day, '새 것이 위'); assert.ok(v.log.every(l => l.why && l.n && l.day >= 1 && l.cat)); assert.ok(v.log.some(l => /연속/.test(l.why)) && v.log.some(l => /거래 기간/.test(l.why)) && v.log.some(l => /소비 실적/.test(l.why)));
+  assert.equal(v.table.length, 7); assert.deepEqual(v.table.map(r => r.name), ['최우량', '우량', '양호', '보통', '주의', '위험', '대출 불가']); assert.equal(v.table.filter(r => r.me).length, 1); assert.equal(v.table.find(r => r.me).grade, v.grade);
+  const me = v.table.find(r => r.me); assert.equal(me.limit, v.limit); assert.equal(me.rate, v.rate); assert.equal(me.ltv, v.ltv); assert.equal(me.mort, v.mort); assert.equal(v.table[6].limit, 0); assert.equal(v.table[0].limit, Math.round(T.cl_limit_3 * T.cl_mult_1 / 10000) * 10000);
+  assert.equal(v.up.grade, v.grade - 1); assert.ok(v.up.limit > v.limit && v.up.rate < v.rate && v.up.ltv >= v.ltv); assert.equal(v.toNext, v.up.from - v.score);
+  const w = R.create(1); assert.equal(R.creditView(w).factors.find(x => x.id === 'age').state, 'bad'); assert.equal(R.creditView(w).up.grade, 6); assert.equal(R.creditView(w).name, '대출 불가');
+})));
+ok('신용의 새 규칙: 4번 연속 제때마다 +10(밀리면 처음부터) · 주소가 생긴 뒤 4주마다 +5(여섯 번까지) · 일요일 밤 통장을 한도의 80% 넘게 쓰고 있으면 −10 · 가게 소비 실적', () => now(() => withTune({ event_p: 0, world_p: 0, credit_title: 0 }, () => {
+  const s = R.create(4); s.quest = 99; s.cash = 5000 * M; R.move(s, 1); R.move(s, 2); const pts = id => R.creditView(s).factors.find(f => f.id === id).pts;
+  const week = () => { toSunday(s); R.endDay(s); R.nextDay(s); s.offer = null; s.picks = 0; };
+  for (let i = 1; i <= 8; i++) { week(); assert.equal(s.crStreak, i); assert.equal(pts('pay'), i * T.credit_ontime + Math.floor(i / 4) * T.credit_streak, i + '주'); assert.equal(pts('age'), T.credit_addr + Math.floor(i / 4) * T.credit_age); assert.equal(s.crWeeks, i); }
+  assert.ok(s.ach.indexOf('streak4') >= 0);
+  const c = s.cash; s.cash = 0; s.cl = 0; s.credit = 350; s.cr.pay -= 0; toSunday(s); s.cash = 0; R.endDay(s); assert.equal(s.crStreak, 0, '밀리면 처음부터'); R.nextDay(s); s.cash = c; s.credit = 700;
+  for (let i = 1; i <= 3; i++) { week(); assert.equal(s.crStreak, i); } const p3 = pts('pay'); week(); assert.equal(pts('pay'), p3 + T.credit_ontime + T.credit_streak, '다시 4번째에');
+  for (let i = 0; i < 16; i++) week(); assert.equal(pts('age'), T.credit_addr + T.credit_age_max * T.credit_age, '여섯 번까지');
+  const lim = R.creditView(s).limit; assert.ok(lim > 0); const d0 = pts('debt');
+  R.borrow(s, Math.floor(lim * 0.79 / 10000) * 10000); week(); assert.equal(pts('debt'), d0, '80% 아래는 그대로'); assert.equal(R.creditView(s).factors.find(f => f.id === 'debt').state, 'ok');
+  R.borrow(s, R.creditView(s).room); assert.equal(R.creditView(s).factors.find(f => f.id === 'debt').state, 'bad'); toSunday(s); R.endDay(s); assert.equal(pts('debt'), d0 - T.credit_use_pen); assert.ok(s.last.notes.some(n => /한도의 80%/.test(n.text))); assert.ok(R.creditView(s).log.some(l => /한도 가까이/.test(l.why) && l.cat === 'debt' && l.n === -T.credit_use_pen)); R.nextDay(s);
+  R.repayCl(s, s.cl); s.credit = 500; const m0 = pts('mix'), sc0 = s.credit; s.spent = 0; s.crSpend = 0; // 점수가 1,000 에 닿아 있으면 더 오르지 않으니 낮춰 놓고 본다
+  R.eat(s, 'kimbap'); assert.equal(pts('mix'), m0); s.spent = 99000; s.ate = 0; R.eat(s, 'kimbap'); assert.equal(s.crSpend, 1); assert.equal(pts('mix'), m0 + T.credit_spend); assert.equal(s.credit, Math.min(1000, sc0 + T.credit_spend));
+  s.tier = 6; s.stats.maxTier = 6; s.cash = 5e8; assert.ok(R.buyItem(s, 'watch')); assert.equal(s.crSpend, 4, '한 번에 여러 단계'); assert.equal(R.creditView(s).factors.find(f => f.id === 'mix').pts, m0 + 4 * T.credit_spend); assert.ok(/1 \/ 5|4 \/ 5/.test(R.creditView(s).factors.find(f => f.id === 'mix').line));
+})));
+ok('돌발 사건 서른다섯: 새 열셋도 주거에 맞게 — 보증 사고는 빚으로(일요일 정산에), 스미싱 · 한도 증액 · 봉사는 신용점수에, 중고 거래는 롱패딩', () => now(() => withTune({ credit_title: 0 }, () => {
+  assert.equal(R.EVENTS.length, 35); const ids = ['phish', 'cosign', 'limit', 'subway', 'coldish', 'used', 'blood', 'fair', 'tax', 'unlisted', 'reunion', 'volunteer', 'relief']; assert.ok(ids.every(id => R.EVENTS.some(e => e.id === id)));
+  const run = (id, k, seed, tier) => { const s = at(tier == null ? 3 : tier, seed); s.cash = 5000 * M; s.credit = 600; s.event = id; s.ev.length = 0; const w = R.worth(s); assert.ok(R.choose(s, k), id + k); return { s, w, text: s.ev.find(e => e.t === 'event_done').text }; };
+  let good = 0, bad = 0;
+  for (let seed = 1; seed <= 40; seed++) { const r = run('cosign', 'a', seed), s = r.s; if (s.arrears > 0) { bad++; assert.equal(s.arrears, 500000); assert.equal(s.credit, 570); assert.equal(R.worth(s), r.w - 500000); assert.ok(s.today.expense.some(x => /보증 사고/.test(x.label) && x.amt === 500000)); assert.equal(R.bill(s).arrears, 500000); } else { good++; assert.equal(s.credit, 610); assert.equal(s.cash, 5000 * M + 60000); } }
+  assert.ok(good > 15 && bad > 8, '보증 ' + good + ' · 사고 ' + bad);
+  good = 0; bad = 0; for (let seed = 1; seed <= 40; seed++) { const s = run('phish', 'a', seed).s; if (s.credit === 610) good++; else { bad++; assert.equal(s.credit, 580); assert.equal(s.cash, 5000 * M - 200000); } } assert.ok(good > 8 && bad > 12);
+  const lim = at(3, 1); lim.credit = 600; const l0 = R.creditView(lim).limit, ev = R.EVENTS.find(e => e.id === 'limit'); assert.ok(ev.when(lim)); lim.event = 'limit'; R.choose(lim, 'a'); assert.equal(R.creditView(lim).limit, Math.round(l0 * 1.1 / 10000) * 10000); assert.equal(ev.when(lim), false, '한 번만');
+  const no = at(3, 1); no.credit = 600; no.event = 'limit'; R.choose(no, 'b'); assert.equal(no.credit, 605); no.credit = 450; assert.equal(ev.when(no), false, '5등급부터');
+  let got = 0; for (let seed = 1; seed <= 30; seed++) { const s = run('used', 'a', seed, 2).s; if (s.items.padding) { got++; assert.equal(s.wear, 'padding'); } assert.equal(s.cash, 5000 * M - 100000); } assert.ok(got > 8 && got < 26); assert.equal(R.EVENTS.find(e => e.id === 'used').when(Object.assign(at(2), { items: { padding: 1 } })), false);
+  let win = 0, tot = 0; for (let seed = 1; seed <= 400; seed++) { const s = run('unlisted', 'a', seed).s; tot += s.cash - 5000 * M; if (s.cash > 5000 * M) win++; } assert.ok(tot < 0, '비상장 권유는 남는 장사가 아니다'); assert.ok(win > 60 && win < 140);
+  const v = run('volunteer', 'b', 1).s; assert.equal(v.credit, 605); const f = run('fair', 'a', 1, 1).s; assert.equal(f.buff.nextJob, 1.5); const re = run('reunion', 'a', 1, 5).s; assert.equal(re.buff.promo, re.day);
+  assert.equal(run('relief', 'a', 1).s.cash, 5000 * M + 100000); assert.ok(run('tax', 'a', 1, 6).s.cash < 5000 * M);
+})));
+ok('저장 v5: 예전 저장(v4 — 알바 넷 · 종목 여덟)을 불러오면 새 알바 · 종목 · 신용 항목이 채워지고, 세상 사건이 도는 채로 이어 갈 수 있다', () => now(() => withTune({ event_p: 0 }, () => {
+  const s = at(3, 8); s.cash = 3000 * M; s.credit = 620; s.jobs.flyer = 5; R.buy(s, 'daejang', 100 * M); R.levOpen(s, 1, 100 * M, 2); const o = JSON.parse(R.save(s));
+  o.v = 4; for (const id of ['cafe', 'tutor', 'driver', 'lecture', 'tv', 'advise']) delete o.jobs[id];
+  for (const id of ['etf', 'gold', 'insure', 'air', 'energy', 'defense', 'inv', 'doge']) { delete o.market.px[id]; delete o.market.hist[id]; delete o.market.chg[id]; delete o.hold[id]; }
+  for (const k of ['cr', 'crLog', 'crStreak', 'crWeeks', 'crSpend', 'spent', 'clBoost', 'ever']) delete o[k]; delete o.market.world; delete o.lev.id;
+  const w = R.worth(s), t = R.load(JSON.stringify(o)); assert.ok(t); assert.equal(t.v, 5); assert.equal(R.worth(t), w, '순자산은 그대로');
+  assert.deepEqual(Object.keys(t.jobs).sort(), R.JOBS.map(j => j.id).sort()); assert.equal(t.jobs.cafe, 0); assert.equal(t.jobs.flyer, 5); assert.deepEqual(t.ever, { flyer: 1 });
+  for (const a of R.ASSETS) { assert.ok(t.market.px[a.id] > 0 && t.market.hist[a.id].length >= 4, a.id); assert.ok(t.hold[a.id]); } assert.equal(t.market.px.etf, R.ASSETS.find(a => a.id === 'etf').px); assert.deepEqual(t.market.world, []);
+  assert.equal(t.credit, o.credit); assert.deepEqual(t.cr, { pay: o.credit - T.credit_start - T.credit_addr, debt: 0, age: T.credit_addr, asset: 0, mix: 0 }, '주소 몫은 거래 기간에, 나머지는 상환 이력에'); assert.equal(R.creditView(t).factors.reduce((a, f) => a + f.pts, 0), o.credit - T.credit_start); assert.deepEqual(t.crLog, []);
+  assert.equal(R.levId(t.lev), 'coin'); assert.ok(R.levValue(t) > 0);
+  let worlds = 0; for (let d = 0; d < 40; d++) { day(t, x => R.doJob(x, 'cafe', 0.8) || R.doRest(x)); while (t.offer) R.pickPerk(t, safePerk(t)); worlds += t.ev.filter(e => e.t === 'world').length; t.ev.length = 0; const bad = JSON.stringify(t).match(/NaN|null,"px"/); assert.ok(!bad); assert.ok(Number.isFinite(R.worth(t)) && Number.isFinite(t.hp)); }
+  assert.ok(worlds >= 2, '이어 한 40일에 세상 사건 ' + worlds + '번'); assert.ok(t.jobs.cafe > 0); assert.equal(JSON.parse(R.save(t)).v, 5); assert.ok(R.load(R.save(t)));
+  for (const a of R.ASSETS) assert.ok(Number.isFinite(t.market.px[a.id]) && t.market.px[a.id] >= 10, a.id);
+})));
+ok('업적 48개: 새 여덟(N잡러 · 세상 사건 · 빗나간 예보 · 수리비 · 거꾸로ETF · 여러 바구니 · 성실 납부 · 멍멍)이 조건에 맞게 한 번씩', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
+  assert.equal(R.achList().length, 48); assert.equal(new Set(R.achList().map(a => a.id)).size, 48); assert.ok(R.achList().every(a => a.name && a.hint && a.icon));
+  const s = at(8); s.hp = 100; for (const j of R.JOBS) { s.slot = j.id === 'driver' ? 2 : 1; s.hp = 100; s.did = null; assert.ok(R.doJob(s, j.id, 0.5), j.id); } assert.ok(s.ach.indexOf('jobs10') >= 0);
+  const t = at(6); for (const id of ['daejang', 'bank', 'buldak', 'etf']) R.buyUnits(t, id, 1); assert.ok(t.ach.indexOf('basket') < 0); R.buyUnits(t, 'inv', 100); assert.ok(t.ach.indexOf('basket') >= 0);
+  t.market.px.inv *= 1.2; R.sellUnits(t, 'inv', 100); assert.ok(t.stats.invGain > 0 && t.ach.indexOf('hedge') >= 0);
+  t.stats.world = 5; t.stats.wmiss = 1; t.stats.repair = 1000; R.doRest(t); for (const id of ['storm', 'forecast', 'repair']) assert.ok(t.ach.indexOf(id) >= 0, id);
+  const four = at(4); four.jobs = { flyer: 12, loading: 12, store: 12, delivery: 0, cafe: 12, tutor: 0, driver: 0, lecture: 0, tv: 0, advise: 0 }; R.doRest(four); assert.ok(four.ach.indexOf('allskill') >= 0, '네 가지를 숙련 3단계');
+})));
+// ── 2026-11-21 독립 검토에서 나온 것 ──
+ok('코인이 바닥 가까이 내려가면 100:1 로 합친다: 표기만 100배 · 포지션의 손익과 청산 값의 비율은 그대로 — 바닥(10원)에 닿아 롱이 공짜가 되는 일이 없다', () => now(() => {
+  withTune(Object.assign({ event_p: 0, world_p: 0, dg_sigma: 0, dg_momentum: 0, lev_fund: 0 }, quiet), () => {
+    const s = at(4, 5); s.market.px.doge = 30; assert.ok(R.levOpen(s, 1, 1000000, 2, 'doge')); const e0 = s.lev.entry;
+    s.market.px.doge = 19.5; const v0 = R.levValue(s), n0 = s.market.hist.doge.length, h0 = s.market.hist.doge[n0 - 1]; s.ev.length = 0;
+    R.doRest(s); // 한 칸: 움직임 0 이라 값은 그대로인데 20 아래라 합쳐진다
+    assert.ok(Math.abs(s.market.px.doge - 1950) < 1e-6, '값 ' + s.market.px.doge); assert.ok(Math.abs(s.lev.entry - e0 * 100) < 1e-6); assert.ok(Math.abs(R.levValue(s) - v0) < 1, '손익 그대로 ' + v0 + ' → ' + R.levValue(s));
+    assert.ok(Math.abs(R.levLiq(s.lev) - 1500) < 1e-6, '청산 값도 100배'); assert.ok(Math.abs(s.market.hist.doge[n0 - 1] - h0 * 100) < 1e-6, '차트도 같이 옮긴다');
+    assert.equal(s.ev.filter(e => e.t === 'merge' && e.id === 'doge').length, 1); R.doRest(s); assert.equal(s.ev.filter(e => e.t === 'merge').length, 1, '한 번만');
+    s.market.px.coin = 12; R.doRest(s); assert.ok(s.market.px.coin >= 1000, '달나라코인도 ' + s.market.px.coin);
+    const m3 = at(4, 5); assert.equal(R.levMax('doge'), 3); assert.equal(R.levMax('coin'), 5); assert.ok(R.levOpen(m3, 1, 1000000, 5, 'doge')); assert.equal(m3.lev.lev, 3, '멍멍코인은 3배까지 (5배를 청해도)'); R.levClose(m3); assert.ok(R.levOpen(m3, 1, 1000000, 5, 'coin')); assert.equal(m3.lev.lev, 5);
+    const g = at(4, 5); g.market.world = [{ id: 1, type: 'crash', day: g.day + 1, days: 1, warn: false, truth: true }]; g.market.px.doge = 22; while (g.slot < 3) R.doRest(g); R.endDay(g); g.market.px.doge = 22; R.nextDay(g); assert.ok(g.market.px.doge >= 1000, '밤사이 갭으로 내려가도 ' + g.market.px.doge);
+  });
+  withTune({ event_p: 0 }, () => { // 긴 판에서도 코인 값은 바닥 근처에 머물지 않는다
+    for (const seed of [3, 9, 27]) { const s = at(4, seed); for (let d = 0; d < 150; d++) { while (s.slot < 3) { R.doRest(s); assert.ok(s.market.px.doge >= 20 && s.market.px.coin >= 20, seed + ' ' + s.day + '일째 ' + s.market.px.doge); } R.endDay(s); R.nextDay(s); s.offer = null; s.picks = 0; assert.ok(s.market.px.doge >= 20 && s.market.px.coin >= 20); } }
+  });
+}));
+ok('바닥까지 내려간 주식은 살 수 없다(더 내려갈 수 없는 값) · 다담아ETF 는 일요일 밤 부동산 시세로 뚝딱건설이 움직인 몫만큼 따라간다', () => now(() => withTune(Object.assign({ event_p: 0, world_p: 0 }, quiet), () => {
+  const s = at(4, 5); s.market.px.hantang = 10; assert.equal(R.buy(s, 'hantang', 1000000), false); assert.equal(R.buyUnits(s, 'hantang', 10), false); s.market.px.hantang = 11; assert.ok(R.buyUnits(s, 'hantang', 10)); s.market.px.hantang = 10; assert.ok(R.sellUnits(s, 'hantang', 10), '파는 것은 된다');
+  const t = at(4, 6); while (t.day % 7 !== 0) day(t); while (t.slot < 3) R.doRest(t); const d = t.re.next, p = Object.assign({}, t.market.px); R.endDay(t);
+  assert.ok(Math.abs(d) > 1e-6); const lg = id => Math.log(t.market.px[id] / p[id]);
+  assert.ok(Math.abs(lg('build') - T.bd_beta * d) < 1e-9); assert.ok(Math.abs(lg('etf') - T.bd_beta * d / 10) < 1e-9, 'ETF ' + lg('etf')); assert.ok(Math.abs(lg('inv') + T.bd_beta * d / 10) < 1e-9);
+})));
+ok('빗나갈 일이 없는 예보(명절 연휴)는 뜬 아침에 값에 전부 들어간다 — 닥친 아침에는 더 움직이지 않는다', () => now(() => withTune(Object.assign({ event_p: 0, world_p: 0 }, quiet), () => {
+  const s = at(8, 5); day(s); s.market.world = [{ id: 1, type: 'holiday', day: s.day + 2, days: 2, warn: true, truth: true }];
+  while (s.slot < 3) R.doRest(s); R.endDay(s); let p = s.market.px.air; R.nextDay(s); assert.ok(Math.abs(Math.log(s.market.px.air / p) - Math.log(1.08)) < 1e-9, '예보가 뜬 아침에 전부');
+  while (s.slot < 3) R.doRest(s); R.endDay(s); p = s.market.px.air; R.nextDay(s); assert.ok(Math.abs(Math.log(s.market.px.air / p)) < 1e-9, '닥친 아침에는 그대로'); assert.equal(R.worldView(s).now.type, 'holiday');
+})));
+ok('못 하는 알바는 하다 만 것으로도 못 한다(태풍 날의 전단지 · 오전의 대리) · 밤 회복은 0 아래로 안 내려간다 · 한도가 0 인 7등급은 사용률로 더 깎지 않는다', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
+  const a = at(5); a.slot = 0; assert.equal(job(a, 'driver').banned, true); const c0 = a.cash; assert.equal(R.quitJob(a, 'driver', 1), false); assert.equal(a.cash, c0); assert.equal(a.slot, 0);
+  const b = at(3); b.market.world = [{ id: 1, type: 'typhoon', day: b.day, days: 1, warn: true, truth: true, done: 1 }]; assert.equal(job(b, 'flyer').banned, true); assert.equal(R.quitJob(b, 'flyer', 1), false); assert.ok(R.quitJob(b, 'store', 1), '막히지 않은 일은 된다');
+  const n = at(0); n.cash = 0; n.hp = 3; n.buff.sleepPen = 1; n.market.world = [{ id: 1, type: 'typhoon', day: n.day, days: 1, warn: true, truth: true, done: 1 }];
+  assert.equal(R.sleepGain(n), 0, '서울역 12 − 태풍 10 − 잠 설침 15 → 0'); while (n.slot < 3) R.doRest(n); n.hp = 3; R.endDay(n); assert.ok(n.hp >= 0, '체력 ' + n.hp);
+  const g = at(2); g.credit = 300; g.cr = { pay: -50, debt: 0, age: 0, asset: 0, mix: 0 }; g.cl = 50000; g.cash = 1e9; while (g.day % 7 !== 0) day(g); const before = g.cr.debt; while (g.slot < 3) R.doRest(g); R.endDay(g);
+  assert.equal(R.creditView(g).limit, 0); assert.equal(g.cr.debt, before, '한도 0 이면 "한도 가까이 씀"으로 깎지 않는다');
+})));
+ok('방송이 잘 나가도 자동 수입이 없는 단계면 "내일 사업 매출" 알림을 띄우지 않는다', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
+  const a = at(7); a.biz = 0; a.log.length = 0; assert.ok(R.doJob(a, 'tv', 0.8)); assert.ok(!a.log.some(l => /사업 매출/.test(l.text || l)), JSON.stringify(a.log.slice(-2)));
+  const b = at(7); b.biz = 3; b.log.length = 0; assert.ok(R.doJob(b, 'tv', 0.8)); assert.ok(b.log.some(l => /내일 사업 매출/.test(l.text || l)));
+})));
 console.log(n + '개 통과');

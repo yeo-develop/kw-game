@@ -465,6 +465,109 @@
         disc(g, 7, 26, 3, 'E', 'k'); P(g, 7, 26, 1, 1, 'L');
         disc(g, 25, 26, 3, 'E', 'k'); P(g, 25, 26, 1, 1, 'L');
       },
+      // 2026-11-21: 새 일 여섯
+      cafe: g => { // 카페: 김이 오르는 테이크아웃 컵 + 원두
+        P(g, 6, 30, 21, 1, 'd');
+        map(g, 11, 0, ['..k....k..', '.k....k...', '..k....k..', '.k....k...', '..k....k..']);
+        box(g, 6, 6, 20, 5, 'w'); P(g, 7, 7, 18, 1, 'L'); P(g, 8, 5, 16, 1, 'k'); P(g, 9, 6, 14, 1, 'w');
+        map(g, 7, 11, [
+          'kkkkkkkkkkkkkkkkkk',
+          'kwwwwwwwwwwwwwwwLk',
+          '.kwwwwwwwwwwwwwLk.',
+          '.kNNNNNNNNNNNNNnk.',
+          '.kNNNNNkkkkNNNNnk.',
+          '.kNNNNkGGGGkNNNnk.',
+          '.kNNNNkGhhGkNNNnk.',
+          '.kNNNNkGGGGkNNNnk.',
+          '.kNNNNNkkkkNNNNnk.',
+          '..kNNNNNNNNNNNnk..',
+          '..kwwwwwwwwwwwLk..',
+          '..kwwwwwwwwwwwLk..',
+          '..kwwwwwwwwwwwLk..',
+          '...kwwwwwwwwwLk...',
+          '...kwwwwwwwwwLk...',
+          '...kLLLLLLLLLLk...',
+          '....kkkkkkkkkk....',
+        ]);
+        map(g, 1, 24, ['.kkk.', 'knHnk', 'knHnk', '.kkk.']); map(g, 26, 22, ['.kkk.', 'knHnk', 'knHnk', '.kkk.']);
+      },
+      tutor: g => { // 과외: 채점한 시험지 + 빨간 색연필
+        P(g, 4, 30, 22, 1, 'd');
+        box(g, 3, 2, 22, 27, 'w'); P(g, 4, 3, 20, 4, 'S'); P(g, 6, 4, 9, 2, 'b'); P(g, 23, 4, 1, 24, 'L');
+        for (const y of [10, 15, 20, 25]) { P(g, 6, y, 8, 1, 'E'); P(g, 6, y + 2, 5, 1, 'L'); }
+        map(g, 15, 8, ['.rrrr.', 'r....r', 'r....r', 'r....r', '.rrrr.']);
+        map(g, 15, 14, ['....rr', '...rr.', 'r.rr..', 'rrr...', '.r....']);
+        map(g, 15, 20, ['.rrrr.', 'r....r', 'r....r', 'r....r', '.rrrr.']);
+        map(g, 17, 14, [
+          '...........kk.',
+          '..........kRrk',
+          '.........kRrrk',
+          '........kRrrk.',
+          '.......kRrrk..',
+          '......kRrrk...',
+          '.....kRrrk....',
+          '....kRrrk.....',
+          '...kRrrk......',
+          '..kpprk.......',
+          '.kpppk........',
+          '.kkpk.........',
+          'kk.k..........',
+        ]);
+      },
+      driver: g => { // 대리: 운전대 + 초승달
+        P(g, 5, 30, 22, 1, 'd');
+        for (let y = -13; y <= 13; y++) for (let x = -13; x <= 13; x++) { const d = Math.hypot(x, y); if (d <= 12.5 && d > 7.5) P(g, 15 + x, 17 + y, 1, 1, d > 11.5 || d <= 8.5 ? 'k' : x + y < -3 ? 'e' : 'E'); }
+        P(g, 6, 15, 18, 1, 'k'); P(g, 7, 16, 16, 3, 'E'); P(g, 6, 19, 18, 1, 'k'); P(g, 13, 19, 1, 8, 'k'); P(g, 14, 19, 3, 7, 'E'); P(g, 17, 19, 1, 8, 'k');
+        disc(g, 15, 17, 3, 'L', 'k'); P(g, 14, 16, 2, 1, 'w');
+        map(g, 22, 0, ['...kkkk.', '..kyyk..', '.kyyk...', '.kyyk...', '.kyyk...', '.kyyyk..', '..kyyykk', '...kkkk.']);
+        P(g, 3, 3, 1, 1, 'y'); P(g, 8, 1, 1, 1, 'w'); sparkle(g, 19, 3, 'Y');
+      },
+      lecture: g => { // 강연: 연단과 마이크 + 말풍선
+        P(g, 4, 30, 24, 1, 'd');
+        map(g, 5, 14, [
+          'kkkkkkkkkkkkkkkkkkkkkk',
+          'kNNNNNNNNNNNNNNNNNNNNk',
+          'kkkkkkkkkkkkkkkkkkkkkk',
+          '.knnnnnnnnnnnnnnnnnnk.',
+          '.knnnnnnkkkkkknnnnnnk.',
+          '.knnnnnkyyyyyyknnnnnk.',
+          '.knnnnnkyYyyyyknnnnnk.',
+          '.knnnnnkyyyyyyknnnnnk.',
+          '.knnnnnnkkkkkknnnnnnk.',
+          '.knnnnnnnnnnnnnnnnnnk.',
+          '.knnnnnnnnnnnnnnnnnnk.',
+          '.knnnnnnnnnnnnnnnnnnk.',
+          '.knnnnnnnnnnnnnnnnnnk.',
+          '.kHHHHHHHHHHHHHHHHHHk.',
+          '.kkkkkkkkkkkkkkkkkkkk.',
+        ]);
+        P(g, 10, 8, 1, 6, 'k'); P(g, 11, 8, 1, 6, 'E'); box(g, 8, 3, 6, 6, 'E'); P(g, 9, 4, 4, 1, 'L'); P(g, 9, 6, 4, 1, 'e');
+        map(g, 16, 0, [
+          '.kkkkkkkkkkkkk.',
+          'kwwwwwwwwwwwwwk',
+          'kwbbbbwwbbbbbwk',
+          'kwwwwwwwwwwwwwk',
+          'kwbbbbbbbwwwwwk',
+          'kwwwwwwwwwwwwwk',
+          '.kkkkwwkkkkkkk.',
+          '....kwk........',
+          '....kk.........',
+        ]);
+      },
+      tv: g => { // 방송: 삼각대 위의 방송 카메라 + 빨간 불
+        P(g, 4, 30, 24, 1, 'd');
+        box(g, 3, 8, 19, 13, 'E'); P(g, 4, 9, 17, 2, 'e'); P(g, 4, 18, 17, 2, 'k'); box(g, 5, 12, 8, 5, 'S'); P(g, 6, 13, 3, 1, 'w');
+        map(g, 21, 9, ['kkkkkkkk', 'kEEEkllk', 'kEEkllbk', 'kEEkllbk', 'kEEkllbk', 'kEEkllbk', 'kEEkllbk', 'kEEkbbbk', 'kEEEkbbk', 'kkkkkkkk']);
+        box(g, 8, 3, 8, 6, 'E'); disc(g, 17, 5, 2, 'r', 'k'); P(g, 16, 4, 1, 1, 'w'); P(g, 20, 2, 1, 1, 'r'); P(g, 21, 5, 2, 1, 'r'); P(g, 20, 8, 1, 1, 'r');
+        P(g, 11, 21, 3, 3, 'k'); line(g, 12, 23, 5, 30, 'k', 1); line(g, 13, 23, 20, 30, 'k', 1); P(g, 12, 23, 1, 7, 'k'); P(g, 4, 30, 3, 1, 'k'); P(g, 19, 30, 3, 1, 'k');
+      },
+      advise: g => { // 자문: 서류 가방 + 오르는 화살표
+        P(g, 3, 30, 26, 1, 'd');
+        map(g, 10, 7, ['.kkkkkkkkkk.', 'kNNkkkkkkNNk', 'kNk......kNk']);
+        box(g, 2, 10, 28, 19, 'n'); P(g, 3, 11, 26, 2, 'N'); P(g, 3, 19, 26, 1, 'k'); P(g, 3, 20, 26, 1, 'H'); P(g, 28, 13, 1, 15, 'H');
+        box(g, 13, 17, 6, 6, 'y'); P(g, 15, 19, 2, 2, 'O');
+        map(g, 17, 0, ['....kkkkkkk', '.....kggggk', '......kgggk', '.....kgkggk', '....kgk.kgk', '...kgk...kk', '..kgk......', '.kgk.......', 'kgk........', 'kk.........']);
+      },
     };
     const ACT = {
       rest: g => { // 침대에서 쉬기 + Zz
@@ -616,6 +719,131 @@
           if (a && !b) P(g, 15 + x, 15 + y, 1, 1, 'O');
         }
         sparkle(g, 20, 19, 'O'); P(g, 22, 13, 1, 1, 'O'); P(g, 23, 7, 1, 1, 'w'); P(g, 22, 8, 3, 1, 'w'); P(g, 23, 9, 1, 1, 'w'); P(g, 9, 9, 2, 1, 'w'); P(g, 8, 10, 1, 2, 'w');
+      },
+      // 2026-11-21: 새 종목 여덟
+      etf: g => { // 다담아ETF: 네 조각 원 그래프
+        for (let y = -13; y <= 13; y++) for (let x = -13; x <= 13; x++) {
+          const d = Math.hypot(x, y); if (d > 12.5) continue;
+          const col = d > 11.5 ? 'k' : (x === 0 || y === 0) ? 'k' : x > 0 && y < 0 ? 'r' : x > 0 ? 'y' : y > 0 ? 'g' : 'b';
+          P(g, 16 + x, 16 + y, 1, 1, col);
+        }
+        P(g, 18, 6, 4, 1, 'w'); P(g, 21, 7, 2, 1, 'w'); P(g, 7, 9, 3, 1, 'l'); P(g, 6, 10, 1, 2, 'l'); disc(g, 16, 16, 3, 'w', 'k');
+      },
+      gold: g => { // 황금ETF: 쌓은 금괴 셋
+        P(g, 2, 29, 28, 1, 'd');
+        const bar = (x, y) => map(g, x, y, ['..kkkkkkkkkk..', '.kYYYYYYYYYYk.', 'kYyyyyyyyyyyOk', 'kyyyyyyyyyyyOk', 'kyyyyyyyyyyOOk', 'kOOOOOOOOOOOOk', 'kkkkkkkkkkkkkk']);
+        bar(2, 21); bar(16, 21); bar(9, 14);
+        sparkle(g, 24, 9, 'Y'); P(g, 6, 9, 1, 1, 'y'); P(g, 27, 15, 1, 1, 'w');
+      },
+      insure: g => { // 든든보험: 큰 우산
+        map(g, 2, 3, [
+          '............kkkk............',
+          '.........kkkbbllkkk.........',
+          '.......kkbbbbbllllbkk.......',
+          '.....kkbbbbbbbbllllbbkk.....',
+          '....kbbbbbbbbbbbllllbbbk....',
+          '...kbbbbbbbbbbbbbllllbbbk...',
+          '..kbbbbbbbbbbbbbbblllbbbbk..',
+          '.kbbbbbbbbbbbbbbbbbllbbbbBk.',
+          '.kbbbbbbbbbbbbbbbbbbbbbbBBk.',
+          'kbbbbkkbbbbbbkkbbbbbbkkbbBBk',
+          'kkkkk..kkkkkk..kkkkkk..kkkkk',
+        ]);
+        P(g, 15, 13, 2, 13, 'k'); P(g, 15, 13, 1, 13, 'E'); map(g, 10, 25, ['k....kk', 'k....kk', 'kk..kk.', '.kkkk..']);
+        P(g, 15, 1, 2, 2, 'k');
+      },
+      air: g => { // 날개항공: 오른쪽 위로 나는 여객기
+        map(g, 1, 3, [
+          '......................kkkk....',
+          '....................kkwwwk....',
+          '..................kkwwwwLk....',
+          '.......kkkk.....kkwwwsswLk....',
+          '.......kbbbk..kkwwwwsswLk.....',
+          '........kbbbkkwwwwwwwwLk......',
+          '........kkbbbwwwwwwwwLkk......',
+          '......kkwwwwwwwwwwwwLk........',
+          '....kkwwwwwwwwwwwwwwbkkkkkk...',
+          '..kkwwwwwwwwwwwwwwbbbbbbbbbk..',
+          '.kwwwwwwwwwwwwwkkkkbbbbbbbkk..',
+          'kLLLLLLLLLLLkkk....kkkkkkk....',
+          '.kkkkkkkkkkk..................',
+        ]);
+        P(g, 4, 22, 6, 1, 'S'); P(g, 1, 25, 9, 1, 'S'); P(g, 6, 28, 5, 1, 'S');
+      },
+      energy: g => { // 훈훈에너지: 가스 불꽃
+        P(g, 5, 30, 22, 1, 'd');
+        map(g, 8, 1, [
+          '.......kk.......',
+          '......kook......',
+          '......koook.....',
+          '.....koooook....',
+          '....kooyyoook...',
+          '...kooyyyyook...',
+          '...kooyyyyyook..',
+          '..kooyyYYyyook..',
+          '..koyyYYYYyyok..',
+          '.kooyyYwwYyyook.',
+          '.kooyYYwwYYyook.',
+          '.kooyYwwwwYyook.',
+          '.kkoyYwllwYyokk.',
+          '..koylllllyyok..',
+          '...kklllllkkk...',
+          '.....kkkkk......',
+        ]);
+        box(g, 6, 18, 20, 4, 'E'); P(g, 7, 19, 18, 1, 'L'); box(g, 9, 22, 14, 7, 'e'); P(g, 10, 23, 12, 1, 'L'); P(g, 13, 25, 6, 2, 'k');
+      },
+      defense: g => { // 방패방산: 별이 새겨진 방패
+        map(g, 4, 2, [
+          '.kkkkkkkkkkkkkkkkkkkkkk.',
+          'kllllllllllllBBBBBBBBBBk',
+          'klbbbbbbbbbbbBBbbbbbbbBk',
+          'klbbbbbbbbbbbBBbbbbbbbBk',
+          'klbbbbbbbbbyyBBbbbbbbbBk',
+          'klbbbbbbbbyyyyBbbbbbbbBk',
+          'klbbbbbbyyyyyyyybbbbbbBk',
+          'klbbbbyyyyyyyyyyyybbbbBk',
+          'klbbbbbbyyyyyyyybbbbbbBk',
+          'klbbbbbbbyyyyyybbbbbbbBk',
+          'klbbbbbbbyyybyyybbbbbbBk',
+          'klbbbbbbyyybbbyyybbbbbBk',
+          '.klbbbbbbbbbBBbbbbbbbBk.',
+          '.klbbbbbbbbbBBbbbbbbbBk.',
+          '..klbbbbbbbbBBbbbbbbBk..',
+          '..klbbbbbbbbBBbbbbbbBk..',
+          '...klbbbbbbbBBbbbbbBk...',
+          '....klbbbbbbBBbbbbBk....',
+          '.....kklbbbbBBbbBkk.....',
+          '.......kklbbBBBkk.......',
+          '.........kkBBkk.........',
+          '...........kk...........',
+        ]);
+        P(g, 6, 27, 20, 1, 'd');
+      },
+      inv: g => { // 거꾸로ETF: 내려가는 화살표 차트
+        box(g, 2, 3, 28, 24, 'w'); P(g, 3, 4, 26, 1, 'L'); for (const y of [10, 16, 22]) P(g, 4, y, 24, 1, 'L');
+        line(g, 5, 8, 11, 12, 'b', 2); line(g, 11, 12, 15, 10, 'b', 2); line(g, 15, 10, 24, 20, 'b', 2);
+        map(g, 19, 16, ['......k', '.....kb', '....kbb', '...kbbb', '..kbbbb', '.kbbbbb', 'kkkkkkk']);
+        P(g, 2, 28, 28, 1, 'd'); map(g, 5, 19, ['kkkkkkk', 'k.....k', 'k.kkk.k', 'k.....k', 'kkkkkkk'].map(r => r.replace(/k/g, 'E')));
+      },
+      doge: g => { // 멍멍코인: 강아지가 새겨진 금화
+        disc(g, 16, 16, 13, 'y', 'k');
+        for (let y = -14; y <= 14; y++) for (let x = -14; x <= 14; x++) { const d = Math.hypot(x, y); if (d > 10.5 && d <= 12.5 && x + y > 4) P(g, 16 + x, 16 + y, 1, 1, 'O'); if (d > 10.5 && d <= 12.5 && x + y < -4) P(g, 16 + x, 16 + y, 1, 1, 'Y'); }
+        map(g, 8, 8, [
+          'kkk.........kkk.',
+          'kNNk.......kNNk.',
+          'kNNNkkkkkkkNNNk.',
+          'kNNNNNNNNNNNNNk.',
+          '.kNNNNNNNNNNNk..',
+          '.kNkkNNNNNkkNk..',
+          '.kNkkNNNNNkkNk..',
+          '.kNNNNNNNNNNNk..',
+          '.kNNNwwkkwwNNk..',
+          '.kNNwwwkkwwwNk..',
+          '..kNwwwwwwwNk...',
+          '..kNNwkrrkwNk...',
+          '...kNNwrrwNk....',
+          '....kkkkkkk.....',
+        ]);
       },
     };
 
@@ -969,9 +1197,10 @@
     }
     const SCENE_ALT = { morning: '아침의 서울역 광장 벤치', day: '낮의 서울역 광장 벤치', evening: '저녁의 서울역 광장 벤치', night: '밤의 서울역 광장 벤치' };
     const THUMB_NAME = ['서울역', '찜질방', '고시원', '원룸', '내 집', '아파트', '주택', '별장', '호텔', '한국 최고 부자'];
-    const JOB_NAME = { flyer: '전단지 알바', loading: '상하차 알바', store: '편의점 알바', delivery: '배달 알바' };
+    const JOB_NAME = { flyer: '전단지 알바', loading: '상하차 알바', store: '편의점 알바', delivery: '배달 알바', cafe: '카페 알바', tutor: '과외', driver: '대리운전', lecture: '강연', tv: '방송 출연', advise: '투자 자문' };
     const ACT_NAME = { rest: '쉬기', study: '공부' };
-    const ASSET_NAME = { daejang: '대장전자', buldak: '화끈식품', hantang: '한탕바이오', coin: '달나라코인', bank: '튼튼은행', battery: '번쩍배터리', game: '꿀잼게임즈', build: '뚝딱건설' };
+    const ASSET_NAME = { daejang: '대장전자', buldak: '화끈식품', hantang: '한탕바이오', coin: '달나라코인', bank: '튼튼은행', battery: '번쩍배터리', game: '꿀잼게임즈', build: '뚝딱건설',
+      etf: '다담아ETF', gold: '황금ETF', insure: '든든보험', air: '날개항공', energy: '훈훈에너지', defense: '방패방산', inv: '거꾸로ETF', doge: '멍멍코인' };
 
     const old = { scene: Old.scene, thumb: Old.thumb, job: Old.job, act: Old.act, asset: Old.asset, die: Old.die, cup: Old.cup };
     const safe = (name, fn) => function () { try { const r = fn.apply(this, arguments); if (r != null) return r; } catch (e) { if (window.console) console.warn('pxart', name, e); } return old[name] ? old[name].apply(this, arguments) : ''; };

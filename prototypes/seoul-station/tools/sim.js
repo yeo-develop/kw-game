@@ -31,7 +31,7 @@ function play(seed, bot) {
   const s = R.create(seed, 'bot'); R.setDream(s, bot.dream || 'family');
   if (process.env.START) { const [t, c] = process.env.START.split(':').map(Number); s.tier = t; s.movedDay = 1; s.cash = c * M; s.quest = 9; s.stats.maxTier = t; s.lease = t >= 4 ? 'own' : t >= 2 ? 'rent' : ''; s.credit = 600; } // 중간 단계에서 바로 시작 (START=집단계:만원)
   s.bot = { labor: [], reach: {}, bizAt: {}, worth: {}, rng: seed * 2654435761 % 4294967296, log: [], rests: 0, tier0: 0 }; // rng: 봇 손의 떨림 (게임 난수와 따로)
-  if (bot.want != null) for (const a of ['flyer', 'loading', 'store', 'delivery']) R.setInt(s, a, bot.want); // 강도 표: 늘 그 강도 (모자라면 acts 의 use 가 내려 줌)
+  if (bot.want != null) for (const j of R.JOBS) R.setInt(s, j.id, bot.want); // 강도 표: 늘 그 강도 (모자라면 acts 의 use 가 내려 줌)
   let guard = 0;
   while (!s.ended && guard++ < DAYS * 40) {
     if (s.phase === 'night') {
@@ -269,7 +269,8 @@ for (const name of names) {
   for (let i = 1; i <= N; i++) runs.push(play(i * 7 + 1, bots[name]));
   const row = { fore: runs.filter(s => s.stats.foreclosed > 0).length / N, foreN: runs.reduce((a, s) => a + s.stats.foreclosed, 0) / N, liq: runs.reduce((a, s) => a + s.stats.liq, 0) / N, st: {} };
   const avg = fn => runs.reduce((a, s) => a + fn(s), 0) / N;
-  row.more = { grade: avg(s => R.creditGrade(s)), props: avg(s => Object.keys(s.props).length), fell: avg(s => s.stats.collapsed || 0), evict: avg(s => s.stats.evicted || 0), jeonse: avg(s => (s.stats.jeonse ? 1 : 0)), meals: avg(s => s.stats.meals || 0), rent: avg(s => s.stats.rent || 0), cl: avg(s => s.stats.borrowed || 0), late: avg(s => s.stats.missedTotal || 0) };
+  row.more = { grade: avg(s => R.creditGrade(s)), props: avg(s => Object.keys(s.props).length), fell: avg(s => s.stats.collapsed || 0), evict: avg(s => s.stats.evicted || 0), jeonse: avg(s => (s.stats.jeonse ? 1 : 0)), meals: avg(s => s.stats.meals || 0), rent: avg(s => s.stats.rent || 0), cl: avg(s => s.stats.borrowed || 0), late: avg(s => s.stats.missedTotal || 0),
+    world: avg(s => s.stats.world || 0), wmiss: avg(s => s.stats.wmiss || 0), repair: avg(s => s.stats.repair || 0), kinds: avg(s => Object.keys(s.ever || {}).length), days: avg(s => s.day), score: avg(s => s.credit) }; // 2026-11-21: 세상 사건 · 빗나간 예보 · 수리비 · 해 본 알바 가짓수
   for (const [t] of STAGES) { const d = runs.map(s => s.bot.reach[t] || Infinity).sort((a, b) => a - b); row.st[t] = { p10: q(d, 0.1), p50: q(d, 0.5), p90: q(d, 0.9), pct: d.filter(x => x < Infinity).length / N }; }
   row.maxTier = runs.reduce((a, s) => a + Math.min(s.stats.maxTier, 9), 0) / N;
   row.worth = runs.map(s => R.worth(s)).sort((a, b) => a - b);
@@ -286,5 +287,7 @@ for (const name of names) {
 }
 console.log('봇'.padEnd(12) + '끝 신용등급 · 상가 수 · 쓰러짐/판 · 쫓겨남/판 · 전세 쓴 판 · 사 먹기/판 · 임대수익/판 · 마이너스 통장으로 빌린 돈/판 · 연체/판');
 for (const name of names) { const m = out[name].more; console.log(name.padEnd(12) + m.grade.toFixed(1) + ' · ' + m.props.toFixed(1) + ' · ' + m.fell.toFixed(2) + ' · ' + m.evict.toFixed(2) + ' · ' + Math.round(m.jeonse * 100) + '% · ' + m.meals.toFixed(0) + ' · ' + won(m.rent) + ' · ' + won(m.cl) + ' · ' + m.late.toFixed(2)); }
+console.log('봇'.padEnd(12) + '세상 사건/판 · 빗나간 예보/판 · 수리비/판 · 해 본 알바 가짓수 · 끝 신용점수 · 판 길이(일)');
+for (const name of names) { const m = out[name].more; console.log(name.padEnd(12) + m.world.toFixed(1) + ' · ' + m.wmiss.toFixed(1) + ' · ' + won(m.repair) + ' · ' + m.kinds.toFixed(1) + ' · ' + m.score.toFixed(0) + ' · ' + m.days.toFixed(0)); }
 console.log('(' + ((Date.now() - t0) / 1000).toFixed(1) + '초)');
 module.exports = { out };

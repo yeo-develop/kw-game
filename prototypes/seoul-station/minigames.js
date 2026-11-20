@@ -1,7 +1,7 @@
 // PROTOTYPE - NOT FOR PRODUCTION
 // Question: 상태창이 시키는 대로 알바 → 방 → 투자 → 집으로 올라가는 한 판이, 뭘 해야 할지 늘 분명하면서 20분 동안 재미있는가?
 // Date: 2026-11-12
-// 알바 미니게임 4종: 전단지(flyer) · 상하차(loading) · 편의점(store) · 배달(delivery).
+// 알바 미니게임 10종: 전단지(flyer) · 상하차(loading) · 편의점(store) · 배달(delivery) + 2026-11-21 의 여섯 — 카페(cafe) · 과외(tutor) · 대리(driver) · 강연(lecture) · 방송(tv) · 자문(advise).
 // 약속: window.Minigames = { list, create(id, opts), demo(id, opts), sprites() }.
 // opts.intensity: 알바 강도 0 하 · 1 중 · 2 상 · 3 최상 (기본 1). 강도가 높을수록 판정 자리가 좁고, 머무는 시간이 짧고, 더 촘촘히 온다 (2026-11-17 전체를 어렵게: "미니게임 너무쉬움").
 // opts.pace: 강도의 속도 배율 (기본 1, ui 가 config 의 mg_int_n 을 넘김, 2.5 에서 자름). 판 속도 = (1 + levelSpeed x level) x pace.
@@ -191,16 +191,17 @@
   }
   function dots(g, x, y, w, h, k, a) { faded(g, a, function (lg) { fr(lg, x, y, w, h, k); }); }   // 점무늬 덮개 (a 만큼)
   // 방향 딱지 색: 왼쪽 파랑 · 오른쪽 주황 · 위 초록 (상자 · 트럭 · 선반이 같은 색)
-  const DIRK = ['b', 'o', 'g'];
+  const DIRK = ['b', 'o', 'g', 'r'], DIRSH = ['B', 'O', 'G', 'R'];   // 넷째(아래 = 빨강)는 강연 · 자문이 쓴다
   const ARROW = [
     ['...w...', '..ww...', '.wwwwww', 'wwwwwww', '.wwwwww', '..ww...', '...w...'],
     ['...w...', '...ww..', 'wwwwww.', 'wwwwwww', 'wwwwww.', '...ww..', '...w...'],
     ['...w...', '..www..', '.wwwww.', 'wwwwwww', '..www..', '..www..', '..www..'],
+    ['..www..', '..www..', '..www..', 'wwwwwww', '.wwwww.', '..www..', '...w...'],
   ];
-  function sticker(g, x, y, size, dir) { // 가운데 (x, y), 색 바탕 + 흰 화살표(그림자 한 칸)
+  function sticker(g, x, y, size, dir, col) { // 가운데 (x, y), 색 바탕 + 흰 화살표(그림자 한 칸). col = [바탕, 그늘] 을 주면 그 색으로
     const x0 = Math.round(x - size / 2), y0 = Math.round(y - size / 2);
-    SB(g, x0, y0, size, size, DIRK[dir]);
-    fr(g, x0 + 1, y0 + size - 2, size - 2, 1, dir === 0 ? 'B' : dir === 1 ? 'O' : 'G');
+    SB(g, x0, y0, size, size, col ? col[0] : DIRK[dir]);
+    fr(g, x0 + 1, y0 + size - 2, size - 2, 1, col ? col[1] : DIRSH[dir]);
     const a = ARROW[dir], s = size >= 14 ? 2 : 1, ax = Math.round(x - 3.5 * s), ay = Math.round(y - 3.5 * s) - (size >= 14 ? 1 : 0);
     for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) if (a[j][i] === 'w') fr(g, ax + i * s + 1, ay + j * s + 1, s, s, 'k');
     for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) if (a[j][i] === 'w') fr(g, ax + i * s, ay + j * s, s, s, 'w');
@@ -314,8 +315,10 @@
     const ready = +opts.ready > 0 ? Math.min(+opts.ready, 3) : READY;                                                 // "준비"가 떠 있는 시간
     const warm = opts.warm == null || !(+opts.warm > 0) ? 1 : clamp(+opts.warm, 0.3, 1), warmSec = +opts.warmSec > 0 ? Math.min(+opts.warmSec, 6) : 0;   // 느린 시작
     const fx = makeFx(P);
+    const cap = (+opts.perfect > 0 && +opts.perfect <= 1 ? +opts.perfect : 0.95) - 0.01;                           // 완벽 기준 바로 아래 (ui 가 config 의 grade_perfect 를 넘긴다)
     const env = {
-      P: P, font: font, seconds: seconds, level: level, speed: (1 + levelSpeed * level) * pace, intensity: intensity, ramp: ramp, rng: rng, fx: fx,
+      flawed: function (score, flaws) { return flaws > 0 ? Math.min(score, cap) : score; },   // 흠(틀림 · 넘침)이 하나라도 있으면 완벽은 없다 — 목표 수가 많은 게임에서 한 번 틀린 감점이 묻히지 않게 (2026-11-21 독립 검토). 특성 '금손'(판정이 후해진다)의 덤은 규칙이 이 뒤에 더하므로, 금손이 있으면 흠 하나쯤은 덮인다 — 예전 네 게임과 같은, 특성의 뜻 그대로
+      P: P, font: font, seconds: seconds, level: level, speed: (1 + levelSpeed * level) * pace, lf: 1 + levelSpeed * level, intensity: intensity, ramp: ramp, rng: rng, fx: fx,   // lf = 숙련만의 빠르기 (강도의 pace 를 뺀 것 — 생각해서 누르는 게임이 쓴다)
       rate: function (wt) { return 1 + ramp * clamp(wt / seconds, 0, 1); },     // 지금 시각의 속도 배율 (1 -> 1 + ramp)
       warp: function (r) { return makeWarp(r, seconds); },
       pick: function (n) { return Math.min(n - 1, Math.floor(rng() * n)); },
@@ -1368,6 +1371,546 @@
   }
 
   // =====================================================================
+  // 2026-11-21 "알바 다각화해": 새 일 여섯 — 카페 · 과외 · 대리 · 강연 · 방송 · 자문. 저마다 다른 손놀림
+  // =====================================================================
+  const DIRS4 = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];   // sticker 의 방향 번호 0 왼쪽 · 1 오른쪽 · 2 위 · 3 아래
+  // 주인공 (22×31 후드티, 기준 = 발 가운데)
+  function heroSprite(face, armOut) { return spr('hero-' + (face || 'calm') + (armOut ? 1 : 0), 30, 36, 15, 34, function (g) { heroAt(g, 4, 4, face, armOut); }, true); }
+  // 기다려 주는 시간 막대 (낮은 해상도). f 0~1
+  function waitBar(g, x, y, w, f) {
+    OB(g, x, y, w, 5, 'L');
+    if (f > 0) { const n = Math.max(1, Math.round((w - 2) * clamp(f, 0, 1))); fr(g, x + 1, y + 1, n, 3, f < 0.3 ? 'r' : 'b'); fr(g, x + 1, y + 1, n, 1, f < 0.3 ? 'P' : 'l'); }
+  }
+  // 아래쪽 누름 칸 (번호 칸처럼): 가운데 (cx, cy), 눌린 만큼 k, 틀림 bad
+  function pad(g, cx, cy, w, h, col, k, bad) {
+    const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2) + (k > 0.3 ? 1 : 0);
+    fr(g, x + 2, y + 3, w, h, 'd');
+    SB(g, x, y, w, h, bad ? 'P' : col);
+    fr(g, x + 1, y + 1, w - 2, 2, bad ? 'r' : 'w');
+    if (bad) veil(g, x + 2, y + 3, w - 4, h - 5, 'r');
+    if (k > 0.05) { fr(g, x + 1, y + 1, w - 2, 2, 'y'); fr(g, x + 1, y + h - 3, w - 2, 2, 'y'); fr(g, x + 1, y + 1, 2, h - 2, 'y'); fr(g, x + w - 3, y + 1, 2, h - 2, 'y'); }
+  }
+
+  // ---------------------------------------------------------------------
+  // 5. 카페 — Space 로 붓기 시작, 선에 닿을 때 다시 Space 로 멈춘다
+  // ---------------------------------------------------------------------
+  function cupSprite() { // 유리잔 틀 (38×60, 기준 = 바닥 가운데). 안쪽은 그릴 때 채운다
+    return spr('cup', 40, 62, 20, 60, function (g) {
+      fr(g, 1, 0, 2, 60, 'L'); fr(g, 37, 0, 2, 60, 'L'); fr(g, 1, 58, 38, 2, 'L'); fr(g, 3, 56, 34, 2, 'S');
+      fr(g, 0, 0, 4, 2, 'L'); fr(g, 36, 0, 4, 2, 'L');
+    });
+  }
+  function cafeSprite() { // 배경: 벽 · 메뉴판 · 선반 · 나무 카운터 (294×127)
+    return spr('cafe', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, 93, 'c'); for (let x = 0; x < LW; x += 14) fr(g, x, 0, 1, 93, 'C');
+      fr(g, 0, 60, LW, 2, 'C');
+      OB(g, 8, 12, 64, 36, 'H'); fr(g, 10, 14, 60, 32, 'E'); for (let i = 0; i < 4; i++) { fr(g, 14, 18 + i * 7, 22 + (i * 7) % 12, 2, 'w'); fr(g, 54, 18 + i * 7, 10, 2, 'y'); }
+      OB(g, 214, 34, 72, 4, 'N'); for (let i = 0; i < 5; i++) { OB(g, 220 + i * 13, 22, 9, 12, ['w', 'S', 'w', 'Y', 'w'][i]); fr(g, 222 + i * 13, 25, 5, 2, ['o', 'b', 'r', 'o', 'g'][i]); }
+      OB(g, 232, 62, 40, 26, 'e'); fr(g, 234, 64, 36, 6, 'L'); OB(g, 240, 74, 8, 8, 'k'); OB(g, 256, 74, 8, 8, 'k'); fr(g, 242, 76, 4, 4, 'r'); fr(g, 258, 76, 4, 4, 'g');   // 에스프레소 기계
+      fr(g, 0, 92, LW, 2, 'k'); fr(g, 0, 94, LW, 33, 'N'); fr(g, 0, 94, LW, 3, 'C'); fr(g, 0, 97, LW, 1, 'n');
+      for (let x = 20; x < LW; x += 46) fr(g, x, 98, 1, 29, 'n');
+    }, true);
+  }
+  const CAFE_PEN = 0.5;   // 카페: 빗나간 선 · 넘친 잔 하나의 감점 (선 반 개)
+  function makeCafe(env) {
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, speed = env.speed, rate = env.rate, n = env.intensity;
+    const TOL = [0.11, 0.07, 0.066, 0.055][n], HALF = 1.6 * TOL, CAPV = 2 * TOL / STAY[n], TWO = n >= 2;   // 판정 반폭(잔 높이 대비) · 아까운 자리 · 붓는 속도 상한(판정 자리를 STAY 초는 지나가게) · 상부터는 선이 둘(두 번에 나눠 붓는다)
+    const TRANS = 0.34, WAIT = 1.6, CX = 441, BY = 270, CH = 168;          // 잔이 바뀌는 시간 · 안 누르고 버틸 수 있는 시간 · 잔 가운데 · 바닥 · 높이(논리)
+    const vAt = function (wt) { return softCap(0.62 * speed * rate(wt), CAPV, 0.85); };
+    const cups = [];
+    let last = -1;
+    for (let i = 0; i < 40; i++) {                 // 선의 높이: 하는 세 가지, 중은 아무 높이나(앞 잔과 다르게), 상부터는 아래 · 위 두 줄
+      let t = n === 0 ? [0.55, 0.72, 0.88][env.pick(3)] : 0.42 + 0.5 * rng();
+      if (Math.abs(t - last) < 0.12) t = t > 0.67 ? t - 0.2 : t + 0.2;
+      last = t;
+      cups.push({ targets: TWO ? [0.24 + 0.2 * rng(), 0.64 + 0.28 * rng()] : [t], res: [] });
+    }
+    let par = 0;
+    for (let t = 0.3, i = 0; i < cups.length && t <= seconds; i++) {   // 만점 기준: 손이 빠른 사람이 맞출 수 있는 선의 수
+      let lv = 0;
+      for (const tg of cups[i].targets) { t += 0.14 + (tg - lv) / vAt(t); lv = tg; if (t <= seconds - 0.05) par++; }
+      t += TRANS;
+    }
+    par = Math.max(3, par);
+    const S = { cups: cups, cur: 0, step: 0, level: 0, st: 'idle', v: vAt(0), trans: 0, wait: WAIT, sum: 0, par: par, tol: TOL, perfects: 0, halves: 0, misses: 0, spills: 0, done: 0, glow: 0, bad: 0, leaving: null };
+    function next() {
+      const c = cups[S.cur % cups.length];
+      S.leaving = { c: { targets: c.targets, res: c.res.slice() }, level: S.level, t: 0 };
+      S.done++; S.cur++; S.step = 0; S.level = 0; S.st = 'idle'; S.trans = TRANS; S.wait = WAIT;
+      cups[S.cur % cups.length].res = [];
+    }
+    function yOf(f) { return BY - CH * f; }
+    // 지금까지 번 몫(선 단위): 아까운 선은 딱 맞춘 선이 모자란 자리만 반씩 채운다(빨리 대충 여러 번으로는 완벽이 안 된다) · 빗나간 선 · 넘친 잔은 감점. 점수와 진행 네모가 같은 식을 쓴다
+    function units() { const got = Math.min(S.perfects, S.par); return Math.max(0, got + 0.5 * Math.min(S.halves, S.par - got) - CAFE_PEN * (S.misses + S.spills)); }
+    return {
+      title: '카페 음료', howto: '선에 닿을 때 멈춘다 (Space 로 붓고 · 멈추고)',
+      how: ['Space 로 붓기 시작, 주황 선에 닿을 때 다시 Space 로 멈춘다' + (TWO ? ' — 선이 둘이면 한 번 더' : ''), '선에서 멀수록 감점 — 넘치면 그 잔은 버린다'],
+      controls: [{ code: 'Space', label: '붓기 · 멈추기' }],
+      state: S,
+      tick: function (dt, wt, playing) {
+        S.v = vAt(Math.max(0, wt)); S.trans = Math.max(0, S.trans - dt); S.glow = decay(S.glow, dt, 0.35); S.bad = decay(S.bad, dt, 0.35);
+        if (S.leaving) { S.leaving.t += dt / TRANS; if (S.leaving.t >= 1) S.leaving = null; }
+        if (!playing || S.trans > EPS) return;
+        const c = cups[S.cur % cups.length];
+        if (S.st === 'pour') {
+          S.level += S.v * dt;
+          if (S.level >= 1.04) { S.spills++; S.bad = 1; while (c.res.length < c.targets.length) c.res.push(3); fx.cross(CX, yOf(1) - 20, 16); fx.kick(3); fx.flash(P.bad, 0.16); fx.float(CX + 96, yOf(1), '넘침', P.bad); next(); }
+        } else if ((S.wait -= dt) <= 0) { S.bad = 1; while (c.res.length < c.targets.length) c.res.push(3); fx.cross(CX, yOf(0.5), 14); next(); }   // 안 붓고 버티면 손님이 그냥 간다
+      },
+      press: function (code) {
+        if (code !== 'Space' || S.trans > EPS) return;
+        const c = cups[S.cur % cups.length];
+        if (S.st === 'idle') { S.st = 'pour'; return; }
+        const tg = c.targets[S.step], d = Math.abs(S.level - tg), ty = yOf(tg);
+        if (d <= TOL + EPS) { S.perfects++; S.sum += 1; c.res.push(1); S.glow = 1; fx.ring(CX, ty, P.gold, 20, 70); fx.burst(CX, ty, P.gold, 6, 150); fx.float(CX + 96, ty, '딱!', P.gold); }
+        else if (d <= HALF + EPS) { S.halves++; S.sum += 0.5; c.res.push(2); S.glow = 0.6; fx.float(CX + 96, ty, S.level < tg ? '모자람' : '넘겼다', P.text); }
+        else { S.misses++; c.res.push(3); S.bad = 1; fx.cross(CX, yOf(S.level), 14); fx.kick(1.5); fx.float(CX + 96, ty, S.level < tg ? '한참 모자람' : '너무 많이', P.bad); }
+        if (++S.step >= c.targets.length) next(); else { S.st = 'idle'; S.wait = WAIT; }
+      },
+      finish: function () {
+        const got = Math.min(S.perfects, S.par), flaws = S.misses + S.spills;
+        return { score: env.flawed(clamp(units() / S.par, 0, 1), flaws), hits: got, total: S.par,
+          detail: '딱 맞춘 선 ' + got + ' / ' + S.par + (S.halves ? ' · 아까운 선 ' + S.halves : '') + (S.misses ? ' · 빗나간 선 ' + S.misses : '') + (S.spills ? ' · 넘친 잔 ' + S.spills : '') };
+      },
+      draw: function (g, wt) {
+        g.drawImage(cafeSprite(), 0, 0);
+        put(g, heroSprite(S.st === 'pour' ? 'open' : 'calm', S.st === 'pour'), 78, 92);
+        fr(g, 0, 92, LW, 2, 'k'); fr(g, 0, 94, 120, 3, 'C');
+        // 만점 기준 칸: 맞힌 만큼 노랗게 (반 칸은 옅게)
+        const u = S.misses + S.spills > 0 ? Math.min(units(), S.par - 0.5) : units();   // 흠이 있으면 마지막 네모는 다 차지 않는다 (완벽이 아님을 하는 중에도 보이게)
+        for (let i = 0; i < S.par; i++) { const on = i < Math.floor(u), half = !on && i < u; OB(g, 12 + (i % 8) * 9, 52 + Math.floor(i / 8) * 9, 7, 7, on ? 'y' : half ? 'Y' : 'b', on || half ? 'k' : 'B'); }
+        const one = function (g, x, c, level, step, pouring) {   // 잔 하나 (g = 그릴 판: 나가는 잔은 점무늬 층에)
+          const bx = Math.round(x), by = L(BY), h = L(CH), tol = Math.max(1, Math.round(h * S.tol));
+          fr(g, bx - 17, by - h, 34, h, 'S');
+          for (let i = 0; i < c.targets.length; i++) if (i >= step) { const ty = by - Math.round(h * c.targets[i]); fr(g, bx - 17, ty - tol, 34, tol * 2, i === step ? 'Y' : 'q'); }   // 맞는 자리 (선 위아래) — 지금 맞출 선만 노랗게
+          const lv = Math.round(h * Math.min(level, 1.03));
+          if (lv > 0) { fr(g, bx - 17, by - lv, 34, lv, 'n'); fr(g, bx - 17, by - lv, 34, 2, 'N'); fr(g, bx - 15, by - lv + 3, 2, Math.max(0, lv - 5), 'N'); }
+          for (let i = 0; i < c.targets.length; i++) {
+            const ty = by - Math.round(h * c.targets[i]), now = i === step, col = now ? 'o' : 'E', r = c.res[i];
+            for (let xx = -17; xx < 17; xx += 4) fr(g, bx + xx, ty, 2, 1, col);                           // 선
+            fr(g, bx - 24, ty - 1, 5, 3, col); fr(g, bx - 26, ty, 2, 1, col); fr(g, bx + 19, ty - 1, 5, 3, col); fr(g, bx + 24, ty, 2, 1, col);
+            if (r === 1) vMark(g, bx + 33, ty, 4); else if (r === 3) xMark(g, bx + 33, ty, 3); else if (r === 2) fr(g, bx + 29, ty - 1, 8, 3, 'y');
+          }
+          put(g, cupSprite(), bx, by);
+          if (pouring) { fr(g, bx - 1, 33, 3, by - lv - 33, 'n'); fr(g, bx - 1, 33, 1, by - lv - 33, 'N'); }
+        };
+        OB(g, 134, 20, 26, 10, 'e'); fr(g, 136, 22, 22, 3, 'L'); OB(g, 143, 28, 8, 5, 'E');               // 붓는 꼭지
+        const c = cups[S.cur % cups.length], lv = S.leaving, k = S.trans > EPS ? 1 - S.trans / TRANS : 1;
+        if (lv) faded(g, 1 - lv.t, function (lg) { one(lg, L(CX) - 50 * easeOut(lv.t), lv.c, lv.level, 9, false); });   // 나가는 잔: 조금 밀리며 점무늬로 사라진다
+        if (wt >= -0.3) one(g, L(CX) + 150 * (1 - easeOut(k)), c, S.level, S.step, S.st === 'pour' && S.trans <= EPS);
+        if (S.st === 'idle' && S.trans <= EPS && wt >= 0) waitBar(g, L(CX) - 20, L(BY) + 5, 40, S.wait / WAIT);
+        for (let i = 1; i <= 2; i++) { const q = cups[(S.cur + i) % cups.length], x = 196 + i * 22; OB(g, x, 66, 14, 22, 'S', 'L'); for (const tg of q.targets) fr(g, x + 1, 87 - Math.round(20 * tg), 12, 1, 'o'); }   // 다음 잔 둘
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // 6. 과외 — 답안지의 셈이 맞으면 ←(맞다), 틀리면 →(틀리다)
+  // ---------------------------------------------------------------------
+  function deskSprite() { // 배경: 방 벽 · 책장 · 책상 (294×127)
+    return spr('desk', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, 84, 'S'); fr(g, 0, 60, LW, 1, 'q');
+      OB(g, 6, 8, 46, 50, 'N'); for (let r = 0; r < 3; r++) { fr(g, 8, 23 + r * 16, 42, 2, 'n'); for (let i = 0; i < 7; i++) fr(g, 10 + i * 6, 11 + r * 16, 4, 12, ['r', 'b', 'g', 'y', 'o', 'l', 'R'][(i + r * 3) % 7]); }
+      OB(g, 236, 10, 50, 34, 'w'); fr(g, 238, 12, 46, 30, 'G'); fr(g, 242, 18, 26, 1, 'w'); fr(g, 242, 24, 34, 1, 'w'); fr(g, 242, 30, 18, 1, 'w');   // 칠판
+      fr(g, 0, 83, LW, 2, 'k'); fr(g, 0, 85, LW, 42, 'N'); fr(g, 0, 85, LW, 3, 'C'); for (let x = 30; x < LW; x += 52) fr(g, x, 89, 1, 38, 'n');
+    }, true);
+  }
+  function genSum(rng, n) { // 강도에 따라 어려워지는 셈. { text, ok, think(따져 보는 데 드는 시간) }
+    const pick = function (k) { return Math.min(k - 1, Math.floor(rng() * k)); };
+    const kind = n === 0 ? pick(2) : n === 1 ? pick(3) : n === 2 ? 1 + pick(3) : 2 + pick(3);
+    let a, b, op, val;
+    if (kind === 0) { a = 2 + pick(8); b = 2 + pick(8); op = '+'; val = a + b; }
+    else if (kind === 1) { a = 11 + pick(40); b = 2 + pick(8); if (rng() < 0.5) { op = '+'; val = a + b; } else { op = '−'; val = a - b; } }
+    else if (kind === 2) { a = 2 + pick(8); b = 2 + pick(8); op = '×'; val = a * b; }
+    else if (kind === 3) { a = 12 + pick(60); b = 11 + pick(30); if (rng() < 0.5) { op = '+'; val = a + b; } else { if (b > a) { const t = a; a = b; b = t; } op = '−'; val = a - b; } }
+    else { a = 11 + pick(20); b = 3 + pick(6); op = '×'; val = a * b; }
+    const ok = rng() < 0.5; let shown = val;
+    if (!ok) { shown = val + [1, -1, 2, -2, 10, -10][pick(6)]; if (shown < 0 || shown === val) shown = val + 1; }
+    return { text: a + ' ' + op + ' ' + b + ' = ' + shown, ok: ok, think: [0.2, 0.34, 0.3, 0.55, 0.75][kind], mark: 0 };
+  }
+  function makeTutor(env) {
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, font = env.font, rate = env.rate, n = env.intensity, lf = env.lf;
+    const lfs = 1 + (lf - 1) * 0.5;                                                                      // 셈은 숙련이 올라도 그만큼 빨라지지 않는다 (절반만)
+    const par = Math.max(3, Math.min([8, 10, 11, 11][n], Math.round([6.4, 8.6, 9.0, 9.0][n] * lfs * seconds / 7)));
+    const TRANS = 0.2, items = [];
+    for (let i = 0; i < 40; i++) items.push(genSum(rng, n));
+    const allowFor = function (wt) { return Math.max(1.0, [2.2, 1.9, 1.8, 1.8][n] / (lfs * rate(wt))); };
+    const S = { items: items, cur: 0, trans: 0, allow: 0, patience: 0, par: par, hits: 0, wrongs: 0, timeouts: 0, padPop: [0, 0], padBad: [0, 0], leaving: null, pip: 0 };
+    function next(mark) { const it = items[S.cur % items.length]; it.mark = mark; S.leaving = { it: it, mark: mark, t: 0 }; S.cur++; S.trans = TRANS; S.allow = 0; S.patience = 0; }
+    return {
+      title: '과외 채점', howto: '맞으면 ← 틀리면 →', startY: 300,
+      how: ['답안지의 셈이 맞으면 ←(맞다), 틀리면 →(틀리다)', '잘못 채점하면 감점 — 찍지 않는다'],
+      controls: [{ code: 'ArrowLeft', label: '맞다' }, { code: 'ArrowRight', label: '틀리다' }],
+      state: S,
+      tick: function (dt, wt, playing) {
+        S.trans = Math.max(0, S.trans - dt); S.pip = decay(S.pip, dt, 0.2);
+        for (let i = 0; i < 2; i++) { S.padPop[i] = decay(S.padPop[i], dt, 0.18); S.padBad[i] = decay(S.padBad[i], dt, 0.3); }
+        if (S.leaving) { S.leaving.t += dt / 0.3; if (S.leaving.t >= 1) S.leaving = null; }
+        if (!playing || S.trans > EPS) return;
+        if (S.allow === 0) S.allow = S.patience = allowFor(wt);
+        if ((S.patience -= dt) <= 0) { S.timeouts++; fx.cross(440, 150, 16); fx.kick(1.5); next(3); }   // 못 본 답안지는 그냥 넘어간다 (벌점 없음)
+      },
+      press: function (code) {
+        const k = code === 'ArrowLeft' ? 0 : code === 'ArrowRight' ? 1 : -1;
+        if (k < 0 || S.trans > EPS) return;
+        const it = items[S.cur % items.length], right = (k === 0) === it.ok, px = k === 0 ? 150 : 730;
+        if (right) { S.hits++; S.padPop[k] = 1; S.pip = 1; fx.ring(px, 318, P.good, 26, 70); fx.burst(440, 150, P.gold, 5, 130); fx.float(px, 270, '+1', P.gold); next(1); }
+        else { S.wrongs++; S.padBad[k] = 1; fx.cross(px, 318, 22); fx.kick(3); fx.flash(P.bad, 0.16); next(2); }
+      },
+      finish: function () {
+        return { score: env.flawed(clamp((Math.min(S.hits, S.par) - S.wrongs) / S.par, 0, 1), S.wrongs), hits: Math.min(S.hits, S.par), total: S.par,   // 틀린 것은 더 많이 해도 메워지지 않는다 (완벽은 흠 없이)
+          detail: '맞게 채점 ' + Math.min(S.hits, S.par) + ' / ' + S.par + (S.wrongs ? ' · 잘못 채점 ' + S.wrongs + '번' : '') + (S.timeouts ? ' · 못 본 답안지 ' + S.timeouts + '장' : '') };
+      },
+      draw: function (g, wt) {
+        g.drawImage(deskSprite(), 0, 0);
+        put(g, heroSprite('open', false), 34, 84); put(g, customerSprite(0, S.padBad[0] + S.padBad[1] > 0 ? 2 : 0), 262, 84);
+        fr(g, 0, 83, LW, 2, 'k');
+        for (let i = 0; i < S.par; i++) { const on = i < Math.min(S.hits, S.par); OB(g, 62 + i * 9, 12, 7, 7, on ? 'y' : 'b', on ? 'k' : 'B'); }
+        const sheet = function (y, mark) {
+          fr(g, 92, y + 3, 114, 46, 'd'); SB(g, 90, y, 114, 46, 'w'); fr(g, 91, y + 1, 112, 6, 'S'); fr(g, 96, y + 3, 30, 2, 'l');
+          for (let i = 0; i < 3; i++) fr(g, 96, y + 36 + i * 3, 102 - i * 20, 1, 'L');
+          if (mark === 1) vMark(g, 188, y + 24, 8); else if (mark === 2) xMark(g, 188, y + 24, 7); else if (mark === 3) { fr(g, 180, y + 23, 16, 3, 'e'); }
+        };
+        const lv = S.leaving, k = S.trans > EPS ? 1 - S.trans / TRANS : 1;
+        S.sheetY = wt >= -0.3 ? 30 + Math.round(60 * (1 - easeOut(k))) : 200; S.leaveY = lv ? 30 - Math.round(90 * easeOut(lv.t)) : -200;
+        if (lv) sheet(S.leaveY, lv.mark);
+        if (wt >= -0.3) sheet(S.sheetY, 0);
+        if (wt >= 0 && S.trans <= EPS && S.allow > 0) waitBar(g, 107, 79, 80, S.patience / S.allow);
+        // 아래 두 칸: 맞다(동그라미) · 틀리다(가위표)
+        pad(g, 50, 106, 76, 32, 'h', bump(S.padPop[0]), S.padBad[0] > 0); ring(g, 36, 106, 9, 'k', 4); ring(g, 36, 106, 8, 'r', 2); sticker(g, 70, 106, 17, 0);
+        pad(g, 243, 106, 76, 32, 'P', bump(S.padPop[1]), S.padBad[1] > 0); xMark(g, 229, 106, 7); sticker(g, 263, 106, 17, 1);
+      },
+      text: function (ctx, wt, ox, oy) { // 답안지의 셈 (둥근모꼴 32px)
+        const lv = S.leaving, put1 = function (it, y) { if (y < -60 || y > 130) return; ctx.font = '32px ' + font; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = pc('k'); const w = ctx.measureText(it.text).width; ctx.fillText(it.text, Math.round((147 * SC - w / 2 + ox) / 2) * 2, (y + 13) * SC + oy); };
+        if (lv) put1(lv.it, S.leaveY);
+        if (wt >= -0.3) put1(items[S.cur % items.length], S.sheetY);
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // 7. 대리 — 손님이 불러 준 길(화살표 줄)을 잠깐 보고 외워서, 갈림길마다 차례로 누른다
+  // ---------------------------------------------------------------------
+  function nightSprite() { // 배경: 밤거리 (294×127)
+    return spr('night', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, 96, 'B'); for (let i = 0; i < 26; i++) fr(g, (i * 53) % LW, (i * 29) % 40, 1, 1, i % 3 ? 'l' : 'w');
+      for (let i = 0; i < 9; i++) { const x = i * 34 - 6, h = 30 + (i * 17) % 34; fr(g, x, 96 - h, 30, h, 'k'); for (let y = 96 - h + 4; y < 92; y += 7) for (let xx = x + 4; xx < x + 26; xx += 7) fr(g, xx, y, 3, 4, (xx + y + i) % 3 ? 'E' : 'y'); }
+      fr(g, 0, 96, LW, 31, 'E'); fr(g, 0, 96, LW, 2, 'k'); fr(g, 0, 98, LW, 1, 'e');
+      for (let x = 6; x < LW; x += 22) fr(g, x, 111, 12, 2, 'Y');
+    }, true);
+  }
+  function sedanSprite() { // 손님 차 (옆모습, 오른쪽 보기, 46×20, 기준 = 바퀴 아래 가운데)
+    return spr('sedan', 48, 22, 24, 20, function (g) {
+      rows(g, 1, 1, [
+        '............kkkkkkkkkkkkkkkk..................',
+        '..........kkSSSSSSkwwwwwwwwkk................',
+        '.........kSSSSSSSSkwwwwwwwwwwkk..............',
+        '........kSSSSSSSSSkwwwwwwwwwwwwk.............',
+        '...kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk....',
+        '..kwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwkk..',
+        '.kwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwyk.',
+        '.kLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLyk.',
+        '.krLLLLLkkkkkLLLLLLLLLLLLLLLLLLkkkkkLLLLLLLLk.',
+        '..kkkkkkkEEEkkkkkkkkkkkkkkkkkkkkEEEkkkkkkkkk..',
+        '.........kEEEk..................kEEEk.........',
+        '..........kkk....................kkk..........',
+      ]);
+    }, true);
+  }
+  function makeDriver(env) {
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, n = env.intensity, lf = env.lf;
+    const K = [3, 4, 5, 6][n], R = 2, total = R * K, GAP = 0.25, budget = (seconds - 0.2) / R;
+    const SHOW = Math.max(0.55 + 0.07 * K, [1.0, 1.1, 1.15, 1.2][n] / lf), INPUT = budget - SHOW - GAP;   // 길을 보여 주는 시간 · 누를 수 있는 시간
+    const rounds = [];
+    for (let r = 0; r < R; r++) { const seq = []; for (let i = 0; i < K; i++) { let d = env.pick(3); if (i > 1 && d === seq[i - 1] && d === seq[i - 2]) d = (d + 1) % 3; seq.push(d); } rounds.push({ seq: seq, marks: seq.map(function () { return 0; }) }); }
+    const S = { rounds: rounds, r: 0, ph: 'show', t: SHOW, idx: 0, K: K, total: total, hits: 0, wrongs: 0, timeouts: 0, showFor: SHOW, inputFor: INPUT, carX: 60, jolt: 0, padPop: [0, 0, 0], padBad: [0, 0, 0], fin: false };
+    const ORDER = [0, 2, 1];   // 조작 칸의 왼쪽부터: 왼쪽 · 직진(위) · 오른쪽
+    function endRound() { S.ph = 'gap'; S.t = GAP; }
+    return {
+      title: '대리운전', howto: '길을 외워 차례로 ← ↑ →', startY: 300,
+      how: ['손님이 불러 준 길(화살표)을 잠깐 보여 준다 — 외운다', '가려지면 왼쪽부터 차례로 ← ↑ → 를 누른다. 틀리면 감점'],
+      controls: [{ code: 'ArrowLeft', label: '왼쪽' }, { code: 'ArrowUp', label: '직진' }, { code: 'ArrowRight', label: '오른쪽' }],
+      state: S,
+      tick: function (dt, wt, playing) {
+        S.jolt = decay(S.jolt, dt, 0.3);
+        for (let i = 0; i < 3; i++) { S.padPop[i] = decay(S.padPop[i], dt, 0.18); S.padBad[i] = decay(S.padBad[i], dt, 0.3); }
+        const want = 60 + (S.r * K + (S.ph === 'show' ? 0 : S.idx)) * (760 / total); S.carX += (want - S.carX) * Math.min(1, dt * 7);
+        if (!playing || S.fin) return;
+        S.t -= dt;
+        if (S.ph === 'show' && S.t <= 0) { S.ph = 'input'; S.t = INPUT; S.idx = 0; }
+        else if (S.ph === 'input' && S.t <= 0) { const rd = rounds[S.r]; for (let i = S.idx; i < K; i++) { rd.marks[i] = 3; S.timeouts++; } S.idx = K; fx.kick(1.5); endRound(); }
+        else if (S.ph === 'gap' && S.t <= 0) { if (S.r + 1 < R) { S.r++; S.ph = 'show'; S.t = SHOW; S.idx = 0; } else S.fin = true; }
+      },
+      press: function (code) {
+        const d = DIRS4.indexOf(code);
+        if (d < 0 || d > 2 || S.ph !== 'input' || S.fin) return;        // 보여 주는 동안 · 바뀌는 동안은 받지 않는다 (벌점 없음)
+        const rd = rounds[S.r], slot = ORDER.indexOf(d), x = 147 + (slot - 1) * 250;
+        if (d === rd.seq[S.idx]) { S.hits++; rd.marks[S.idx] = 1; S.padPop[slot] = 1; fx.ring(x, 330, P.good, 24, 64); fx.float(S.carX + 40, 250, '+1', P.gold); }
+        else { S.wrongs++; rd.marks[S.idx] = 2; S.padBad[slot] = 1; S.jolt = 1; fx.cross(x, 330, 20); fx.kick(3); fx.flash(P.bad, 0.16); }
+        S.idx++;
+        if (S.idx >= K) endRound();
+      },
+      finish: function () {
+        return { score: env.flawed(clamp((S.hits - S.wrongs) / S.total, 0, 1), S.wrongs), hits: S.hits, total: S.total,   // 잘못 든 길은 한 칸을 통째로 깎는다: 아무 키나 누르면(셋 중 하나가 맞음) "보통"이 50판에 한 번꼴 — 감점이 0.5 · 0.75 면 하 강도에서 열에 한 번 나왔다 (길이 여섯 칸뿐이라)
+          detail: '맞게 간 길 ' + S.hits + ' / ' + S.total + (S.wrongs ? ' · 잘못 든 길 ' + S.wrongs + '번' : '') + (S.timeouts ? ' · 못 누른 길 ' + S.timeouts + '번' : '') };
+      },
+      draw: function (g, wt) {
+        g.drawImage(nightSprite(), 0, 0);
+        const rd = rounds[S.r], show = S.ph === 'show' && wt >= 0, w = K * 22 + 14, x0 = Math.round(147 - w / 2);
+        // 내비 화면: 길 순서 (보여 줄 때는 화살표, 가려진 뒤에는 누른 것만)
+        fr(g, x0 + 2, 15, w, 34, 'k'); SB(g, x0, 12, w, 34, 'E'); fr(g, x0 + 2, 14, w - 4, 30, 'B'); fr(g, x0 + 2, 14, w - 4, 1, 'l');
+        for (let i = 0; i < K; i++) {
+          const cx = x0 + 18 + i * 22, m = rd.marks[i], now = S.ph === 'input' && i === S.idx;
+          if (now) { fr(g, cx - 10, 17, 21, 24, 'b'); fr(g, cx - 8, 39, 17, 2, 'y'); }
+          if (show || m === 1 || m === 2) sticker(g, cx, 28, 17, rd.seq[i]); else { SB(g, cx - 8, 20, 17, 17, 'e'); fr(g, cx - 2, 24, 5, 2, 'w'); fr(g, cx + 1, 26, 2, 3, 'w'); fr(g, cx - 1, 29, 2, 2, 'w'); fr(g, cx - 1, 33, 2, 2, 'w'); }
+          if (m === 1) vMark(g, cx + 5, 39, 4); else if (m === 2) xMark(g, cx + 5, 39, 3); else if (m === 3) fr(g, cx - 4, 40, 9, 2, 'r');
+        }
+        if (wt >= 0 && !S.fin && S.ph !== 'gap') waitBar(g, x0, 49, w, S.t / (show ? SHOW : INPUT));
+        // 길: 갈림길 표시와 손님 차
+        for (let i = 0; i <= S.total; i++) { const x = L(60 + i * (760 / S.total)); fr(g, x, 99, 1, 6, i <= S.r * K + (S.ph === 'show' ? 0 : S.idx) ? 'g' : 'L'); }
+        const cx = L(S.carX), jy = S.jolt > 0 ? Math.round(Math.sin(S.jolt * 30) * 2) : 0;
+        ell(g, cx, 109, 20, 2, 'k'); put(g, sedanSprite(), cx, 109 + jy);
+        if (S.jolt <= 0.05) { fr(g, cx - 8, 82, 5, 1, 'w'); fr(g, cx - 5, 83, 2, 1, 'w'); fr(g, cx - 8, 85, 5, 1, 'w'); fr(g, cx - 13, 87, 3, 1, 'w'); fr(g, cx - 13, 89, 3, 1, 'w'); }   // 뒷자리 손님은 잔다 (Zz)
+        // 아래 세 칸: 왼쪽 · 직진 · 오른쪽
+        for (let i = 0; i < 3; i++) { const px = 64 + i * 83; pad(g, px, 119, 60, 14, show || S.ph === 'gap' ? 'L' : 'w', bump(S.padPop[i]), S.padBad[i] > 0); sticker(g, px, 118, 11, ORDER[i]); }
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // 8. 강연 — 큐카드의 화살표를 왼쪽부터 차례로, 빨리
+  // ---------------------------------------------------------------------
+  function hallSprite() { // 배경: 강연장 무대 · 막 · 연단 (294×127)
+    return spr('hall', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, 92, 'C'); fr(g, 0, 0, LW, 12, 'R'); for (let x = 0; x < LW; x += 12) { fr(g, x, 0, 6, 14, 'r'); fr(g, x + 5, 0, 1, 14, 'R'); }
+      fr(g, 0, 14, LW, 1, 'k'); for (let x = 0; x < 30; x += 6) { fr(g, x, 15, 3, 70, 'r'); fr(g, LW - 3 - x, 15, 3, 70, 'r'); } fr(g, 30, 15, 1, 70, 'k'); fr(g, LW - 31, 15, 1, 70, 'k');
+      fr(g, 0, 86, LW, 2, 'k'); fr(g, 0, 88, LW, 39, 'N'); fr(g, 0, 88, LW, 2, 'C'); for (let x = 16; x < LW; x += 40) fr(g, x, 91, 1, 36, 'n');
+      OB(g, 54, 64, 30, 26, 'n'); fr(g, 56, 66, 26, 3, 'N'); OB(g, 62, 72, 14, 10, 'y'); fr(g, 68, 56, 2, 9, 'k'); OB(g, 66, 52, 6, 5, 'E');   // 연단 · 마이크
+    }, true);
+  }
+  function makeLecture(env) {
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, n = env.intensity, lf = env.lf;
+    const K = [4, 5, 5, 6][n], ND = n >= 2 ? 4 : 3, TRANS = 0.18, LOCK = 0.22;                          // 카드의 화살표 수 · 방향 가짓수(상부터 아래 방향이 섞인다)
+    const par = Math.max(4, Math.min([22, 29, 33, 37][n], Math.round([18, 25, 29, 33][n] * (1 + (lf - 1) * 0.6) * seconds / 7)));
+    const cards = [];
+    for (let c = 0; c < 30; c++) { const a = []; for (let i = 0; i < K; i++) { let d = env.pick(ND); if (i > 0 && d === a[i - 1] && rng() < 0.7) d = (d + 1 + env.pick(ND - 1)) % ND; a.push(d); } cards.push({ seq: a, marks: a.map(function () { return 0; }) }); }
+    const ORDER = ND === 4 ? [0, 2, 3, 1] : [0, 2, 1];                                                   // 조작 칸의 왼쪽부터: ← ↑ (↓) →
+    const S = { cards: cards, c: 0, i: 0, K: K, par: par, trans: 0, lock: 0, hits: 0, wrongs: 0, done: 0, clap: 0, padPop: [0, 0, 0, 0], padBad: [0, 0, 0, 0], leaving: null, order: ORDER };
+    return {
+      title: '강연', howto: '큐카드의 화살표를 차례로, 빨리', startY: 250,
+      how: ['큐카드의 화살표를 왼쪽부터 차례로 누른다 — 빠를수록 많이 넘긴다', '틀리면 감점이고 잠깐 말이 막힌다'],
+      controls: ORDER.map(function (d) { return { code: DIRS4[d], label: ['왼쪽', '오른쪽', '위', '아래'][d] }; }),
+      state: S,
+      tick: function (dt) {
+        S.trans = Math.max(0, S.trans - dt); S.lock = Math.max(0, S.lock - dt); S.clap = decay(S.clap, dt, 0.4);
+        for (let i = 0; i < 4; i++) { S.padPop[i] = decay(S.padPop[i], dt, 0.16); S.padBad[i] = decay(S.padBad[i], dt, 0.3); }
+        if (S.leaving) { S.leaving.t += dt / 0.25; if (S.leaving.t >= 1) S.leaving = null; }
+      },
+      press: function (code) {
+        const d = DIRS4.indexOf(code), slot = ORDER.indexOf(d);
+        if (slot < 0 || S.trans > EPS || S.lock > EPS) return;
+        const cd = cards[S.c % cards.length], x = (294 / 2 + (slot - (ORDER.length - 1) / 2) * 60) * SC;
+        if (d === cd.seq[S.i]) { S.hits++; cd.marks[S.i] = 1; S.padPop[slot] = 1; if (S.hits <= S.par) fx.float(x, 300, '+1', P.gold); }
+        else { S.wrongs++; cd.marks[S.i] = 2; S.padBad[slot] = 1; S.lock = LOCK; fx.cross(x, 336, 18); fx.kick(3); fx.flash(P.bad, 0.14); }
+        S.i++;
+        if (S.i >= K) {                                                                                  // 카드 한 장 끝: 박수
+          const clean = cd.marks.every(function (m) { return m === 1; });
+          S.leaving = { cd: { seq: cd.seq.slice(), marks: cd.marks.slice() }, t: 0 }; S.done++; S.c++; S.i = 0; S.trans = TRANS;
+          const nx = cards[S.c % cards.length]; for (let j = 0; j < K; j++) nx.marks[j] = 0;
+          if (clean) { S.clap = 1; fx.burst(520, 150, P.gold, 8, 170); }
+        }
+      },
+      finish: function () {
+        return { score: env.flawed(clamp((Math.min(S.hits, S.par) - S.wrongs) / S.par, 0, 1), S.wrongs), hits: Math.min(S.hits, S.par), total: S.par,
+          detail: '읽은 화살표 ' + Math.min(S.hits, S.par) + ' / ' + S.par + (S.wrongs ? ' · 말이 꼬임 ' + S.wrongs + '번' : '') + ' · 넘긴 카드 ' + S.done + '장' };
+      },
+      draw: function (g, wt) {
+        g.drawImage(hallSprite(), 0, 0);
+        put(g, heroSprite(S.lock > 0 ? 'calm' : 'open', false), 69, 64); OB(g, 54, 64, 30, 26, 'n'); fr(g, 56, 66, 26, 3, 'N'); OB(g, 62, 72, 14, 10, 'y');
+        const card = function (cd, y, cur) {
+          const w = K * 22 + 16, x0 = Math.round(180 - w / 2);
+          fr(g, x0 + 2, y + 3, w, 36, 'd'); SB(g, x0, y, w, 36, 'w'); fr(g, x0 + 1, y + 1, w - 2, 4, 'Y');
+          for (let i = 0; i < K; i++) {
+            const cx = x0 + 19 + i * 22, m = cd.marks[i], now = i === cur;
+            if (now) { fr(g, cx - 10, y + 7, 21, 25, 'Y'); fr(g, cx - 8, y + 30, 17, 2, 'o'); }
+            sticker(g, cx, y + 19 - (now ? Math.round(1 + Math.sin(fx.clock * 9)) : 0), 17, cd.seq[i]);
+            if (m) veil(g, cx - 9, y + 9, 19, 20, 'w');
+            if (m === 1) vMark(g, cx, y + 20, 5); else if (m === 2) xMark(g, cx, y + 19, 4);
+          }
+        };
+        const lv = S.leaving, k = S.trans > EPS ? 1 - S.trans / TRANS : 1;
+        if (lv) card(lv.cd, 22 - Math.round(50 * easeOut(lv.t)), -1);
+        if (wt >= -0.3) card(cards[S.c % cards.length], 22 + Math.round(70 * (1 - easeOut(k))), S.trans > EPS ? -1 : S.i);
+        for (let i = 0; i < S.par; i++) { const on = i < Math.min(S.hits, S.par), cols = Math.ceil(S.par / 3), x0 = 258 - cols * 5; OB(g, x0 + (i % cols) * 5, 66 + Math.floor(i / cols) * 6, 4, 5, on ? 'y' : 'b', on ? 'k' : 'B'); }   // 만점 기준 칸 (세 줄, 오른쪽 막 앞)
+        // 청중: 박수를 치면 들썩인다
+        for (let i = 0; i < 12; i++) { const hx = 12 + i * 24, up = S.clap > 0 ? Math.round(2 * Math.abs(Math.sin(S.clap * 14 + i))) : 0; ell(g, hx, 100 - up, 7, 7, i % 3 === 0 ? 'H' : i % 3 === 1 ? 'n' : 'E'); fr(g, hx - 9, 105 - up, 18, 8, ['b', 'g', 'r', 'E'][i % 4]); }
+        // 아래 누름 칸
+        for (let i = 0; i < ORDER.length; i++) { const px = Math.round(147 + (i - (ORDER.length - 1) / 2) * 60); pad(g, px, 118, 48, 15, 'w', bump(S.padPop[i]), S.padBad[i] > 0); sticker(g, px, 117, 11, ORDER[i]); }
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // 9. 방송 — 빨간 불이 켜진 카메라 쪽 키 (← ↑ →). 파란 불(대기)에는 누르지 않는다
+  // ---------------------------------------------------------------------
+  function studioSprite() { // 배경: 스튜디오 · 책상 (294×127)
+    return spr('studio', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, 96, 'b'); for (let x = 0; x < LW; x += 21) fr(g, x, 0, 1, 96, 'B'); fr(g, 0, 30, LW, 1, 'B'); fr(g, 0, 62, LW, 1, 'B');
+      OB(g, 104, 34, 86, 40, 'S', 'k'); fr(g, 106, 36, 82, 36, 'l'); fr(g, 110, 40, 30, 3, 'w'); fr(g, 110, 46, 50, 2, 'S'); fr(g, 110, 51, 40, 2, 'S');   // 뒤 화면
+      fr(g, 0, 96, LW, 31, 'E'); fr(g, 0, 96, LW, 2, 'k');
+      OB(g, 96, 84, 102, 26, 'N'); fr(g, 98, 86, 98, 3, 'C'); fr(g, 98, 106, 98, 2, 'n'); OB(g, 132, 92, 30, 10, 'r'); fr(g, 136, 95, 22, 4, 'w');           // 책상 · 방송 딱지
+    }, true);
+  }
+  function camSprite(up) { // 카메라 (30×24, 기준 = 가운데). up = 위에서 내려다보는 카메라(매달림)
+    return spr('cam' + (up ? 1 : 0), 32, 26, 16, 13, function (g) {
+      if (up) { fr(g, 14, 0, 4, 6, 'E'); }
+      OB(g, 3, 5, 22, 14, 'E'); fr(g, 5, 7, 18, 2, 'e'); OB(g, 24, 8, 7, 8, 'k'); fr(g, 26, 10, 3, 4, 'l');
+      if (!up) { fr(g, 12, 19, 4, 3, 'k'); fr(g, 6, 22, 16, 2, 'k'); }
+    });
+  }
+  function makeTv(env) {
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, n = env.intensity, lf = env.lf, rate = env.rate;
+    const WIN = [1.1, 0.68, 0.6, 0.5][n], FLOORW = [0.66, 0.53, 0.44, 0.37][n], GAP = [0.42, 0.32, 0.26, 0.22][n], DECOY = [0, 0.24, 0.28, 0.33][n];   // 불이 켜져 있는 시간 · 그 바닥 · 불 사이의 틈 · 파란 불(가짜) 비율
+    const CAMS = [[120, 196], [440, 62], [760, 196]];                                                   // 왼쪽 · 위 · 오른쪽 카메라 (논리 좌표)
+    const cues = [];
+    let lastCam = -1;
+    for (let t = 0.45; t < seconds - 0.5;) {
+      const dur = Math.max(FLOORW, WIN / (lf * rate(t))), red = cues.length < 1 || cues[cues.length - 1].red === false || rng() >= DECOY;   // 첫 불은 늘 빨강, 파란 불이 연달아 오지 않는다
+      let cam = env.pick(3); if (cam === lastCam && rng() < 0.6) cam = (cam + 1 + env.pick(2)) % 3; lastCam = cam;
+      if (t + dur > seconds - 0.05) break;
+      cues.push({ at: t, dur: dur, cam: cam, red: red, st: 0 });                                         // st: 0 아직 · 1 맞힘 · 2 놓침 · 3 가짜를 눌렀다 · 4 가짜를 잘 참았다
+      t += dur + Math.max(0.16, GAP / (lf * rate(t)));
+    }
+    const total = Math.max(1, cues.filter(function (c) { return c.red; }).length);
+    const S = { cues: cues, total: total, hits: 0, wrongs: 0, misses: 0, look: 1, lookT: 0, now: null, camPop: [0, 0, 0], camBad: [0, 0, 0], wt: 0 };
+    const ORDER = [0, 2, 1];                                                                             // 카메라 번호(왼 · 위 · 오) → 방향 번호
+    return {
+      title: '방송 출연', howto: '빨간 불 카메라 쪽으로 ← ↑ →',
+      how: ['빨간 불이 켜진 카메라 쪽 키(← ↑ →)를 불이 꺼지기 전에 누른다', '파란 불은 대기 화면 — 누르면 감점'],
+      controls: [{ code: 'ArrowLeft', label: '왼쪽 카메라' }, { code: 'ArrowUp', label: '위 카메라' }, { code: 'ArrowRight', label: '오른쪽 카메라' }],
+      state: S,
+      tick: function (dt, wt, playing) {
+        S.lookT = decay(S.lookT, dt, 0.5);
+        for (let i = 0; i < 3; i++) { S.camPop[i] = decay(S.camPop[i], dt, 0.25); S.camBad[i] = decay(S.camBad[i], dt, 0.3); }
+        S.now = null;
+        for (const c of cues) {
+          if (wt >= c.at && wt < c.at + c.dur) { if (c.st === 0) S.now = c; }
+          else if (playing && wt >= c.at + c.dur && c.st === 0) { if (c.red) { c.st = 2; S.misses++; S.camBad[c.cam] = Math.max(S.camBad[c.cam], 0.6); } else c.st = 4; }
+        }
+      },
+      press: function (code) {
+        const d = DIRS4.indexOf(code), cam = ORDER.indexOf(d);
+        if (cam < 0) return;
+        const c = S.now, p = CAMS[cam];
+        S.look = cam; S.lookT = 1;
+        if (c && c.red && c.cam === cam) { c.st = 1; S.hits++; S.camPop[cam] = 1; S.now = null; fx.ring(p[0], p[1], P.gold, 18, 60); fx.float(p[0], p[1] - 50, '+1', P.gold); }
+        else { S.wrongs++; S.camBad[cam] = 1; if (c && !c.red) { c.st = 3; S.now = null; } fx.cross(p[0], p[1], 18); fx.kick(2.5); fx.flash(P.bad, 0.14); }
+      },
+      finish: function () {
+        return { score: env.flawed(clamp((S.hits - 0.5 * S.wrongs) / S.total, 0, 1), S.wrongs), hits: S.hits, total: S.total,
+          detail: '맞춘 카메라 ' + S.hits + ' / ' + S.total + (S.misses ? ' · 놓친 불 ' + S.misses + '번' : '') + (S.wrongs ? ' · 엉뚱한 카메라 ' + S.wrongs + '번' : '') };
+      },
+      draw: function (g, wt) {
+        g.drawImage(studioSprite(), 0, 0);
+        put(g, heroSprite('open', false), 147, 91); OB(g, 96, 84, 102, 26, 'N'); fr(g, 98, 86, 98, 3, 'C'); fr(g, 98, 106, 98, 2, 'n'); OB(g, 132, 92, 30, 10, 'r'); fr(g, 136, 95, 22, 4, 'w');
+        if (S.lookT > 0.05) { const p = CAMS[S.look]; seg(g, 147, 62, L(p[0]) + (S.look === 0 ? 14 : S.look === 2 ? -14 : 0), L(p[1]) + (S.look === 1 ? 10 : 0), 'Y', 1); }   // 눈길
+        for (let i = 0; i < S.total; i++) { const on = i < S.hits; OB(g, 8 + i * 8, 116, 6, 7, on ? 'y' : 'b', on ? 'k' : 'B'); }
+        const c = S.now;
+        for (let i = 0; i < 3; i++) {
+          const x = L(CAMS[i][0]), y = L(CAMS[i][1]), on = c && c.cam === i, k = bump(S.camPop[i]), bad = S.camBad[i] > 0.05;
+          const im = camSprite(i === 1); put(g, i === 2 ? flipped(im) : im, x, y - Math.round(3 * k));
+          const lx = x + (i === 2 ? 8 : -8), ly = y - (i === 1 ? 2 : 12), col = on ? (c.red ? 'r' : 'l') : bad ? 'R' : 'e';
+          OB(g, lx - 3, ly - 3, 7, 7, col); if (on) fr(g, lx - 2, ly - 2, 2, 2, 'w');
+          if (on) {                                                                                       // 켜진 불: 꺾쇠 + 남은 시간
+            const f = clamp(1 - (wt - c.at) / c.dur, 0, 1);
+            corners(g, x - 22, y - 18, x + 23, y + 17, 6, c.red ? 'r' : 'l', 2);
+            waitBar(g, x - 16, y + 18, 32, f);
+            sticker(g, x + (i === 0 ? 30 : i === 2 ? -30 : 0), y + (i === 1 ? 32 : 0), c.red ? 17 : 11, ORDER[i]);
+            if (!c.red) xMark(g, x + (i === 0 ? 30 : i === 2 ? -30 : 0), y + (i === 1 ? 32 : 0), 3);
+          }
+          if (k > 0.3) vMark(g, x, y - 20, 6);
+        }
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // 10. 자문 — 차트의 끝이 처음보다 높으면 ↑(사라), 낮으면 ↓(팔아라)
+  // ---------------------------------------------------------------------
+  function boardSprite() { // 배경: 회의실 · 큰 화면 (294×127)
+    return spr('board', LW, LH, 0, 0, function (g) {
+      fr(g, 0, 0, LW, 92, 'L'); for (let x = 0; x < LW; x += 28) fr(g, x, 0, 1, 92, 'e'); fr(g, 0, 70, LW, 22, 'e'); fr(g, 0, 70, LW, 1, 'E');
+      fr(g, 64, 9, 170, 76, 'k'); fr(g, 62, 6, 170, 76, 'E'); fr(g, 65, 9, 164, 70, 'k');
+      fr(g, 0, 92, LW, 2, 'k'); fr(g, 0, 94, LW, 33, 'n'); fr(g, 0, 94, LW, 3, 'N');
+      OB(g, 240, 40, 16, 30, 'g'); fr(g, 244, 30, 8, 12, 'G'); fr(g, 242, 34, 12, 6, 'g');   // 화분
+    }, true);
+  }
+  function makeAdvise(env) {
+    const P = env.P, rng = env.rng, fx = env.fx, seconds = env.seconds, n = env.intensity, lf = env.lf, rate = env.rate;
+    const lfs = 1 + (lf - 1) * 0.6;
+    const par = Math.max(3, Math.min([10, 12, 12, 12][n], Math.round([8, 10, 10, 10][n] * lfs * seconds / 7)));
+    const TRANS = 0.2, NP = 14, items = [];
+    for (let i = 0; i < 40; i++) {                                                                       // 차트: 처음 값에서 끝 값까지 출렁이며 간다. 강도가 높을수록 차이가 작고 출렁임이 크다
+      const up = rng() < 0.5, d = ([0.28, 0.16, 0.1, 0.06][n] + [0.12, 0.14, 0.1, 0.08][n] * rng()) * (up ? 1 : -1), y0 = clamp(0.5 - d / 2 + (rng() - 0.5) * 0.2, 0.18, 0.82), y1 = clamp(y0 + d, 0.06, 0.94);
+      const amp = [0.07, 0.12, 0.16, 0.2][n], pts = [];
+      for (let j = 0; j < NP; j++) { const f = j / (NP - 1); pts.push(j === 0 ? y0 : j === NP - 1 ? y1 : clamp(y0 + (y1 - y0) * f + amp * (rng() * 2 - 1) * Math.sin(Math.PI * f) * 1.6, 0.04, 0.96)); }
+      items.push({ pts: pts, up: y1 > y0, mark: 0 });
+    }
+    const allowFor = function (wt) { return Math.max(0.9, [2.0, 1.7, 1.6, 1.5][n] / (lfs * rate(wt))); };
+    const S = { items: items, cur: 0, trans: 0, allow: 0, patience: 0, par: par, hits: 0, wrongs: 0, timeouts: 0, padPop: [0, 0], padBad: [0, 0], leaving: null, guide: n <= 1, think: [0.05, 0.12, 0.22, 0.3][n], hard: [1, 1.5, 2.5, 4][n] };
+    function next(mark) { const it = items[S.cur % items.length]; it.mark = mark; S.leaving = { it: it, mark: mark, t: 0 }; S.cur++; S.trans = TRANS; S.allow = 0; S.patience = 0; }
+    return {
+      title: '투자 자문', howto: '끝이 처음보다 높으면 ↑ 낮으면 ↓', startY: 300,
+      how: ['차트의 끝(흰 점)이 처음(파란 점)보다 높으면 ↑(사라), 낮으면 ↓(팔아라)', '틀리면 감점 — 찍지 않는다'],
+      controls: [{ code: 'ArrowUp', label: '사라' }, { code: 'ArrowDown', label: '팔아라' }],
+      state: S,
+      tick: function (dt, wt, playing) {
+        S.trans = Math.max(0, S.trans - dt);
+        for (let i = 0; i < 2; i++) { S.padPop[i] = decay(S.padPop[i], dt, 0.18); S.padBad[i] = decay(S.padBad[i], dt, 0.3); }
+        if (S.leaving) { S.leaving.t += dt / 0.22; if (S.leaving.t >= 1) S.leaving = null; }
+        if (!playing || S.trans > EPS) return;
+        if (S.allow === 0) S.allow = S.patience = allowFor(wt);
+        if ((S.patience -= dt) <= 0) { S.timeouts++; fx.cross(441, 130, 16); fx.kick(1.5); next(3); }
+      },
+      press: function (code) {
+        const k = code === 'ArrowUp' ? 0 : code === 'ArrowDown' ? 1 : -1;
+        if (k < 0 || S.trans > EPS) return;
+        const it = items[S.cur % items.length], right = (k === 0) === it.up, px = k === 0 ? 150 : 730;
+        if (right) { S.hits++; S.padPop[k] = 1; fx.ring(px, 330, P.good, 24, 66); fx.float(px, 280, '+1', P.gold); next(1); }
+        else { S.wrongs++; S.padBad[k] = 1; fx.cross(px, 330, 20); fx.kick(3); fx.flash(P.bad, 0.16); next(2); }
+      },
+      finish: function () {
+        return { score: env.flawed(clamp((Math.min(S.hits, S.par) - S.wrongs) / S.par, 0, 1), S.wrongs), hits: Math.min(S.hits, S.par), total: S.par,
+          detail: '맞힌 차트 ' + Math.min(S.hits, S.par) + ' / ' + S.par + (S.wrongs ? ' · 잘못 본 차트 ' + S.wrongs + '번' : '') + (S.timeouts ? ' · 못 본 차트 ' + S.timeouts + '장' : '') };
+      },
+      draw: function (g, wt) {
+        g.drawImage(boardSprite(), 0, 0);
+        put(g, heroSprite('open', true), 34, 92);
+        for (let i = 0; i < S.par; i++) { const on = i < Math.min(S.hits, S.par); OB(g, 6 + (i % 6) * 9, 12 + Math.floor(i / 6) * 9, 7, 7, on ? 'y' : 'b', on ? 'k' : 'B'); }
+        const chart = function (it, mark, a) {
+          const X0 = 72, X1 = 222, Y0 = 16, Y1 = 72, X = function (j) { return Math.round(X0 + (X1 - X0) * j / (NP - 1)); }, Y = function (v) { return Math.round(Y1 - (Y1 - Y0) * v); };
+          const col = mark === 0 ? 'y' : it.up ? 'r' : 'l';                                              // 답한 뒤에야 색이 갈린다 (오름 = 빨강 · 내림 = 파랑)
+          const body = function (lg) {
+            for (let y = Y0; y <= Y1; y += 14) fr(lg, X0 - 4, y, X1 - X0 + 8, 1, 'E');
+            if (S.guide || mark) for (let x = X0; x < X1; x += 6) fr(lg, x, Y(it.pts[0]), 3, 1, 'l');   // 처음 값의 높이 (하 · 중에만 미리 보인다)
+            for (let j = 1; j < NP; j++) seg(lg, X(j - 1), Y(it.pts[j - 1]), X(j), Y(it.pts[j]), col, 2);
+            OB(lg, X(0) - 3, Y(it.pts[0]) - 3, 7, 7, 'l'); OB(lg, X(NP - 1) - 3, Y(it.pts[NP - 1]) - 3, 7, 7, 'w');
+            if (mark === 1) vMark(lg, 208, 24, 7); else if (mark === 2) xMark(lg, 208, 24, 6);
+          };
+          if (a >= 0.999) body(g); else faded(g, a, body);
+        };
+        const lv = S.leaving;
+        if (lv) chart(lv.it, lv.mark, 1 - lv.t);
+        else if (wt >= -0.3 && S.trans <= EPS) chart(items[S.cur % items.length], 0, 1);
+        if (wt >= 0 && S.trans <= EPS && S.allow > 0) waitBar(g, 107, 86, 80, S.patience / S.allow);
+        // 아래 두 칸: 사라(위) · 팔아라(아래)
+        pad(g, 50, 111, 76, 24, 'P', bump(S.padPop[0]), S.padBad[0] > 0); sticker(g, 50, 110, 17, 2, ['r', 'R']);    // 오름 = 빨강 · 내림 = 파랑 (시세 색과 같게)
+        pad(g, 243, 111, 76, 24, 'S', bump(S.padPop[1]), S.padBad[1] > 0); sticker(g, 243, 110, 17, 3, ['b', 'B']);
+      },
+    };
+  }
+
+  // =====================================================================
   // 손: 판 상태에서 화면에 보이는 것만 읽고 "지금 할 일"을 골라 사람처럼 누른다 (시연 · tools/mg-model.js)
   // =====================================================================
   // 읽기는 { key, code, alt, eta, chain } 을 준다. code 가 null 이면 "안 누르는 게 맞음", alt = 헷갈렸을 때 누르는 키들,
@@ -1408,6 +1951,39 @@
       const d = want < s.lane ? 'ArrowLeft' : 'ArrowRight';
       return { key: why + ':' + s.lane, code: d, alt: [d === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft'], eta: null, chain: why };
     },
+    // 새 일 여섯. think = 따져 보는 시간(셈 · 차트), hard = 헷갈리기 쉬운 정도(외운 길의 뒤쪽 · 비슷한 차트)
+    cafe: function (s) {   // 붓기 시작은 보는 대로, 멈추기는 선에 닿을 때를 재서 (스스로 시작한 일이라 다시 놀라지 않는다 = chain)
+      if (s.trans > EPS) return null;
+      const c = s.cups[s.cur % s.cups.length], k = s.cur + '.' + s.step;
+      return s.st === 'idle' ? { key: k + 's', code: 'Space', alt: [], eta: null, chain: 'c' + k, hard: 0.5 }
+        : { key: k + 'e', code: 'Space', alt: [], eta: (c.targets[s.step] - s.level) / s.v, chain: 'c' + k, hard: 0.5 };
+    },
+    tutor: function (s) {
+      if (s.trans > EPS) return null;
+      const it = s.items[s.cur % s.items.length];
+      return { key: s.cur, code: it.ok ? 'ArrowLeft' : 'ArrowRight', alt: [it.ok ? 'ArrowRight' : 'ArrowLeft'], eta: null, pick: true, think: it.think };
+    },
+    driver: function (s) {
+      if (s.ph !== 'input' || s.fin || s.idx >= s.K) return null;
+      const d = s.rounds[s.r].seq[s.idx];
+      return { key: s.r + '.' + s.idx, code: DIRS4[d], alt: [0, 1, 2].filter(function (x) { return x !== d; }).map(function (x) { return DIRS4[x]; }), eta: null, hard: 1 + 1.2 * (s.K - 3) + 0.6 * s.idx };
+    },
+    lecture: function (s) {
+      if (s.trans > EPS || s.lock > EPS) return null;
+      const d = s.cards[s.c % s.cards.length].seq[s.i];
+      return { key: s.c + '.' + s.i, code: DIRS4[d], alt: s.order.filter(function (x) { return x !== d; }).map(function (x) { return DIRS4[x]; }), eta: null, pick: s.i === 0 };
+    },
+    tv: function (s, done) {   // 한 번 누른 불은 다시 누르지 않는다 (엉뚱한 카메라를 눌렀어도)
+      const c = s.now;
+      if (!c || done.has(c)) return null;
+      const d = [0, 2, 1][c.cam];
+      return { key: c, code: c.red ? DIRS4[d] : null, alt: c.red ? [0, 1, 2].filter(function (x) { return x !== d; }).map(function (x) { return DIRS4[x]; }) : [DIRS4[d]], eta: null, pick: true };
+    },
+    advise: function (s) {
+      if (s.trans > EPS) return null;
+      const it = s.items[s.cur % s.items.length];
+      return { key: s.cur, code: it.up ? 'ArrowUp' : 'ArrowDown', alt: [it.up ? 'ArrowDown' : 'ArrowUp'], eta: null, pick: true, think: s.think, hard: s.hard };
+    },
   };
   // prof = { react, rsd, rlo, rhi (반응 초), tsd (박자 오차), wrong (헷갈림 확률), chain (이어 누르기 반응), pick (고르는 시간) }, 없으면 완벽한 손
   function makeHand(id, prof, rng) {
@@ -1423,8 +1999,9 @@
         r = prof ? clamp(prof.react + prof.rsd * gauss(), prof.rlo, prof.rhi) : 0;
         if (prof && q.chain != null && q.chain === lastChain) r = Math.min(r, prof.chain);
         if (prof && q.pick) r += prof.pick;
+        if (prof && q.think) r += q.think * prof.pick / 0.12;   // 따져 보는 시간: 잘하는 사람(고르는 시간 0.12초) 기준, 느린 손일수록 더
         e = prof ? prof.tsd * gauss() : 0;
-        slip = !!prof && rng() < prof.wrong;
+        slip = !!prof && rng() < prof.wrong * (q.hard || 1);
       }
       if (s.phase !== 'play' || t < since + r - EPS || (q.eta != null && q.eta + e > dt / 2)) return null;
       done.add(q.key); lastChain = q.chain;
@@ -1466,7 +2043,7 @@
   // =====================================================================
   // 내놓기
   // =====================================================================
-  const MAKERS = { flyer: makeFlyer, loading: makeLoading, store: makeStore, delivery: makeDelivery };
+  const MAKERS = { flyer: makeFlyer, loading: makeLoading, store: makeStore, delivery: makeDelivery, cafe: makeCafe, tutor: makeTutor, driver: makeDriver, lecture: makeLecture, tv: makeTv, advise: makeAdvise };
   // 미니게임 색: 예전 PAL 과 같은 역할 이름, 값은 PX(밝은 낮의 픽셀 색). ui.js 가 opts.pal 로 넘긴다.
   // 그림은 PX 를 직접 쓰고, pal 은 효과 색(맞음 · 틀림 · 금빛 · 흰 글)의 역할을 알아보는 데만 쓴다 — 예전 PAL 이 와도 같은 그림.
   root.MGPAL = (function () {
@@ -1480,7 +2057,7 @@
     };
   })();
   root.Minigames = {
-    list: ['flyer', 'loading', 'store', 'delivery'],
+    list: ['flyer', 'loading', 'store', 'delivery', 'cafe', 'tutor', 'driver', 'lecture', 'tv', 'advise'],
     create: function (id, opts) {
       if (!MAKERS[id]) throw new Error('Minigames.create: 모르는 미니게임 "' + id + '"');
       return build(opts, MAKERS[id]);
@@ -1527,6 +2104,11 @@
         S('승용차', function () { return carSprite(0); }),
         S('버스', busSprite),
         S('배달 완료 지점', pinSprite),
+        S('나 (새 일들)', function () { return heroSprite('open', false); }),
+        S('유리잔', cupSprite),
+        S('손님 차', sedanSprite),
+        S('카메라', function () { return camSprite(false); }),
+        S('위 카메라', function () { return camSprite(true); }),
       ];
     },
   };

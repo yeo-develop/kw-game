@@ -2,7 +2,7 @@
 // 게임이 불러오지 않는 개발용 도구. 화면 없는 브라우저(Playwright)는 KW_PLAYWRIGHT 환경 변수로 위치를 줄 수 있다.
 // "모든 화면" 모음 한 장을 만든다 (와이어프레임 검사 · 화면 검토용). 창 없이 돈다.
 //   1) 기존 도구 넷이 찍은 화면을 쓴다: <내보낼 폴더>/c (check.js) · t (tut.js) · w (worst.js) · r (rt.js). 폴더가 없으면 그 도구를 돌려 만든다.
-//   2) 그 도구들이 안 찍는 화면을 더 찍는다: <내보낼 폴더>/x (미니게임 넷의 하는 중 — 완벽한 손이 2.4초쯤 한 때)
+//   2) 그 도구들이 안 찍는 화면을 더 찍는다: <내보낼 폴더>/x (미니게임 열의 하는 중 — 완벽한 손이 2.4초쯤 한 때)
 //   3) 화면 목록(tools/screens.json: 묶음 · 파일 · 이름 · 설명)대로 index.html 한 장을 만든다 — 그림은 data URI 로 안에 넣는다(파일 하나 = 주소 하나인 곳에 그대로 올림).
 // node tools/screens.js <게임 폴더> <내보낼 폴더>     없는 그림이 있으면 그 이름을 적고 1 로 끝난다.
 const path = require('path'), fs = require('fs'), cp = require('child_process');
@@ -30,10 +30,11 @@ async function extras() {
   await page.click('[data-do="new"]');
   // st: 창이 막 뜬 직후에는 누름이 잠깐 막힌다(guard) — 그만큼 더 흘려보낸 뒤에 누른다
   await G(() => { const g = window.game; window.__st = n => { g.step(n); const left = g.state.guard || 0; if (left) g.step(left + 1); }; window.__clear = () => { for (let i = 0; i < 12 && g.state.modal; i++) { g.press(g.state.modal === 'mg' ? 'Escape' : 'Space'); window.__st(30); } return g.state.modal; }; window.__st(30); window.__clear(); });
-  for (const id of ['flyer', 'loading', 'store', 'delivery']) { // 하는 중: 중 강도 · 숙련 0, 완벽한 손이 3초쯤 한 때
+  for (const id of ['flyer', 'loading', 'store', 'delivery', 'cafe', 'tutor', 'driver', 'lecture', 'tv', 'advise']) { // 하는 중: 중 강도 · 숙련 0, 완벽한 손이 3초쯤 한 때 (새 일 여섯은 호텔 · 저녁 칸에서)
     const r = await G(id => {
       const g = window.game, S = g.state.raw, st = window.__st;
-      Object.assign(S, { tier: 3, slot: 0, quest: 99, offer: null, picks: 0, event: null, hp: 100, inten: {} }); g.render();
+      const late = ['cafe', 'tutor', 'driver', 'lecture', 'tv', 'advise'].indexOf(id) >= 0;
+      Object.assign(S, { tier: late ? 8 : 3, lease: late ? 'own' : 'rent', homeVal: late ? 8000000000 : 0, slot: late ? 2 : 0, quest: 99, offer: null, picks: 0, event: null, hp: 100, inten: {}, did: null }); S.market.world = []; g.render();
       g.run('job', id); st(10); g.press('Space'); st(4);
       if (!g.mg) return '시작되지 않음 (창: ' + g.state.modal + ')';
       const hand = window.Minigames._hand(id, null, () => 0.5);
