@@ -20,15 +20,36 @@
   const MANUAL = params.get('manual') === '1';
   const GUIDE = params.get('tut') === '1' || (params.get('tut') !== '0' && !MANUAL); // 처음 하는 사람을 위한 안내를 쓰는 창인가 (점검 도구는 ?tut=1 일 때만)
   const SAVE = 'seoul-station-save-v1', RUNS = 'seoul-station-runs', META = 'seoul-station-meta-v1';
+  const OPENING_TITLES = ['서울역 벤치', '상태 진단', '우리의 목표', '첫 각성 선물', '첫 퀘스트'];
+  const DREAM_CARDS = {
+    family: {
+      icon: 'hp', effect: '밤 체력 회복', amount: () => '+' + num(tune.dream_family),
+      story: '딸이 그려 준 집에 가족을 다시 모은다.',
+      path: [['thumb', 2, '고시원 도착'], ['thumb', 4, '첫 내 집 마련']]
+    },
+    sign: {
+      icon: 'chart', effect: '사업 매출', amount: () => pct0(tune.dream_sign),
+      story: '넘겨준 간판을 되찾아 다시 불을 켠다.',
+      path: [['thumb', 2, '고시원 도착'], ['job', 'store', '첫 사업 시작']]
+    },
+    landlord: {
+      icon: 'coin', effect: '임대수익', amount: () => pct0(tune.dream_landlord),
+      story: '방을 빼 달라는 문자는 이제 그만.',
+      path: [['icon', 'door', '전세 입주 또는 내 집 마련'], ['icon', 'building', '첫 상가 구입']]
+    }
+  };
   const SLOTS = ['오전', '오후', '저녁'], SLOT_IC = ['sun', 'noon', 'moon'], PHASE = ['morning', 'day', 'evening', 'night'];
   const events = [];
   const $ = id => document.getElementById(id);
-  const stage = $('stage');
+  const stage = $('stage'), veil = $('veil');
+  const narrowPopup = matchMedia('(max-width: 610px)');
   // 화면 색은 px.js 가 :root 에 --k · --c … (window.PX) 로 넣는다. PAL(예전 밤 색)은 벡터 그림 · 미니게임 몫
   const PX = window.PX || {};
 
   let scene = 'title', S = null; // S = 규칙의 상태 (window.game.state 가 요약해서 보여 줌)
+  let persistOpening = true;
   const ui = { joff: null, coin: 'coin', tab: 'road', sview: 'market', sel: 'daejang', qty: 1, bamt: 0, lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, fresh: {}, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
+  const infoPopup = createInfoPopup($('info-popup'), () => scene === 'play' && !ui.modal);
 
   // 판 밖에 남는 것: 업적 · 기록 · 설정 (판 저장과 따로)
   function loadMeta() {
@@ -83,8 +104,18 @@
     stage.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
     const bs = document.body && document.body.style;
     if (bs) { bs.backgroundSize = 48 * k + 'px ' + 48 * k + 'px'; bs.backgroundPosition = x + 'px ' + y + 'px'; } // 테두리의 바둑판이 무대의 바둑판과 이어지게
+    infoPopup.reposition();
   }
   addEventListener('resize', fit); fit();
+  function placeVeil() {
+    const outsideStage = veil.matches('.opening-veil, .first-quest-veil');
+    const parent = narrowPopup.matches && outsideStage ? document.body : stage;
+    if (veil.parentNode === parent) return;
+    const focused = veil.contains(document.activeElement) ? document.activeElement : null;
+    parent.insertBefore(veil, parent === stage ? $('fxc') : null);
+    if (focused) focused.focus({ preventScroll: true });
+  }
+  narrowPopup.addEventListener('change', placeVeil);
 
   // ── 소리: 첫 입력 때 켜짐, M 으로 끔 ──
   let audio = null;
@@ -198,6 +229,13 @@
   const DEN_ROLL = 42, DEN_AFTER = 24; // 도박장: 주사위가 구르는 걸음 수(0.7초) · 결과가 뜬 뒤 누름을 버리는 걸음 수
   addEventListener('keydown', e => {
     startAudio();
+    if (infoPopup.handleKey(e)) return;
+    const activate = e.code === 'Enter' || e.code === 'Space';
+    if (activate && e.target instanceof Element &&
+        (e.target.closest('#s-title button, .intro button, .quest-finished button') || (!ui.modal && e.target.matches('[data-info-trigger]')))) {
+      if (e.repeat) e.preventDefault();
+      return;
+    }
     if (e.target && e.target.tagName === 'INPUT') { if (e.code === 'Enter') { e.preventDefault(); if (e.target.id === 'qty') e.target.blur(); else hit.push('Enter'); } return; } // 수량 칸의 Enter = 적은 수를 확정 (사기 · 팔기는 버튼으로)
     if (e.repeat) return;
     hit.push(e.code);
@@ -217,7 +255,8 @@
   });
   stage.addEventListener('input', e => { if (e.target && e.target.id === 'qty' && scene === 'play' && S) qtyTyped(e.target); });
   stage.addEventListener('change', e => { if (e.target && e.target.id === 'qty' && scene === 'play' && S && !ui.modal) qtyTyped(e.target, true); }); // 칸에서 손을 뗄 때: 다시 그리지 않는다 (바로 이어 누른 "사기"의 누름이 씹히지 않게)
-  stage.addEventListener('click', e => {
+  document.addEventListener('click', e => {
+    if (!stage.contains(e.target) && !veil.contains(e.target)) return;
     const sr = stage.getBoundingClientRect();
     ui.from = { x: (e.clientX - sr.left) / sr.width * 1280, y: (e.clientY - sr.top) / sr.height * 720 }; // 번 돈 숫자가 떠오를 자리
     const el = e.target.closest('[data-do]');
@@ -228,13 +267,14 @@
 
   // ── 장면 전환 · 저장 ──
   function show(name) {
+    infoPopup.hide();
     scene = name;
     for (const n of ['title', 'play', 'results', 'figures']) $('s-' + n).classList.toggle('hide', n !== name);
     if (name !== 'play') { ui.modal = null; ui.queue = []; renderVeil(); }
     $('fx').innerHTML = ''; $('toasts').innerHTML = ''; ui.toastQ = []; ui.coachDirty = true;
   }
   function hasSave() { if (MANUAL) return null; try { const s = R.load(localStorage.getItem(SAVE) || ''); if (s && s.ended) { clearSave(); return null; } return s; } catch (e) { return null; } } // 끝난 판의 저장(예전 버전)은 이어 할 것이 없으니 지움
-  function newGame(seed) {
+  function newGame(seed, persist = true) {
     seed = seed || Number(params.get('seed'));
     if (!seed) {
       let runs = 0;
@@ -242,6 +282,7 @@
       seed = CONFIG.seed + runs * 101; // 판마다 시세가 다르게
     }
     S = R.create(seed, ui.name); R.setLook(S, meta.look || 0);
+    S.opening = { step: 0, dream: R.dreamList()[0].id }; persistOpening = persist;
     ui.tut = GUIDE && meta.tut !== 2; // 안내를 끝낸 적이 없으면 첫날을 따라가며 알려 준다
     const mark = ui.tut ? 1 : meta.tut === 1 ? 0 : meta.tut; // "보는 중"(1)은 늘 지금 판을 가리킨다: 안내 없이 연 새 판이 보던 판을 갈아 치우면 "안 봄"으로 되돌림
     meta.tut = mark; meta.runs++; saveMeta(); // 판 수는 시작한 판으로 센다 (끝이 멀어서)
@@ -277,10 +318,15 @@
         let seed = 0;
         if (what === 'daily') { const d = new Date(); seed = R.dailySeed(d.getFullYear(), d.getMonth() + 1, d.getDate()); } // 오늘의 판: 날짜가 씨앗 (게임 진행에는 시계를 쓰지 않음)
         else if (code) { seed = R.seedOf(code); if (!seed) { deny('판 코드는 SS-0A1B 같은 모양입니다'); return; } }
-        if (hasSave() && ui.askNew !== what) { ui.askNew = what; sfx.deny(); renderTitle(); return; } // 저장이 있으면 같은 버튼을 한 번 더 눌러야 지워짐
+        if (hasSave() && ui.askNew !== what) {
+          ui.askNew = what; sfx.deny(); renderTitle();
+          $('code').value = code;
+          $('s-title').querySelector('[data-do="' + what + '"]').focus({ preventScroll: true });
+          return;
+        }
         ui.askNew = false; sfx.up(); newGame(seed);
         saveNow(); // 새 판을 고른 순간 하던 판의 저장을 덮는다 ("보는 중"인 안내가 예전 판에 붙지 않게). ?scene=play 로 바로 여는 점검 길은 저장을 건드리지 않는다
-      } else if (what === 'continue') { const s = hasSave(); if (s) { S = s; ui.tut = GUIDE && meta.tut === 1; sfx.click(); begin(); } }
+      } else if (what === 'continue') { const s = hasSave(); if (s) { S = s; persistOpening = true; ui.tut = GUIDE && meta.tut === 1; sfx.click(); begin(); } }
       else if (what === 'look') { meta.look = clamp(Number(arg) || 0, 0, 3); saveMeta(); sfx.click(); renderTitle(); }
       else if (what === 'tuttoggle') {
         if (meta.tut === 2) { guideOn(); toast(I('info') + '<span>새 판을 시작하면 첫날을 따라가며 알려 줍니다</span>', 'tip', 260); }
@@ -304,7 +350,17 @@
       else if (what === 'opt' && m.opts) { const i = Number(arg); if (m.opts[i]) { m.pick = i; sfx.click(); renderVeil(); } } // 집 사기 · 미리 갚기: 고르고 Enter
       else if (what === 'studyasset' && m.type === 'study') studyPick(arg);
       else if (what === 'studygo' && m.type === 'study') studyGo();
-      else if (what === 'dream' && m.type === 'intro') { m.dream = arg; sfx.click(); renderVeil(); }
+      else if (what === 'dream' && m.type === 'intro' && S.opening.step === 3 && R.dreamList().some(d => d.id === arg)) {
+        S.opening.dream = arg; if (persistOpening) saveNow(); sfx.click();
+        const focusedChoice = $('veil').contains(document.activeElement) && document.activeElement.classList.contains('dcard');
+        for (const button of $('veil').querySelectorAll('.dcard')) {
+          const selected = button.dataset.arg === arg;
+          button.classList.toggle('on', selected);
+          button.setAttribute('aria-pressed', selected);
+          if (selected && focusedChoice) button.focus();
+        }
+        $('opening-dream').innerHTML = openingDream();
+      }
       else if (what === 'copy' && m.type === 'act1') copyCard('act1');
       else if (what === 'why') deny(arg);
       else if (what === 'mgstart' && m.type === 'mg' && m.pre) beginMg();
@@ -523,7 +579,7 @@
       if (m.type === 'perk') { const o = d && S.offer && S.offer[Number(d[1]) - 1]; if (o) run('perk', o); return; } // 특성은 꼭 하나 골라야 닫힘
       if (m.type === 'event' && !m.done) { if (d && d[1] === '1') run('ev', 'a'); else if (d && d[1] === '2') run('ev', 'b'); return; }
       if (m.type === 'study') { const a = d && m.assets[Number(d[1]) - 1]; if (a) run('studyasset', a.id); else if (code === 'Enter' && m.picks > 1) run('studygo'); else if (code === 'Space' || code === 'Escape') closeModal(false); return; } // 종목 고르기: 숫자 = 그 종목, Space = 돌아가기 (두 종목을 읽는 단계면 고른 뒤 Enter)
-      if (m.type === 'intro' && d) { const dr = R.dreamList()[Number(d[1]) - 1]; if (dr) run('dream', dr.id); return; } // 첫 창: 숫자로 꿈을 고른다
+      if (m.type === 'intro' && d) { const dr = R.dreamList()[Number(d[1]) - 1]; if (dr) run('dream', dr.id); return; }
       if (m.type === 'drill') { if (d && d[1] === '1') drillRun('drillgo', 'long'); else if (d && d[1] === '2') drillRun('drillgo', 'short'); else if (code === 'Escape') drillRun('drillskip'); else if (code === 'Space' || code === 'Enter') drillRun('ok'); return; } // 연습: 1 롱 · 2 숏 · Space 다음 · Esc 건너뛰기
       if (m.opts && d) { run('opt', String(Number(d[1]) - 1)); return; } // 집 사기 · 미리 갚기: 숫자로 고르고 Enter
       if (m.type === 'confirm' || m.type === 'buy' || m.type === 'repay' || m.type === 'lease') { if (code === 'Enter') closeModal(true); else if (code === 'Space' || code === 'Escape') closeModal(false); return; } // 확인 창은 늘 같다: Enter = 한다, Space · Esc = 돌아간다 (연타해도 안전한 쪽)
@@ -582,7 +638,6 @@
       else if (e.t === 'quest_done') { quests.done.push(e.quest); quests.next = null; if (quests.at < 0) quests.at = ui.queue.length; }
       else if (e.t === 'quest_skip') { quests.skipped.push(e.quest); quests.next = null; }
       else if (e.t === 'quest_new') { quests.next = e.quest; ping(); } // 마지막에 나온 것이 지금 할 퀘스트
-      else if (e.t === 'intro') ui.queue.push({ type: 'intro', next: e.quest });
       else if (e.t === 'perk') ping();
       else if (e.t === 'tier') {
         if (e.up && e.to === 1) { ui.fresh.stock = true; ui.fresh.info = true; }
@@ -611,6 +666,7 @@
   }
   function pump() { // 뜰 창이 남았으면 하나씩: 알림 → 특성 고르기 → 돌발 사건 → 엔딩
     if (ui.modal) return;
+    if (S && S.opening) { openModal({ type: 'intro' }); return; }
     if (ui.queue.length) { openModal(ui.queue.shift()); return; }
     if (S && !S.ended && S.offer) { openModal({ type: 'perk' }); return; }
     if (S && !S.ended && S.event) { openModal({ type: 'event', view: R.eventView(S), done: null }); return; }
@@ -842,7 +898,18 @@
         else if (m.kind === 'propbuy') { if (R.buyProp(S, m.v.id)) sfx.up(); } else if (m.kind === 'propsell') { if (R.sellProp(S, m.v.id)) sfx.pay(); } }
       done(); return;
     }
-    if (m.type === 'intro') { R.setDream(S, m.dream || R.dreamList()[0].id); saveNow(); } // 고른 꿈으로 판을 시작한다
+    if (m.type === 'intro') {
+      if (yes && S.opening.step === OPENING_TITLES.length - 1) {
+        R.setDream(S, S.opening.dream);
+        delete S.opening;
+      } else {
+        S.opening.step = Math.max(0, S.opening.step + (yes ? 1 : -1));
+        if (persistOpening) saveNow();
+        sfx.click(); $('veil').classList.add('arming'); renderVeil();
+        return;
+      }
+      if (persistOpening) saveNow();
+    }
     if (m.type === 'buy' || m.type === 'repay' || m.type === 'lease') {
       const o = m.opts[m.pick];
       if (yes && !(o && o.ok)) { deny(o ? o.why : ''); return; } // 못 하는 것을 고른 채 Enter: 창은 그대로
@@ -1093,11 +1160,18 @@
           : '다음 목표: ' + g.name + ' ' + won(g.price) + ' — ' + (g.tier === 4 ? '현금으로만 (전세 보증금은 돌려받아 보태집니다)' : (g.loanMax ? '대출을 최대(' + won(g.loanMax) + ')로 끼거나 ' : '') + '전세(보증금 ' + won(g.jeonse) + ')로 들어가면') + ' 현금 ' + won(g.need) + '이 있으면 됩니다. 막대는 지금 현금';
     return '<div class="goal" title="' + t + '">' + I(ic) + '<span class="gn">' + g.name + '</span><span class="gp">' + shortWon(g.price) + '</span><div class="bar"><div style="width:' + (g.pct * 100).toFixed(1) + '%"></div></div><b>' + Math.floor(g.pct * 100) + '%</b></div>';
   }
+  function timeWindow() {
+    const slot = Math.min(S.slot, SLOTS.length), label = SLOTS[slot] || '밤';
+    const description = label + ' · 남은 행동 ' + (SLOTS.length - slot) + '칸';
+    return '<div class="sky-window" data-phase="' + PHASE[slot] + '" role="img" aria-label="' + description + '">' +
+      art('hudSky', slot) + '<span class="sky-window-label" aria-hidden="true"><b>' + label + '</b><span class="sky-window-pips">' +
+      SLOTS.map((_, i) => '<i' + (i >= slot ? ' class="remaining"' : '') + '></i>').join('') + '</span></span></div>';
+  }
   function renderHud() {
     const wk = R.week(S);
     $('hud').innerHTML =
       '<div class="zh" title="' + wk.week + '주차 ' + wk.dow + '일 — 판을 시작하고 ' + S.day + '일째 (기한 없음)">' + I('calendar') + '<b>' + S.day + '일째</b>' + weekStrip(wk) + '</div>' +
-      '<div class="slots">' + SLOT_IC.map((n, i) => '<span class="' + (i < S.slot ? 'done' : i === S.slot ? 'now' : '') + '" title="' + SLOTS[i] + (i === S.slot ? ' — 지금' : i < S.slot ? ' — 지남' : '') + '">' + art('icon', n) + '<i>' + SLOTS[i] + '</i></span>').join('') + (S.slot >= 3 ? '<span class="now" title="밤 — 세 칸을 다 썼습니다. 하루 마치기로 잠듭니다">' + art('icon', 'zzz') + '<i>밤</i></span>' : '') + '</div>' + // 지금 칸만 글자까지, 나머지는 아이콘만 (뜻은 title). 세 칸을 다 쓴 밤에는 "밤" 칩이 켜짐
+      timeWindow() +
       (S.combo ? '<div class="money gold" title="콤보 ' + S.combo + ' — 다음 알바 일당 +' + Math.round((tune.combo_bonus + tune.perk_streak * R.perk(S, 'streak')) * S.combo * 100) + '%. 직접 해서 잘함 이상이면 쌓이고, 실수하거나 대충 하면 끊깁니다"><span class="ic" style="color:var(--O)">' + art('icon', 'fire') + '</span><b>' + S.combo + '</b></div>' : '') +
       '<div class="money" title="현금">' + I('cash') + '<i>현금</i><b id="cash">' + won(ui.cash) + '</b></div>' +
       '<div class="money" title="순자산 = 현금 + 투자한 돈 + 집(산 값) − 대출 − 밀린 돈">' + I('wallet') + '<i>순자산</i><b id="worth">' + won(ui.worth) + '</b></div>' +
@@ -1148,6 +1222,8 @@
   }
   function renderMe() {
     const x = R.xpView(S), mx = R.hpMax(S), low = S.hp < 25, perks = R.perksView(S), extra = bizRow() + loanRow(), rows = (extra.match(/class="me-row/g) || []).length;
+    const me = $('me'), focusedPerk = me.querySelector('[data-perk]:focus-visible');
+    const wasDescribed = focusedPerk && focusedPerk.hasAttribute('aria-describedby');
     // 그림 칸: 줄이 없으면 216px(128×72 를 3배) 전부. 사업 · 대출 줄이 하나 붙을 때마다 34px 낮아지고, 그림은 3배 그대로 가운데를 맞춰 위아래가 잘린다.
     // 보이는 높이와 위치를 3의 배수로 맞춰 맨 윗줄 · 아랫줄 점이 반만 보이지 않게 한다. 줄이 둘이면 49줄(y 11~59)이 보여 그림의 약속(y 12~59)이 다 들어간다.
     const vis = Math.min(72, Math.floor((216 - 34 * rows) / 3)), sh = vis * 3 + 12, sy = -3 * Math.floor((72 - vis) / 2), lease = R.leaseOf(S);
@@ -1156,28 +1232,50 @@
     const sb = window.PxArt && window.PxArt.SCENE_BOX && window.PxArt.SCENE_BOX[S.tier], faceTop = sb ? sy + (sb.hero[1] + 9) * 3 : 216;
     ui.toastCap = faceTop >= 60 ? 2 : 1;
     if ($('toasts').children.length > ui.toastCap) { const o = $('toasts').firstChild; if (o._kind !== 'deny' && o._kind !== 'tip') ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 칸이 낮아진 순간 넘친 것은 줄로
-    $('me').innerHTML =
+    me.innerHTML =
       '<div class="zh">' + I('door', '지금 사는 곳') + '<span class="place">' + R.HOMES[S.tier].name + '</span>' + (lease ? '<span class="lease" title="계약: ' + R.LEASE[lease] + (S.deposit ? ' — 보증금 ' + won(S.deposit) + ' (나갈 때 돌려받음)' : '') + '">' + R.LEASE[lease] + '</span>' : '') +
       '<span class="who chip hot" title="' + esc(S.name + ' · 칭호 ' + S.title) + '">' + esc(S.title) + '</span>' + // 칭호만 (이름까지 붙이면 잘림)
       '<span class="r lvb" title="레벨 ' + x.lv + ' — 경험치 ' + x.xp + ' / ' + x.need + '. 오르면 특성을 하나 고릅니다">' + I('star', '', 's') + 'Lv.' + x.lv + '<i class="xpbar"><i style="width:' + (x.xp / x.need * 100).toFixed(0) + '%"></i></i></span></div>' +
       '<div class="scene" style="height:' + sh + 'px;--sy:' + sy + 'px">' + art('scene', S.tier, PHASE[Math.min(3, S.slot)]) + '</div>' +
       '<div class="me-row hp' + (low ? ' low' : '') + '" title="체력 — 알바 · 공부에 쓰고, 쉬거나 자면 돌아옵니다">' + I('hp') + '<div class="bar"><div style="width:' + (S.hp / mx * 100).toFixed(0) + '%"></div></div><b>' + Math.round(S.hp) + ' / ' + mx + '</b>' + condChip() + '</div>' + extra +
-      '<div class="perks' + (perks.length > 10 ? ' many' : '') + '"><span class="pl" title="레벨이 오를 때 고른 특성">특성</span><span class="pks">' + (perks.length ? perks.map(p => '<span class="pk' + (p.n > 1 ? ' x' + p.n : '') + (p.aug ? ' aug' : '') + '" data-do="tip" data-arg="' + perkTip(p) + '" title="' + perkTip(p) + '">' + art('icon', p.icon) + '</span>').join('')
-        : '<span class="none" title="레벨이 오르면 특성이 여기에 쌓입니다">' + I('star', '', 's') + I('plus', '', 's') + '</span>') + '</span>' +
+      '<div class="perks' + (perks.length > 10 ? ' many' : '') + '"><span class="pl" title="레벨이 오를 때 고른 특성">특성</span><span class="pks">' + (perks.length ? perks.map(p => '<button type="button" class="pk' + (p.n > 1 ? ' x' + p.n : '') + (p.aug ? ' aug' : '') + '" data-perk="' + p.id + '" aria-label="' + esc(perkTitle(p) + (p.aug ? ' (양날)' : '')) + '">' + art('icon', p.icon) + '</button>').join('')
+        : '<span class="none">레벨 업 시 선택</span>') + '</span>' +
       '</div>'; // 로드맵 · 은행 · 가게는 오른쪽 아래 판의 탭에 있다
-    fitPerks($('me').querySelector('.pks'), perks);
-  }
-  const perkTip = p => esc(p.name + (p.n > 1 ? ' ×' + p.n : '') + (p.aug ? ' (양날)' : '') + ' — ' + p.desc + (p.aug ? '. 대신: ' + p.con : '') + (p.excl ? '. ' + p.excl : ''));
-  function fitPerks(box, perks) { // 특성 아이콘이 칸을 넘으면 뒤에서부터 접고 "+n" (누르면 접힌 것의 이름)
-    if (!box || !perks.length || box.scrollWidth <= box.clientWidth) return;
-    const pk = [...box.querySelectorAll('.pk')], more = document.createElement('span');
-    more.className = 'more'; more.dataset.do = 'tip'; box.appendChild(more);
-    let n = 0;
-    while (n < pk.length - 1 && (n === 0 || box.scrollWidth > box.clientWidth)) {
-      pk[pk.length - 1 - n].style.display = 'none'; n++;
-      const hid = perks.slice(perks.length - n).map(p => p.name + (p.n > 1 ? ' ×' + p.n : '')).join(' · ');
-      more.textContent = '+' + n; more.title = '특성 ' + n + '개 더: ' + hid; more.dataset.arg = '특성 더: ' + hid;
+    infoPopup.reposition();
+    fitPerks(me.querySelector('.pks'), perks);
+    if (focusedPerk) {
+      const next = me.querySelector('[data-perk="' + focusedPerk.dataset.perk + '"]');
+      const target = next && next.offsetWidth ? next : me.querySelector('.perks .more');
+      if (target) target.focus({ preventScroll: true });
+      if (!wasDescribed) infoPopup.hide();
     }
+  }
+  const perkTitle = p => p.name + (p.n > 1 ? ' ×' + p.n : '');
+  const perkBadge = p => p.aug ? '<span class="info-badge">양날</span>' : '';
+  const perkEffect = p => '<p class="perk-effect">' + esc(p.desc).replace(/[+−-]?\d+(?:\.\d+)?%?p?/g, '<strong>$&</strong>') +
+    (p.n > 1 ? ' <small>(1회 기준)</small>' : '') + '</p>' +
+    (p.con ? '<p class="perk-cost"><span>대신</span> ' + esc(p.con) + '</p>' : '') +
+    (p.excl ? '<p class="perk-exclusion">' + esc(p.excl) + '</p>' : '');
+  function fitPerks(box, perks) { // 특성 아이콘이 칸을 넘으면 뒤에서부터 접고 "+n"
+    if (!box || !perks.length) return;
+    const pk = [...box.querySelectorAll('.pk')];
+    pk.forEach((button, i) => infoPopup.bind(button, () => {
+      const p = perks[i];
+      return { title: perkTitle(p), icon: p.icon, badge: perkBadge(p), body: perkEffect(p) };
+    }));
+    if (box.scrollWidth <= box.clientWidth) return;
+    const more = document.createElement('button');
+    more.type = 'button'; more.className = 'more'; more.dataset.perk = 'more'; box.appendChild(more);
+    let n = 0;
+    while (n < pk.length && (n === 0 || box.scrollWidth > box.clientWidth)) {
+      pk[pk.length - 1 - n].style.display = 'none'; n++;
+      more.textContent = '+' + n;
+    }
+    more.setAttribute('aria-label', '접힌 특성 ' + n + '개');
+    infoPopup.bind(more, () => ({
+      title: '접힌 특성', icon: 'star',
+      body: perks.slice(-n).map(p => '<section class="perk-detail"><h3>' + I(p.icon) + esc(perkTitle(p)) + perkBadge(p) + '</h3>' + perkEffect(p) + '</section>').join('')
+    }));
   }
 
   // ── 구역 quest: 상태창 (지금 퀘스트 하나 · 시스템의 한마디 · 다가오는 것) ──
@@ -1254,8 +1352,9 @@
   function renderToday() {
     const pg = S.slot < 3 ? jobPage() : null, wc = worldChips();
     const pager = pg && pg.max ? '<span class="jpg" title="알바 ' + pg.n + '가지 — 넷씩 보입니다(처음에는 새로 열린 일부터). ◀ ▶ 또는 키보드 ← → 로 넘깁니다"><button class="chip go" data-do="jpage" data-arg="-1"' + (pg.off <= 0 ? ' disabled' : '') + ' title="앞의 일 (←)">' + keyName('ArrowLeft') + '</button><b>일 ' + (pg.off + 1) + '~' + (pg.off + JOBS_SHOWN) + ' / ' + pg.n + '</b><button class="chip go" data-do="jpage" data-arg="1"' + (pg.off >= pg.max ? ' disabled' : '') + ' title="뒤의 일 (→)">' + keyName('ArrowRight') + '</button></span>' : '';
-    const head = '<div class="zh" title="지금 칸 — 하루는 오전 · 오후 · 저녁 세 칸입니다">' + I(S.slot < 3 ? SLOT_IC[S.slot] : 'zzz') + '<span>오늘 · ' + (S.slot < 3 ? SLOTS[S.slot] : '밤') + '</span><span class="pips" title="하루 세 칸 중 남은 칸">' + [0, 1, 2].map(i => '<i class="' + (i >= S.slot ? 'on' : '') + '"></i>').join('') + '</span>' + wc + pager +
-      '<span class="r">' + (S.slot < 3 ? '<span>남은 칸 ' + (3 - S.slot) + (wc || pager ? '' : ' · 하나를 고르세요') + '</span>' : '<span>다 썼으면 하루 마치기</span>') + (S.buff && S.buff.nextJob ? '<span class="chip hot" title="대타: 다음 알바 일당 ×' + S.buff.nextJob + '">' + I('swap', '', 's') + '×' + S.buff.nextJob + '</span>' : '') + '</span></div>';
+    const head = '<div class="zh"><span>행동</span>' + wc + pager + '<span class="r">' +
+      (S.buff && S.buff.nextJob ? '<span class="chip hot" title="대타: 다음 알바 일당 ×' + S.buff.nextJob + '">' + I('swap', '', 's') + '×' + S.buff.nextJob + '</span>' : '') +
+      (S.slot === 2 ? '<span class="chip last-action">오늘 마지막 행동</span>' : '') + '</span></div>';
     if (S.slot >= 3) {
       const b = R.bill(S), due = b && b.inDays === 0;
       $('today').innerHTML = head + '<div class="cards"><button class="card wide go" data-do="endday"><span class="pic">' + art('act', 'rest') + '</span><span><span class="big">하루 마치기</span>' +
@@ -1632,6 +1731,100 @@
     chartLabels(cv, labs);
   }
 
+  function createInfoPopup(panel, canShow) {
+    const header = panel.querySelector('.info-popup-title'), body = panel.querySelector('.info-popup-body');
+    const viewport = window.visualViewport;
+    let anchor = null, input = '', hideTimer;
+
+    function hide() {
+      clearTimeout(hideTimer);
+      if (!anchor) return;
+      anchor.classList.remove('info-active');
+      anchor.removeAttribute('aria-describedby');
+      anchor = null;
+      panel.hidden = true;
+    }
+    function reposition() {
+      if (!anchor) return;
+      if (!anchor.isConnected) { hide(); return; }
+      const rect = anchor.getBoundingClientRect(), center = (rect.left + rect.right) / 2;
+      const x = viewport ? viewport.offsetLeft : 0, y = viewport ? viewport.offsetTop : 0;
+      const right = x + (viewport ? viewport.width : innerWidth), bottom = y + (viewport ? viewport.height : innerHeight);
+      if (rect.right <= x || rect.left >= right || rect.bottom <= y || rect.top >= bottom) { hide(); return; }
+      const margin = 9, gap = 8;
+      panel.style.setProperty('--popup-viewport-width', Math.max(1, Math.floor(right - x - 2 * margin)) + 'px');
+      const width = panel.offsetWidth;
+      const left = Math.round(clamp(center - 56, x + margin, Math.max(x + margin, right - width - margin)));
+      const above = rect.top - y - gap - margin, below = bottom - rect.bottom - gap - margin;
+      panel.style.maxHeight = '';
+      const onTop = above >= panel.offsetHeight || above >= below;
+      panel.style.maxHeight = Math.max(0, Math.floor(onTop ? above : below)) + 'px';
+      panel.classList.toggle('below', !onTop);
+      panel.style.left = left + 'px';
+      panel.style.top = Math.round(onTop ? rect.top - gap - panel.offsetHeight : rect.bottom + gap) + 'px';
+      panel.style.setProperty('--popup-arrow', Math.round(clamp(center - left - 2, 10, width - 14)) + 'px');
+    }
+    function show(trigger, content, source) {
+      if (!canShow()) return;
+      clearTimeout(hideTimer);
+      if (trigger !== anchor) {
+        hide();
+        const { title, icon, badge = '', body: details } = content();
+        anchor = trigger;
+        header.innerHTML = (icon ? I(icon) : '') + '<span>' + esc(title) + '</span>' + badge;
+        body.innerHTML = details;
+        body.scrollTop = 0;
+        panel.hidden = false;
+        anchor.classList.add('info-active');
+        anchor.setAttribute('aria-describedby', panel.id);
+        reposition();
+      }
+      input = source;
+    }
+    function scheduleHide() {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        if (anchor && input !== 'touch' && !anchor.matches(':hover, :focus-visible') && !panel.matches(':hover')) hide();
+      }, 160);
+    }
+    function bind(trigger, content) {
+      trigger.dataset.infoTrigger = '';
+      let pointerType = '';
+      trigger.addEventListener('pointerenter', e => { if (e.pointerType !== 'touch') show(trigger, content, 'hover'); });
+      trigger.addEventListener('pointerleave', scheduleHide);
+      trigger.addEventListener('focus', () => { if (trigger.matches(':focus-visible')) show(trigger, content, 'keyboard'); });
+      trigger.addEventListener('blur', scheduleHide);
+      trigger.addEventListener('pointerdown', e => { pointerType = e.pointerType; });
+      trigger.addEventListener('click', e => {
+        if (e.detail === 0) show(trigger, content, 'keyboard');
+        else if ((e.pointerType || pointerType) === 'touch') {
+          if (anchor === trigger && input === 'touch') hide(); else show(trigger, content, 'touch');
+        }
+      });
+    }
+    function handleKey(e) {
+      if (!anchor) return false;
+      if (e.code === 'Escape') { hide(); e.preventDefault(); return true; }
+      if (e.target !== anchor || body.scrollHeight <= body.clientHeight) return false;
+      const scroll = { ArrowUp: -24, ArrowDown: 24, PageUp: -body.clientHeight, PageDown: body.clientHeight,
+        Home: -body.scrollHeight, End: body.scrollHeight }[e.code];
+      if (scroll === undefined) return false;
+      body.scrollTop += scroll;
+      e.preventDefault();
+      return true;
+    }
+    panel.addEventListener('pointerenter', () => clearTimeout(hideTimer));
+    panel.addEventListener('pointerleave', scheduleHide);
+    document.addEventListener('pointerdown', e => {
+      if (anchor && !anchor.contains(e.target) && !panel.contains(e.target)) hide();
+    });
+    if (viewport) {
+      viewport.addEventListener('resize', reposition);
+      viewport.addEventListener('scroll', reposition);
+    }
+    return { bind, hide, reposition, handleKey };
+  }
+
   // ── 겹쳐 뜨는 창 ──
   const okBtn = t => '<div class="foot"><button class="btn main" data-do="ok">' + (t || '확인') + ' <span class="key">Space</span></button></div>';
   function evFx(f) { // 사건이 바꾼 것: 현금 · 체력 · 경험치 · 잠
@@ -1645,12 +1838,107 @@
     return out.length ? '<div class="evfx">' + out.join('') + '</div>' : '';
   }
   function nextBox(q) { return q ? '<div class="nextbox"><i>' + I('quest', '', 's') + '다음 ' + q.n + ' / ' + q.of + '</i><b>' + esc(q.title) + '</b><span>' + esc(q.desc) + '</span></div>' : ''; }
+  function questDoneList(done, skipped) {
+    if (!done.length && !skipped.length) return '';
+    return '<div class="qdone">' + done.map(q => '<div>' + I('check', '', 's') + '<b>' + esc(q.title) + '</b><span class="gold">' + I('gift', '', 's') + esc(q.reward) + '</span></div>').join('') +
+      skipped.map(q => '<div class="off">' + I('skip', '', 's') + '<b>' + esc(q.title) + '</b><span>때가 지나 건너뜀</span></div>').join('') + '</div>';
+  }
+  function firstQuestCards(q, finished) {
+    const hp = finished ? (q.recoveredHp ?? q.rewardHp) : q.rewardHp;
+    const recovery = finished ? (hp > 0 ? '체력에 바로 반영됨' : '체력이 이미 가득 찼습니다') : '완료 즉시 체력 회복';
+    return '<div class="quest-layout">' +
+      '<section class="quest-objective"><h4>' + I(finished ? 'check' : 'quest', '', 's') + (finished ? '완료한 일' : '해야 할 일') + '</h4>' +
+        '<div class="quest-check-row"><span class="quest-check" aria-hidden="true">' + (finished ? I('check', '', 's') : '') + '</span>' +
+          '<b>아무 알바 1회 완료</b><span class="quest-count">' + q.cur + ' / ' + q.goal + '회</span></div>' +
+        (finished ? '' : '<div class="quest-hint"><span class="quest-job">' + art('job', 'flyer') + '</span>추천 · <b>전단지 알바</b></div>') + '</section>' +
+      '<section class="quest-payment"><h4>' + I(finished ? 'check' : 'gift', '', 's') + (finished ? '받은 보상' : '완료 보상') + '</h4>' +
+        '<div class="quest-item"><span class="quest-item-icon">' + I('kimbap') + '</span><div><b>삼각김밥</b>' +
+          '<span class="quest-heal">' + I('hp', '', 's') + '체력 <strong>+' + hp + '</strong></span></div></div>' +
+        '<p class="quest-recovery">' + recovery + '</p></section></div>';
+  }
+  function openingDream() {
+    const dream = DREAM_CARDS[S.opening.dream];
+    const arrow = '<span class="dream-arrow" aria-label="그다음">' + I('up', '', 's') + '</span>';
+    const path = dream.path.map(([kind, icon, label]) => '<span class="dream-stop"><span class="dream-stop-icon" aria-hidden="true">' +
+      art(kind, icon) + '</span><span>' + label + '</span></span>').join(arrow);
+    return '<p class="dintro">' + dream.story + '</p>' +
+      '<div class="dream-unlock"><span class="dream-unlock-label">' + I('lock') +
+      '<span><b>패시브 해금</b><small>두 번째 꿈 장면</small></span></span><div class="dream-path">' + path + '</div></div>';
+  }
+  function openingBody(quest) {
+    switch (S.opening.step) {
+      case 0:
+        return '<div class="opening-story"><div class="opening-scene">' + art('scene', 0, 'morning') + '</div><div class="opening-narration">' +
+          '<p>서울역 첫차가 철로를 길게 울렸다. 그 소리에 눈을 떴다.<br>밤새 누워 있던 벤치의 냉기가 아직 옷에 배어 있었다.</p>' +
+          '<p>주머니엔 잔액이 바닥난 교통카드 한 장.<br>역 앞 가게에 하나둘 불이 켜졌다. 그 불빛을 잠시 바라보다 나도 몸을 일으켰다.</p>' +
+          '<p class="opening-dialogue reveal">그때 눈 앞에 게임 속에서 볼 법한 상태창이 보였다.</p></div></div>';
+      case 1:
+        return '<p class="opening-dialogue">현재 상태를 스캔합니다.</p>' +
+          '<div class="opening-stats">' +
+          '<div><span>' + I('coin', '', 's') + '현금</span><b>' + won(S.cash) + '</b></div>' +
+          '<div><span>' + I('home', '', 's') + '주소</span><b>없음</b></div>' +
+          '<div><span>' + I('hp', '', 's') + '체력</span><b>' + S.hp + '</b></div></div>' +
+          '<p class="opening-dialogue">' + esc(S.name) + '님, 각성을 축하드립니다.</p>';
+      case 2:
+        return '<p class="opening-dialogue">저는 ' + esc(S.name) + '님을 돕기 위해 온 사람입니다.<br>' +
+          '기한은 없으니, 한국 최고의 부자가 되는 날까지 곁에서 응원하겠습니다.</p>' +
+          '<div class="opening-road-head"><span>서울역부터 한 칸씩</span><span>기한 없음</span></div>' +
+          '<ol class="introroad" aria-label="주거 진행 순서">' + R.HOMES.map((home, i) => {
+          const col = i < 5 ? i + 1 : R.HOMES.length - i;
+          const direction = i < 4 ? 'right' : i === 4 ? 'down' : 'left';
+          const arrow = i < R.HOMES.length - 1 ? '<span class="arr ' + direction + '" aria-hidden="true">' + I('up', '', 's') + '</span>' : '';
+          return '<li class="st' + (i === 0 ? ' here' : '') + '" style="grid-column:' + col + ';grid-row:' + (i < 5 ? 1 : 2) + '">' +
+            '<span class="th" aria-hidden="true">' + art('thumb', i) + '</span><i>' + home.name + '</i>' + arrow + '</li>';
+        }).join('') + '</ol><div class="opening-goals">' +
+          '<div><small>' + I('home', '', 's') + '1막 목표</small><b>내 집 마련</b><span>현금 ' + won(R.homePrice(S, 4)) + '</span></div>' +
+          '<div><small>' + I('crown', '', 's') + '최종 목표</small><b>한국 최고 부자</b><span>호텔에서 순자산 ' + eok(tune.top_worth) + ' 원</span></div></div>' +
+          '<div class="opening-slots"><span>오늘의 행동 3칸</span>' +
+          ['아침', '오후', '저녁'].map((label, i) => '<span class="opening-slot">' + I(SLOT_IC[i], '', 's') + label + '</span>').join('') + '</div>';
+      case 3:
+        return '<p class="opening-dialogue">첫 각성을 기념해 다음 중 하나를 고를 수 있습니다.</p>' +
+          '<div class="dreams" role="group" aria-label="꿈 선택">' + R.dreamList().map((d, i) => {
+            const selected = d.id === S.opening.dream;
+            const card = DREAM_CARDS[d.id];
+            return '<button class="dcard' + (selected ? ' on' : '') + '" data-do="dream" data-arg="' + d.id +
+              '" aria-pressed="' + selected + '"><span class="key" aria-hidden="true">' + (i + 1) + '</span>' +
+              '<span class="dream-mark" aria-hidden="true">' + I('check', '', 's') + '</span>' +
+              '<span class="dream-emblem" aria-hidden="true">' + art('icon', 'dream_' + d.id) + '</span>' +
+              '<span class="dream-name">' + esc(d.name) + '</span><span class="dream-effect">' + I(card.icon, '', 's') +
+              '<span>' + card.effect + ' <b>' + card.amount() + '</b></span></span></button>';
+          }).join('') + '</div><div id="opening-dream" aria-live="polite" aria-atomic="true">' + openingDream() + '</div>';
+      case 4:
+        if (!quest) return '';
+        if (quest.id === 'first_job') return firstQuestCards(quest, false);
+        return nextBox(quest) + '<div class="rewardbox">' + I('gift') + '<span>보상 · ' + esc(quest.reward) + '</span></div>';
+    }
+  }
+  function renderOpening() {
+    const step = S.opening.step;
+    const quest = step === 4 ? R.questView(S) : null;
+    const header = step ? '<div class="opening-head"><h2>' + I('quest', '', 's') + '시스템</h2><span>' + step + ' / ' + (OPENING_TITLES.length - 1) + '</span></div>' : '';
+    const back = step ? '<button class="btn" data-do="no">이전</button>' : '';
+    const title = '<h3 id="opening-title" tabindex="-1">' + esc(quest ? quest.title : OPENING_TITLES[step]) + '</h3>';
+    veil.innerHTML = '<section class="win pop intro corner' + (step === 3 ? ' dream-step' : '') + '" role="dialog" aria-modal="true" aria-labelledby="opening-title">' +
+      header + (quest ? '<div class="quest-heading">' + title + '<span>퀘스트 ' + quest.n + ' / ' + quest.of + '</span></div>' : title) + openingBody(quest) +
+      '<div class="foot">' + back + '<button class="btn main" data-do="ok">다음 <span class="key">Space</span></button></div></section>';
+  }
   const ARROW = { ArrowLeft: -90, ArrowRight: 90, ArrowUp: 0, ArrowDown: 180 };
   const keyName = c => (c in ARROW ? '<span class="ic s" style="transform:rotate(' + ARROW[c] + 'deg)">' + art('icon', 'up') + '</span>' : c.replace('Digit', '').replace('Key', '')); // 방향키는 위 화살표 아이콘을 돌려서
   function renderVeil() {
     const v = $('veil'), m = ui.modal;
     ui.coachDirty = true;
+    if (m) {
+      infoPopup.hide();
+      if (document.activeElement && document.activeElement.matches('[data-info-trigger]')) document.activeElement.blur();
+    }
+    const opening = !!m && m.type === 'intro';
+    const firstQuest = m && m.type === 'quest' && m.done.find(q => q.id === 'first_job');
+    $('s-play').inert = opening || !!firstQuest;
     v.classList.toggle('hide', !m); v.classList.toggle('top', !!m && m.type === 'shock'); // 속보는 위쪽 띠
+    v.classList.toggle('opening-veil', opening);
+    v.classList.toggle('dream-veil', opening && S.opening.step === 3);
+    v.classList.toggle('first-quest-veil', !!firstQuest);
+    placeVeil();
     if (!m) { v.innerHTML = ''; return; }
     if (m.type === 'mg') {
       const g = m.mg || m.demo, L = m.act.levels[m.n];
@@ -1689,14 +1977,7 @@
         roadmapHtml(true) + okBtn('닫기') + '</div>';
       requestAnimationFrame(() => roadDraw(v)); roadDraw(v);
     } else if (m.type === 'intro') {
-      const road = [0, 1, 2, 3, 4, 9], dreams = R.dreamList(); // 첫 창의 한 줄: 원룸 · 내 집까지 보이고, 그 뒤는 줄여서 끝(한국 최고 부자)만
-      if (!m.dream) m.dream = dreams[0].id;
-      const dr = dreams.find(d => d.id === m.dream) || dreams[0];
-      v.innerHTML = '<div class="win pop intro corner"><h2>' + I('quest', '', 's') + '시스템</h2><h3>상태창이 열렸습니다</h3><p>' + esc(S.name) + ' 님, 각성을 축하합니다. 현금 0원. 주소 없음. 이 창은 당신에게만 보입니다.</p>' +
-        '<div class="rewardbox" title="이 판의 목표 — 기한은 없습니다">' + I('crown') + '<span>목표는 <b class="gold">한국 최고 부자</b>. 먼저 현금 ' + won(R.homePrice(S, 4)) + '으로 내 집부터. 기한은 없다.</span></div>' +
-          '<div class="introroad" title="로드맵: 퀘스트를 따라 한 칸씩 올라갑니다. 내 집 뒤로 아파트 · 주택 · 별장 · 호텔이 있습니다">' + road.map((t, i) => (i ? '<span class="arr' + (t === 9 ? ' far' : '') + '">' + I('up', '', 's') + '</span>' : '') + '<span class="st' + (t === 0 ? ' here' : '') + '"><span class="th">' + art('thumb', t) + '</span><i>' + (t === 9 ? '최고 부자' : R.HOMES[t].name) + '</i></span>').join('') + '</div>' +
-        '<div class="dl" title="꿈 — 이 판의 이야기입니다. 조건이 되면 장면이 뜨고, 둘째 장면에서 작은 힘을 얻습니다">' + I('star', '', 's') + '꿈을 하나 고른다 <i>판마다 다른 이야기와 작은 힘</i></div><div class="dreams">' + dreams.map((d, i) => '<button class="dcard' + (d.id === m.dream ? ' on' : '') + '" data-do="dream" data-arg="' + d.id + '" title="' + esc(d.line + ' — 둘째 장면에서: ' + d.gain) + '"><span class="key">' + (i + 1) + '</span><b>' + esc(d.name) + '</b></button>').join('') + '</div>' +
-        '<p class="dintro">' + esc(dr.intro) + ' <i>' + esc(dr.line) + '.</i></p>' + nextBox(m.next) + okBtn('시작') + '</div>';
+      renderOpening();
     } else if (m.type === 'shock') { // 속보: 머리글 · 종목 · 몇 %. 든 종목이면 내 손익을 크게
       const e = m.e, a = R.ASSETS.find(x => x.id === e.asset), tone = e.held ? cls(e.delta) || 'dim' : 'calm';
       v.innerHTML = '<div class="win shock ' + tone + ' corner"><div class="sh-tag">' + I('news') + '<b>속보</b></div>' +
@@ -1705,10 +1986,18 @@
           : '<div class="sh-pl calm"><i>내 손익</i><span>든 것 없음</span></div>') + okBtn() + '</div>';
     } else if (m.type === 'quest') {
       const one = m.done.length + m.skipped.length === 1, q0 = m.done[0];
-      v.innerHTML = '<div class="win pop corner"><h2>' + I('check', '', 's') + '퀘스트 완료' + (m.done.length > 1 ? ' ×' + m.done.length : '') + '</h2>' +
-        (one ? '<h3>' + esc(q0.title) + '</h3><div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(q0.reward) + '</b></div>'
-          : '<div class="qdone">' + m.done.map(q => '<div>' + I('check', '', 's') + '<b>' + esc(q.title) + '</b><span class="gold">' + I('gift', '', 's') + esc(q.reward) + '</span></div>').join('') +
-            m.skipped.map(q => '<div class="off">' + I('skip', '', 's') + '<b>' + esc(q.title) + '</b><span>때가 지나 건너뜀</span></div>').join('') + '</div>') + nextBox(m.next) + okBtn() + '</div>';
+      const heading = '퀘스트 완료' + (m.done.length > 1 ? ' ×' + m.done.length : '');
+      if (firstQuest) {
+        v.innerHTML = '<section class="win pop quest-finished corner" role="dialog" aria-modal="true" aria-labelledby="quest-finished-title">' +
+          '<div class="opening-head"><h2>' + I('quest', '', 's') + '시스템</h2><span>첫 퀘스트</span></div>' +
+          '<div class="quest-heading"><h3 id="quest-finished-title" tabindex="-1">' + heading + '</h3><span>퀘스트 ' + firstQuest.n + ' / ' + firstQuest.of + '</span></div>' +
+          '<p class="quest-finished-name">' + esc(firstQuest.title) + '</p>' + firstQuestCards(firstQuest, true) +
+          questDoneList(m.done.filter(q => q !== firstQuest), m.skipped) + nextBox(m.next) + okBtn('다음') + '</section>';
+      } else {
+        v.innerHTML = '<div class="win pop corner"><h2>' + I('check', '', 's') + heading + '</h2>' +
+          (one ? '<h3>' + esc(q0.title) + '</h3><div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(q0.reward) + '</b></div>'
+            : questDoneList(m.done, m.skipped)) + nextBox(m.next) + okBtn() + '</div>';
+      }
     } else if (m.type === 'perk') {
       const cards = R.offerView(S) || [];
       v.innerHTML = '<div class="win lvup corner"><h2>' + I('star', '', 's') + '레벨 업</h2><h3>Lv.' + (S.lv - S.picks + 1) + ' — 특성을 하나 고르세요</h3><div class="pcards">' + cards.map((p, i) =>
@@ -1838,6 +2127,8 @@
     else if (m.type === 'help') v.innerHTML = helpHtml();
     const w = v.firstElementChild; // 꺾쇠를 창보다 먼저 그리려고 틀을 한 겹 둠
     if (w && w.classList.contains('corner')) { const f = document.createElement('div'); f.className = 'frame corner'; w.classList.remove('corner'); v.replaceChild(f, w); f.appendChild(w); }
+    if (m.type === 'intro') $('opening-title').focus({ preventScroll: true });
+    if (firstQuest) $('quest-finished-title').focus({ preventScroll: true });
   }
   function nightHtml(n) {
     const keep = t => esc(t).replace(/\([^)]*\)/g, m => m.replace(/ /g, '\u00a0')); // 괄호 덧붙임은 한 덩어리로 (줄이 바뀌면 통째로 다음 줄에 — 금액 바로 옆에서 끊기지 않게)
@@ -2060,7 +2351,7 @@
   try { document.fonts.load('16px DungGeunMo').then(() => { if (scene === 'play') render(); ui.coachDirty = true; }, () => {}); } catch (e) { /* 글꼴을 못 불러도 게임은 됨 */ } // 둥근모꼴이 늦게 들어오면 한 번 더 그려 자리(말풍선 · 길)를 다시 잼
   const first = params.get('scene') || 'title';
   if (first === 'figures') { renderFigures(); show('figures'); }
-  else if (first === 'play') { newGame(); }
+  else if (first === 'play') { newGame(undefined, false); }
   else show('title');
   last = clock.now();
   if (!MANUAL) { requestAnimationFrame(frame); setInterval(timer, 50); }

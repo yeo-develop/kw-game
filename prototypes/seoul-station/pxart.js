@@ -1,8 +1,9 @@
 // PROTOTYPE - NOT FOR PRODUCTION
-// 픽셀 그림 — 장면(서울역) · 카드 그림(알바 · 행동 · 종목) · 로드맵 건물 · 주사위 · 컵.
+// 픽셀 그림 — 하늘 창 · 장면(서울역) · 카드 그림(알바 · 행동 · 종목) · 로드맵 건물 · 주사위 · 컵.
 // 불려 올 때 window.Art 의 scene · thumb · job · act · asset · die · cup 을 감싼다.
 // 픽셀 그림이 있으면 <img class="px">(원래 점 크기)를, 없으면 예전 벡터 그림(art.js)을 돌려준다.
-// 색은 window.PX(28색) + 장면 전용 XC(아래 넷)만. 오류가 나도 예전 Art 가 남게 전체를 try/catch 로 싼다.
+// 주거 장면에는 window.PX와 XC를 쓰고 하늘 창에는 시간대별 팔레트를 쓴다.
+// 오류가 나도 예전 Art 가 남게 전체를 try/catch 로 싼다.
 // 2단계(다른 집 장면)에서 다시 쓸 그리는 함수는 window.PxArt 에 둔다.
 (function () {
   try {
@@ -1186,6 +1187,58 @@
     };
     const SCENES = [sceneStation, sceneSauna, sceneGosi, sceneOneroom, sceneHome];
 
+    const HUD_SKY = [
+      { sky: ['#5ba5d7', '#88c8e9', '#b2dbed', '#ffdcb4'], sun: '#ffe79a', halo: '#ffd497', cloud: '#ebf2de', mist: '#84abc1', hill: '#597e93', fore: '#3d535f', city: '#596c78', brick: '#a76851', roof: '#424755', window: '#ccaf86', rail: '#516973' },
+      { sky: ['#468ed1', '#63aee1', '#9ed7ef', '#c5ecf5'], sun: '#fff8a8', halo: '#ffdf68', cloud: '#f3f8f4', mist: '#6f9fb9', hill: '#4e8291', fore: '#335c64', city: '#436a7c', brick: '#b77250', roof: '#454858', window: '#e9c69a', rail: '#517c83' },
+      { sky: ['#725e99', '#9d6f9c', '#d88e9d', '#ffad7f'], sun: '#ffe195', halo: '#ffc284', cloud: '#ffd1a1', mist: '#886b8e', hill: '#684e74', fore: '#443b62', city: '#504467', brick: '#7c4a55', roof: '#4a3d54', window: '#ffcf77', rail: '#655072' },
+      { sky: ['#172440', '#22385a', '#30496b', '#466480'], sun: '#edf2ff', cloud: '#9ab6d4', mist: '#49607a', hill: '#354761', fore: '#242f48', city: '#303a56', brick: '#424458', roof: '#302d43', window: '#ffd879', rail: '#3c4d66' },
+    ];
+    const HUD_RIDGES = [
+      [[0, 21, 14], [21, 26, 12], [26, 31, 11], [31, 36, 10], [36, 44, 9], [44, 48, 10], [48, 51, 11], [51, 55, 10], [55, 60, 8], [60, 63, 7], [63, 67, 8], [67, 71, 9], [71, 76, 11], [76, 82, 12]],
+      [[0, 28, 15], [28, 33, 14], [33, 39, 13], [39, 43, 14], [43, 50, 15], [50, 55, 14], [55, 59, 13], [59, 67, 12], [67, 72, 13], [72, 76, 14], [76, 82, 15]],
+    ];
+    function hudDisc(g, x, y, r, color) {
+      for (let dy = -r; dy <= r; dy++) {
+        const half = Math.floor(Math.sqrt(r * r - dy * dy));
+        P(g, x - half, y + dy, 2 * half + 1, 1, color);
+      }
+    }
+    function drawHudSky(g, slot) {
+      MAP = null;
+      const p = HUD_SKY[slot], [sunX, sunY] = [[36, 10], [50, 5], [72, 10], [73, 5]][slot];
+      P(g, 0, 0, 82, 18, p.sky[0]); P(g, 0, 3, 82, 4, p.sky[1]);
+      P(g, 0, 7, 82, 5, p.sky[2]); P(g, 0, 12, 82, 6, p.sky[3]);
+      if (slot < 3) {
+        hudDisc(g, sunX, sunY, 5, p.halo); hudDisc(g, sunX, sunY, 3, p.sun);
+        const clouds = [[[28, 4, 12], [53, 4, 8], [69, 6, 10]], [[29, 5, 10], [63, 5, 13], [69, 8, 10]], [[28, 6, 12], [44, 5, 12], [58, 4, 8]]][slot];
+        for (const [x, y, w] of clouds) {
+          P(g, x, y, w, 1, p.cloud); P(g, x + 2, y - 1, w - 4, 1, p.cloud);
+          P(g, x + 3, y + 1, w - 6, 1, p.sky[3]);
+        }
+      } else {
+        hudDisc(g, sunX, sunY, 3, p.sun); hudDisc(g, sunX + 2, sunY - 2, 3, p.sky[1]);
+        for (const [x, y] of [[29, 3], [34, 6], [41, 3], [46, 6], [52, 2], [57, 4], [64, 3], [78, 2], [80, 6]]) P(g, x, y, 1, 1, p.cloud);
+        sparkle(g, 47, 2, p.cloud);
+      }
+      HUD_RIDGES.forEach((ridge, i) => {
+        for (const [left, right, y] of ridge) P(g, left, y, right - left, 18 - y, i ? p.hill : p.mist);
+      });
+      // 남산타워와 서울역은 시간대마다 같은 자리에 둔다.
+      P(g, 61, 3, 1, 8, p.fore); P(g, 60, 5, 3, 1, p.fore);
+      P(g, 59, 6, 5, 1, p.fore); P(g, 60, 7, 3, 1, p.fore);
+      if (slot >= 2) P(g, 61, 3, 1, 1, p.window);
+      for (const [x, y, w] of [[26, 14, 4], [30, 13, 4], [34, 14, 3], [38, 15, 4], [64, 13, 4], [69, 12, 4], [74, 13, 4], [79, 11, 3]]) {
+        P(g, x, y, w, 18 - y, p.city);
+        if (slot >= 2) P(g, x + 1, y + 1, 1, 1, p.window);
+      }
+      P(g, 38, 15, 26, 2, p.brick); P(g, 42, 14, 17, 1, p.roof); P(g, 46, 13, 9, 1, p.brick);
+      P(g, 48, 12, 6, 1, p.roof); P(g, 49, 11, 4, 1, p.roof); P(g, 50, 10, 2, 1, p.roof);
+      for (const x of [40, 43, 46, 50, 54, 58, 61]) P(g, x, 15, 1, 1, p.window);
+      P(g, 50, 12, 2, 1, p.window); P(g, 49, 16, 4, 1, p.fore);
+      P(g, 0, 17, 82, 1, p.fore);
+      for (const x of [27, 37, 45, 56, 66, 75]) P(g, x, 17, 5, 1, p.rail);
+    }
+
     // ───── 감싸기 (이름별 캐시) ─────
     const cache = {};
     function img(key, w, h, alt, draw) {
@@ -1217,6 +1270,7 @@
       const t = Math.max(0, Math.min(9, Math.round(Number(tier) || 0)));
       return img('thumb' + t + (gray ? 'g' : ''), 32, 32, THUMB_NAME[t] + (gray ? ' (잠김)' : ''), g => { MAP = gray ? GRAY : null; try { BUILD[t](g); } finally { MAP = null; } }); // 그리다 오류가 나도 회색 표가 다음 그림에 남지 않게
     });
+    Old.hudSky = safe('hudSky', slot => img('hudSky_' + slot, 82, 18, '', g => drawHudSky(g, slot)));
     Old.job = safe('job', id => JOB[id] ? img('job_' + id, 32, 32, JOB_NAME[id], JOB[id]) : null);
     Old.act = safe('act', id => ACT[id] ? img('act_' + id, 32, 32, ACT_NAME[id], ACT[id]) : null);
     Old.asset = safe('asset', id => ASSET[id] ? img('asset_' + id, 32, 32, ASSET_NAME[id], ASSET[id]) : null);

@@ -5,6 +5,7 @@
 // node rt.js <게임 폴더> <찍을 폴더>
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
+const advanceOpening = require('./opening');
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..')), out = process.argv[3] || path.join(dir, 'evidence', 'rt');
 fs.mkdirSync(out, { recursive: true });
 (async () => {
@@ -43,8 +44,8 @@ fs.mkdirSync(out, { recursive: true });
   };
   const mgButtons = () => page.evaluate(() => Array.from(document.querySelectorAll('[data-mg]')).map(b => b.dataset.mg + ':' + b.textContent.trim()));
   await wait(500); await page.fill('#name', '동여'); await shot('rt01_title');
-  await page.click('text=새로 시작'); await wait(700); await shot('rt02_intro'); await note('새로 시작');
-  await page.click('[data-do="ok"]'); await wait(600); await note('시작 확인');
+  await page.click('text=새로 시작'); await advanceOpening(page, 1); await wait(300); await shot('rt02_intro'); await note('새로 시작');
+  await advanceOpening(page); await wait(600); await note('시작 확인');
   await shot('rt03_first_screen'); await coach('job', '첫 화면');
   await page.click('[data-do="job"][data-arg="loading"]', { position: { x: 30, y: 80 } }); await wait(300); // 안내가 짚지 않은 카드는 안 눌린다
   if ((await st()).modal || (await st()).slot !== 0) errs.push('안내가 전단지를 짚는 동안 상하차가 눌림');

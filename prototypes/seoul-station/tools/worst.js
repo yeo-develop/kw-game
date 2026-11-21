@@ -5,6 +5,7 @@
 // node tools/worst.js [게임 폴더] [찍을 폴더]
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
+const advanceOpening = require('./opening');
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..')), out = path.resolve(process.argv[3] || path.join(dir, 'evidence', 'worst'));
 fs.mkdirSync(out, { recursive: true });
 (async () => {
@@ -15,7 +16,7 @@ fs.mkdirSync(out, { recursive: true });
     pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
     pg.on('pageerror', e => errs.push(e.message));
     await pg.goto('file://' + path.join(dir, 'index.html') + '?manual=1&scene=play&seed=5');
-    await pg.evaluate(() => window.game.step(60)); await pg.keyboard.press('Space'); await pg.evaluate(() => window.game.step(60));
+    await advanceOpening(pg); await pg.evaluate(() => window.game.step(60));
     await pg.evaluate(() => { window.game.state.raw.beats = ['family1', 'family2', 'sign1', 'sign2', 'landlord1', 'landlord2']; }); // 꿈의 장면 창은 여기서 보지 않는다 (사는 곳을 건너뛰는 점검마다 끼어들지 않게 — 본 것으로 해 둔다)
     return pg;
   };

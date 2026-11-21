@@ -1557,6 +1557,12 @@
       '................',
     ],
     };
+    // 32×32 꿈 엠블럼은 단일 HTML 빌드에 함께 들어가는 PNG다.
+    var EMBLEMS = {
+      dream_family: 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABLUlEQVR4nGNgGAVDEWjL6v3Hhulq+fU4JxRMF0cgW/5/bR4KprkjsFkO8z3NHYHLckLiNLEY3RJCjiDbIfiCHFcuQE+YZIcGOZZTzRGUWE6xI4gxgGaOoKblZDkCWWO/kyUKfrWziiyMbg7enIHNByBD/t+fhSH+/8NWrBhD3f1ZYDNIrjeQHQCio00dUDA2R+BSh+wAgjkAlwP+n56IgnE54N2WLhRMUwdgw3R1QEOYBQqmqQOw4f+356FgXOoocgAI7wgM+P99fS0cg/i4HICszqSuBYyJTvn4HICOcTkAZikyppkDsGGaOAAbzli58P+yq0fhGMQHYUL6SHYArCRExjAHYMOw0g8ZU5wLNuR6omBCvkRXT7YDbsxKoiom2nL0UKAGJtnyUUBPAAAKSmT37Be3EgAAAABJRU5ErkJggg==',
+      dream_sign: 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA90lEQVR4nGNgGAWDCWjL6v2nBsZlLlEOONoYSDbGZdH/s4n/QZiuIYDM///tGhjjCyW4A14sSkVRQHTwoakFW/xiGQRDHQDjk+SAzdk2RDsAWS1KCECjgKwQINcByICkNEALB5ASjSgaaJEtv+3N/A/CdLMc3REkOWBvkj08AVGCSYoCZMuphQmmfmwOALm81TX4f6ypD0UYZMaTWS6UOeD3tigMjGwJrqCnmgNghsEtfLEMLx9ZbGQ5ACUKhlcIwGo1JExXBwxINgQVICDN1MDIhdHQcQAIP+z2oAomqy6gZZVMd0eQZDkyOFDh/Z8amGwHjIIRAQDHlURG0bHjpgAAAABJRU5ErkJggg==',
+      dream_landlord: 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABDUlEQVR4nGNgGAWDHWjL6v0nBw+o5VRxBLJB/Tt2E4UjaqfCMcWOQHYAssHEYopDAqTRMrSQYjy0HAALsq0nt1MdExUdyPG2qSODapjo9IDNAZ/2VYKxSnAw0RiknqKsicsBRrk5BDFIHcyy/2cTUTBVHODd24YTIzsAbvGLZQhMrCMIOSBzxSwMjNcBpIYELRyAHC3D2wG4EiBy8FPsAFwYw/JP+0i3nJADcGF8WY8u5QDVLCfkAI2YaKwY3QHIJSrJNSKxDkD3ITbLaeYAbBYjWw7SQxcHwCzenG0DxjDL6eYAdAyrDWnmAPRsh4xhJSHNHEBKe4AsBxDT1qcUE+WAFzsrqI5JLoxGDAAACGYwXJ0OUcgAAAAASUVORK5CYII=',
+    };
     var NAMES = Object.keys(GRIDS);
     var cache = {};
     function grid(name) { return GRIDS[name] ? GRIDS[name].slice() : null; }
@@ -1582,6 +1588,7 @@
     if (!A || typeof A.icon !== 'function') return;
     var old = A.icon;
     A.icon = function (name) {
+      if (typeof EMBLEMS[name] === 'string') return '<img class="px" alt="" width="32" height="32" src="data:image/png;base64,' + EMBLEMS[name] + '">';
       var u = GRIDS[name] ? dataURL(name) : null;
       if (u) return '<img class="px" alt="" src="' + u + '" width="16" height="16">';
       return old.apply(this, arguments);

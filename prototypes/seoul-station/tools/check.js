@@ -4,6 +4,7 @@
 // 그 뒤 단계(아파트 · 대출 · 미리 갚기 기준 · 사업 · 공부 종목 · 밤사이 갭 · 압류 · 호텔 선언 · 엔딩 · 가장 긴 숫자 · 로드맵 열 단계 · 사는 곳 그림 아홉)는 판 상태를 만들어 넣어 같은 점검을 한다.
 // node check.js <게임 폴더> <찍을 폴더> [seed] [style: study|alba|gamble]
 const path = require('path'), fs = require('fs');
+const advanceOpening = require('./opening');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..')), out = process.argv[3] || path.join(dir, 'evidence', 'check'), seed = process.argv[4] || '5', style = process.argv[5] || 'study';
 fs.mkdirSync(out, { recursive: true });
@@ -86,7 +87,9 @@ const LINT = () => {
   await G(k => { for (const n of ['pay_flyer', 'pay_loading', 'pay_store', 'pay_delivery']) window.CONFIG[n].value *= k; }, BOOST);
   await shot('01_title');
   await click('[data-do="new"]'); await step(20);
+  await advanceOpening(page, 1);
   await shot('02_intro');
+  await advanceOpening(page);
   let guard = 0, mgShot = 0, fxSeen = 0, perks = 0, evts = 0, dens = 0;
   const rollBad = [], forcedMain = [];
   let lastKey = '', stuck = 0;
@@ -238,7 +241,7 @@ const LINT = () => {
   await shot('30_after_act1');
   // ── 일부러 만든 화면: 판이 우연히 안 지나간 곳도 한 번씩 (같은 넘침 · 작은 글자 점검) ──
   const forced = [];
-  const fresh = async () => { await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=play&seed=' + seed); await step(60); await G(() => window.game.press('Space')); await step(40); await G(() => { window.game.state.raw.beats = ['family1', 'family2', 'sign1', 'sign2', 'landlord1', 'landlord2']; }); }; // 일부러 만든 화면에서는 꿈의 장면 창이 끼어들지 않게 본 것으로 해 둔다 (장면 창은 J 에서 따로 본다)
+  const fresh = async () => { await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=play&seed=' + seed); await advanceOpening(page); await step(40); await G(() => { window.game.state.raw.beats = ['family1', 'family2', 'sign1', 'sign2', 'landlord1', 'landlord2']; }); }; // 일부러 만든 화면에서는 꿈의 장면 창이 끼어들지 않게 본 것으로 해 둔다 (장면 창은 J 에서 따로 본다)
   await fresh();
   await G(() => { const S = window.game.state.raw; S.day = 2; S.cash = 40000; S.quest = 2; window.game.render(); }); await step(10); await shot('40_roadmap_board_next'); // 찜질방 옮기기 버튼이 켜진 로드맵 판
   if (!(await G(() => !!document.querySelector('#board .rung.next [data-do="move"]') && !!document.querySelector('#quest [data-do="move"]')))) forced.push('로드맵 판 · 상태창에 찜질방 옮기기 버튼이 없음');
@@ -630,11 +633,11 @@ const LINT = () => {
     { const t = await G(() => { const ls = [...document.querySelectorAll('.t-looks .look')]; if (ls[2]) ls[2].click(); window.game.step(3); return { n: ls.length, on: [...document.querySelectorAll('.t-looks .look')].findIndex(e => e.classList.contains('on')), look: window.game.meta.look }; });
       if (t.n !== 4 || t.on !== 2 || t.look !== 2) forced.push('제목 화면의 후드 색 넷 중 셋째를 눌렀는데 켜지지 않음: ' + JSON.stringify(t));
       await shot('80_title_look'); }
-    await click('[data-do="new"]'); await step(30);
+    await click('[data-do="new"]'); await advanceOpening(page, 3); await step(30);
     { const d0 = await G(() => ({ modal: window.game.state.modal, n: document.querySelectorAll('#veil .dcard').length, intro: (document.querySelector('#veil .dintro') || {}).textContent || '' }));
       await key('Digit2', 5); await shot('81_intro_dream');
       const d1 = await G(() => ({ on: [...document.querySelectorAll('#veil .dcard')].findIndex(e => e.classList.contains('on')), intro: (document.querySelector('#veil .dintro') || {}).textContent || '' }));
-      await key('Space', 40);
+      await advanceOpening(page);
       const d2 = await G(() => { const S = window.game.state.raw; return { dream: S.dream, look: S.look, note: (document.querySelector('#quest .note.dream') || {}).textContent || '' }; });
       if (d0.modal !== 'intro' || d0.n !== 3 || d1.on !== 1 || d1.intro === d0.intro || d2.dream !== 'sign' || d2.look !== 2 || !/간판을 다시 건다/.test(d2.note)) forced.push('첫 창에서 고른 꿈(둘째) · 제목에서 고른 후드 색이 판에 남지 않음: ' + JSON.stringify({ d0, d1, d2 }).slice(0, 400)); }
     // 꿈의 장면: 고시원에 들어가면(주소) 첫 장면 창이 한 번 뜬다

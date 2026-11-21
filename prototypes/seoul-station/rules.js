@@ -1365,9 +1365,10 @@
   const totalJobs = s => s.stats.jobsDone || 0;
   const qamt = (s, amt) => round1k(amt * scale(s) * (1 + T.perk_quest * perk(s, 'quester'))); // 사는 곳에 따라 커진다
   const qcash = (s, amt) => income(s, '퀘스트 보상', qamt(s, amt));
+  const FIRST_MEAL_HP = 10;
   const QUESTS = [
     { id: 'first_job', title: '첫 끼니를 벌어라', desc: '알바를 한 번 해낸다. 전단지가 가볍다.', cur: s => Math.min(1, totalJobs(s)), goal: () => 1, unit: '회',
-      reward: s => { s.hp = Math.min(hpMax(s), s.hp + 10); }, rtext: '삼각김밥 (체력 +10)' },
+      rewardHp: FIRST_MEAL_HP, reward: s => { s.hp = Math.min(hpMax(s), s.hp + FIRST_MEAL_HP); }, rtext: '삼각김밥 (체력 +' + FIRST_MEAL_HP + ')' },
     { id: 'survive', title: '오늘을 버텨라', desc: '세 칸을 다 쓰고 "하루 마치기"로 밤을 넘긴다.', cur: s => (s.day > 1 ? 1 : 0), goal: () => 1, unit: '일',
       reward: s => qcash(s, T.q_survive_cash), rtext: s => won(qamt(s, T.q_survive_cash)) },
     { id: 'roof', title: '지붕 아래에서 자라', desc: '찜질방으로 옮긴다. 자고 나면 체력이 더 많이 돌아오고, 폰으로 주식 계좌를 연다.', cur: s => (s.tier >= 1 ? 1 : 0), goal: () => 1, unit: '', go: 'move',
@@ -1424,13 +1425,21 @@
     const q = QUESTS[s.quest];
     if (!q) return null;
     const cur = q.cur(s), goal = q.goal(s);
-    return { id: q.id, n: s.quest + 1, of: QUESTS.length, title: q.title, desc: typeof q.desc === 'function' ? q.desc(s) : q.desc, cur, goal, unit: q.unit, pct: goal ? clamp(cur / goal, 0, 1) : 0, near: goal > 1 && cur / goal >= 0.8 && cur < goal, reward: typeof q.rtext === 'function' ? q.rtext(s) : q.rtext, go: q.go || '' };
+    const view = { id: q.id, n: s.quest + 1, of: QUESTS.length, title: q.title, desc: typeof q.desc === 'function' ? q.desc(s) : q.desc, cur, goal, unit: q.unit, pct: goal ? clamp(cur / goal, 0, 1) : 0, near: goal > 1 && cur / goal >= 0.8 && cur < goal, reward: typeof q.rtext === 'function' ? q.rtext(s) : q.rtext, go: q.go || '' };
+    if (q.rewardHp) view.rewardHp = q.rewardHp;
+    return view;
   }
   function questTick(s) {
     let guard = 0;
     while (s.quest < QUESTS.length && !s.ended && guard++ < 20) {
       const q = QUESTS[s.quest], view = questView(s);
-      if (questDone(s, q)) { s.quest++; s.stats.quests++; ev(s, 'quest_done', { quest: view }); q.reward(s); gainXp(s, T.xp_quest); }
+      if (questDone(s, q)) {
+        s.quest++; s.stats.quests++; ev(s, 'quest_done', { quest: view });
+        const hp = s.hp;
+        q.reward(s);
+        if (q.rewardHp) view.recoveredHp = Math.max(0, s.hp - hp);
+        gainXp(s, T.xp_quest);
+      }
       else if (q.skip && q.skip(s)) { s.quest++; ev(s, 'quest_skip', { quest: view }); } // 때가 지난 퀘스트는 보상 없이 넘김
       else break;
       if (s.quest < QUESTS.length) ev(s, 'quest_new', { quest: questView(s) });

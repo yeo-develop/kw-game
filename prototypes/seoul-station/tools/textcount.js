@@ -3,6 +3,7 @@
 // node tools/textcount.js [게임 폴더] [기준이 되는 옛 게임 폴더]   → 기준 폴더를 주면 줄어든 비율도 보여 준다
 const path = require('path');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
+const advanceOpening = require('./opening');
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..')), base = process.argv[3] ? path.resolve(process.argv[3]) : null;
 const STATES = { // 상태를 고친 뒤 탭을 고르고 한 칸 쉬어서 화면 전체를 다시 그리게 한다 (옛 판과 새 판에서 같은 길)
   first: () => { },
@@ -30,7 +31,7 @@ async function measure(folder) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     await page.goto('file://' + path.join(folder, 'index.html') + '?manual=1&scene=play&seed=5');
     const step = n => page.evaluate(n => window.game.step(n), n);
-    await step(60); await page.keyboard.press('Space'); await step(60);
+    await advanceOpening(page); await step(60);
     await page.evaluate(STATES[name]); await step(40);
     for (let i = 0; i < 6; i++) { // 뜬 창은 닫고(특성은 첫째, 사건은 둘째), 잠깐 떠 있는 글이 사라질 때까지 기다린 뒤 센다
       const modal = await page.evaluate(() => window.game.state.modal); if (!modal) break;

@@ -7,6 +7,7 @@
 // node tools/tut.js [게임 폴더] [찍을 폴더]
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
+const advanceOpening = require('./opening');
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..')), out = process.argv[3] || path.join(dir, 'evidence', 'tut');
 fs.mkdirSync(out, { recursive: true });
 const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280×720 기준). 말풍선은 뜨는 연출(살짝 커짐) 중에도 같은 값이 나오게 배치 값으로 잰다
@@ -34,7 +35,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     const shot = async n => { await page.waitForTimeout(420); await page.screenshot({ path: path.join(out, n + '.png') }); };
     const box = () => G(BOX);
     const closeAll = async () => { for (let i = 0; i < 8; i++) { const m = (await st()).modal; if (!m) break; await page.keyboard.press(m === 'perk' ? 'Digit1' : 'Space'); await step(60); } };
-    const start = async () => { await step(60); await page.keyboard.press('Space'); await step(30); }; // 첫 창을 닫음
+    const start = async () => { await advanceOpening(page); await step(30); };
     return { page, G, step, st, shot, box, closeAll, start };
   };
   const want = (cond, msg) => { if (!cond) errs.push(msg); };
@@ -58,9 +59,36 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.step(60);
   let s = await p.st();
   want(s.modal === 'intro' && !s.coach, '첫 창이 떠 있는 동안에는 안내가 없어야 함: ' + JSON.stringify(s));
-  { const t = await p.page.textContent('#veil .win'); want(/목표는 한국 최고 부자/.test(t) && /내 집부터/.test(t) && /기한은 없다/.test(t) && !/28일/.test(t), '첫 창에 목표 한 줄(한국 최고 부자 · 내 집부터 · 기한 없음)이 없음'); }
-  await p.shot('tut00_intro');
-  await p.page.keyboard.press('Space'); await p.step(30);
+  want(await p.page.textContent('#opening-title') === '서울역 벤치', '첫 화면에 서울역 프롤로그가 없음');
+  want((await p.page.textContent('.opening-narration')).includes('밤새 누워 있던 벤치의 냉기가 아직 옷에 배어 있었다.'), '수정한 프롤로그 대사가 빠짐');
+  want(await p.G(() => {
+    const art = document.querySelector('.opening-scene img').getBoundingClientRect();
+    const story = document.querySelector('.opening-narration').getBoundingClientRect();
+    return Math.abs(art.width / art.height - 3.25) < 0.05 && art.bottom <= story.top;
+  }), '프롤로그 가로 그림 아래에 대사가 있어야 함');
+  await p.shot('tut00_prologue');
+  await advanceOpening(p.page, 1); await p.step(30); await p.shot('tut00_intro');
+  want(await p.page.textContent('#opening-title') === '상태 진단' && await p.page.locator('.opening-stats > div').count() === 3 &&
+    await p.page.locator('.opening-slots').count() === 0,
+    '상태창 안내에 현금 · 주소 · 체력이 빠짐');
+  await advanceOpening(p.page, 2); await p.step(30); await p.shot('tut00_road');
+  { const t = await p.page.textContent('#veil .intro'); want(/한국 최고 부자/.test(t) && /내 집 마련/.test(t) && /기한 없음/.test(t) && !/28일/.test(t), '로드맵에 두 목표와 기한 안내가 없음'); }
+  want((await p.page.locator('.opening-dialogue').innerText()).endsWith('님을 돕기 위해 온 사람입니다.\n기한은 없으니, 한국 최고의 부자가 되는 날까지 곁에서 응원하겠습니다.'), '목표 안내의 응원 대사가 빠졌거나 순서가 바뀜');
+  want(await p.page.locator('.introroad + .opening-goals').count() === 1, '로드맵 아래에 목표 카드가 있어야 함');
+  want(await p.page.locator('.opening-slot').count() === 3, '오늘의 행동 3칸이 목표 화면에 빠짐');
+  await advanceOpening(p.page, 3); await p.step(30); await p.shot('tut00_dream');
+  want(await p.page.textContent('#opening-title') === '첫 각성 선물', '꿈 선택 앞에 첫 각성 선물 안내가 없음');
+  { const cards = await p.page.locator('.dcard').allTextContents();
+    want(cards.length === 3 && /밤 체력 회복 \+8/.test(cards[0]) && /사업 매출 \+10%/.test(cards[1]) &&
+      /임대수익 \+10%/.test(cards[2]), '꿈 카드 세 장에 비교할 효과 수치가 있어야 함');
+    const emblems = await p.page.locator('.dream-emblem img').evaluateAll(images => images.filter(img => img.naturalWidth === 32).map(img => img.src));
+    want(new Set(emblems).size === 3, '꿈마다 서로 다른 32픽셀 엠블럼이 있어야 함'); }
+  await advanceOpening(p.page, 4); await p.step(30); await p.shot('tut00_quest');
+  want(await p.page.textContent('#opening-title') === '첫 끼니를 벌어라' &&
+    /아무 알바 1회 완료/.test(await p.page.textContent('#veil .quest-objective')) &&
+    /삼각김밥.*체력 \+10/.test(await p.page.textContent('#veil .quest-payment')), '시작 안내의 첫 퀘스트에 목표 또는 보상 카드가 빠짐');
+  want((await p.page.textContent('#veil [data-do="ok"]')).trim().startsWith('다음'), '첫 퀘스트 확인 버튼은 "다음"이어야 함');
+  await p.start();
   s = await p.st(); let b = await p.box();
   want(s.coach === 'job', '첫 안내가 "전단지"가 아님: ' + s.coach); geometry(b, 'job'); log.push('1 ' + b.label + ' — ' + b.text);
   want(await p.G(() => !document.querySelector('#today [data-do="skip"]')), '첫 알바를 짚는 동안 "대충" 버튼이 보임');
@@ -97,7 +125,11 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.step(30); await p.shot('tut03_playing');
   for (let i = 0; i < 700 && !(await p.G(() => !!document.querySelector('.mg-res'))); i += 20) await p.G(() => { const g = window.game, m = g.mg; if (m && m._state.people) { const z = m._state; if (z.people.some(q => q.state === 'walk' && !q.busy && Math.abs(q.x - z.zoneX) < 30)) g.press('Space'); } g.step(20); });
   want(await p.G(() => !!document.querySelector('.mg-res')), '미니게임이 끝나지 않음');
-  await p.step(60); await p.closeAll();
+  await p.step(60); await p.page.keyboard.press('Space'); await p.step(30);
+  want(await p.page.locator('.quest-finished').count() === 1 &&
+    /1 \/ 1회/.test(await p.page.textContent('#veil .quest-objective')) &&
+    /받은 보상.*체력 \+10/.test(await p.page.textContent('#veil .quest-payment')), '첫 알바 뒤에 완료 진행도와 받은 보상이 보여야 함');
+  await p.shot('tut03_quest_done'); await p.closeAll();
   s = await p.st(); b = await p.box();
   want(s.coach === 'slots' && s.slot === 1, '첫 알바 뒤 안내가 "세 칸"이 아님: ' + JSON.stringify(s)); geometry(b, 'slots'); log.push('2 ' + b.label + ' — ' + b.text);
   want(b.rings.length === 2, '세 칸 안내의 고리가 둘(오늘 · 체력)이 아님');
@@ -270,7 +302,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     const st = () => page.evaluate(() => { const s = window.game.state; return { scene: window.game.scene, day: s.day, slot: s.slot, coach: s.coach, tut: s.tut, modal: s.modal, pre: s.pre, int: s.int, mt: window.game.meta.tut, first: !!document.querySelector('.mg-how') && /처음 하는 알바/.test(document.querySelector('.mg-how').textContent) }; });
     const wait = ms => page.waitForTimeout(ms);
     const load = async q => { await page.goto('file://' + path.join(dir, 'index.html') + '?' + (q || query)); await wait(450); };
-    const fresh = async () => { await page.click('[data-do="new"]'); await wait(300); if (await page.evaluate(() => window.game.scene) === 'title') { await page.click('[data-do="new"]'); await wait(300); } await wait(600); if ((await st()).modal === 'intro') { await page.click('#veil [data-do="ok"]'); await wait(700); } }; // 저장이 있으면 한 번 더 눌러야 시작
+    const fresh = async () => { await page.click('[data-do="new"]'); await wait(300); if (await page.evaluate(() => window.game.scene) === 'title') { await page.click('[data-do="new"]'); await wait(300); } await advanceOpening(page); await wait(700); }; // 저장이 있으면 한 번 더 눌러야 시작
     const resume = async () => { await page.click('[data-do="continue"]'); await wait(700); };
     const quit = async () => { await page.click('#hud [data-do="quit"]'); await wait(400); };
     const clear = async () => { for (let i = 0; i < 6 && (await st()).modal; i++) { await page.click((await st()).modal === 'perk' ? '.pcard' : '#veil [data-do="ok"]'); await wait(750); } };
@@ -281,7 +313,33 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     const r = await real('seed=5');
     want(await r.page.locator('[data-do="tuttoggle"]').count() === 1 && /켜짐/.test(await r.page.textContent('[data-do="tuttoggle"]')), '제목 화면에 "첫 판 안내 켜짐"이 없음');
     await r.page.screenshot({ path: path.join(out, 'tut13_title.png') });
-    await r.fresh();
+    await r.page.click('[data-do="new"]');
+    await advanceOpening(r.page, 3);
+    await r.load();
+    await r.page.locator('[data-do="new"]').press('Enter');
+    await r.page.evaluate(() => window.game.step(1));
+    want((await r.st()).scene === 'title' && /하던 판을 지우고/.test(await r.page.textContent('[data-do="new"]')),
+      '새로 시작에서 Enter를 눌렀는데 새 판 확인 대신 하던 판이 열림');
+    await r.page.keyboard.press('Enter');
+    want(await r.page.textContent('#opening-title') === '서울역 벤치', '새 판을 Enter로 확정하면 프롤로그부터 열려야 함');
+    await advanceOpening(r.page, 3);
+    const desktop = r.page.viewportSize();
+    await r.page.setViewportSize({ width: 390, height: 760 });
+    await r.page.waitForSelector('body > #veil.dream-veil');
+    await r.page.waitForFunction(() => window.game.state.guard === 0);
+    await r.page.click('#veil [data-do="dream"][data-arg="sign"]');
+    want(/첫 사업 시작/.test(await r.page.textContent('#veil .dream-path')), '모바일에서 꿈을 고르면 해금 경로가 바뀌어야 함');
+    await advanceOpening(r.page, 4);
+    want(await r.page.locator('body > #veil.opening-veil .quest-layout').count() === 1, '좁은 화면의 첫 퀘스트는 화면 크기에 맞아야 함');
+    await r.page.setViewportSize(desktop);
+    await r.page.waitForSelector('#stage > #veil.opening-veil');
+    await r.load(); await r.resume();
+    want(await r.page.evaluate(() => {
+      const s = window.game.state.raw;
+      return s.opening?.step === 4 && s.opening.dream === 'sign' && !s.dreamSet;
+    }), '중간에 새로 고치면 마지막 안내창과 꿈 선택이 남아야 함');
+    await advanceOpening(r.page); await r.wait(700);
+    want(await r.page.evaluate(() => window.game.state.raw.dream === 'sign'), '첫날 시작에 고른 꿈이 적용되지 않음');
     s = await r.st(); want(s.coach === 'job' && s.mt === 1, '처음 연 사람에게 안내가 안 뜸: ' + JSON.stringify(s));
     await r.load(); // 아무것도 하지 않고 새로 고침: 방금 시작한 판이 저장되어 있어야 한다
     want(await r.page.locator('[data-do="continue"]').count() === 1, '새 판을 시작하자마자 새로 고치면 이어하기가 없음');

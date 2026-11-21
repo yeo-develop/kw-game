@@ -4,6 +4,7 @@
 // node tools/zones.js [게임 폴더]
 const path = require('path');
 const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects/outsourcing/high-order-front/node_modules/playwright');
+const advanceOpening = require('./opening');
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const NEED = ['hud', 'me', 'quest', 'today', 'board'];
 (async () => {
@@ -12,7 +13,7 @@ const NEED = ['hud', 'me', 'quest', 'today', 'board'];
   for (const [w, h] of [[1280, 720], [800, 450], [1920, 1080]]) {
     const page = await browser.newPage({ viewport: { width: w, height: h } });
     await page.goto('file://' + path.join(dir, 'index.html') + '?manual=1&scene=play&seed=5');
-    await page.evaluate(() => window.game.step(60)); await page.keyboard.press('Space'); await page.evaluate(() => window.game.step(60));
+    await advanceOpening(page); await page.evaluate(() => window.game.step(60));
     for (const state of ['first', 'late']) {
       if (state === 'late') await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; S.slot = 3; window.game.render(); window.game.run('tab', 'coin'); });
       const z = await page.evaluate(() => {
