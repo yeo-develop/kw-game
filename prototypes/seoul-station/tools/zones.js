@@ -34,7 +34,7 @@ const NEED = ['hud', 'me', 'quest', 'today', 'board'];
       for (const id of NEED) if (!z.some(a => a.id === id)) bad.push(tag + ': 구역 없음 ' + id);
       for (const a of z) {
         if (a.x0 < -0.5 || a.y0 < -0.5 || a.x1 > 1280.5 || a.y1 > 720.5) bad.push(tag + ': 화면 밖 ' + a.id);
-        if (!a.head || !a.icon) bad.push(tag + ': 아이콘 머리줄 없음 ' + a.id);
+        if (!a.head || (!a.icon && a.id !== 'today')) bad.push(tag + ': 아이콘 머리줄 없음 ' + a.id); // '오늘' 구역의 머리줄은 글자("행동")만이다 — 2026-11-21 화면 개편에서 시간대 아이콘이 위쪽 띠의 하늘 창으로 옮겨 갔다
         if (a.same !== z[0].same) bad.push(tag + ': 틀이 다름 ' + a.id);
         for (const b of z) {
           if (a.id >= b.id) continue;

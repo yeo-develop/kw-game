@@ -152,13 +152,16 @@ fs.mkdirSync(out, { recursive: true });
     const g = window.game, S = g.state.raw; g.press('Space'); g.step(60); if (g.state.modal === 'perk') { g.press('Digit1'); g.step(60); }
     for (let i = 0; i < 4; i++) g.run('why', '현금이 모자랍니다');
     const same = [...document.querySelectorAll('#toasts .toast')].filter(e => /현금이 모자랍니다/.test(e.textContent)).length;
-    S.perks = { iron: 2, lazy: 1 }; g.render(); for (const e of document.querySelectorAll('#me .pk')) e.click(); // '요령'의 설명에는 큰따옴표가 들어 있다
-    const tip = Array.from(document.querySelectorAll('#toasts .toast.tip')).map(e => e.textContent).join('|');
+    // 특성 아이콘의 설명은 알림 한 줄이 아니라 설명 팝업(#info-popup)으로 뜬다 (2026-11-21 화면 개편 — 마우스를 올리거나 · 키보드로 가거나 · 터치로 누르면). '요령'의 설명에는 큰따옴표가 들어 있다
+    S.perks = { iron: 2, lazy: 1 }; g.render();
+    const pop = document.getElementById('info-popup'), tips = [];
+    for (const e of document.querySelectorAll('#me .pk')) { e.click(); tips.push(pop && !pop.hidden ? pop.textContent.replace(/\s+/g, ' ').trim() : ''); }
+    const tip = tips.join('|');
     return { modal: g.state.modal, same, tip };
   });
   await page3.waitForTimeout(400); await page3.screenshot({ path: path.join(out, 'toasts.png') });
   if (pops.toast.same !== 1) pops.bad.push('같은 알림이 ' + pops.toast.same + '개 쌓임');
-  if (!/강철 체력 ×2 — 최대 체력/.test(pops.toast.tip) || !/요령 — "대충" 배율.*받는다/.test(pops.toast.tip)) pops.bad.push('특성 아이콘을 눌러도 설명이 다 안 뜸: ' + pops.toast.tip);
+  if (!/강철 체력 ×2 ?최대 체력/.test(pops.toast.tip) || !/요령 ?"대충" 배율.*받는다/.test(pops.toast.tip)) pops.bad.push('특성 아이콘을 눌러도 설명이 다 안 뜸: ' + pops.toast.tip);
   if (pops.bad.length) report.popups = pops.bad;
   // 속보 띠: 든 종목(손익을 크게 · 도장 없이 · 흔들림 한 번) / 안 든 종목(차분하게) / 퀘스트 창과 한 칸에 몰릴 때(줄을 서서 하나씩) / 효과 줄이기(흔들림 없음)
   const sh = { bad: [] };
@@ -239,7 +242,7 @@ fs.mkdirSync(out, { recursive: true });
     const out = { perks: Object.assign({}, S.perks), after: [] };
     for (let i = 0; i < 6 && g.state.modal; i++) { out.after.push(g.state.modal); g.press('Space'); g.step(60); } // 특성을 고른 뒤 이어 뜨는 창(꿈의 장면 등)을 닫는다
     g.run('tab', 'stock'); toasts();
-    out.pk = (document.querySelector('#me .pk.aug') || {}).title || '';
+    { const e = document.querySelector('#me .pk.aug'), pop = document.getElementById('info-popup'); if (e) e.click(); out.pk = e && pop && !pop.hidden ? pop.textContent.replace(/\s+/g, ' ').trim() : ''; if (e) e.blur(); document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); } // 양날 특성의 설명 팝업 (읽은 뒤 닫는다)
     g.run('sel', 'daejang'); toasts(); // 종목 상세: "사기"가 잠기고(팔기는 그대로), 누르면 이유
     out.buys = [...document.querySelectorAll('#board .order2 .btn.up')].map(e => e.dataset.do); out.sells = [...document.querySelectorAll('#board .order2 .btn.down')].map(e => e.dataset.do);
     document.querySelector('#board .order2 .btn.up').click(); g.step(2); out.buyClick = toasts();
@@ -254,7 +257,7 @@ fs.mkdirSync(out, { recursive: true });
     return out; });
   await p9.waitForTimeout(300); await p9.screenshot({ path: path.join(out, 'aug-locked.png') }); await p9.close();
   { const l = ag.locks;
-    if (!/양날/.test(l.pk) || !/대신: 이 판 끝까지 주식을 살 수 없다/.test(l.pk)) ag.bad.push("'나' 구역의 양날 특성 설명에 대신이 없음: " + l.pk);
+    if (!/양날/.test(l.pk) || !/대신 ?이 판 끝까지 주식을 살 수 없다/.test(l.pk)) ag.bad.push("'나' 구역의 양날 특성 설명에 대신이 없음: " + l.pk);
     if (!l.buys.length || l.buys.some(d => d !== 'why') || l.sells.join() !== 'sellq' || !/코인 외길 — 대신 이 판 끝까지 주식을 살 수 없다/.test(l.buyClick.join())) ag.bad.push('코인 외길인데 주식 사기가 안 잠기거나 이유가 안 뜸: ' + JSON.stringify(l));
     if (!/코인 외길: 주식을 살 수 없습니다/.test(l.buyRule.join()) || l.bought) ag.bad.push('규칙의 deny 이유가 화면에 안 뜸 (코인 외길 사기): ' + JSON.stringify(l.buyRule));
     if (l.order.some(d => d !== 'why') || !/주식 외길 — 대신 이 판 끝까지 코인을 할 수 없다/.test(l.longClick.join()) || !/주식 외길: 코인을 할 수 없습니다/.test(l.longRule.join()) || l.lev) ag.bad.push('주식 외길인데 롱 · 숏이 안 잠기거나 이유가 안 뜸: ' + JSON.stringify(l));
