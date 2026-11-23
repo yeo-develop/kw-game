@@ -9,8 +9,8 @@ const { chromium } = require(process.env.KW_PLAYWRIGHT || '/Users/admin/projects
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..')), out = process.argv[3] || path.join(dir, 'evidence', 'check'), seed = process.argv[4] || '5', style = process.argv[5] || 'study';
 fs.mkdirSync(out, { recursive: true });
 const LINT = () => {
-  const stage = document.getElementById('stage'), sr = stage.getBoundingClientRect(), k = sr.width / 1280, bad = [], leaves = [];
-  const w = document.createTreeWalker(stage, NodeFilter.SHOW_TEXT);
+  const root = document.querySelector('body > #veil.perk-veil') || document.getElementById('stage'), sr = root.getBoundingClientRect(), bad = [], leaves = [];
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n;
   while ((n = w.nextNode())) {
     const t = n.textContent.trim(); if (!t) continue;
@@ -29,7 +29,7 @@ const LINT = () => {
     const fs = parseFloat(cs.fontSize);
     if (fs < 13.99) bad.push('작은 글자 ' + fs + 'px: ' + t.slice(0, 24));
     if (b.x0 < sr.left - 1 || b.y0 < sr.top - 1 || b.x1 > sr.right + 1 || b.y1 > sr.bottom + 1) bad.push('화면 밖: ' + t.slice(0, 24));
-    for (let p = el; p && p !== stage; p = p.parentElement) { // 잘림: overflow hidden 조상 밖으로 나간 글자
+    for (let p = el; p && p !== root; p = p.parentElement) { // 잘림: overflow hidden 조상 밖으로 나간 글자
       const ps = getComputedStyle(p); if (ps.overflow === 'visible' && ps.overflowX === 'visible') continue;
       const pr = p.getBoundingClientRect();
       if (b.x1 > pr.right + 2 || b.y1 > pr.bottom + 2 || b.x0 < pr.left - 2 || b.y0 < pr.top - 2) { if (!(ps.textOverflow === 'ellipsis' || ps.webkitLineClamp !== 'none')) bad.push('잘림(' + (p.id || p.className) + '): ' + t.slice(0, 24)); break; }
@@ -38,7 +38,7 @@ const LINT = () => {
     if (box) { const br = box.getBoundingClientRect(); if (b.x1 > br.right + 1 || b.y1 > br.bottom + 1 || b.x0 < br.left - 1 || b.y0 < br.top - 1) bad.push('칸 밖(' + (box.id || box.className) + '): ' + t.slice(0, 24)); }
     // 겹침은 보이는 부분끼리 잰다: … 으로 줄인 글(줄 수 제한 · 말줄임)의 가려진 줄은 overflow 로 안 보이므로 그 조상의 칸으로 자른다 (넘침 자체는 위의 잘림 검사가 본다)
     const v = Object.assign({}, b);
-    for (let p = el; p && p !== stage; p = p.parentElement) { const ps = getComputedStyle(p); if (ps.overflow === 'visible' && ps.overflowX === 'visible' && ps.overflowY === 'visible') continue; const pr = p.getBoundingClientRect(); v.x0 = Math.max(v.x0, pr.left); v.y0 = Math.max(v.y0, pr.top); v.x1 = Math.min(v.x1, pr.right); v.y1 = Math.min(v.y1, pr.bottom); }
+    for (let p = el; p && p !== root; p = p.parentElement) { const ps = getComputedStyle(p); if (ps.overflow === 'visible' && ps.overflowX === 'visible' && ps.overflowY === 'visible') continue; const pr = p.getBoundingClientRect(); v.x0 = Math.max(v.x0, pr.left); v.y0 = Math.max(v.y0, pr.top); v.x1 = Math.min(v.x1, pr.right); v.y1 = Math.min(v.y1, pr.bottom); }
     if (v.x1 - v.x0 < 0.5 || v.y1 - v.y0 < 0.5) continue;
     leaves.push({ el, b: v, t });
   }
@@ -50,15 +50,15 @@ const LINT = () => {
     if (ix * iy > small * 0.25) bad.push('겹침: "' + A.t.slice(0, 16) + '" × "' + B.t.slice(0, 16) + '"');
   }
   // 로드맵 카드: 안의 줄 · 버튼 · 막대가 카드 아래로 잘리지 않는지 (overflow 로 가려져 위의 글자 점검에 안 잡히는 것)
-  for (const r of stage.querySelectorAll('.rung')) {
+  for (const r of root.querySelectorAll('.rung')) {
     if (r.closest('.hide') || !r.offsetParent) continue;
     const rr = r.getBoundingClientRect();
     for (const e of r.querySelectorAll('.rows > *, .foot > *')) { const q = e.getBoundingClientRect(); if (q.height > 0 && q.bottom > rr.bottom + 1) bad.push('잘림(rung ' + ((r.querySelector('.nm') || {}).textContent || '') + '): ' + ((e.textContent || '').trim() || e.className).slice(0, 16)); }
   }
   // 창(테두리째)이 화면 밖으로 나가지 않는지 (글자는 안 잘려도 창 위 · 아래 꺾쇠가 잘리는 것)
-  for (const w of stage.querySelectorAll('#veil .win')) { const q = w.getBoundingClientRect(); if (q.height && (q.top < sr.top - 1 || q.bottom > sr.bottom + 1)) bad.push('창이 화면 밖: ' + ((w.querySelector('h2') || {}).textContent || w.className).slice(0, 16)); }
+  for (const w of root.querySelectorAll('#veil .win')) { const q = w.getBoundingClientRect(); if (q.height && (q.top < sr.top - 1 || q.bottom > sr.bottom + 1)) bad.push('창이 화면 밖: ' + ((w.querySelector('h2') || {}).textContent || w.className).slice(0, 16)); }
   // 버튼이 화면 밖이거나 서로 겹치는지
-  const btns = [...stage.querySelectorAll('button,[data-do]')].filter(e => !e.closest('.hide') && e.offsetParent !== null);
+  const btns = [...root.querySelectorAll('button,[data-do]')].filter(e => !e.closest('.hide') && e.offsetParent !== null);
   for (const e of btns) { const r = e.getBoundingClientRect(); if (r.right > sr.right + 1 || r.bottom > sr.bottom + 1 || r.left < sr.left - 1 || r.top < sr.top - 1) bad.push('버튼 화면 밖: ' + (e.textContent || '').trim().slice(0, 16)); }
   return [...new Set(bad)];
 };
@@ -75,6 +75,14 @@ const LINT = () => {
   const click = (sel, o) => page.click(sel, Object.assign({ timeout: 2500 }, o || {})).catch(() => { errs.push('누를 것이 없거나 가려짐: ' + sel + ' @ ' + ((new Error().stack || '').split('\n').find(l => /check\.js:\d+/.test(l) && !/click \(/.test(l)) || '').trim().slice(-22)); }); // 없는 버튼도 멈추지 않고 적어 둔다
   const step = n => G(n => { const g = window.game; g.step(n); const left = g.state.guard || 0; if (left) g.step(left + 1); }, n); // 누름이 막힌 동안(창이 막 뜬 직후)은 마저 기다린다
   const st = () => G(() => { const s = window.game.state; return { scene: window.game.scene, day: s.day, slot: s.slot, cash: s.cash, worth: s.worth, hp: s.hp, tier: s.tier, quest: s.quest, modal: s.modal, ended: s.ended, act1: s.act1, price: s.housePrice }; });
+  const confirmPerk = async n => {
+    await step(1);
+    const [id, owned] = await G(() => { const s = window.game.state.raw, id = s.offer[0]; return [id, window.Rules.perk(s, id)]; });
+    await click('#perk-confirm'); await step(n);
+    const applied = await G(id => window.Rules.perk(window.game.state.raw, id), id) === owned + 1;
+    if (!applied) errs.push('첫 특성 확정으로 보유 수가 하나 늘지 않음: ' + id);
+    return applied;
+  };
   const QI = id => G(id => { const R = window.Rules, s = R.create(1); for (let i = 0; i < 60; i++) { s.quest = i; const v = R.questView(s); if (!v) return -1; if (v.id === id) return i; } return -1; }, id); // 그 퀘스트가 몇 번째인지
   const seen = new Set();
   async function shot(name, once = true) {
@@ -128,7 +136,7 @@ const LINT = () => {
       if ((await st()).modal === 'study') { await G(() => window.game.press('Digit1')); await step(4); await shot('pop_study_two'); await G(() => window.game.press('Enter')); await step(20); if ((await st()).modal === 'study') { forcedMain.push('공부 창에서 두 종목을 고르고 Enter 를 눌렀는데 닫히지 않음'); await G(() => window.game.press('Space')); await step(20); } }
       continue; }
     if (s.modal === 'quest') fxSeen = Math.max(fxSeen, await G(() => window.game.fx.parts));
-    if (s.modal === 'perk') { await shot('pop_perk'); await step(20); await G(() => window.game.press('Digit1')); await step(20); perks++; continue; } // 특성: 첫째 카드
+    if (s.modal === 'perk') { await shot('pop_perk'); if (await confirmPerk(20)) perks++; continue; } // 특성: 미리 고른 첫째 카드 확정
     if (s.modal === 'den') { // 도박장: 가장 작은 판돈으로 홀에 두 판 걸고 나온다 (다섯 판을 채우면 규칙이 닫음)
       await shot('pop_den');
       const d = await G(() => { const g = window.game.state; return { fin: !!(g.den && g.den.fin), round: g.raw.den ? g.raw.den.round : 0, cash: g.raw.cash }; });
@@ -276,9 +284,18 @@ const LINT = () => {
     if (d0.qty !== '1' || d0.steps !== 8 || !d0.chart || !d0.buy || !d0.sell || !(d0.max > 100)) forced.push('종목 상세에 차트 · 수량 고르기(여덟 버튼 + 적는 칸) · 사기 · 팔기가 없음: ' + JSON.stringify(d0));
     const d1 = await G(() => { const g = window.game, S = g.state.raw, R = window.Rules; g.run('qty', 'q25'); const q = Number(document.getElementById('qty').value), shown = Number(document.getElementById('buyamt').textContent.replace(/[^0-9]/g, '')), c0 = S.cash, u0 = S.hold.daejang.units; g.run('buyq'); g.step(5); return { q, want: Math.floor(R.maxUnits(Object.assign({}, S, { cash: c0 }), 'daejang') / 4), shown, paid: c0 - S.cash, got: S.hold.daejang.units - u0 }; });
     if (!(d1.q > 1) || d1.got !== d1.q || d1.paid !== d1.shown) forced.push('수량을 25%로 고르고 산 것이 고른 수량 · 버튼의 금액과 다름: ' + JSON.stringify(d1));
-    const d2 = await G(() => { const g = window.game, S = g.state.raw; for (let i = 0; i < 8 && g.state.modal; i++) { g.press(g.state.modal === 'perk' ? 'Digit1' : 'Space'); g.step(40); } g.run('qty', 'all'); const q = Number(document.getElementById('qty').value), shown = Number(document.getElementById('sellamt').textContent.replace(/[^0-9]/g, '')), c0 = S.cash, u0 = S.hold.daejang.units; g.run('qty', '=7'); const q7 = Number(document.getElementById('qty').value), shown7 = Number(document.getElementById('sellamt').textContent.replace(/[^0-9]/g, '')); g.run('sellq'); g.step(5); return { q, u0, q7, shown7, got: S.cash - c0, left: S.hold.daejang.units }; });
+    const clearTradeNotices = async () => {
+      for (let i = 0; i < 8; i++) {
+        const m = (await st()).modal; if (!m) break;
+        if (m === 'perk') await confirmPerk(40);
+        else await G(() => { const g = window.game; g.press('Space'); g.step(40); });
+      }
+    };
+    await clearTradeNotices();
+    const d2 = await G(() => { const g = window.game, S = g.state.raw; g.run('qty', 'all'); const q = Number(document.getElementById('qty').value), shown = Number(document.getElementById('sellamt').textContent.replace(/[^0-9]/g, '')), c0 = S.cash, u0 = S.hold.daejang.units; g.run('qty', '=7'); const q7 = Number(document.getElementById('qty').value), shown7 = Number(document.getElementById('sellamt').textContent.replace(/[^0-9]/g, '')); g.run('sellq'); g.step(5); return { q, u0, q7, shown7, got: S.cash - c0, left: S.hold.daejang.units }; });
     if (d2.q !== d2.u0 || d2.q7 !== 7 || d2.left !== d2.u0 - 7 || d2.got !== d2.shown7) forced.push('"보유"가 가진 수량이 아니거나, 7주를 판 것이 수량 · 버튼의 금액과 다름: ' + JSON.stringify(d2));
-    await G(() => { const g = window.game; for (let i = 0; i < 8 && g.state.modal; i++) { g.press(g.state.modal === 'perk' ? 'Digit1' : 'Space'); g.step(40); } g.run('sview', 'mine'); g.step(5); }); await shot('42c_stock_mine');
+    await clearTradeNotices();
+    await G(() => { const g = window.game; g.run('sview', 'mine'); g.step(5); }); await shot('42c_stock_mine');
     const d3 = await G(() => ({ cells: [...document.querySelectorAll('#board .mlist.own .arow')].map(e => e.textContent.replace(/\s+/g, ' ').slice(0, 40)) }));
     if (d3.cells.length !== 3 || !d3.cells.some(t => /달나라코인.*롱 5배/.test(t))) forced.push('내 보유에 가진 주식 둘 + 코인 포지션이 안 보임: ' + JSON.stringify(d3));
     await G(() => { const g = window.game; g.run('sview', 'market'); g.step(3); }); }
@@ -336,7 +353,14 @@ const LINT = () => {
   if ((await st()).modal) forced.push('도박장 합계 창이 닫히지 않음: ' + (await st()).modal);
   await hudCheck('도박장 뒤');
   // ── 1막 뒤: 판 상태를 만들어 넣어 화면을 지나간다 (아파트 대출 고르기 · 대출 줄 · 미리 갚기 · 사업 · 자동 수입 · 공부 종목 · 밤사이 갭 · 압류 · 호텔 선언 · 엔딩) ──
-  const closeAll = async () => { for (let i = 0; i < 8; i++) { const m = (await st()).modal; if (!m) break; await G(k => window.game.press(k), m === 'perk' ? 'Digit1' : m === 'event' ? 'Digit2' : 'Space'); await step(30); if ((await st()).modal === 'event') { await G(() => window.game.press('Space')); await step(30); } } };
+  const closeAll = async () => {
+    for (let i = 0; i < 8; i++) {
+      const m = (await st()).modal; if (!m) break;
+      if (m === 'perk') await confirmPerk(30);
+      else { await G(k => window.game.press(k), m === 'event' ? 'Digit2' : 'Space'); await step(30); }
+      if ((await st()).modal === 'event') { await G(() => window.game.press('Space')); await step(30); }
+    }
+  };
   const W = n => G(n => window.Rules.won(n), n), N = n => G(n => window.Rules.num(n), n);
   await fresh();
   // A. 아파트: 내 집에 살며 현금 25,000,000 · 신용 3등급 · 가게 → 들어가는 창에 넷(전세 · 대출 최대 · 절반 · 없이), 고른 것마다 지금 낼 현금 · 일요일 밤마다 나갈 돈 · 압류 경고 · 살던 집 판 돈
@@ -642,7 +666,7 @@ const LINT = () => {
       if (d0.modal !== 'intro' || d0.n !== 3 || d1.on !== 1 || d1.intro === d0.intro || d2.dream !== 'sign' || d2.look !== 2 || !/간판을 다시 건다/.test(d2.note)) forced.push('첫 창에서 고른 꿈(둘째) · 제목에서 고른 후드 색이 판에 남지 않음: ' + JSON.stringify({ d0, d1, d2 }).slice(0, 400)); }
     // 꿈의 장면: 고시원에 들어가면(주소) 첫 장면 창이 한 번 뜬다
     await G(() => { const g = window.game, S = g.state.raw; S.tier = 1; S.cash = 700000; S.day = 3; S.quest = 99; g.render(); g.run('move', '2'); g.step(30); }); await key('Enter', 40);
-    { const seenM = []; for (let i = 0; i < 6; i++) { const v = await veil(); if (!v.modal) break; seenM.push(v.modal); if (v.modal === 'story') { await shot('82_story'); if (!/고시원 벽에 메뉴판을 다시 적어 붙였다/.test(v.t) || !/1 \/ 2/.test(v.t)) forced.push('꿈의 첫 장면 창(글 · 1 / 2)이 다름: ' + v.t.slice(0, 160)); } await key(v.modal === 'perk' ? 'Digit1' : 'Space', 40); }
+    { const seenM = []; for (let i = 0; i < 6; i++) { const v = await veil(); if (!v.modal) break; seenM.push(v.modal); if (v.modal === 'story') { await shot('82_story'); if (!/고시원 벽에 메뉴판을 다시 적어 붙였다/.test(v.t) || !/1 \/ 2/.test(v.t)) forced.push('꿈의 첫 장면 창(글 · 1 / 2)이 다름: ' + v.t.slice(0, 160)); } if (v.modal === 'perk') await confirmPerk(40); else await key('Space', 40); }
       const s2 = await G(() => { const S = window.game.state.raw; return { tier: S.tier, dep: S.deposit, lease: S.lease, beats: S.beats, credit: S.credit }; });
       if (s2.tier !== 2 || s2.dep !== 500000 || seenM.indexOf('story') < 0 || (s2.beats || []).join() !== 'sign1' || !(s2.credit >= 450)) forced.push('고시원 입주(예치금 500,000 · 주소가 생겨 신용 +100 — 칭호가 오르면 +25씩 더) 뒤 꿈의 첫 장면이 안 뜸: ' + JSON.stringify({ s2, seenM })); }
     // 가게: 작업 조끼를 사면 바로 입고(상하차에 드는 체력이 준다), 방 그림의 내 모습이 바뀐다. 후드티로 갈아입으면 효과가 사라진다
@@ -703,7 +727,7 @@ const LINT = () => {
       const c0 = await G(() => window.game.state.raw.cash);
       await key('Space', 4); await G(() => { const g = window.game; g.step(90); g.mg.done = true; g.mg.result = { score: 0.8 }; g.step(1); }); await G(() => window.game.step(60)); await shot('88c_result_push');
       await key('Space', 30);
-      let v = await veil(); for (let i = 0; i < 4 && v.modal && v.modal !== 'collapse'; i++) { await key(v.modal === 'perk' ? 'Digit1' : 'Space', 40); v = await veil(); }
+      let v = await veil(); for (let i = 0; i < 4 && v.modal && v.modal !== 'collapse'; i++) { if (v.modal === 'perk') await confirmPerk(40); else await key('Space', 40); v = await veil(); }
       await shot('89_collapse');
       const k = await G(() => { const S = window.game.state.raw; return { slot: S.slot, hp: S.hp, sick: S.sick, hosp: S.hosp, cash: S.cash, n: S.stats.collapse || S.stats.collapsed || 0 }; });
       if (v.modal !== 'collapse' || !/응급실/.test(v.t) || !/응급실비 150,000원/.test(v.t) || !/내일 오전/.test(v.t) || k.slot !== 3 || k.hp !== 0 || !k.sick || !k.hosp) forced.push('무리 끝에 쓰러졌는데 응급실 창(응급실비 · 잃는 칸)이나 판 상태(칸 · 체력 · 병원)가 다름: ' + JSON.stringify({ t: v.t.slice(0, 200), k }));

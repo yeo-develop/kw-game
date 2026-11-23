@@ -18,6 +18,14 @@ fs.mkdirSync(out, { recursive: true });
     await pg.goto('file://' + path.join(dir, 'index.html') + '?manual=1&scene=play&seed=5');
     await advanceOpening(pg); await pg.evaluate(() => window.game.step(60));
     await pg.evaluate(() => { window.game.state.raw.beats = ['family1', 'family2', 'sign1', 'sign2', 'landlord1', 'landlord2']; }); // 꿈의 장면 창은 여기서 보지 않는다 (사는 곳을 건너뛰는 점검마다 끼어들지 않게 — 본 것으로 해 둔다)
+    await pg.evaluate(() => {
+      window.__confirmFirstPerk = () => {
+        const g = window.game, s = g.state.raw, id = s.offer[0], n = window.Rules.perk(s, id);
+        if (g.state.guard) g.step(g.state.guard);
+        g.run('perkconfirm');
+        if (window.Rules.perk(s, id) !== n + 1) throw new Error('첫 특성 확정으로 보유 수가 하나 늘지 않음: ' + id);
+      };
+    });
     return pg;
   };
   const page = await fresh();
@@ -88,7 +96,7 @@ fs.mkdirSync(out, { recursive: true });
     await page.evaluate(([w, fn]) => { (0, eval)('(' + w + ')')(fn.which); (0, eval)('(' + fn.open + ')')(window.game); window.game.render(); }, [WORST.toString(), { which, open: open.toString() }]);
     await step(40);
     const tabs = await page.evaluate(() => ({ on: (document.querySelector('#board .tabs .on') || {}).textContent || '', modal: window.game.state.modal }));
-    if (tabs.modal) { await page.evaluate(() => { const g = window.game; for (let i = 0; i < 6 && g.state.modal; i++) { g.press(g.state.modal === 'perk' ? 'Digit1' : 'Space'); g.step(40); } }); await page.evaluate(([w, fn]) => { (0, eval)('(' + fn.open + ')')(window.game); window.game.render(); }, [0, { open: open.toString() }]); await step(20); }
+    if (tabs.modal) { await page.evaluate(() => { const g = window.game; for (let i = 0; i < 6 && g.state.modal; i++) { if (g.state.modal === 'perk') window.__confirmFirstPerk(); else g.press('Space'); g.step(40); } }); await page.evaluate(([w, fn]) => { (0, eval)('(' + fn.open + ')')(window.game); window.game.render(); }, [0, { open: open.toString() }]); await step(20); }
     await page.screenshot({ path: path.join(out, name + '.png') });
     const r = await page.evaluate('(' + SCAN.toString() + ')()');
     report[name] = r.bad; if (r.cut.length) cuts[name] = r.cut;
@@ -140,7 +148,7 @@ fs.mkdirSync(out, { recursive: true });
   await page3.waitForTimeout(400); await page3.screenshot({ path: path.join(out, 'quest-two.png') }); // 창 · 알림이 나타나는 움직임이 끝난 뒤에 찍음
   if (pops.morning.modal !== 'quest' || pops.morning.rows !== 2 || pops.morning.next !== '든든하게 먹어라') pops.bad.push('두 퀘스트가 한 장에 안 모임: ' + JSON.stringify(pops.morning));
   if (pops.morning.event) pops.bad.push('퀘스트가 끝난 아침에 돌발 사건이 겹침');
-  pops.after = await page3.evaluate(() => { const g = window.game; g.press('Space'); g.step(60); const m = g.state.modal; if (m === 'perk') { g.press('Digit1'); g.step(60); } return { then: m, last: g.state.modal }; });
+  pops.after = await page3.evaluate(() => { const g = window.game; g.press('Space'); g.step(60); const m = g.state.modal; if (m === 'perk') { window.__confirmFirstPerk(); g.step(60); } return { then: m, last: g.state.modal }; });
   if (pops.after.then === 'quest' || pops.after.last) pops.bad.push('퀘스트 창 뒤에 창이 더 남음: ' + JSON.stringify(pops.after));
   pops.skip = await page3.evaluate(() => { // 원룸에 늦게 들어간 날: 때가 지나 건너뛴 것 둘(수익 실현 · 세력) + 끝난 것 둘(신용 500점 · 원룸) → 한 장
     const g = window.game, S = g.state.raw; S.quest = 7; S.tier = 3; S.lease = 'rent'; S.deposit = 2000000; S.credit = 520; S.cash = 3000000; /* 내 집 값에 한참 못 미치는 돈: 전세 · 레버리지 퀘스트가 건너뛰어지지 않게 */ S.day = 23; S.movedDay = 22; S.slot = 0; S.hp = 50; S.offer = null; S.picks = 0; S.event = null; S.xp = 0; g.render(); g.run('rest'); g.step(60);
@@ -149,7 +157,7 @@ fs.mkdirSync(out, { recursive: true });
   await page3.waitForTimeout(400); await page3.screenshot({ path: path.join(out, 'quest-skip.png') });
   if (pops.skip.modal !== 'quest' || pops.skip.done !== 2 || pops.skip.off !== 2 || pops.skip.next !== '전세로 갈아타라') pops.bad.push('건너뛴 퀘스트가 창에 안 적힘: ' + JSON.stringify(pops.skip));
   pops.toast = await page3.evaluate(() => {
-    const g = window.game, S = g.state.raw; g.press('Space'); g.step(60); if (g.state.modal === 'perk') { g.press('Digit1'); g.step(60); }
+    const g = window.game, S = g.state.raw; g.press('Space'); g.step(60); if (g.state.modal === 'perk') { window.__confirmFirstPerk(); g.step(60); }
     for (let i = 0; i < 4; i++) g.run('why', '현금이 모자랍니다');
     const same = [...document.querySelectorAll('#toasts .toast')].filter(e => /현금이 모자랍니다/.test(e.textContent)).length;
     // 특성 아이콘의 설명은 알림 한 줄이 아니라 설명 팝업(#info-popup)으로 뜬다 (2026-11-21 화면 개편 — 마우스를 올리거나 · 키보드로 가거나 · 터치로 누르면). '요령'의 설명에는 큰따옴표가 들어 있다
@@ -178,7 +186,7 @@ fs.mkdirSync(out, { recursive: true });
     for (let i = 0; i < 8 && g.state.modal; i++) {
       const m = g.state.modal; seen.push(m); wins.push(document.querySelectorAll('#veil .win').length);
       if (m === 'shock' && !seen.slice(0, -1).includes('shock')) Object.assign(o, { text: document.querySelector('#veil .win.shock').textContent, cls: document.querySelector('#veil .win.shock').className, shake: document.getElementById('s-play').classList.contains('shake'), stamp: !!document.querySelector('.stamp'), top: document.querySelector('#veil .win.shock').getBoundingClientRect().top, queue: g.state.queue.slice() });
-      g.step(40); g.press(m === 'perk' ? 'Digit1' : m === 'event' ? 'Digit2' : 'Space'); g.step(40); if (g.state.modal === 'event') { g.press('Space'); g.step(40); }
+      g.step(40); if (m === 'perk') window.__confirmFirstPerk(); else g.press(m === 'event' ? 'Digit2' : 'Space'); g.step(40); if (g.state.modal === 'event') { g.press('Space'); g.step(40); }
     }
     g.meta.fxOff = false;
     return Object.assign(o, { seen, wins });
@@ -206,7 +214,7 @@ fs.mkdirSync(out, { recursive: true });
     Object.assign(S, { tier: 3, cash: 9000000, day: 23, movedDay: 22, slot: 0, hp: 50, offer: null, picks: 0, event: null, xp: 0, quest: 99 }); g.meta.seen.coin = 1;
     g.render(); g.run('tab', 'coin'); g.run('lev', '5'); g.run('share', '0.5'); g.run('long'); g.step(40);
     S.market.shocks.push({ id: 9100, day: S.day, slot: S.slot, asset: 'coin', pct: -0.4, head: '달나라코인 거래소 해킹' }); g.run('rest'); // −40%: 그 칸의 평소 출렁임이 어느 쪽이든 5배 롱은 청산된다
-    const seen = []; for (let i = 0; i < 6 && g.state.modal; i++) { seen.push(g.state.modal); g.step(40); g.press(g.state.modal === 'perk' ? 'Digit1' : 'Space'); g.step(40); }
+    const seen = []; for (let i = 0; i < 6 && g.state.modal; i++) { seen.push(g.state.modal); g.step(40); if (g.state.modal === 'perk') window.__confirmFirstPerk(); else g.press('Space'); g.step(40); }
     return { seen, shakes };
   });
   if (sh.liq.seen[0] !== 'shock' || sh.liq.seen[1] !== 'liq' || sh.liq.shakes !== 1) sh.bad.push('코인 속보 → 청산: 속보 띠 다음 청산 창, 흔들림 한 번이 아님: ' + JSON.stringify(sh.liq));
@@ -224,22 +232,29 @@ fs.mkdirSync(out, { recursive: true });
     const seen = await pg.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 3, lease: 'rent', deposit: 2000000, cash: 9000000, day: 23, movedDay: 22, slot: 0, hp: 50, offer: null, picks: 0, event: null, xp: 0, quest: 99 }); g.meta.seen.coin = 1;
       g.render(); g.run('tab', 'coin'); g.run('lev', '5'); g.run('share', '0.5'); g.run('long'); g.step(40);
       S.market.shocks.push({ id: 9300, day: S.day, slot: S.slot, asset: 'coin', pct: -0.4, head: '달나라코인 거래소 해킹' }); g.run('rest');
-      const seen = []; for (let i = 0; i < 6 && g.state.modal && g.state.modal !== 'liq'; i++) { seen.push(g.state.modal); g.step(40); g.press(g.state.modal === 'perk' ? 'Digit1' : 'Space'); g.step(40); } seen.push(g.state.modal); return seen; });
+      const seen = []; for (let i = 0; i < 6 && g.state.modal && g.state.modal !== 'liq'; i++) { seen.push(g.state.modal); g.step(40); if (g.state.modal === 'perk') window.__confirmFirstPerk(); else g.press('Space'); g.step(40); } seen.push(g.state.modal); return seen; });
     await pg.waitForTimeout(450); await pg.screenshot({ path: path.join(out, 'liq.png') }); await pg.close();
     if (seen[seen.length - 1] !== 'liq') (report.liqShot = report.liqShot || []).push('청산 창을 찍지 못함: ' + seen.join(' → ')); }
-  // 양날 특성: 카드(딱지 · 얻는 것 · "대신:" 줄) · '나' 구역 표시(설명에 대신) · 막힌 행동은 잠기고 누르면 이유 (규칙의 deny 도 알림으로 뜸)
+  // 양날 특성: 카드(딱지 · 얻는 것 · "대신" 줄) · '나' 구역 표시(설명에 대신) · 막힌 행동은 잠기고 누르면 이유 (규칙의 deny 도 알림으로 뜸)
   const ag = { bad: [] };
   const p9 = await fresh();
   ag.card = await p9.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 3, cash: 9000000, day: 15, movedDay: 12, quest: 99, offer: ['iron', 'coinonly', 'hustle'], picks: 1, lv: 3, event: null }); g.render(); g.run('rest'); g.step(60);
-    const cs = [...document.querySelectorAll('#veil .pcard')].map(c => ({ aug: c.classList.contains('aug'), tag: (c.querySelector('.edge') || {}).textContent || '', gain: (c.querySelector('.gain') || {}).textContent || '', con: (c.querySelector('.con') || {}).textContent || '', border: getComputedStyle(c).borderTopColor }));
+    const cs = [...document.querySelectorAll('#veil .pcard')].map(c => {
+      const effect = c.querySelector('.pcard-effect');
+      return { aug: c.classList.contains('aug'), tag: (c.querySelector('.perk-name small') || {}).textContent || '', gain: effect?.textContent || '', con: (c.querySelector('.con') || {}).textContent || '', border: effect ? getComputedStyle(effect).borderLeftColor : '' };
+    });
     return { modal: g.state.modal, cs }; });
   await p9.waitForTimeout(450); await p9.screenshot({ path: path.join(out, 'aug-card.png') });
   { const c = ag.card.cs, a = c.find(x => x.aug), n = c.find(x => !x.aug);
-    if (ag.card.modal !== 'perk' || !a || a.tag !== '양날' || !/코인 이익/.test(a.gain) || !/^대신: 이 판 끝까지 주식을 살 수 없다/.test(a.con) || !n || n.tag || n.con || a.border === n.border) ag.bad.push('양날 카드가 다른 카드와 달라 보이지 않거나 딱지 · 얻는 것 · 대신 줄이 없음: ' + JSON.stringify(ag.card)); }
+    if (ag.card.modal !== 'perk' || !a || a.tag !== '양날' || !/코인 이익\+30%/.test(a.gain) || !/^대신 이 판 끝까지 주식을 살 수 없다/.test(a.con) || !n || n.tag || n.con || !a.border || !n.border || a.border === n.border) ag.bad.push('양날 카드가 다른 카드와 달라 보이지 않거나 딱지 · 얻는 것 · 대신 줄이 없음: ' + JSON.stringify(ag.card)); }
+  await p9.keyboard.press('Digit2');
+  ag.selected = await p9.evaluate(() => ({ id: document.querySelector('#veil .pcard[aria-pressed=true]')?.dataset.arg, modal: window.game.state.modal, perks: { ...window.game.state.raw.perks } }));
+  if (ag.selected.id !== 'coinonly' || ag.selected.modal !== 'perk' || ag.selected.perks.coinonly) ag.bad.push('숫자 2가 둘째 후보만 강조하지 않음: ' + JSON.stringify(ag.selected));
+  await p9.click('#perk-confirm');
   ag.locks = await p9.evaluate(() => {
     const g = window.game, S = g.state.raw, toasts = () => { const t = [...document.querySelectorAll('#toasts .toast')].map(e => e.textContent); document.querySelectorAll('#toasts .toast').forEach(e => e.remove()); return t; };
-    g.press('Digit2'); g.step(60); g.meta.seen.coin = 1; g.meta.seen.stock = 1;
-    const out = { perks: Object.assign({}, S.perks), after: [] };
+    g.step(60); g.meta.seen.coin = 1; g.meta.seen.stock = 1;
+    const out = { perks: Object.assign({}, S.perks), modal: g.state.modal, after: [] };
     for (let i = 0; i < 6 && g.state.modal; i++) { out.after.push(g.state.modal); g.press('Space'); g.step(60); } // 특성을 고른 뒤 이어 뜨는 창(꿈의 장면 등)을 닫는다
     g.run('tab', 'stock'); toasts();
     { const e = document.querySelector('#me .pk.aug'), pop = document.getElementById('info-popup'); if (e) e.click(); out.pk = e && pop && !pop.hidden ? pop.textContent.replace(/\s+/g, ' ').trim() : ''; if (e) e.blur(); document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); } // 양날 특성의 설명 팝업 (읽은 뒤 닫는다)
@@ -257,6 +272,7 @@ fs.mkdirSync(out, { recursive: true });
     return out; });
   await p9.waitForTimeout(300); await p9.screenshot({ path: path.join(out, 'aug-locked.png') }); await p9.close();
   { const l = ag.locks;
+    if (l.perks.coinonly !== 1 || l.modal === 'perk') ag.bad.push('둘째 후보 확정이 한 장을 지급하고 창을 닫지 않음: ' + JSON.stringify({ perks: l.perks, modal: l.modal }));
     if (!/양날/.test(l.pk) || !/대신 ?이 판 끝까지 주식을 살 수 없다/.test(l.pk)) ag.bad.push("'나' 구역의 양날 특성 설명에 대신이 없음: " + l.pk);
     if (!l.buys.length || l.buys.some(d => d !== 'why') || l.sells.join() !== 'sellq' || !/코인 외길 — 대신 이 판 끝까지 주식을 살 수 없다/.test(l.buyClick.join())) ag.bad.push('코인 외길인데 주식 사기가 안 잠기거나 이유가 안 뜸: ' + JSON.stringify(l));
     if (!/코인 외길: 주식을 살 수 없습니다/.test(l.buyRule.join()) || l.bought) ag.bad.push('규칙의 deny 이유가 화면에 안 뜸 (코인 외길 사기): ' + JSON.stringify(l.buyRule));

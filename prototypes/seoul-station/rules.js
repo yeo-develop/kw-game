@@ -1449,26 +1449,46 @@
   // ── 레벨 · 특성 ─────────────────────────────────────────────
   const XPF = { miss: 0.5, ok: 1, good: 1.3, perfect: 1.6, skip: 0.4 };
   const pc = v => Math.round(v * 100) + '%';
+  const perkPercent = v => Number((v * 100).toFixed(6));
+  // desc는 보유 설명과 획득 알림에 쓰고, label · value · note는 선택 카드에 쓴다.
   const PERKS = [
-    { id: 'iron', name: '강철 체력', icon: 'muscle', max: 3, desc: () => '최대 체력 +' + T.perk_iron },
-    { id: 'sleep', name: '꿀잠', icon: 'zzz', max: 2, desc: () => '밤마다 체력을 ' + T.perk_sleep + ' 더 회복' },
-    { id: 'hustle', name: '일머리', icon: 'coin', max: 3, grp: 'work', desc: () => '알바 일당 +' + pc(T.perk_hustle) },
-    { id: 'hands', name: '금손', icon: 'sparkle', max: 2, desc: () => '미니게임 판정이 후해진다' },
-    { id: 'lazy', name: '요령', icon: 'skip', max: 2, desc: () => '"대충" 배율 +' + T.perk_lazy + ', 실수해도 그만큼은 받는다' },
-    { id: 'streak', name: '리듬', icon: 'fire', max: 2, desc: () => '콤보 한 단계의 보너스 +' + pc(T.perk_streak) + 'p' },
-    { id: 'thrift', name: '짠돌이', icon: 'tag', max: 2, desc: () => '끼니 · 찜질방 · 고정비 −' + pc(T.perk_thrift) },
-    { id: 'early', name: '아침형 인간', icon: 'sun', max: 2, desc: () => '매일 아침 체력 +' + T.perk_early },
-    { id: 'quester', name: '보상 사냥꾼', icon: 'gift', max: 1, desc: () => '퀘스트 현금 보상 +' + pc(T.perk_quest) },
-    { id: 'legs', name: '발품', icon: 'rise', max: 2, desc: () => '집 · 사업 값 −' + pc(T.perk_legs) },
-    { id: 'sense', name: '눈치', icon: 'eye', max: 2, need: s => s.tier >= 2, desc: () => '리포트가 맞을 확률 +' + pc(T.perk_sense) + 'p' },
-    { id: 'vip', name: '수수료 우대', icon: 'percent', max: 1, need: s => s.tier >= 2, desc: () => '매매 수수료 절반' },
-    { id: 'tipster', name: '정보통', icon: 'news', max: 1, need: s => s.tier >= 2, desc: () => '아침마다 소식 하나의 진짜 방향을 귀띔받는다 (' + pc(T.perk_tip_acc) + ' 맞음)' },
-    { id: 'guts', name: '강심장', icon: 'shield', max: 1, need: s => s.tier >= 3, desc: () => '청산될 때 한 번, 증거금의 ' + pc(T.perk_guts) + '를 건진다' },
+    { id: 'iron', name: '강철 체력', icon: 'muscle', max: 3, desc: () => '최대 체력 +' + T.perk_iron,
+      label: '최대 체력', value: () => '+' + T.perk_iron },
+    { id: 'sleep', name: '꿀잠', icon: 'zzz', max: 2, desc: () => '밤마다 체력을 ' + T.perk_sleep + ' 더 회복',
+      label: '밤 체력 회복', value: () => '+' + T.perk_sleep },
+    { id: 'hustle', name: '일머리', icon: 'coin', max: 3, grp: 'work', desc: () => '알바 일당 +' + pc(T.perk_hustle),
+      label: '알바 일당', value: () => '+' + perkPercent(T.perk_hustle) + '%' },
+    { id: 'hands', name: '금손', icon: 'sparkle', max: 2, desc: () => '미니게임 판정이 후해진다',
+      label: '미니게임', value: () => '판정 완화' },
+    { id: 'lazy', name: '요령', icon: 'skip', max: 2, desc: () => '"대충" 배율 +' + T.perk_lazy + ', 실수해도 그만큼은 받는다',
+      label: '"대충" 배율', value: () => '+' + T.perk_lazy, note: '실수해도 그만큼은 받는다.' },
+    { id: 'streak', name: '리듬', icon: 'fire', max: 2, desc: () => '콤보 한 단계의 보너스 +' + pc(T.perk_streak) + 'p',
+      label: '콤보 한 단계의 보너스', value: () => '+' + perkPercent(T.perk_streak) + '%p' },
+    { id: 'thrift', name: '짠돌이', icon: 'tag', max: 2, desc: () => '끼니 · 찜질방 · 고정비 −' + pc(T.perk_thrift),
+      label: '끼니 · 찜질방 · 고정비', value: () => '−' + perkPercent(T.perk_thrift) + '%' },
+    { id: 'early', name: '아침형 인간', icon: 'sun', max: 2, desc: () => '매일 아침 체력 +' + T.perk_early,
+      label: '매일 아침 체력', value: () => '+' + T.perk_early },
+    { id: 'quester', name: '보상 사냥꾼', icon: 'gift', max: 1, desc: () => '퀘스트 현금 보상 +' + pc(T.perk_quest),
+      label: '퀘스트 현금 보상', value: () => '+' + perkPercent(T.perk_quest) + '%' },
+    { id: 'legs', name: '발품', icon: 'rise', max: 2, desc: () => '집 · 사업 값 −' + pc(T.perk_legs),
+      label: '집 · 사업 값', value: () => '−' + perkPercent(T.perk_legs) + '%' },
+    { id: 'sense', name: '눈치', icon: 'eye', max: 2, need: s => s.tier >= 2, desc: () => '리포트가 맞을 확률 +' + pc(T.perk_sense) + 'p',
+      label: '리포트가 맞을 확률', value: () => '+' + perkPercent(T.perk_sense) + '%p' },
+    { id: 'vip', name: '수수료 우대', icon: 'percent', max: 1, need: s => s.tier >= 2, desc: () => '매매 수수료 절반',
+      label: '매매 수수료', value: () => '절반' },
+    { id: 'tipster', name: '정보통', icon: 'news', max: 1, need: s => s.tier >= 2, desc: () => '아침마다 소식 하나의 진짜 방향을 귀띔받는다 (' + pc(T.perk_tip_acc) + ' 맞음)',
+      label: '귀띔 적중률', value: () => perkPercent(T.perk_tip_acc) + '%', note: '아침마다 소식 하나의 방향을 귀띔받는다.' },
+    { id: 'guts', name: '강심장', icon: 'shield', max: 1, need: s => s.tier >= 3, desc: () => '청산될 때 한 번, 증거금의 ' + pc(T.perk_guts) + '를 건진다',
+      label: '청산 시 증거금 회수', value: () => perkPercent(T.perk_guts) + '%', note: '한 판에 한 번 발동한다.' },
     // 양날: 얻는 것 + 대신 못 하는 것(con). 레벨 3 · 6 · 9 의 고르기에 한 장씩만. 같은 무리(grp)에서는 한 판에 한 가지 (일머리 · 일중독도 'work' 한 무리 — 일머리는 3장까지 겹쳐 찍을 수 있다)
-    { id: 'coinonly', name: '코인 외길', icon: 'bolt', max: 1, aug: true, grp: 'invest', con: '이 판 끝까지 주식을 살 수 없다 (가진 주식은 팔 수 있다)', need: s => s.tier >= 3, desc: () => '코인 이익 +' + pc(T.perk_coinonly) },
-    { id: 'stockonly', name: '주식 외길', icon: 'chart', max: 1, aug: true, grp: 'invest', con: '이 판 끝까지 코인을 할 수 없다 (연 포지션은 정리할 수 있다)', need: s => s.tier >= 2, desc: () => '주식 이익 +' + pc(T.perk_stockonly) + ' · 수수료 0' },
-    { id: 'workaholic', name: '일중독', icon: 'clock', max: 1, aug: true, grp: 'work', con: '쉴 수 없다 (할 수 있는 알바가 없을 때만)', desc: () => '알바 일당 +' + pc(T.perk_workaholic) },
-    { id: 'beast', name: '야수의 심장', icon: 'skull', max: 1, aug: true, grp: 'invest', get con() { return T.beast_min_lev + '배 미만으로는 걸 수 없다'; }, need: s => s.tier >= 3, desc: () => '코인 이익 +' + pc(T.perk_beast) },
+    { id: 'coinonly', name: '코인 외길', icon: 'bolt', max: 1, aug: true, grp: 'invest', con: '이 판 끝까지 주식을 살 수 없다 (가진 주식은 팔 수 있다)', need: s => s.tier >= 3, desc: () => '코인 이익 +' + pc(T.perk_coinonly),
+      label: '코인 이익', value: () => '+' + perkPercent(T.perk_coinonly) + '%' },
+    { id: 'stockonly', name: '주식 외길', icon: 'chart', max: 1, aug: true, grp: 'invest', con: '이 판 끝까지 코인을 할 수 없다 (연 포지션은 정리할 수 있다)', need: s => s.tier >= 2, desc: () => '주식 이익 +' + pc(T.perk_stockonly) + ' · 수수료 0',
+      label: '주식 이익', value: () => '+' + perkPercent(T.perk_stockonly) + '%', note: '매매 수수료 0' },
+    { id: 'workaholic', name: '일중독', icon: 'clock', max: 1, aug: true, grp: 'work', con: '쉴 수 없다 (할 수 있는 알바가 없을 때만)', desc: () => '알바 일당 +' + pc(T.perk_workaholic),
+      label: '알바 일당', value: () => '+' + perkPercent(T.perk_workaholic) + '%', offerCon: '할 수 있는 알바가 없을 때만 쉴 수 있다' },
+    { id: 'beast', name: '야수의 심장', icon: 'skull', max: 1, aug: true, grp: 'invest', get con() { return T.beast_min_lev + '배 미만으로는 걸 수 없다'; }, need: s => s.tier >= 3, desc: () => '코인 이익 +' + pc(T.perk_beast),
+      label: '코인 이익', value: () => '+' + perkPercent(T.perk_beast) + '%' },
   ];
   const xpNeed = lv => T.lv_base + T.lv_step * (lv - 1);
   function gainXp(s, n) {
@@ -1503,7 +1523,10 @@
     const o = p.grp ? PERKS.filter(q => q.grp === p.grp && q.id !== p.id).map(q => q.name) : [];
     return o.length ? o.join(' · ') + jo(o[o.length - 1], '과', '와') + ' 함께 가질 수 없다' : '';
   }
-  const offerView = s => (s.offer ? s.offer.map(id => perkCard(s, byId(PERKS, id))) : null);
+  const offerView = s => (s.offer ? s.offer.map(id => {
+    const p = byId(PERKS, id), card = perkCard(s, p);
+    return { ...card, con: p.offerCon || card.con, label: p.label, value: p.value(), note: p.note || '' };
+  }) : null);
   const perksView = s => PERKS.filter(p => perk(s, p.id) > 0).map(p => perkCard(s, p));
   const xpView = s => ({ lv: s.lv, xp: s.xp, need: xpNeed(s.lv) });
 

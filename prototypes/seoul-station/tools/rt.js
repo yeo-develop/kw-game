@@ -27,7 +27,12 @@ fs.mkdirSync(out, { recursive: true });
       const m = (await st()).modal; if (!m || m === 'drill') break; // 코인 연습은 따로 눌러서 지나간다
       const sig = m + ':' + await page.evaluate(() => (document.querySelector('#veil h3, #veil .qdone b') || {}).textContent || ''); // 같은 종류라도 제목이 다르면 다른 창
       if (sig !== last) { seen.push(m); last = sig; }
-      if (m === 'perk') await page.click('.pcard'); else if (m === 'event' && await page.locator('[data-do="ev"]').count()) await page.click('[data-do="ev"][data-arg="b"]'); else await page.click('#veil [data-do="ok"]');
+      if (m === 'perk') {
+        await page.waitForFunction(() => window.game.state.guard === 0);
+        const [id, n] = await page.evaluate(() => { const s = window.game.state.raw, id = s.offer[0]; return [id, window.Rules.perk(s, id)]; });
+        await page.click('#perk-confirm');
+        if (await page.evaluate(id => window.Rules.perk(window.game.state.raw, id), id) !== n + 1) throw new Error('첫 특성 확정으로 보유 수가 하나 늘지 않음: ' + id);
+      } else if (m === 'event' && await page.locator('[data-do="ev"]').count()) await page.click('[data-do="ev"][data-arg="b"]'); else await page.click('#veil [data-do="ok"]');
       await wait(750);
     }
     return seen;

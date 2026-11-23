@@ -29,7 +29,22 @@ async function extras() {
   const G = (fn, arg) => page.evaluate(fn, arg);
   await page.click('[data-do="new"]');
   // st: 창이 막 뜬 직후에는 누름이 잠깐 막힌다(guard) — 그만큼 더 흘려보낸 뒤에 누른다
-  await G(() => { const g = window.game; window.__st = n => { g.step(n); const left = g.state.guard || 0; if (left) g.step(left + 1); }; window.__clear = () => { for (let i = 0; i < 12 && g.state.modal; i++) { g.press(g.state.modal === 'mg' ? 'Escape' : 'Space'); window.__st(30); } return g.state.modal; }; window.__st(30); window.__clear(); });
+  await G(() => {
+    const g = window.game;
+    window.__st = n => { g.step(n); const left = g.state.guard || 0; if (left) g.step(left + 1); };
+    window.__clear = (mgKey = 'Escape') => {
+      for (let i = 0; i < 12 && g.state.modal; i++) {
+        if (g.state.modal === 'perk') {
+          const s = g.state.raw, id = s.offer[0], n = window.Rules.perk(s, id);
+          if (g.state.guard) g.step(g.state.guard);
+          g.run('perkconfirm'); window.__st(30);
+          if (window.Rules.perk(s, id) !== n + 1) throw new Error('첫 특성 확정으로 보유 수가 하나 늘지 않음: ' + id);
+        } else { g.press(g.state.modal === 'mg' ? mgKey : 'Space'); window.__st(30); }
+      }
+      return g.state.modal;
+    };
+    window.__st(30); window.__clear();
+  });
   for (const id of ['flyer', 'loading', 'store', 'delivery', 'cafe', 'tutor', 'driver', 'lecture', 'tv', 'advise']) { // 하는 중: 중 강도 · 숙련 0, 완벽한 손이 3초쯤 한 때 (새 일 여섯은 호텔 · 저녁 칸에서)
     const r = await G(id => {
       const g = window.game, S = g.state.raw, st = window.__st;
@@ -44,7 +59,7 @@ async function extras() {
     if (r) { errs.push(id + ': ' + r); continue; }
     await page.waitForTimeout(120);
     await page.screenshot({ path: path.join(sub('x'), 'mg_' + id + '.png') });
-    await G(() => { const g = window.game; for (let i = 0; i < 900 && g.state.modal === 'mg' && !document.querySelector('.mg-res'); i++) g.step(1); window.__st(80); g.press('Space'); window.__st(30); for (let i = 0; i < 12 && g.state.modal; i++) { g.press('Space'); window.__st(30); if (g.state.modal === 'perk') { g.press('Digit1'); window.__st(30); } } });
+    await G(() => { const g = window.game; for (let i = 0; i < 900 && g.state.modal === 'mg' && !document.querySelector('.mg-res'); i++) g.step(1); window.__st(80); g.press('Space'); window.__st(30); window.__clear('Space'); });
   }
   await browser.close();
   if (errs.length) { console.log('더 찍는 중 오류:', errs.join(' | ')); process.exitCode = 1; }

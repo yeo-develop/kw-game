@@ -34,11 +34,23 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     const st = () => G(() => { const s = window.game.state; return { day: s.day, slot: s.slot, cash: s.cash, hp: s.hp, tier: s.tier, modal: s.modal, coach: s.coach, pre: s.pre, int: s.int, tut: s.tut }; });
     const shot = async n => { await page.waitForTimeout(420); await page.screenshot({ path: path.join(out, n + '.png') }); };
     const box = () => G(BOX);
-    const closeAll = async () => { for (let i = 0; i < 8; i++) { const m = (await st()).modal; if (!m) break; await page.keyboard.press(m === 'perk' ? 'Digit1' : 'Space'); await step(60); } };
+    const closeAll = async () => {
+      for (let i = 0; i < 8; i++) {
+        const m = (await st()).modal; if (!m) break;
+        if (m === 'perk') await confirmPerk(page, () => step(1)); else await page.keyboard.press('Space');
+        await step(60);
+      }
+    };
     const start = async () => { await advanceOpening(page); await step(30); };
     return { page, G, step, st, shot, box, closeAll, start };
   };
   const want = (cond, msg) => { if (!cond) errs.push(msg); };
+  async function confirmPerk(page, ready = () => page.waitForFunction(() => window.game.state.guard === 0)) {
+    await ready();
+    const [id, n] = await page.evaluate(() => { const s = window.game.state.raw, id = s.offer[0]; return [id, window.Rules.perk(s, id)]; });
+    await page.click('#perk-confirm');
+    want(await page.evaluate(id => window.Rules.perk(window.game.state.raw, id), id) === n + 1, '첫 특성 확정으로 보유 수가 하나 늘지 않음: ' + id);
+  }
   const geometry = (b, tag) => { // 말풍선은 화면 안 · 짚은 곳과 안 겹침 · 화살표가 짚은 곳을 가리킴 · 글이 넘치지 않음 · 작은 글자 없음
     want(b.bubble, tag + ': 말풍선이 없음'); if (!b.bubble) return;
     const q = b.bubble;
@@ -305,7 +317,12 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     const fresh = async () => { await page.click('[data-do="new"]'); await wait(300); if (await page.evaluate(() => window.game.scene) === 'title') { await page.click('[data-do="new"]'); await wait(300); } await advanceOpening(page); await wait(700); }; // 저장이 있으면 한 번 더 눌러야 시작
     const resume = async () => { await page.click('[data-do="continue"]'); await wait(700); };
     const quit = async () => { await page.click('#hud [data-do="quit"]'); await wait(400); };
-    const clear = async () => { for (let i = 0; i < 6 && (await st()).modal; i++) { await page.click((await st()).modal === 'perk' ? '.pcard' : '#veil [data-do="ok"]'); await wait(750); } };
+    const clear = async () => {
+      for (let i = 0; i < 6 && (await st()).modal; i++) {
+        if ((await st()).modal === 'perk') await confirmPerk(page); else await page.click('#veil [data-do="ok"]');
+        await wait(750);
+      }
+    };
     await load();
     return { ctx, page, st, wait, load, fresh, resume, quit, clear };
   };
@@ -403,7 +420,14 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   { // 보기 전에 새로 고친 창 · 끝난 저장: 1막 끝 · 사업 확장 창을 닫기 전에 새로 고치면 이어 할 때 다시 뜨고(닫은 뒤엔 안 뜸), 끝난 판의 저장은 이어하기로 열리지 않는다
     const r = await real('seed=5&tut=0');
     await r.fresh();
-    const upto = async want2 => { for (let i = 0; i < 5; i++) { const m = (await r.st()).modal; if (!m || m === want2) return m; await r.page.click(m === 'perk' ? '.pcard' : '#veil [data-do="ok"]'); await r.wait(750); } return (await r.st()).modal; };
+    const upto = async want2 => {
+      for (let i = 0; i < 5; i++) {
+        const m = (await r.st()).modal; if (!m || m === want2) return m;
+        if (m === 'perk') await confirmPerk(r.page); else await r.page.click('#veil [data-do="ok"]');
+        await r.wait(750);
+      }
+      return (await r.st()).modal;
+    };
     await r.page.evaluate(() => { const g = window.game, S = g.state.raw; S.tier = 3; S.stats.maxTier = 3; S.movedDay = 1; S.cash = 20000000; S.quest = 11; S.offer = null; S.picks = 0; S.event = null; g.render(); g.run('house'); g.step(30); g.press('Enter'); g.step(40); });
     want(await upto('act1') === 'act1', '내 집을 샀는데 1막 끝 창이 안 뜸');
     await r.load(); await r.resume();

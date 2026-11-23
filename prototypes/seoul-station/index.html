@@ -22,6 +22,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; }
   body { background: var(--S, #c4ecff) var(--tile-bg, none) 0 0 / 48px 48px; image-rendering: crisp-edges; image-rendering: pixelated; } /* 무대 밖 테두리의 바둑판도 무대와 같은 배율 · 같은 자리 (ui.js 의 fit) */
   body { font-family: 'DungGeunMo', monospace; font-size: 16px; line-height: 20px; color: var(--text); word-break: keep-all; overflow-wrap: break-word; -webkit-font-smoothing: none; -moz-osx-font-smoothing: unset; font-smooth: never; font-synthesis: none; text-rendering: optimizeSpeed; user-select: none; }
+  #viewport { position: fixed; inset: 0; overflow: hidden; }
   #stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; background: var(--S, #c4ecff) var(--tile-bg, none) 0 0 / 48px 48px; overflow: hidden; image-rendering: crisp-edges; image-rendering: pixelated; } /* 물려받는 속성: 틀(border-image) · 무늬 · 그림이 늘어날 때 점이 뭉개지지 않게 */
   button, input { font: inherit; color: inherit; }
   button { cursor: pointer; border: 0; background: none; padding: 0; line-height: 20px; }
@@ -419,23 +420,38 @@
   .win.bad { border-image-source: var(--fr-red); }
   .win.bad h2 { border-image-source: var(--fr-rband); text-shadow: 0 2px 0 var(--R); }
   /* 레벨 업 · 돌발 사건 */
-  .win.lvup { width: 760px; text-align: center; border-image-source: var(--fr-cardq); }
-  .win.lvup h2 { justify-content: center; }
-  .pcards { margin-top: 12px; display: flex; gap: 10px; }
-  .pcard { position: relative; flex: 1 1 0; min-width: 0; padding: 10px 6px 8px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--k); border: 9px solid transparent; border-image: var(--fr-card) 9 fill / 9px; }
-  .pcard:hover { transform: translateY(-3px); }
-  .pcard > .ic { width: 64px; height: 64px; }
-  .pcard b { font-size: 32px; line-height: 36px; } .pcard > span:not(.key) { line-height: 22px; color: var(--k); min-height: 44px; }
-  .pcard .key { position: absolute; left: -2px; top: -2px; }
-  .pcard .have { color: var(--E); }
-  .pcard .excl { line-height: 20px; color: var(--E); display: flex; align-items: center; justify-content: center; gap: 4px; overflow-wrap: anywhere; } /* 함께 가질 수 없는 특성 */
-  .pcard .excl .ic { width: 16px; height: 16px; min-height: 0; flex: none; }
-  /* 양날 특성: 빨간 틀 · "양날" 딱지 · 얻는 것(초록) / 대신(빨강) 두 줄 */
-  .pcard.aug { border-image-source: var(--fr-red); border-color: var(--R); } /* 틀 그림의 외곽선 색 (그림이 안 뜨면 이 색으로) */
-  .pcard .edge { position: absolute; right: -2px; top: -2px; height: 24px; padding: 0 2px; box-sizing: border-box; border: 4px solid transparent; border-image: var(--sc-r) 4 fill / 4px; color: var(--w); line-height: 16px; }
-  .pcard .gain, .pcard .con { line-height: 22px; min-height: 0; }
-  .pcard .gain { color: var(--G); }
-  .pcard .con { color: var(--R); padding-top: 4px; border-top: 2px dashed var(--d); }
+  .perk-head { display: flex; align-items: center; gap: 10px; color: var(--B); }
+  .perk-head h2 { font-size: 16px; }
+  .pcards { margin-top: 14px; display: grid; grid-template-columns: repeat(var(--perk-count), minmax(0, 1fr)); gap: 10px; }
+  .pcard { --effect-bg: #e4edf9; --effect-ink: #22487f; --effect-side: #3b69ad;
+    position: relative; min-width: 0; min-height: 44px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    text-align: left; color: var(--k); background: #fcf9ef; border: 2px solid var(--k); border-bottom-width: 5px;
+    overflow-wrap: anywhere; -webkit-tap-highlight-color: transparent; }
+  .pcard[data-arg="hustle"] { --effect-bg: #fff0bf; --effect-ink: #6d440f; --effect-side: #ad7221; }
+  .pcard.aug, .pcard[data-arg="quester"] { --effect-bg: #ffe7d9; --effect-ink: #793b2b; --effect-side: #b85b41; }
+  .pcard[aria-pressed="true"] { background: #f0f5fc; border-color: #234984; box-shadow: inset 0 0 0 2px #8fb5ec; }
+  .pcard:focus-visible { outline: 2px dashed var(--B); outline-offset: 2px; }
+  .pcard .key { position: absolute; right: 10px; top: 10px; }
+  .perk-icon { display: grid; place-items: center; width: 54px; height: 54px; background: var(--effect-bg); }
+  .perk-icon .ic { width: 44px; height: 44px; }
+  .perk-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; font-size: 26px; line-height: 30px; }
+  .perk-name small { font-size: 14px; line-height: 18px; color: var(--R); }
+  .pcard-effect { display: grid; gap: 3px; padding: 6px 8px; background: var(--effect-bg); border-left: 3px solid var(--effect-side); color: var(--effect-ink); }
+  .pcard-effect strong { font-size: 32px; line-height: 34px; }
+  .pcard-notes { display: grid; justify-items: start; gap: 4px; color: var(--E); }
+  .pcard-notes .con { color: var(--R); }
+  .pcard-notes .excl { display: flex; align-items: baseline; gap: 4px; padding: 2px 4px; border: 1px solid #e3b45d; background: #fff0cd; color: #6d440f; }
+  .pcard .have { margin-top: auto; padding-top: 6px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--E); }
+  .perk-marks { display: flex; gap: 3px; }
+  .perk-marks i { width: 6px; height: 6px; border: 1px solid #5b75a1; }
+  .perk-marks .on { background: #345da2; }
+  .lvup .foot { justify-content: space-between; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid #debb80; }
+  .perk-keys { color: var(--E); }
+  #veil #perk-confirm { min-height: 48px; height: auto; margin-left: auto; padding: 4px 14px; white-space: normal;
+    color: var(--w); background: var(--B); border: 2px solid var(--k); border-bottom-width: 5px;
+    box-shadow: inset 0 2px 0 var(--b); -webkit-tap-highlight-color: transparent; }
+  #veil #perk-confirm:active { border-width: 5px 2px 2px; }
+  #veil.arming #perk-confirm { background: var(--L); color: var(--E); box-shadow: none; }
   .lock { color: var(--E); } /* 잠긴 것: 회색 틀 버튼(.btn.lock · .seg button.lock) + 자물쇠 (반투명으로 바탕이 비치지 않게) */
   .win.evt { width: 580px; }
   .win.pop.wide { width: 680px; } .win.pop.wide.buy { width: 980px; }
@@ -969,9 +985,127 @@
   .win.pop.study3 { width: 800px; } .win.pop.study3 .spick { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 6px; } .win.pop.study3 .sbtn { height: 52px; gap: 6px; } .win.pop.study3 .sbtn:not(:has(.key)) { padding-left: 8px; }
   .ctb .th { color: var(--E); border-bottom: 2px solid var(--d); } .ctb .tr.me { background: var(--Y); outline: 2px solid var(--k); outline-offset: -2px; } .ctb span { min-width: 0; overflow: hidden; text-overflow: ellipsis; } .ctb span + span { text-align: right; }
   .cl { display: flex; gap: 8px; white-space: nowrap; line-height: 20px; } .cl .d { color: var(--E); width: 56px; flex: none; } .cl .w { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; } .cl.dim .w { white-space: normal; color: var(--E); }
+
+  /* 첫날 조작과 주요 창은 작은 화면에서 무대 배율을 쓰지 않는다. */
+  #stage.compact-layout { width: 100%; height: 100%; }
+  .compact-layout #s-title, .compact-layout #s-play { overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
+  .compact-layout #s-title .bg > img { width: 100%; height: 100%; object-fit: cover; object-position: left center; }
+  .compact-layout .t-box { position: relative; inset: auto; width: min(calc(100% - 16px), 600px); margin: 8px auto; }
+  .compact-layout .t-box h1 { font-size: 36px; line-height: 1.1; }
+  .compact-layout .t-form { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .compact-layout .t-form input { width: 100%; min-height: 44px; }
+  .compact-layout .t-looks { flex-wrap: wrap; }
+  .compact-layout .t-looks .look, .compact-layout .rec button { min-width: 44px; min-height: 44px; }
+  .compact-layout #s-play { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+  .compact-layout #s-play > * { flex: none; }
+  .compact-layout #s-play > .zone { position: relative; inset: auto; width: 100%; height: auto; }
+  .compact-layout #hud { order: 0; flex-wrap: wrap; gap: 4px 8px; }
+  .compact-layout #hud .zh b, .compact-layout #hud .money b { font-size: 20px; line-height: 24px; }
+  .compact-layout #hud .sky-window { width: 124px; }
+  .compact-layout #hud > .goal { flex: 1 0 100%; height: auto; min-height: 36px; }
+  .compact-layout .goal-go { min-height: 44px; }
+  .compact-layout #coach { order: 1; position: static; }
+  .compact-layout #coach .bubble { position: static; width: 100%; }
+  .compact-layout #coach .bubble .foot button { min-width: 44px; min-height: 44px; }
+  .compact-layout #today { order: 2; }
+  .compact-layout #today .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); height: auto; gap: 8px; }
+  .compact-layout #today .card { height: auto; min-height: 120px; min-width: 0; max-width: none; padding: 2px; }
+  .compact-layout #today .card .pic { width: 48px; height: 48px; }
+  .compact-layout #today .card .nm { font-size: 22px; line-height: 24px; }
+  .compact-layout #today .card .tag { font-size: 14px; }
+  .compact-layout #today .card .skip { min-width: 44px; min-height: 44px; }
+  .compact-layout #today .card.wide { grid-column: 1 / -1; min-height: 72px; justify-content: flex-start; gap: 8px; }
+  .compact-layout #today .card.wide > .key { display: none; }
+  .compact-layout #today .card.wide .big { font-size: 24px; line-height: 28px; }
+  .compact-layout #quest { order: 3; }
+  .compact-layout #me { order: 4; }
+  .compact-layout #me .scene { width: min(100%, 396px); }
+  .compact-layout #me .scene > :is(img, svg) { width: 100%; object-fit: cover; }
+  .compact-layout #board { order: 5; overflow: auto; }
+  .compact-layout #board .ladder { min-width: 760px; }
+  .compact-layout #board .tabs { overflow-x: auto; }
+  .compact-layout #board .tabs button { min-height: 44px; }
+  .compact-layout #board .tabs { height: auto; }
+  /* 주식 본문까지 패널 높이에 넣어 플레이 화면에서 함께 스크롤한다. */
+  .compact-layout #board:has(> .tb-stock) { overflow: clip; }
+  .compact-layout #board:has(> .tb-stock) .tabs { overflow: visible; flex-wrap: wrap; }
+  .compact-layout #board > .tb-stock { position: static; }
+  .compact-layout .tb-stock .svtabs { height: auto; flex-wrap: wrap; }
+  .compact-layout .tb-stock .hsum { height: auto; min-height: 28px; margin-left: 0; flex-wrap: wrap; white-space: normal; }
+  .compact-layout .tb-stock .mlist { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+  .compact-layout .tb-stock :is(.dt .thead, .mine-line, .order2) { height: auto; flex-wrap: wrap; }
+  .compact-layout .tb-stock :is(.svtabs button, .dt .back, .order2 button, .order2 input) { min-width: 44px; min-height: 44px; }
+  .compact-layout .tb-stock .order2 .ob { height: auto; min-height: 52px; white-space: normal; }
+  @media (max-width: 610px) {
+    .compact-layout .tb-stock .order2 .olab { flex-basis: 100%; align-items: flex-start; }
+    .compact-layout .tb-stock .order2 .ob { flex-basis: 100%; margin-left: 0; }
+  }
+  .compact-layout #fx, .compact-layout #fxc { display: none; }
+  .compact-layout #toasts { position: fixed; inset: auto 8px 8px; width: auto; }
+  .compact-layout .toast { max-width: 100%; height: auto; min-height: 28px; white-space: normal; }
+  .compact-layout .toast > :is(div, span) { white-space: normal; }
+
+  body > #veil { position: fixed; padding: 8px; overflow: auto; align-items: safe center; overscroll-behavior: contain; touch-action: pan-y; }
+  body > #veil > :is(.frame, .win) { flex: none; width: min(100%, 640px); }
+  body > #veil .frame > .win { width: 100%; }
+  body > #veil .win { padding: 6px 7px 8px; }
+  body > #veil .win .btn { min-width: 44px; min-height: 44px; }
+  body > #veil .win:not(.mg) h3 { font-size: 24px; line-height: 28px; }
+  body > #veil.perk-veil { padding: 12px; }
+  body > #veil > .win.lvup { width: min(100%, 880px); padding: 16px; }
+  body > #veil .win.lvup h3 { margin-top: 10px; font-size: 32px; line-height: 36px; }
+  @media (max-width: 610px), (max-width: 900px) and (max-height: 430px) {
+    body > #veil.perk-veil { padding: 8px; }
+    body > #veil > .win.lvup { width: min(100%, 480px); padding: 8px; }
+    body > #veil .win.lvup h3 { font-size: 24px; line-height: 28px; }
+    .pcards { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 10px; }
+    .pcard { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 5px 8px; padding: 8px; }
+    .pcard .key, .perk-keys { display: none; }
+    .perk-icon { grid-row: 1 / 3; width: 40px; height: 40px; }
+    .perk-icon .ic { width: 32px; height: 32px; }
+    .perk-name { font-size: 20px; line-height: 24px; }
+    .pcard-effect, .pcard-notes, .pcard .have { grid-column: 2; }
+    .pcard-effect { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; padding: 4px 6px; }
+    .pcard-effect strong { font-size: 24px; line-height: 26px; }
+    .pcard .have { padding-top: 2px; }
+    #perk-confirm { width: 100%; }
+  }
+  body > #veil .n-cols { grid-template-columns: 1fr; gap: 8px; }
+  body > #veil .n-big { grid-template-columns: 20px 50px minmax(0, 1fr); }
+  body > #veil .n-house { flex-wrap: wrap; gap: 4px 8px; }
+  body > #veil .n-house .bar { min-width: 40px; }
+  body > #veil .mg-head { gap: 4px; flex-wrap: wrap; height: auto; white-space: normal; }
+  body > #veil .mg-pic { width: min(100%, calc(43dvh * 880 / 380)); margin-inline: auto; }
+  body > #veil .mg-canvas { width: 100%; height: auto; box-sizing: border-box; }
+  body > #veil .mg-how { flex-wrap: wrap; gap: 4px 10px; }
+  body > #veil .mg-how ol { flex-basis: 100%; }
+  body > #veil .mg-how .keys { display: none; }
+  body > #veil .mg-act { flex-wrap: wrap; height: auto; }
+  body > #veil .mg-act.pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body > #veil .mg-act.pick .ib { width: 100%; height: 64px; padding-inline: 2px; grid-template-rows: 24px 20px; }
+  body > #veil .mg-act.pick .ib b { font-size: 22px; line-height: 24px; }
+  body > #veil .mg-act.pick .go { grid-column: 1 / -1; width: 100%; height: 48px; font-size: 24px; }
+  body > #veil .mg-line { height: auto; flex-wrap: wrap; white-space: normal; }
+  body > #veil .mg-line > span:not(.r) { overflow: visible; }
+  body > #veil .mg-live .mg-act { order: -1; }
+  body > #veil .mg-act [data-mg] { flex: 1 1 auto; height: 52px; touch-action: manipulation; }
+  body > #veil .win.mg-result { display: flex; flex-direction: column; }
+  body > #veil .mg-result .mg-pic, body > #veil .mg-result .mg-ctl > :not(.mg-act) { display: none; }
+  body > #veil .mg-result .mg-ctl { order: 1; }
+  body > #veil .mg-res { position: static; width: auto; height: auto; padding: 8px; margin-top: 8px; text-align: center; }
+  body > #veil .mg-res .s, body > #veil .mg-res .w { flex-wrap: wrap; justify-content: center; }
+  body > #veil .mg-res .nb { height: auto; }
+  @media (max-width: 480px) {
+    body > #veil .quest-layout { grid-template-columns: 1fr; }
+    body > #veil .opening-goals { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 611px) and (max-height: 430px) {
+    body > #veil .mg-act.pick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
 </style>
 </head>
 <body>
+<div id="viewport">
 <div id="stage">
   <div id="s-title" class="screen hide"></div>
   <div id="s-play" class="screen hide">
@@ -988,6 +1122,7 @@
   <div id="fx"></div>
   <div id="toasts"></div>
   <div id="coach" class="hide"></div>
+</div>
 </div>
 <section id="info-popup" class="info-popup" role="tooltip" hidden>
   <h2 class="info-popup-title"></h2>

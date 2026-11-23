@@ -42,7 +42,7 @@
   const events = [];
   const $ = id => document.getElementById(id);
   const stage = $('stage'), veil = $('veil');
-  const narrowPopup = matchMedia('(max-width: 610px)');
+  const compactScreen = matchMedia('(max-width: 610px), (max-width: 900px) and (max-height: 430px)');
   // 화면 색은 px.js 가 :root 에 --k · --c … (window.PX) 로 넣는다. PAL(예전 밤 색)은 벡터 그림 · 미니게임 몫
   const PX = window.PX || {};
 
@@ -97,25 +97,34 @@
   // 창이 무대보다 크면(f ≥ 1) 점 하나가 화면의 점(기기 픽셀) 정수 개가 되는 배율로 내려 맞춘다: n = floor(f × dpr), k = n / dpr.
   // 기기 배율이 1.25 · 1.5 인 화면(윈도우 125% 등)에서는 k 가 1보다 작아질 수 있다 — 점이 고른 것이 먼저(예: dpr 1.25 · f 1.3 → n 1 → k 0.8).
   // n 이 1도 안 되면(f × dpr < 1) 그대로 f. 창이 더 작으면(f < 1) 그대로 줄인다. 남는 테두리는 같은 바둑판, 무대는 가운데.
+  const compactLayout = () => compactScreen.matches && (scene === 'title' || (scene === 'play' && (S.day === 1 || (S.day === 2 && ui.tut))));
   function fit() {
-    const f = Math.min(innerWidth / 1280, innerHeight / 720), dpr = window.devicePixelRatio || 1;
-    const n = Math.floor(f * dpr + 1e-6), k = f >= 1 ? Math.max(1, n / dpr) : f; // 창이 커지는데 무대가 작아지는 일은 없게: 1배 아래로는 내려 맞추지 않는다
-    const snap = v => Math.round(v * dpr) / dpr, x = snap((innerWidth - 1280 * k) / 2), y = snap((innerHeight - 720 * k) / 2);
-    stage.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
+    const compact = compactLayout(), viewport = $('viewport'), width = viewport.clientWidth, height = viewport.clientHeight;
+    const f = Math.min(width / 1280, height / 720), dpr = window.devicePixelRatio || 1;
+    const n = Math.floor(f * dpr + 1e-6), k = compact ? 1 : f >= 1 ? Math.max(1, n / dpr) : f;
+    const snap = v => Math.round(v * dpr) / dpr, x = compact ? 0 : snap((width - 1280 * k) / 2), y = compact ? 0 : snap((height - 720 * k) / 2);
+    stage.classList.toggle('compact-layout', compact);
+    stage.style.transform = compact ? 'none' : 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
+    const coach = $('coach'), coachParent = compact && scene === 'play' ? $('s-play') : stage;
+    if (coach.parentNode !== coachParent) coachParent.appendChild(coach);
+    placeVeil(); ui.coachDirty = true;
     const bs = document.body && document.body.style;
     if (bs) { bs.backgroundSize = 48 * k + 'px ' + 48 * k + 'px'; bs.backgroundPosition = x + 'px ' + y + 'px'; } // 테두리의 바둑판이 무대의 바둑판과 이어지게
     infoPopup.reposition();
   }
-  addEventListener('resize', fit); fit();
+  addEventListener('resize', () => { const wasCompact = stage.classList.contains('compact-layout'); fit(); if (wasCompact !== compactLayout()) render(); }); fit();
   function placeVeil() {
-    const outsideStage = veil.matches('.opening-veil, .first-quest-veil');
-    const parent = narrowPopup.matches && outsideStage ? document.body : stage;
+    const m = ui.modal, perk = m?.type === 'perk';
+    const outsideStage = perk || (compactScreen.matches && m && (compactLayout() || ['intro', 'mg', 'night'].includes(m.type) || veil.classList.contains('first-quest-veil')));
+    $('s-play').inert = !!(m && (outsideStage || ['intro', 'mg', 'night'].includes(m.type) || veil.classList.contains('first-quest-veil')));
+    $('s-title').inert = scene === 'title' && !!outsideStage;
+    stage.inert = perk;
+    const parent = outsideStage ? document.body : stage;
     if (veil.parentNode === parent) return;
     const focused = veil.contains(document.activeElement) ? document.activeElement : null;
     parent.insertBefore(veil, parent === stage ? $('fxc') : null);
     if (focused) focused.focus({ preventScroll: true });
   }
-  narrowPopup.addEventListener('change', placeVeil);
 
   // ── 소리: 첫 입력 때 켜짐, M 으로 끔 ──
   let audio = null;
@@ -231,8 +240,27 @@
     startAudio();
     if (infoPopup.handleKey(e)) return;
     const activate = e.code === 'Enter' || e.code === 'Space';
-    if (activate && e.target instanceof Element &&
-        (e.target.closest('#s-title button, .intro button, .quest-finished button') || (!ui.modal && e.target.matches('[data-info-trigger]')))) {
+    const button = e.target instanceof Element && e.target.closest('button');
+    if (ui.modal?.type === 'perk') {
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        const buttons = [...veil.querySelectorAll('button')];
+        const at = buttons.indexOf(document.activeElement);
+        const next = at < 0 ? (e.shiftKey ? buttons.length - 1 : 0) : (at + (e.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
+        buttons[next].focus();
+      } else if (activate) {
+        if (e.repeat || !veil.contains(button)) e.preventDefault();
+      }
+      else if (!e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) key(e.code);
+      return;
+    }
+    if (ui.modal?.type === 'night' && e.code === 'Tab') {
+      e.preventDefault();
+      veil.querySelector('[data-do="ok"]').focus();
+      return;
+    }
+    if (activate && button && (!ui.modal || button.closest('.intro, .quest-finished') ||
+        (veil.contains(button) && (button.matches('[data-do="ev"]') || (ui.modal.pre && button.closest('.mg')))))) {
       if (e.repeat) e.preventDefault();
       return;
     }
@@ -242,10 +270,10 @@
     if (e.code === 'Space' || e.code.indexOf('Arrow') === 0) e.preventDefault();
   });
   const mgPress = code => { try { ui.modal.mg.press(code); } catch (e) { /* 미니게임의 오류가 판을 멈추지 않게 */ } };
-  stage.addEventListener('pointerdown', e => {
-    startAudio();
+  document.addEventListener('pointerdown', e => {
+    if (stage.contains(e.target) || veil.contains(e.target)) startAudio();
     const m = ui.modal;
-    if (!m || m.type !== 'mg' || m.res || m.pre) return;
+    if (!m || m.type !== 'mg' || m.res || m.pre || !veil.contains(e.target)) return;
     const b = e.target.closest('[data-mg]'); // 미니게임 버튼은 누르는 순간 반응
     if (b) { mgPress(b.dataset.mg); e.preventDefault(); return; }
     if (e.target.id === 'mgc') { // 그림을 직접 눌러도 됨: 가로로 나눈 칸이 조작 버튼 순서와 같다
@@ -271,6 +299,7 @@
     scene = name;
     for (const n of ['title', 'play', 'results', 'figures']) $('s-' + n).classList.toggle('hide', n !== name);
     if (name !== 'play') { ui.modal = null; ui.queue = []; renderVeil(); }
+    fit();
     $('fx').innerHTML = ''; $('toasts').innerHTML = ''; ui.toastQ = []; ui.coachDirty = true;
   }
   function hasSave() { if (MANUAL) return null; try { const s = R.load(localStorage.getItem(SAVE) || ''); if (s && s.ended) { clearSave(); return null; } return s; } catch (e) { return null; } } // 끝난 판의 저장(예전 버전)은 이어 할 것이 없으니 지움
@@ -293,18 +322,32 @@
     if (S.pending) { const p = typeof S.pending === 'string' ? { id: S.pending, n: 1 } : S.pending; S.pending = null; if (R.quitJob(S, p.id, p.n)) S.log.push({ day: S.day, text: '하다 만 알바는 대충 한 것으로 처리했습니다.', tone: 'warn' }); } // 하는 중에 새로 고침: 칸은 반드시 쓴다 (예전 저장은 알바 이름 하나 = 중)
     const missed = (S.ach || []).filter(id => !meta.ach[id]); // 알림이 뜨기 전에 새로 고쳐서 판 저장에만 남은 업적
     if (missed.length) { for (const id of missed) meta.ach[id] = 1; saveMeta(); }
-    ui.queue = (S.unseen || []).map(x => ({ type: x.type, e: x.e })); // 1막 끝 · 사업 확장 창을 보기 전에 새로 고쳤으면 다시 띄움
+    ui.queue = (S.unseen || []).slice(); // 아직 확인하지 않은 안내는 다시 띄움
     ui.cash = S.cash; ui.worth = R.worth(S); rollNow('cash', ui.cash); rollNow('worth', ui.worth);
     show('play');
+    if (S.phase === 'night' && S.last) {
+      rollNow('nightin', S.last.labor); rollNow('nightout', S.last.spent);
+      openModal({ type: 'night', sum: S.last });
+    }
     drain(); render();
   }
   function saveNow() { if (MANUAL) return; try { localStorage.setItem(SAVE, R.save(S)); } catch (e) { /* 무시 */ } }
   function clearSave() { if (MANUAL) return; try { localStorage.removeItem(SAVE); } catch (e) { /* 무시 */ } }
+  function rememberNotice(m) { S.unseen = (S.unseen || []).filter(x => x.type !== m.type).concat([m]); }
+  const firstQuestDone = m => m.done.find(q => q.id === 'first_job');
 
   // ── 누름 처리 ──
   function run(what, arg) {
-    if (what === 'mute') { setMute(!ui.mute); return; }
     const m = ui.modal;
+    if (m?.type === 'perk') {
+      if (ui.guard > 0) return;
+      if (what === 'perkchoice') selectPerk(arg);
+      else if (what === 'perkconfirm' && R.pickPerk(S, m.pick)) {
+        sfx.ding(); ui.modal = null; hit.length = 0; hold(16); renderVeil(); done(); focusAfterModal();
+      }
+      return;
+    }
+    if (what === 'mute') { setMute(!ui.mute); return; }
     if (m && (m.type === 'achs' || m.type === 'help')) { // 어느 장면에서나 뜨는 책 두 권
       if (what === 'fxtoggle') { meta.fxOff = !meta.fxOff; saveMeta(); renderVeil(); }
       else if (what === 'ok') { ui.modal = null; hold(12); sfx.click(); renderVeil(); if (scene === 'play') pump(); }
@@ -365,10 +408,11 @@
       else if (what === 'why') deny(arg);
       else if (what === 'mgstart' && m.type === 'mg' && m.pre) beginMg();
       else if (what === 'int' && m.type === 'mg' && m.pre) pickInt(Number(arg));
-      else if (what === 'perk' && m.type === 'perk') { if (R.pickPerk(S, arg)) { sfx.ding(); ui.modal = null; hold(16); renderVeil(); done(); } }
       else if (what === 'ev' && m.type === 'event' && !m.done) {
+        const hadFocus = veil.contains(document.activeElement);
         if (R.choose(S, arg)) { const d = S.ev.find(e => e.t === 'event_done'); m.done = d ? d.text : ''; m.fx = d ? d.fx : null; saveNow(); sfx.click(); hold(20); $('veil').classList.add('arming'); renderVeil(); } // 고르자마자 저장 (새로 고쳐서 다시 고르기 없음)
         else { S.ev.length = 0; deny('현금이 모자랍니다'); }
+        if (hadFocus) focusAfterModal();
       }
       return;
     }
@@ -485,10 +529,11 @@
     const opts = ['rent', 'jeonse'].map(lease => { const info = R.moveInfo(S, 3, lease); return { name: R.LEASE[lease], lease, info, ok: info.ok, why: info.why }; });
     return { type: 'lease', to: 3, opts, pick: Math.max(0, opts.findIndex(o => o.ok)) };
   }
+  const maxOrderQty = (owned, buyable) => Math.max(1, buyable, Math.ceil(owned)); // 예전 저장의 소수 수량도 전량 매도할 수 있게
   function setQty(arg) { // 수량: −10 · −1 · +1 · +10 · 살 수 있는 만큼의 25% · 50% · 전부 · 가진 만큼
-    const h = S.hold[ui.sel] || { units: 0 }, max = R.maxUnits(S, ui.sel), top = Math.max(1, max, Math.floor(h.units));
+    const h = S.hold[ui.sel] || { units: 0 }, max = R.maxUnits(S, ui.sel), top = maxOrderQty(h.units, max);
     const q = arg === 'max' ? max : arg === 'q50' ? Math.floor(max / 2) : arg === 'q25' ? Math.floor(max / 4) : arg === 'all' ? Math.ceil(h.units) : /^=/.test(arg) ? Number(arg.slice(1)) : ui.qty + Number(arg);
-    ui.qty = clamp(Math.floor(q) || 1, 1, Math.max(1, top));
+    ui.qty = clamp(Math.floor(q) || 1, 1, top);
   }
   function setBamt(arg) { // 은행에서 빌리거나 갚을 금액: 한도 · 잔액 안에서
     const v = R.creditView(S), top = Math.max(v.room, v.balance), unit = top >= 1e8 ? 1e7 : top >= 1e7 ? 1e6 : 1e5;
@@ -523,8 +568,10 @@
   function sleepNow() {
     if (!R.endDay(S)) return;
     const evs = S.ev.splice(0), down = evs.some(e => e.t === 'tier' && !e.up && e.from >= 2); // 밤의 사건은 정산 창이 보여 주므로 비우되, 쫓겨난 것은 흔들림으로도 알림
-    const fc = evs.find(e => e.t === 'foreclose'); if (fc) ui.queue.push({ type: 'foreclose', e: fc }); // 압류는 정산 창을 닫은 뒤 숫자로 한 장 더
+    const fc = evs.find(e => e.t === 'foreclose');
+    if (fc) { const m = { type: 'foreclose', e: fc }; ui.queue.push(m); rememberNotice(m); } // 압류는 정산을 확인한 뒤 한 장 더
     for (const e of evs) if (e.t === 'ach') { ui.newAch.push(e.id); if (!meta.ach[e.id]) { meta.ach[e.id] = 1; saveMeta(); } }
+    saveNow();
     rollTo('nightin', S.last.labor, 'nightin', v => '+' + won(v), 0); rollTo('nightout', S.last.spent, 'nightout', v => (v ? '−' : '') + won(v), 0); // 합계가 0 에서 굴러감
     openModal({ type: 'night', sum: S.last }); render();
     if (down) { sfx.bad(); shake(); } else sfx.night();
@@ -553,8 +600,13 @@
   function deny(why) { sfx.deny(); if (why) toast(I('warn') + '<span>' + esc(why) + '</span>', 'deny', 150); }
 
   function key(code) {
-    if (code === 'KeyM') { setMute(!ui.mute); return; }
     const m = ui.modal;
+    if (m?.type === 'perk') {
+      const n = /^(?:Digit|Numpad)([1-3])$/.exec(code);
+      if (n && ui.guard === 0) selectPerk(S.offer[Number(n[1]) - 1]);
+      return;
+    }
+    if (code === 'KeyM') { setMute(!ui.mute); return; }
     if (m && (m.type === 'achs' || m.type === 'help')) { if (ui.guard === 0 && (code === 'Space' || code === 'Enter' || code === 'Escape')) run('ok'); return; }
     if (scene === 'title') { if (code === 'Enter') run(hasSave() ? 'continue' : 'new'); return; }
     if (scene === 'results') { if (ui.guard === 0 && (code === 'Enter' || code === 'KeyR')) run('again'); return; }
@@ -576,7 +628,6 @@
         else if (code === 'Space' || code === 'Escape') denRun('denleave');
         return;
       }
-      if (m.type === 'perk') { const o = d && S.offer && S.offer[Number(d[1]) - 1]; if (o) run('perk', o); return; } // 특성은 꼭 하나 골라야 닫힘
       if (m.type === 'event' && !m.done) { if (d && d[1] === '1') run('ev', 'a'); else if (d && d[1] === '2') run('ev', 'b'); return; }
       if (m.type === 'study') { const a = d && m.assets[Number(d[1]) - 1]; if (a) run('studyasset', a.id); else if (code === 'Enter' && m.picks > 1) run('studygo'); else if (code === 'Space' || code === 'Escape') closeModal(false); return; } // 종목 고르기: 숫자 = 그 종목, Space = 돌아가기 (두 종목을 읽는 단계면 고른 뒤 Enter)
       if (m.type === 'intro' && d) { const dr = R.dreamList()[Number(d[1]) - 1]; if (dr) run('dream', dr.id); return; }
@@ -653,7 +704,11 @@
       else if (e.t === 'ending') ui.ending = true;
       else if (e.t === 'ach') { ui.newAch.push(e.id); if (!meta.ach[e.id]) { meta.ach[e.id] = 1; saveMeta(); } toast(I(e.icon) + '<div><span class="lab">업적</span> <b>' + esc(e.name) + '</b></div>', '', 300); sfx.ding(); } // 규칙(achTick)이 판마다 한 번만 낸다 (S.ach 에 남아 이어하기 · 새로 고침 뒤에도 다시 안 냄)
     }
-    if (quests.done.length) ui.queue.splice(quests.at, 0, { type: 'quest', done: quests.done, skipped: quests.skipped, next: quests.next });
+    if (quests.done.length) {
+      const m = { type: 'quest', done: quests.done, skipped: quests.skipped, next: quests.next };
+      ui.queue.splice(quests.at, 0, m);
+      if (firstQuestDone(m)) rememberNotice(m);
+    }
     else for (const q of quests.skipped) toast(I('skip') + fitLine(['<div><span class="lab">때가 지나 건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>', '<div><span class="lab">건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>']), '', 300);
     if (!ui.modal && !ui.queue.length && !S.offer && !S.event && !ui.ending) for (const f of flies) { fly(f[0], f[1], f[2]); if (f[3]) coins(f[2], f[3]); } // 창이 뜰 참이면 창 위에 겹치므로 내지 않음 (숫자는 위쪽 띠에서 굴러감)
     pump();
@@ -875,22 +930,24 @@
     for (const o of [...$('toasts').children].reverse()) if (o._kind !== 'deny') { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 떠 있던 알림은 창이 닫힌 뒤에 다시 (창 글 위로 올라오지 않게)
     ui.modal = m; hold(GUARD[m.type] || 18); $('veil').classList.add('arming'); // 0.3~0.6초: 연달아 누른 것이 새 창을 닫지 않게 (그동안 버튼이 흐림)
     if (m.type === 'quest') { sfx.ding(); burst(640, 330, 28, 2.2); }
-    else if (m.type === 'perk') { sfx.level(); burst(640, 300, 70, 2.8); }
+    else if (m.type === 'perk') { m.pick = S.offer[0]; hit.length = 0; sfx.level(); burst(640, 300, 70, 2.8); }
     else if (m.type === 'act1') { sfx.up(); burst(640, 300, 120, 2.6); }
     else if (m.type === 'biz') { sfx.level(); burst(640, 300, 50, 2.4); }
     else if (m.type === 'shock') { const e = m.e; if (!e.held) sfx.ding(); else if (e.delta < 0) { sfx.bad(); if (!m.still) shake(); } else { sfx.up(); burst(640, 120, 40, 2.4); } } // 든 종목이면 한 번만 크게, 아니면 차분하게
     else if (m.type === 'world') { if (m.e.type === 'holiday') sfx.ding(); else { sfx.bad(); if (m.e.kind === '재난') shake(); } }
     else if (m.type === 'tier') sfx.up(); else if (m.type === 'liq' || m.type === 'foreclose') sfx.bad(); else if (m.type === 'intro' || m.type === 'event' || m.type === 'den' || m.type === 'drill') sfx.ding();
     renderVeil();
+    veil.scrollTop = 0;
   }
   function closeModal(yes) {
     const m = ui.modal;
     if (!m || m.type === 'perk' || m.type === 'den' || (m.type === 'event' && !m.done)) return; // 고르기 전에는 닫히지 않음 (도박장은 "그만"으로만)
+    const hadFocus = veil.contains(document.activeElement);
     hold(16);
     if (m.type === 'mg' && m.pre) { if (!yes) { ui.modal = null; sfx.click(); renderVeil(); render(); } return; } // 돌아가기: 아무것도 쓰지 않는다
     if (m.type === 'mg') { if (!m.res) return; ui.modal = null; ui.from = { x: 640, y: 330 }; renderVeil(); sfx.pay(); done(); return; }
-    if (m.type === 'night') { ui.modal = null; R.nextDay(S); if (!S.ended) saveNow(); renderVeil(); done(); return; }
-    if (m.type === 'event') { ui.modal = null; renderVeil(); done(); return; }
+    if (m.type === 'night') { ui.modal = null; R.nextDay(S); renderVeil(); done(); focusAfterModal(); return; }
+    if (m.type === 'event') { ui.modal = null; renderVeil(); done(); if (hadFocus) focusAfterModal(); return; }
     if (m.type === 'confirm') {
       ui.modal = null; renderVeil();
       if (yes && m.kind === 'sleep') { sleepNow(); return; }
@@ -905,7 +962,7 @@
       } else {
         S.opening.step = Math.max(0, S.opening.step + (yes ? 1 : -1));
         if (persistOpening) saveNow();
-        sfx.click(); $('veil').classList.add('arming'); renderVeil();
+        sfx.click(); $('veil').classList.add('arming'); renderVeil(); veil.scrollTop = 0;
         return;
       }
       if (persistOpening) saveNow();
@@ -917,8 +974,18 @@
       if (yes) { if (m.type === 'buy') { if (R.buyHome(S, m.to, o.loan, o.lease)) sfx.up(); } else if (m.type === 'lease') { if (R.move(S, 3, o.lease)) sfx.up(); } else if (R.repay(S, o.amt)) sfx.pay(); }
       done(); return;
     }
-    if (m.type === 'act1' || m.type === 'biz' || m.type === 'world') { S.unseen = (S.unseen || []).filter(x => x.type !== m.type); saveNow(); } // 본 창은 저장에서 지움
+    if (m.type === 'act1' || m.type === 'biz' || m.type === 'world' || m.type === 'foreclose' || (m.type === 'quest' && firstQuestDone(m))) {
+      S.unseen = (S.unseen || []).filter(x => x.type !== m.type); saveNow(); // 본 창은 저장에서 지움
+    }
     ui.modal = null; sfx.click(); renderVeil(); pump(); render();
+    if (hadFocus) focusAfterModal();
+  }
+  function focusAfterModal() {
+    if (veil.contains(document.activeElement)) return;
+    const next = ui.modal ? veil.querySelector('button:not(:disabled)')
+      : coachNow()?.id === 'move' ? $('board').querySelector('[data-do="move"]')
+        : $('today').querySelector('button[data-do="skip"]') || $('hud').querySelector('[data-do="quit"]');
+    next?.focus({ preventScroll: true });
   }
   function ping() { const el = $('quest'); el.classList.remove('ping'); void el.offsetWidth; el.classList.add('ping'); }
   function fly(text, color, from) { // 번 자리에서 떠서 위쪽 띠의 현금 칸으로
@@ -984,6 +1051,8 @@
     demoFor(ui.modal);
     hold(first ? 24 : 15); $('veil').classList.add('arming'); // 카드를 두 번 누른 것이 시작 · 강도 버튼까지 누르지 않게
     renderVeil();
+    veil.scrollTop = 0;
+    veil.querySelector('.mg-head b').focus({ preventScroll: true });
   }
   function pickInt(n) {
     const m = ui.modal, L = m.act.levels[n];
@@ -1002,12 +1071,18 @@
     try { mg = window.Minigames ? window.Minigames.create(m.id, opts) : null; } catch (e) { mg = null; }
     m.mg = mg || fallbackGame(opts); m.demo = null; m.pre = false;
     meta.seen[m.id] = 1; saveMeta(); S.pending = { id: m.id, n: m.n }; saveNow(); sfx.click(); renderVeil(); // 하다가 새로 고치면 그 강도의 체력으로 "대충" (R.quitJob)
+    veil.scrollTop = 0;
   }
   function finishMg() {
     const m = ui.modal, r = m.mg.result || { score: 0 };
     const score = clamp(Number(r.score) || 0, 0, 1);
     S.pending = null;
     R.doJob(S, m.id, score, m.n);
+    const completed = S.ev.filter(e => e.t === 'quest_done').map(e => e.quest);
+    if (completed.some(q => q.id === 'first_job')) { // 일당 결과를 확인하기 전에 새로 고쳐도 첫 퀘스트 보상을 보여 준다
+      const skipped = S.ev.filter(e => e.t === 'quest_skip').map(e => e.quest);
+      rememberNotice({ type: 'quest', done: completed, skipped, next: R.questView(S) });
+    }
     saveNow();
     const j = S.ev.find(e => e.t === 'job') || { pay: 0, base: 0, grade: 'ok', gradeName: '보통', mult: 1, gmult: 1, imult: 1, int: m.n, intName: R.INT[m.n], hp: 0, combo: 0, comboWas: 0, comboMult: 1, extra: 1 };
     m.res = { j, tip: S.ev.find(e => e.t === 'tip'), wh: S.ev.find(e => e.t === 'while') };
@@ -1015,6 +1090,7 @@
     hold(54); $('veil').classList.add('arming'); // 미니게임을 하던 누름이 결과 창을 닫지 않게 (0.9초)
     if (j.grade === 'miss') sfx.deny(); else if (j.grade === 'perfect') { sfx.up(); burst(640, 300, 36, 2.4); } else sfx.ding();
     renderVeil();
+    veil.scrollTop = 0;
   }
   function drawMg() {
     const m = ui.modal, g = m && m.type === 'mg' && (m.mg || m.demo);
@@ -1071,16 +1147,19 @@
   function renderCoach() {
     const box = $('coach'), c = coachNow();
     if (!c) { ui.coach = ''; box.className = 'hide'; box.innerHTML = ''; return; }
-    const sr = stage.getBoundingClientRect(), k = 1280 / sr.width, px = v => String(Math.round(v)); // 반 픽셀에 걸리지 않게 정수로
+    const compact = compactLayout(), sr = stage.getBoundingClientRect(), k = 1280 / sr.width, px = v => String(Math.round(v)); // 반 픽셀에 걸리지 않게 정수로
     const rect = sel => { const e = document.querySelector(sel), r = e && e.getBoundingClientRect(); return r && r.width ? { x: (r.left - sr.left) * k - 5, y: (r.top - sr.top) * k - 5, w: r.width * k + 10, h: r.height * k + 10 } : null; };
-    const rings = c.ring.map(rect).filter(Boolean), holes = rings.concat((c.lit || []).map(rect).filter(Boolean));
+    const rings = compact ? [] : c.ring.map(rect).filter(Boolean), holes = compact ? [] : rings.concat((c.lit || []).map(rect).filter(Boolean));
     const fresh = ui.coach !== c.id;
     box.className = ''; // 숨긴 채로는 말풍선의 크기를 잴 수 없다
     const dk = PX.k || '#2b1d2e'; // 짚지 않은 곳은 창 뒤와 같은 한 겹(PX.k · 불투명도 0.6)으로 덮는다 (점 무늬는 늘이고 줄이면 지글거림)
-    box.innerHTML = '<svg viewBox="0 0 1280 720"><defs><mask id="cmask"><rect width="1280" height="720" fill="#fff"/>' + holes.map(r => '<rect x="' + Math.round(r.x) + '" y="' + Math.round(r.y) + '" width="' + Math.round(r.w) + '" height="' + Math.round(r.h) + '" fill="#000"/>').join('') + '</mask></defs><rect width="1280" height="720" fill="' + dk + '" fill-opacity="0.6" mask="url(#cmask)"/></svg>' +
+    box.innerHTML = (compact ? '' : '<svg viewBox="0 0 1280 720"><defs><mask id="cmask"><rect width="1280" height="720" fill="#fff"/>' + holes.map(r => '<rect x="' + Math.round(r.x) + '" y="' + Math.round(r.y) + '" width="' + Math.round(r.w) + '" height="' + Math.round(r.h) + '" fill="#000"/>').join('') + '</mask></defs><rect width="1280" height="720" fill="' + dk + '" fill-opacity="0.6" mask="url(#cmask)"/></svg>') +
       rings.map((r, i) => '<div class="ring" style="left:' + px(r.x) + 'px;top:' + px(r.y) + 'px;width:' + px(r.w) + 'px;height:' + px(r.h) + 'px">' + (c.num ? '<u>' + (i + 1) + '</u>' : '') + '</div>').join('') +
-      '<div class="bubble' + (fresh ? ' in' : '') + '"><em><span class="lab">' + (c.n ? '안내 ' + c.n + ' / 5' : c.lab) + '</span><span class="no">' + (c.ok ? '읽었으면 "' + c.ok + '"를 누릅니다' : '지금은 노란 고리 안만 눌립니다') + '</span></em><div class="tx">' + c.html() + '</div>' + // no = 다른 것을 눌렀을 때 이름표 자리에 뜨는 이유
+      '<div class="bubble' + (fresh ? ' in' : '') + '"><em><span class="lab">' + (c.n ? '안내 ' + c.n + ' / 5' : c.lab) + '</span><span class="no">' + (c.ok ? '읽었으면 "' + c.ok + '"를 누릅니다' : compact ? '안내가 짚은 행동을 먼저 해 보세요' : '지금은 노란 고리 안만 눌립니다') + '</span></em><div class="tx">' + (compact ? c.html().replace('왼쪽 아래 상태창', '아래 상태창').replace('오른쪽 위', '위쪽') : c.html()) + '</div>' + // no = 다른 것을 눌렀을 때 이름표 자리에 뜨는 이유
       (c.n || c.ok ? '<div class="foot">' + (c.n ? '<button data-do="coachoff" title="안내를 끄고 혼자 해 봅니다. 제목 화면에서 다시 켤 수 있습니다">안내 끄기</button>' : '<span></span>') + (c.ok ? '<button class="btn main small" data-do="coachok">' + c.ok + ' <span class="key">Space</span></button>' : '') + '</div>' : '') + '</div>';
+    if (fresh) { ui.coach = c.id; if (c.ok) hold(30); }
+    if (c.ok && ui.guard > 0) box.className = 'arming';
+    if (compact) return;
     const b = box.querySelector('.bubble'), bw = b.offsetWidth, bh = b.offsetHeight, t = rings[0];
     let x = 470, y = 286, side = '';
     if (Array.isArray(c.at)) { x = c.at[0]; y = c.at[1]; }
@@ -1090,8 +1169,6 @@
     x = clamp(x, side === 'up' ? 446 : 12, 1268 - bw); y = clamp(y, 12, 708 - bh); // 아래로 다는 말풍선은 오른쪽 단(오늘 · 판) 안에서만: 왼쪽의 체력 · 상태창을 가리지 않게
     b.style.left = px(x) + 'px'; b.style.top = px(y) + 'px';
     if (side) { b.classList.add(side); b.style.setProperty('--a', px(side === 'left' ? clamp(t.y + t.h / 2 - y, 20, bh - 20) : clamp(t.x + t.w / 2 - x, 20, bw - 20)) + 'px'); } // 화살표가 짚은 곳의 가운데를 가리키게
-    if (fresh) { ui.coach = c.id; if (c.ok) hold(30); } // 읽고 넘기는 안내는 연타로 넘어가지 않게
-    if (c.ok && ui.guard > 0) box.className = 'arming';
   }
   function nudge() { // 짚은 곳 말고 다른 것을 누름: 말풍선이 흔들려 다시 알려 준다
     sfx.deny();
@@ -1565,10 +1642,16 @@
       (lv ? cell(lv.id, lv.name, (lv.dir > 0 ? '롱' : '숏') + ' ' + lv.lev + '배', many ? shortWon(lv.value) : won(lv.value), '건 돈 ' + shortWon(lv.put), '건 돈(증거금) ' + won(lv.put), lv.pnl, lv.pct, 'data-do="tab" data-arg="coin"') : '') + '</div>';
   }
 
+  function sellOrderLabel(qty, owned) {
+    if (owned <= 0) return '팔기';
+    const units = Math.min(qty, owned), kind = units === owned ? '전량' : '부분';
+    const amount = units < 0.01 ? '0.01주 미만' : (Number.isInteger(units) ? '' : '약 ') + unitsText(units);
+    return kind + ' ' + amount + ' 팔기';
+  }
   function detailHtml(hv) { // 종목 상세: 차트 · 오늘 소식 · 내 보유 · 수량을 골라 사고판다
-    const x = hv.rows.find(r => r.id === ui.sel), a = R.ASSETS.find(q => q.id === x.id), c = todayChg(x.id), h = S.hold[x.id], fr = feeRate(), px = S.market.px[x.id];
-    ui.qty = clamp(Math.floor(ui.qty) || 1, 1, Math.max(1, x.max, Math.floor(h.units)));
-    const q = ui.qty, qt = R.quote(S, x.id, q), cost = qt.buy, sq = Math.min(q, h.units), get = qt.sell, no = augWhy('coinonly'); // 버튼의 금액 = 규칙이 실제로 오가게 하는 돈 (같은 식)
+    const x = hv.rows.find(r => r.id === ui.sel), a = R.ASSETS.find(q => q.id === x.id), c = todayChg(x.id), h = S.hold[x.id], fr = feeRate();
+    ui.qty = clamp(Math.floor(ui.qty) || 1, 1, maxOrderQty(h.units, x.max));
+    const q = ui.qty, qt = R.quote(S, x.id, q), cost = qt.buy, get = qt.sell, sale = sellOrderLabel(q, h.units), no = augWhy('coinonly');
     const ns = R.todayNews(S).filter(n => n.asset === x.id);
     const note = ns.length ? ns.map(newsLine).join('') : '<div class="nitem dim">' + I('info', '', 's') + '<span class="tx">' + esc(a.hint) + (x.id === 'bank' ? ' (지난 정산 뒤로 내내 든 만큼의 ' + pct1(tune.bk_div) + ')' : '') + '</span></div>';
     const alert = x.id === 'hantang' && R.htAlert(S) ? '<i class="vol">' + I('up', '', 's') + '거래량</i>' : x.id === 'game' && R.gmAlert(S) ? '<i class="vol">' + I('warn', '', 's') + '신작 출시 대기</i>' : '';
@@ -1582,15 +1665,20 @@
       '<input id="qty" class="qin" inputmode="numeric" maxlength="7" autocomplete="off" value="' + q + '" title="주 수를 직접 적습니다" aria-label="주 수">' + st('+1', '+1', '1주 늘리기') + st('+10', '+10', '10주 늘리기') + '</div>' +
       '<div class="seg pre">' + st('q25', '25%', '살 수 있는 만큼의 25% — ' + num(Math.floor(x.max / 4)) + '주', x.max < 4) + st('q50', '50%', '살 수 있는 만큼의 절반 — ' + num(Math.floor(x.max / 2)) + '주', x.max < 2) + st('max', '최대', '현금으로 살 수 있는 만큼 — ' + num(x.max) + '주', x.max < 1) + st('all', '보유', '가진 만큼 — ' + unitsText(h.units), h.units <= 0) + '</div>' +
       (no ? lockBtn(no, 'btn up ob', I('lock') + '사기') : '<button class="btn up ob" data-do="buyq"' + (cost > S.cash ? ' disabled' : '') + ' title="' + num(q) + '주 사기 — ' + won(cost) + ' (수수료 포함)' + (cost > S.cash ? ' · 현금이 모자랍니다' : '') + '"><b>사기</b><i id="buyamt">' + num(cost) + '</i></button>') +
-      '<button class="btn down ob" data-do="sellq"' + (h.units > 0 ? '' : ' disabled') + ' title="' + (h.units > 0 ? unitsText(sq) + ' 팔기 — ' + won(get) + ' (수수료 뺌)' : '가진 것이 없습니다') + '"><b>팔기</b><i id="sellamt">' + (h.units > 0 ? num(get) : '—') + '</i></button></div></div>';
+      '<button class="btn down ob" data-do="sellq"' + (h.units > 0 ? '' : ' disabled') + ' title="' + (h.units > 0 ? sale + ' — ' + won(get) + ' (수수료 뺌)' : '가진 것이 없습니다') + '"><b id="sellqty">' + sale + '</b><span><i id="sellamt">' + (h.units > 0 ? num(get) : '—') + '</i>' + (h.units > 0 ? '원 받음' : '') + '</span></button></div></div>';
   }
-  function qtyTyped(el, done) { // 수량 칸에 직접 적는 동안: 다시 그리지 않고 금액만 바꾼다 (글자 넣는 자리가 날아가지 않게). done = 칸에서 손을 뗌 — 살 수 있는 · 가진 만큼 안으로 맞춰 적는다
-    const h = S.hold[ui.sel], px = S.market.px[ui.sel], fr = feeRate(), n = Math.floor(Number(String(el.value).replace(/[^0-9]/g, ''))) || 0;
+  function qtyTyped(el, done) { // 직접 적는 동안 수량 · 금액만 갱신해 입력 초점을 유지한다.
+    const h = S.hold[ui.sel], n = Math.floor(Number(String(el.value).replace(/[^0-9]/g, ''))) || 0;
     ui.qty = Math.max(1, n);
-    if (done) { ui.qty = clamp(ui.qty, 1, Math.max(1, R.maxUnits(S, ui.sel), Math.floor(h.units))); el.value = ui.qty; for (const q of document.querySelectorAll('#board [data-do="qty"]')) if (q.dataset.arg === '-1' || q.dataset.arg === '-10') q.disabled = ui.qty <= 1; }
+    if (done) { ui.qty = clamp(ui.qty, 1, maxOrderQty(h.units, R.maxUnits(S, ui.sel))); el.value = ui.qty; for (const q of document.querySelectorAll('#board [data-do="qty"]')) if (q.dataset.arg === '-1' || q.dataset.arg === '-10') q.disabled = ui.qty <= 1; }
     const b = $('buyamt'), s = $('sellamt'), qt = R.quote(S, ui.sel, ui.qty), cost = qt.buy;
     if (b) { b.textContent = num(cost); b.parentNode.disabled = cost > S.cash; }
-    if (s && h.units > 0) s.textContent = num(qt.sell);
+    if (s && h.units > 0) {
+      const sale = sellOrderLabel(ui.qty, h.units);
+      $('sellqty').textContent = sale;
+      s.textContent = num(qt.sell);
+      s.closest('button').title = sale + ' — ' + won(qt.sell) + ' (수수료 뺌)';
+    }
   }
   // ── 코인 탭: 왼쪽 = 주문 칸(또는 내 포지션), 오른쪽 = 차트와 버튼. 정리 버튼은 롱 · 숏과 다른 자리에 둔다 ──
   const coinNow = () => (S.lev ? R.levId(S.lev) : R.visible(S, ui.coin) ? ui.coin : 'coin'); // 지금 보는 코인 (포지션이 있으면 그 코인, 못 보는 코인이면 달나라코인)
@@ -1924,6 +2012,32 @@
   }
   const ARROW = { ArrowLeft: -90, ArrowRight: 90, ArrowUp: 0, ArrowDown: 180 };
   const keyName = c => (c in ARROW ? '<span class="ic s" style="transform:rotate(' + ARROW[c] + 'deg)">' + art('icon', 'up') + '</span>' : c.replace('Digit', '').replace('Key', '')); // 방향키는 위 화살표 아이콘을 돌려서
+  function selectPerk(id) {
+    const cards = [...veil.querySelectorAll('.pcard')];
+    const chosen = cards.find(b => b.dataset.arg === id);
+    if (!chosen) return;
+    ui.modal.pick = id;
+    for (const b of cards) b.setAttribute('aria-pressed', b === chosen);
+    $('perk-confirm').textContent = chosen.querySelector('.perk-name > span').textContent + ' 선택';
+    sfx.click();
+  }
+  function perkOfferHtml(m) {
+    const cards = R.offerView(S), level = S.lv - S.picks + 1;
+    return '<section class="win lvup" role="dialog" aria-modal="true" aria-labelledby="perk-title">' +
+      '<div class="perk-head"><h2>' + I('star', '', 's') + '레벨 업</h2><span>Lv.' + level + '</span></div><h3 id="perk-title">특성 하나를 고르세요</h3>' +
+      '<div class="pcards" style="--perk-count:' + cards.length + '">' + cards.map((p, i) => {
+        const marks = Array.from({ length: p.max }, (_, j) => '<i' + (j < p.n ? ' class="on"' : '') + '></i>').join('');
+        return '<button type="button" class="pcard' + (p.aug ? ' aug' : '') + '" data-do="perkchoice" data-arg="' + p.id + '" aria-pressed="' + (p.id === m.pick) + '">' +
+          '<span class="key" aria-hidden="true">' + (i + 1) + '</span><span class="perk-icon" aria-hidden="true">' + I(p.icon) + '</span>' +
+          '<span class="perk-name"><span>' + esc(p.name) + '</span>' + (p.aug ? '<small>양날</small>' : '') + '</span>' +
+          '<span class="pcard-effect"><span>' + esc(p.label) + '</span><strong>' + esc(p.value) + '</strong></span>' +
+          (p.note || p.con || p.excl ? '<span class="pcard-notes">' + (p.note ? '<span>' + esc(p.note) + '</span>' : '') +
+            (p.con ? '<span class="con">대신 ' + esc(p.con) + '</span>' : '') +
+            (p.excl ? '<span class="excl">' + I('lock', '', 's') + '<span>' + esc(p.excl) + '</span></span>' : '') + '</span>' : '') +
+          '<span class="have">보유 ' + p.n + ' / ' + p.max + '<span class="perk-marks" aria-hidden="true">' + marks + '</span></span></button>';
+      }).join('') + '</div><div class="foot"><span class="perk-keys">' + cards.map((_, i) => '<span class="key">' + (i + 1) + '</span>').join(' ') +
+      ' 숫자 키로 후보 보기</span><button type="button" class="btn down" id="perk-confirm" data-do="perkconfirm">' + esc(cards.find(p => p.id === m.pick).name) + ' 선택</button></div></section>';
+  }
   function renderVeil() {
     const v = $('veil'), m = ui.modal;
     ui.coachDirty = true;
@@ -1932,22 +2046,28 @@
       if (document.activeElement && document.activeElement.matches('[data-info-trigger]')) document.activeElement.blur();
     }
     const opening = !!m && m.type === 'intro';
-    const firstQuest = m && m.type === 'quest' && m.done.find(q => q.id === 'first_job');
-    $('s-play').inert = opening || !!firstQuest;
+    const firstQuest = m && m.type === 'quest' && firstQuestDone(m);
+    const night = !!m && m.type === 'night';
     v.classList.toggle('hide', !m); v.classList.toggle('top', !!m && m.type === 'shock'); // 속보는 위쪽 띠
     v.classList.toggle('opening-veil', opening);
     v.classList.toggle('dream-veil', opening && S.opening.step === 3);
     v.classList.toggle('first-quest-veil', !!firstQuest);
+    v.classList.toggle('perk-veil', m?.type === 'perk');
     placeVeil();
     if (!m) { v.innerHTML = ''; return; }
     if (m.type === 'mg') {
       const g = m.mg || m.demo, L = m.act.levels[m.n];
+      const focused = m.pre && document.activeElement.matches('.mg [data-do="int"]') ? document.activeElement.dataset.arg : null;
       if (!v.querySelector('.mg')) { // 틀은 한 번만 (강도를 바꿔도 뜨는 연출이 다시 돌지 않게). 머리줄 · 아래쪽은 그릴 때마다
         v.innerHTML = '<div class="win mg corner"><div class="mg-head"></div><div class="mg-pic"><canvas id="mgc" class="mg-canvas" width="1760" height="760"></canvas><span class="mg-demo" title="스스로 하는 시연 — 시작을 누르면 내 차례">' + I('eye', '', 's') + '자동 시연</span><span class="mg-press chip hide"></span></div><div class="mg-ctl"></div><div id="mgres"></div></div>';
       }
-      v.querySelector('.mg-head').innerHTML = '<b>' + esc(g.title || m.act.name) + '</b>' + (m.pre ? '' : ich(m.n, true)) + '<i title="일당(보통) — 잘할수록 ×' + tune.mult_miss + '~' + tune.mult_perfect + ', 강도 ' + L.name + ' ×' + L.payMult + '">' + I('coin', '', 's') + won(L.pay) + (S.combo ? ' · ' + I('fire', '콤보', 's') + S.combo : '') + '</i>';
+      const panel = v.querySelector('.mg');
+      panel.classList.toggle('mg-live', !m.pre && !m.res);
+      panel.classList.toggle('mg-result', !!m.res);
+      v.querySelector('.mg-head').innerHTML = '<b tabindex="-1">' + esc(g.title || m.act.name) + '</b>' + (m.pre ? '' : ich(m.n, true)) + '<i title="일당(보통) — 잘할수록 ×' + tune.mult_miss + '~' + tune.mult_perfect + ', 강도 ' + L.name + ' ×' + L.payMult + '">' + I('coin', '', 's') + won(L.pay) + (S.combo ? ' · ' + I('fire', '콤보', 's') + S.combo : '') + '</i>';
       v.querySelector('.mg-demo').classList.toggle('hide', !m.pre); if (!m.pre) v.querySelector('.mg-press').classList.add('hide');
       v.querySelector('.mg-ctl').innerHTML = ctlHtml(m); m.lit = ''; // 다시 그리면 눌린 키 딱지가 지워지므로 다음 걸음에 다시 켠다 // 세 줄의 높이가 시작 전 · 하는 중 · 결과에 같아 그림이 움직이지 않는다
+      if (focused !== null) v.querySelector('[data-do="int"][data-arg="' + focused + '"]').focus({ preventScroll: true });
       if (m.res) {
         const j = m.res.j, w = m.res.wh;
         const det = m.mg.result && m.mg.result.detail; // 한 줄 내역 (왜 이 등급인지): "배달 4 / 5건 · 충돌 2번"
@@ -1999,10 +2119,8 @@
             : questDoneList(m.done, m.skipped)) + nextBox(m.next) + okBtn() + '</div>';
       }
     } else if (m.type === 'perk') {
-      const cards = R.offerView(S) || [];
-      v.innerHTML = '<div class="win lvup corner"><h2>' + I('star', '', 's') + '레벨 업</h2><h3>Lv.' + (S.lv - S.picks + 1) + ' — 특성을 하나 고르세요</h3><div class="pcards">' + cards.map((p, i) =>
-        '<button class="pcard' + (p.aug ? ' aug' : '') + '" data-do="perk" data-arg="' + p.id + '"' + (p.aug ? ' title="양날 특성: 크게 얻는 대신 못 하게 되는 것이 있습니다"' : '') + '><span class="key">' + (i + 1) + '</span>' + (p.aug ? '<em class="edge">양날</em>' : '') + I(p.icon) + '<b>' + p.name + '</b>' +
-        (p.aug ? '<span class="gain">' + esc(p.desc) + '</span><em class="con">대신: ' + esc(p.con) + '</em>' : '<span>' + p.desc + '</span>') + (p.excl ? '<em class="excl">' + I('lock', '', 's') + esc(p.excl) + '</em>' : '') + '<i class="have" title="같은 특성을 겹쳐 고를 수 있는 횟수">보유 ' + p.n + ' / ' + p.max + '</i></button>').join('') + '</div></div>';
+      v.innerHTML = perkOfferHtml(m);
+      focusAfterModal();
     } else if (m.type === 'event') {
       const e = m.view, cost = c => (c.cost ? '<span class="cost" title="고르면 드는 돈">' + I('cash', '', 's') + '−' + won(c.cost) + '</span>' : '');
       v.innerHTML = '<div class="win evt corner"><div class="evt-top">' + I(e.icon) + '<div><h2>' + I('dice', '', 's') + '돌발</h2><h3>' + esc(e.title) + '</h3></div></div><p>' + esc(m.done || e.text) + '</p>' +
@@ -2129,6 +2247,7 @@
     if (w && w.classList.contains('corner')) { const f = document.createElement('div'); f.className = 'frame corner'; w.classList.remove('corner'); v.replaceChild(f, w); f.appendChild(w); }
     if (m.type === 'intro') $('opening-title').focus({ preventScroll: true });
     if (firstQuest) $('quest-finished-title').focus({ preventScroll: true });
+    if (night) $('night-title').focus({ preventScroll: true });
   }
   function nightHtml(n) {
     const keep = t => esc(t).replace(/\([^)]*\)/g, m => m.replace(/ /g, '\u00a0')); // 괄호 덧붙임은 한 덩어리로 (줄이 바뀌면 통째로 다음 줄에 — 금액 바로 옆에서 끊기지 않게)
@@ -2139,7 +2258,7 @@
     const next = []; // 내일 일어날 것만 (고정비 · 원리금은 전날에 미리)
     for (const x of R.notices(S)) if (x.when === 'tomorrow') next.push('<span class="chip hot" title="내일 밤 현금에서 나갑니다">' + I('bill', '', 's') + esc(x.text) + '</span>');
     const g = n.goal || R.goalView(S);
-    return '<div class="win night corner"><h2>' + I('moon', '', 's') + n.day + '일째 밤</h2><h3>' + n.home + '에서 잠듭니다</h3>' +
+    return '<section class="win night corner" role="dialog" aria-modal="true" aria-labelledby="night-title"><h2 id="night-title" tabindex="-1">' + I('moon', '', 's') + n.day + '일째 밤</h2><h3>' + n.home + '에서 잠듭니다</h3>' +
       '<div class="n-cols"><div class="n-col"><h4>' + I('plus', '', 's') + '번 돈</h4>' + rows(n.income, 1) + '<div class="n-row sum"><span>합계</span><span class="gold" id="nightin">+' + won(rolls.nightin ? rolls.nightin.v : n.labor) + '</span></div></div>' +
       '<div class="n-col"><h4>' + I('minus', '', 's') + '쓴 돈</h4>' + rows(n.expense, -1) + '<div class="n-row sum"><span>합계</span><span id="nightout">' + (n.spent ? '−' : '') + won(rolls.nightout ? rolls.nightout.v : n.spent) + '</span></div></div></div>' +
       '<div class="n-big">' + (R.unlocked(S, 'stock') || n.invest ? I('chart', '투자 손익 (오늘)') + '<i>투자</i><b class="' + cls(n.invest) + '">' + sign(n.invest) + '</b>' : '') +
@@ -2151,7 +2270,7 @@
       (n.re ? '<div class="n-notes ' + cls(n.re.pct) + '" title="부동산 시세는 일요일 밤마다 움직입니다 — 집값 · 가진 집 · 상가 · 뚝딱건설이 따라갑니다">' + I('building', '', 's') + ' 부동산 시세 ' + pct(n.re.pct) + ' <span class="dim">(처음 대비 ' + pct(n.re.idx - 1) + ')</span></div>' : '') +
       (n.notes.length ? '<div class="n-notes">' + n.notes.map(x => '<div class="' + x.tone + '">' + esc(x.text) + '</div>').join('') + '</div>' : '') +
       '<div class="n-house" title="다음 목표까지 온 만큼">' + I(g.kind === 'top' ? 'crown' : 'key') + '<span class="gn">' + g.name + '</span><div class="bar"><div style="width:' + (clamp(g.pct, 0, 1) * 100).toFixed(1) + '%"></div></div><b>' + Math.floor(g.pct * 100) + '%</b><span class="dim">' + won(g.price) + '</span></div>' +
-      (next.length ? '<div class="n-next">' + next.join('') + '</div>' : '') + okBtn('다음 날') + '</div>';
+      (next.length ? '<div class="n-next">' + next.join('') + '</div>' : '') + okBtn('다음 날') + '</section>';
   }
   function optsHtml(m) { // 집 사기(대출 고르기) · 미리 갚기: 고를 것 한 줄씩, 숫자 키로 고르고 Enter
     const row = (ic, html, c) => '<div' + (c ? ' class="' + c + '"' : '') + '>' + I(ic) + '<span>' + html + '</span></div>';
@@ -2285,6 +2404,7 @@
 
   function render() {
     if (scene !== 'play') return;
+    if (stage.classList.contains('compact-layout') !== compactLayout()) fit();
     renderHud(); renderMe(); renderQuest(); renderToday(); renderBoard();
   }
 

@@ -24,7 +24,7 @@ const COUNT = () => {
   }
   return { chars, words, hangul, latin, digits, symbols, icons: root.querySelectorAll('svg').length };
 };
-async function measure(folder) {
+async function measure(folder, comparing = false) {
   const browser = await chromium.launch({ headless: true });
   const out = {};
   for (const name of Object.keys(STATES)) {
@@ -35,7 +35,19 @@ async function measure(folder) {
     await page.evaluate(STATES[name]); await step(40);
     for (let i = 0; i < 6; i++) { // 뜬 창은 닫고(특성은 첫째, 사건은 둘째), 잠깐 떠 있는 글이 사라질 때까지 기다린 뒤 센다
       const modal = await page.evaluate(() => window.game.state.modal); if (!modal) break;
-      await page.keyboard.press(modal === 'perk' ? 'Digit1' : modal === 'event' ? 'Digit2' : 'Space'); await step(60); await page.keyboard.press('Space'); await step(60);
+      // 비교용 옛 판의 카드에는 즉시 지급하는 조작이 남아 있다.
+      const legacyPerk = modal === 'perk' && comparing && await page.locator('#veil .pcard[data-do="perk"]').count();
+      if (modal === 'perk' && !legacyPerk) {
+        const [id, n] = await page.evaluate(() => {
+          const g = window.game, s = g.state.raw, id = s.offer[0];
+          if (g.state.guard) g.step(g.state.guard);
+          return [id, window.Rules.perk(s, id)];
+        });
+        await page.click('#perk-confirm'); await step(60);
+        if (await page.evaluate(id => window.Rules.perk(window.game.state.raw, id), id) !== n + 1) throw new Error('첫 특성 확정으로 보유 수가 하나 늘지 않음: ' + id);
+      } else {
+        await page.keyboard.press(legacyPerk ? 'Digit1' : modal === 'event' ? 'Digit2' : 'Space'); await step(60); await page.keyboard.press('Space'); await step(60);
+      }
     }
     await step(460);
     out[name] = await page.evaluate(COUNT);
@@ -45,7 +57,7 @@ async function measure(folder) {
   return out;
 }
 (async () => {
-  const now = await measure(dir), old = base ? await measure(base) : null;
+  const now = await measure(dir), old = base ? await measure(base, true) : null;
   const rows = Object.keys(now).map(k => ({ state: k, chars: now[k].chars, letters: now[k].hangul + now[k].latin, hangul: now[k].hangul, latin: now[k].latin, digits: now[k].digits, symbols: now[k].symbols, icons: now[k].icons, base: old ? old[k].chars : null, cut: old ? Math.round((1 - now[k].chars / old[k].chars) * 100) : null,
     baseLetters: old ? old[k].hangul + old[k].latin : null, cutLetters: old ? Math.round((1 - (now[k].hangul + now[k].latin) / (old[k].hangul + old[k].latin)) * 100) : null }));
   console.log(JSON.stringify(rows));
