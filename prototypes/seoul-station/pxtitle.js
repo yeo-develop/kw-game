@@ -437,7 +437,8 @@
       try { const r = fn.apply(this, arguments); if (r != null) return r; } catch (e) { if (window.console) console.warn('pxtitle', name, e); }
       return old[name] ? old[name].apply(this, arguments) : '';
     };
-    Old.title = safe('title', () => img('title', '아침의 서울역 광장', drawTitle));
+    Old.title = safe('title', (look = 0) => A.withWear('', look,
+      () => img('title_' + A.wearKey(), '아침의 서울역 광장', drawTitle)));
     Old.ending = safe('ending', kind => ENDING[kind] ? img('ending_' + kind, ENDING[kind][0], ENDING[kind][1]) : null);
     window.PxTitle = { drawTitle, drawTop, drawHome, drawHeroCheer, W, H }; // 견본 · 점검용
   } catch (e) {

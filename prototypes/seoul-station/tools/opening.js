@@ -6,6 +6,8 @@ module.exports = async function advanceOpening(page, targetStep = 5) {
       }
     });
     await page.waitForFunction(() => window.game.state.guard === 0);
-    await page.click('#veil .intro [data-do="ok"]');
+    const next = page.locator('#veil .intro [data-do="ok"]');
+    if (await next.isDisabled()) await page.locator('#veil [data-do="dream"]').first().click();
+    await next.click();
   }
 };

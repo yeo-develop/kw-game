@@ -746,6 +746,13 @@
     const one = (x, extra) => Object.assign({ type: x.def.id, name: x.def.name, icon: x.def.icon, kind: x.def.kind, sum: x.def.sum, head: x.def.head }, extra);
     return { season: sn, seasonName: SEASONS[sn], seasonLeft: left, nextSeason: SEASONS[(sn + 1) % 4], now: now ? one(now, { left: now.left, sleepPen: worldSleepPen(s) }) : null, next: nx ? one(nx, { acc: nx.acc, sure: !!nx.def.sure }) : null };
   }
+  function todayChange(s, id) {
+    const h = s.market.hist[id];
+    if (s.slot === 0 || !h?.length) return null;
+    const openIndex = h.length - 1 - Math.min(3, s.slot);
+    const base = h[Math.max(0, openIndex)];
+    return base > 0 ? { pct: s.market.px[id] / base - 1, fromOpen: openIndex >= 0 } : null;
+  }
   function todayNews(s) {
     const intel = s.market.brief && s.market.brief.day === s.day ? s.market.brief : null;
     return s.market.news.filter(n => n.day === s.day && (n.asset === 'coin' || visible(s, n.asset))).map(n => { // 아직 못 보는 종목의 소식은 안 보인다 (달나라코인은 부르는 쪽이 가린다)
@@ -881,12 +888,13 @@
       if (info.settle) { expense(s, HOMES[from].name + ' 고정비 (산 날만큼)', info.settle); s.stats.fixed += info.settle; }
       s.cash += info.refund - info.need; s.deposit = info.need; // 보증금: 살던 곳 것을 돌려받고 새로 건다 (순자산은 그대로)
     }
+    const stockOpened = to === 1 && !unlocked(s, 'stock');
     s.lease = info.lease; s.tier = to; s.movedDay = s.day; s.stats.maxTier = Math.max(s.stats.maxTier || 0, to);
-    ev(s, 'tier', { from, to, name: HOMES[to].name, unlock: info.swap ? '' : HOMES[to].unlock, up: true, lease: info.lease, deposit: to >= 2 ? info.need : 0, refund: info.refund, swap: !!info.swap });
+    ev(s, 'tier', { from, to, name: HOMES[to].name, unlock: info.swap || (to === 1 && !stockOpened) ? '' : HOMES[to].unlock, stockOpened, up: true, lease: info.lease, deposit: to >= 2 ? info.need : 0, refund: info.refund, swap: !!info.swap });
     if (to >= 2 && !s.addr) { s.addr = 1; creditAdd(s, T.credit_addr, '주소가 생김', 'age'); }
     if (info.lease === 'jeonse') { s.stats.jeonse = 1; creditAdd(s, T.credit_contract, '전세 계약', 'mix'); }
     const wk = won(weekCost(s));
-    sys(s, to === 1 ? '찜질방 입장. 인류는 지붕을 발명했습니다. 하룻밤 ' + won(saunaCost(s)) + '씩 나갑니다. 폰으로 주식 계좌도 열었습니다.'
+    sys(s, to === 1 ? '찜질방 입장. 인류는 지붕을 발명했습니다. 하룻밤 ' + won(saunaCost(s)) + '씩 나갑니다.'
       : to === 2 ? '고시원 입주. 예치금 ' + won(info.need) + '을 걸었습니다(나갈 때 돌려받음). 주소가 생겨 은행이 열렸고, 매주 일요일 밤 고정비 ' + wk + '이 나갑니다(끼니 포함).'
         : info.lease === 'jeonse' ? '원룸 전세 계약. 보증금 ' + won(info.need) + '을 걸었고(나갈 때 돌려받음) 월세가 없어 주 고정비는 ' + wk + '입니다.' + (info.swap ? '' : ' 코인과 부동산이 열렸습니다.')
           : '원룸 입주(월세). 보증금 ' + won(info.need) + ' · 주 고정비 ' + wk + '. 코인과 부동산이 열렸습니다. 숨만 쉬어도 나갑니다.', 'good');
@@ -1372,7 +1380,7 @@
     { id: 'survive', title: '오늘을 버텨라', desc: '세 칸을 다 쓰고 "하루 마치기"로 밤을 넘긴다.', cur: s => (s.day > 1 ? 1 : 0), goal: () => 1, unit: '일',
       reward: s => qcash(s, T.q_survive_cash), rtext: s => won(qamt(s, T.q_survive_cash)) },
     { id: 'roof', title: '지붕 아래에서 자라', desc: '찜질방으로 옮긴다. 자고 나면 체력이 더 많이 돌아오고, 폰으로 주식 계좌를 연다.', cur: s => (s.tier >= 1 ? 1 : 0), goal: () => 1, unit: '', go: 'move',
-      reward: s => { s.hp = Math.min(hpMax(s), s.hp + 10); }, rtext: '체력 +10 · 편의점 · 주식 · 공부 열림' },
+      reward: s => { s.hp = Math.min(hpMax(s), s.hp + 10); }, rtext: '체력 +10' },
     { id: 'meal', title: '든든하게 먹어라', desc: '가게에서 밥을 한 번 사 먹는다. 하루 한 번, 칸을 쓰지 않고 돈으로 체력을 채운다. 체력이 모자란 채 무리하면 쓰러진다.', cur: s => Math.min(1, s.stats.meals || 0), goal: () => 1, unit: '회', go: 'shop',
       skip: s => s.tier >= 3, reward: s => qcash(s, T.q_meal_cash), rtext: s => won(qamt(s, T.q_meal_cash)) },
     { id: 'first_stock', title: '첫 주식을 사라', desc: '아무 주식이나 한 주 이상(50,000원어치) 산다. 대장전자가 얌전하고, 튼튼은행은 일요일마다 배당을 준다.', cur: s => Math.min(s.stats.bought, 50000), goal: () => 50000, unit: '원', go: 'stock',
@@ -1829,13 +1837,13 @@
         s.re = { idx: 1, trend: 0, left: 3, next: T.re_flat, hint: 0.5, last: 0, hist: [1] }; s.props = {}; s.know = s.studied || 0; s.items = {}; s.wear = ''; s.look = 0; s.ate = 0; s.sick = 0; s.hosp = 0;
         s.dream = 'family'; s.dreamSet = 1; s.beats = [];
         m.gm = { phase: 'quiet', left: 14 };
-        for (const a of ASSETS) if (m.px[a.id] == null) { m.px[a.id] = a.px; m.hist[a.id] = Array(20).fill(a.px); m.chg[a.id] = 0; s.hold[a.id] = { units: 0, cost: 0, min: 0 }; }
+        for (const a of ASSETS) if (m.px[a.id] == null) { m.px[a.id] = a.px; m.hist[a.id] = [a.px]; m.chg[a.id] = 0; s.hold[a.id] = { units: 0, cost: 0, min: 0 }; }
         if (s.loan && s.loan.rate == null) s.loan.rate = T.loan_rate;
       }
       if (s.v === 4) { // v4: 알바 넷 · 종목 여덟 · 세상 사건 · 신용 항목이 없던 때. 하던 판은 그대로, 새것은 처음 값으로
         s.v = 5;
         for (const j of JOBS) if (s.jobs[j.id] == null) s.jobs[j.id] = 0;
-        for (const a of ASSETS) if (m.px[a.id] == null) { m.px[a.id] = a.px; m.hist[a.id] = Array(20).fill(a.px); m.chg[a.id] = 0; s.hold[a.id] = { units: 0, cost: 0, min: 0 }; }
+        for (const a of ASSETS) if (m.px[a.id] == null) { m.px[a.id] = a.px; m.hist[a.id] = [a.px]; m.chg[a.id] = 0; s.hold[a.id] = { units: 0, cost: 0, min: 0 }; }
         m.world = [];
         const age = s.addr ? T.credit_addr : 0; // 신용 항목: 주소 몫은 거래 기간에, 나머지는 상환 이력에 (그동안의 내역은 없다)
         s.cr = { pay: (s.credit == null ? T.credit_start : s.credit) - T.credit_start - age, debt: 0, age, asset: 0, mix: 0 }; s.crLog = []; s.crStreak = 0; s.crWeeks = 0; s.crSpend = 0; s.spent = 0; s.clBoost = 0;
@@ -1898,7 +1906,7 @@
     setTune, HOMES, ASSETS, create, acts, canAct, doJob, doRest, doStudy, endDay, nextDay,
     buy, sell, levOpen, levClose, levValue, levLiq, move, moveInfo, buyHouse, worth, invested, holdValue, housePrice, weekOf, bill, riseIn,
     homePrice, homeInfo, buyHome, repay, loanView, bizView, bizUp, BIZ, scale, goalView, declareTop,
-    skill, skipMult, setInt, quitJob, INT, unlocked, todayNews, intelView, questView, rnd2, won, num, save, load, weekCost, week, notices, holdings, denView, denBet, denLeave, SHOCKS,
+    skill, skipMult, setInt, quitJob, INT, unlocked, todayNews, todayChange, intelView, questView, rnd2, won, num, save, load, weekCost, week, notices, holdings, denView, denBet, denLeave, SHOCKS,
     hpMax, mealCost, saunaCost, sleepGain, studyAcc, perk, pickPerk, offerView, perksView, xpView, PERKS,
     eventView, choose, EVENTS, achList, codeOf, seedOf, dailySeed, resultCard, htText, accText,
     htAlert: s => !!(s.market && s.market.htAlert === s.day), // 오늘 한탕바이오 거래량 알림이 떴나

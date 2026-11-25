@@ -90,12 +90,20 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   want(await p.page.locator('.opening-slot').count() === 3, '오늘의 행동 3칸이 목표 화면에 빠짐');
   await advanceOpening(p.page, 3); await p.step(30); await p.shot('tut00_dream');
   want(await p.page.textContent('#opening-title') === '첫 각성 선물', '꿈 선택 앞에 첫 각성 선물 안내가 없음');
+  const gift = p.page.locator('#gift-confirm');
+  want(await gift.isDisabled() && await p.page.locator('.dcard.on, .dream-path').count() === 0, '선물을 고르기 전부터 선택 또는 해금 경로가 보임');
+  for (const key of ['Space', 'Space', 'Enter']) { await p.page.keyboard.press(key); await p.step(4); }
+  want(await gift.isDisabled(), 'Space 연타나 Enter로 선물 선택을 건너뜀');
   { const cards = await p.page.locator('.dcard').allTextContents();
     want(cards.length === 3 && /밤 체력 회복 \+8/.test(cards[0]) && /사업 매출 \+10%/.test(cards[1]) &&
       /임대수익 \+10%/.test(cards[2]), '꿈 카드 세 장에 비교할 효과 수치가 있어야 함');
     const emblems = await p.page.locator('.dream-emblem img').evaluateAll(images => images.filter(img => img.naturalWidth === 32).map(img => img.src));
     want(new Set(emblems).size === 3, '꿈마다 서로 다른 32픽셀 엠블럼이 있어야 함'); }
-  await advanceOpening(p.page, 4); await p.step(30); await p.shot('tut00_quest');
+  await p.page.keyboard.press('Digit1'); await p.step(4);
+  want(await gift.isEnabled() && await p.page.locator('.dcard.on, .dream-path').count() === 2, '숫자 키로 고른 선물이 확정 가능해지지 않음');
+  await gift.focus(); await p.page.keyboard.press('Space'); await p.step(4);
+  want(await gift.isVisible(), '선물 받기 버튼에 포커스가 있을 때 Space로 넘어감');
+  await p.page.keyboard.press('Enter'); await p.step(30); await p.shot('tut00_quest');
   want(await p.page.textContent('#opening-title') === '첫 끼니를 벌어라' &&
     /아무 알바 1회 완료/.test(await p.page.textContent('#veil .quest-objective')) &&
     /삼각김밥.*체력 \+10/.test(await p.page.textContent('#veil .quest-payment')), '시작 안내의 첫 퀘스트에 목표 또는 보상 카드가 빠짐');
@@ -177,6 +185,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.page.click('#board [data-do="move"]'); await p.step(30); await p.closeAll();
   s = await p.st(); b = await p.box();
   want(s.tier === 1 && s.coach === 'goal', '옮긴 뒤 안내가 "마무리"가 아님: ' + JSON.stringify(s)); geometry(b, 'goal'); log.push('5 ' + b.label + ' — ' + b.text);
+  want((await p.page.locator('#board .tabs .newly-unlocked').evaluateAll(tabs => tabs.map(tab => tab.dataset.arg))).join() === 'stock,info', '찜질방을 열었을 때 주식과 뉴스 탭에 해금 표시가 없음');
   want(b.side === 'down' && b.bubble.x + b.bubble.w <= b.board.x, '마무리 말풍선이 로드맵(다음 목표인 고시원 카드)을 가림');
   await p.shot('tut07_goal');
   await p.page.keyboard.press('Digit1'); await p.step(10); want(!(await p.st()).modal, '마무리 안내를 읽기 전에 다른 것이 눌림');
@@ -202,6 +211,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.G(() => { const S = window.game.state.raw; S.tier = 2; S.cash = 2330000; S.day = 5; S.movedDay = 3; S.quest = 4; window.game.render(); window.game.run('tab', 'stock'); }); await p.step(30); await p.closeAll();
   s = await p.st(); b = await p.box();
   want(s.coach === 'stock', '주식 탭을 처음 열 때 설명이 안 뜸: ' + JSON.stringify(s)); geometry(b, 'stock'); want(b.rings.length === 3, '주식 설명의 고리가 셋이 아님'); log.push(b.label + ' — ' + b.text);
+  want(await p.page.locator('#board [data-arg="stock"].newly-unlocked').count() === 0 && await p.page.locator('#board [data-arg="info"].newly-unlocked').count() === 1, '열어 본 탭의 해금 표시만 사라져야 함');
   await p.shot('tut10_stock');
   await p.G(() => window.game.run('buy', '100000')); await p.step(10); want(await p.G(() => window.game.state.raw.stats.bought === 0), '주식 설명을 읽기 전에 사짐');
   await p.page.click('[data-do="coachok"]'); await p.step(30);
@@ -210,9 +220,15 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
   await p.G(() => window.game.run('buy', '100000')); await p.step(10); want(await p.G(() => window.game.state.raw.stats.bought > 0), '설명을 닫은 뒤에도 못 삼');
   await p.closeAll();
   // 코인: 처음 탭을 열면 설명 대신 연습 창 (진짜 돈 아님) — 박자마다 맞는 버튼만 · 움직이는 동안 안 넘어감 · 결과 숫자 = 규칙의 식 · 판 상태 그대로 · 한 번만 · "연습"으로 다시 · 건너뛰기
-  await p.G(() => { const S = window.game.state.raw; S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; window.game.render(); window.__S0 = JSON.stringify(S); window.game.run('tab', 'coin'); }); await p.step(30);
+  await p.G(() => {
+    const g = window.game, S = g.state.raw;
+    S.tier = 3; S.cash = 9200000; S.day = 15; S.movedDay = 12; g.render();
+    window.__S0 = JSON.stringify({ ...S, seenTabs: [...S.seenTabs, 'coin'] });
+    g.run('tab', 'coin');
+  }); await p.step(30);
   s = await p.st();
   want(s.modal === 'drill' && !s.coach, '코인 탭을 처음 열 때 연습 창이 안 뜸: ' + JSON.stringify(s));
+  want(await p.G(() => window.__S0 === JSON.stringify(window.game.state.raw)), '코인 탭을 처음 열었을 때는 탭 확인 기록만 바뀌어야 함');
   const D = () => p.G(() => { const g = window.game, w = document.querySelector('#veil .win.drill'), t = sel => ((w && w.querySelector(sel)) || {}).textContent || '';
     const sr = document.getElementById('stage').getBoundingClientRect(), r = w ? w.getBoundingClientRect() : null;
     const small = w ? [...w.querySelectorAll('*')].filter(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 13.99).length : 0;
@@ -353,7 +369,7 @@ const BOX = () => { // 안내의 자리: 말풍선 · 고리 · 밝힌 곳 (1280
     await r.load(); await r.resume();
     want(await r.page.evaluate(() => {
       const s = window.game.state.raw;
-      return s.opening?.step === 4 && s.opening.dream === 'sign' && !s.dreamSet;
+      return s.opening?.step === 4 && s.opening.gift === 'sign' && !s.dreamSet;
     }), '중간에 새로 고치면 마지막 안내창과 꿈 선택이 남아야 함');
     await advanceOpening(r.page); await r.wait(700);
     want(await r.page.evaluate(() => window.game.state.raw.dream === 'sign'), '첫날 시작에 고른 꿈이 적용되지 않음');

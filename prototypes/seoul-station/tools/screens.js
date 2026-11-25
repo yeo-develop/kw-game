@@ -6,6 +6,7 @@
 //   3) 화면 목록(tools/screens.json: 묶음 · 파일 · 이름 · 설명)대로 index.html 한 장을 만든다 — 그림은 data URI 로 안에 넣는다(파일 하나 = 주소 하나인 곳에 그대로 올림).
 // node tools/screens.js <게임 폴더> <내보낼 폴더>     없는 그림이 있으면 그 이름을 적고 1 로 끝난다.
 const path = require('path'), fs = require('fs'), cp = require('child_process');
+const advanceOpening = require('./opening');
 const dir = path.resolve(process.argv[2] || path.join(__dirname, '..')), out = path.resolve(process.argv[3] || path.join(dir, 'evidence', 'screens'));
 fs.mkdirSync(out, { recursive: true });
 const sub = n => path.join(out, n);
@@ -28,6 +29,7 @@ async function extras() {
   await page.goto('file://' + path.join(dir, 'index.html') + '?manual=1&seed=5');
   const G = (fn, arg) => page.evaluate(fn, arg);
   await page.click('[data-do="new"]');
+  await advanceOpening(page);
   // st: 창이 막 뜬 직후에는 누름이 잠깐 막힌다(guard) — 그만큼 더 흘려보낸 뒤에 누른다
   await G(() => {
     const g = window.game;

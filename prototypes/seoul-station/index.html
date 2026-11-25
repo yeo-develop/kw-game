@@ -254,7 +254,12 @@
   .tabs { gap: 4px; }
   .tabs button { height: 26px; display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; box-sizing: border-box; color: var(--S); text-shadow: 0 2px 0 var(--B); }
   .tabs button.on { color: var(--k); text-shadow: none; border: 4px solid transparent; border-image: var(--sc-w) 4 fill / 4px; }
-  .tabs button.new { color: var(--Y); animation: blink 1s steps(1) infinite; }
+  .tabs button.news-unread { color: var(--Y); }
+  .tabs button.newly-unlocked { position: relative; }
+  .tabs button.newly-unlocked::after {
+    content: ''; position: absolute; right: -1px; top: -3px; width: 8px; height: 8px; box-sizing: border-box;
+    border: 1px solid var(--w); border-radius: 50%; background: var(--r); box-shadow: 0 0 0 1px var(--k); pointer-events: none;
+  }
   .pbody { position: absolute; left: 0; top: 36px; right: 0; bottom: 0; padding: 4px 2px 2px; box-sizing: border-box; }
   /* 로드맵: 열 단계를 길로 이은 S자 지도 (윗줄 1→5, 오른쪽 끝에서 꺾어 아랫줄 6→10) */
   .ladder { position: relative; display: flex; gap: 8px; height: 100%; }
@@ -342,6 +347,12 @@
   .chart canvas { display: block; width: 100%; height: 100%; }
   .chart .cl, .drill-chart .cl { position: absolute; white-space: nowrap; line-height: 16px; pointer-events: none; } /* 차트 위 글자 (날짜 · 진입 · 청산 · 산 값): 캔버스가 아니라 글자로 */
   .chart .cl.day { color: var(--E); background: var(--C); padding: 0 2px; } /* 날짜: 선과 겹쳐도 읽히게 바탕 한 칸 */
+  .chart canvas[role="slider"] { cursor: crosshair; }
+  .chart canvas:focus-visible { outline: 2px solid var(--B); outline-offset: -2px; }
+  .price-point, .price-tip { position: absolute; pointer-events: none; z-index: 1; }
+  .price-point { width: 10px; height: 10px; transform: translate(-50%, -50%); background: var(--Y); border: 2px solid var(--k); }
+  .price-tip { max-width: 100%; padding: 2px 5px; color: var(--k); background: var(--C); border: 2px solid var(--B); line-height: 18px; }
+  .price-tip.empty { left: 50%; top: 50%; transform: translate(-50%, -50%); }
   .mine-line { display: flex; gap: 10px; align-items: center; margin-top: 4px; min-height: 20px; white-space: nowrap; }
   .mine-line span { display: inline-flex; align-items: center; gap: 4px; }
   .order { margin-top: 4px; display: flex; gap: 4px; align-items: center; }
@@ -420,38 +431,42 @@
   .win.bad { border-image-source: var(--fr-red); }
   .win.bad h2 { border-image-source: var(--fr-rband); text-shadow: 0 2px 0 var(--R); }
   /* 레벨 업 · 돌발 사건 */
-  .perk-head { display: flex; align-items: center; gap: 10px; color: var(--B); }
+  .perk-head { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 5px 10px; }
   .perk-head h2 { font-size: 16px; }
-  .pcards { margin-top: 14px; display: grid; grid-template-columns: repeat(var(--perk-count), minmax(0, 1fr)); gap: 10px; }
-  .pcard { --effect-bg: #e4edf9; --effect-ink: #22487f; --effect-side: #3b69ad;
-    position: relative; min-width: 0; min-height: 44px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
-    text-align: left; color: var(--k); background: #fcf9ef; border: 2px solid var(--k); border-bottom-width: 5px;
-    overflow-wrap: anywhere; -webkit-tap-highlight-color: transparent; }
-  .pcard[data-arg="hustle"] { --effect-bg: #fff0bf; --effect-ink: #6d440f; --effect-side: #ad7221; }
-  .pcard.aug, .pcard[data-arg="quester"] { --effect-bg: #ffe7d9; --effect-ink: #793b2b; --effect-side: #b85b41; }
-  .pcard[aria-pressed="true"] { background: #f0f5fc; border-color: #234984; box-shadow: inset 0 0 0 2px #8fb5ec; }
+  .pcards { min-height: 0; margin: 4px -4px 0; padding: 4px; display: grid; grid-auto-rows: max-content; gap: 7px;
+    overflow: auto; overscroll-behavior: contain; scroll-padding: 4px; }
+  .pcard { --rail: var(--C); --rail-edge: var(--d);
+    display: grid; grid-template-columns: 62px minmax(0, 1fr); min-width: 0; min-height: 44px;
+    text-align: left; color: var(--k); background: var(--w) padding-box;
+    border: 9px solid var(--k); border-image: var(--fr-card) 9 fill / 9px;
+    overflow-wrap: anywhere; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .pcard[data-max="2"] { --rail: color-mix(in srgb, var(--l) 27%, var(--w)); --rail-edge: var(--l); }
+  .pcard.aug { --rail: color-mix(in srgb, var(--r) 23%, var(--w)); --rail-edge: var(--r); }
+  .pcard[aria-pressed="true"] { border-image-source: var(--fr-cardq); }
   .pcard:focus-visible { outline: 2px dashed var(--B); outline-offset: 2px; }
-  .pcard .key { position: absolute; right: 10px; top: 10px; }
-  .perk-icon { display: grid; place-items: center; width: 54px; height: 54px; background: var(--effect-bg); }
-  .perk-icon .ic { width: 44px; height: 44px; }
-  .perk-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; font-size: 26px; line-height: 30px; }
-  .perk-name small { font-size: 14px; line-height: 18px; color: var(--R); }
-  .pcard-effect { display: grid; gap: 3px; padding: 6px 8px; background: var(--effect-bg); border-left: 3px solid var(--effect-side); color: var(--effect-ink); }
-  .pcard-effect strong { font-size: 32px; line-height: 34px; }
-  .pcard-notes { display: grid; justify-items: start; gap: 4px; color: var(--E); }
-  .pcard-notes .con { color: var(--R); }
-  .pcard-notes .excl { display: flex; align-items: baseline; gap: 4px; padding: 2px 4px; border: 1px solid #e3b45d; background: #fff0cd; color: #6d440f; }
-  .pcard .have { margin-top: auto; padding-top: 6px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--E); }
+  .perk-rail { position: relative; display: grid; place-items: center; margin: -4px 0 -4px -4px;
+    padding: 23px 0 5px; background: var(--rail); border-right: 2px solid var(--rail-edge); }
+  .perk-rail .key { position: absolute; top: 2px; left: 2px; min-width: 18px; height: 19px; font-size: 14px; }
+  .perk-rail .ic { width: 42px; height: 42px; }
+  .perk-copy, .perk-details { display: grid; min-width: 0; gap: 3px; }
+  .perk-copy { padding: 1px 3px 2px 9px; }
+  .perk-name { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 7px; font-size: 24px; line-height: 26px; }
+  .perk-name small { padding: 0 3px; border: 1px solid var(--R); background: var(--rail); color: var(--R); font-size: 14px; line-height: 18px; }
+  .pcard-effect { font-size: 18px; line-height: 22px; }
+  .pcard-effect strong { color: var(--B); background: color-mix(in srgb, var(--l) 24%, var(--w)); padding: 0 2px; }
+  .perk-details .con { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; padding: 3px 5px;
+    border-left: 3px solid var(--R); background: color-mix(in srgb, var(--r) 16%, var(--w)); color: var(--R); }
+  .perk-details .excl, .perk-details .note, .pcard .have { color: var(--H); font-size: 15px; line-height: 18px; }
+  .perk-details .excl { display: flex; align-items: flex-start; gap: 4px; }
+  .perk-details .excl .ic { flex: none; }
+  .pcard .have { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
   .perk-marks { display: flex; gap: 3px; }
-  .perk-marks i { width: 6px; height: 6px; border: 1px solid #5b75a1; }
-  .perk-marks .on { background: #345da2; }
-  .lvup .foot { justify-content: space-between; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid #debb80; }
-  .perk-keys { color: var(--E); }
-  #veil #perk-confirm { min-height: 48px; height: auto; margin-left: auto; padding: 4px 14px; white-space: normal;
-    color: var(--w); background: var(--B); border: 2px solid var(--k); border-bottom-width: 5px;
-    box-shadow: inset 0 2px 0 var(--b); -webkit-tap-highlight-color: transparent; }
-  #veil #perk-confirm:active { border-width: 5px 2px 2px; }
-  #veil.arming #perk-confirm { background: var(--L); color: var(--E); box-shadow: none; }
+  .perk-marks i { width: 9px; height: 7px; border: 1px solid var(--n); background: var(--c); }
+  .perk-marks .on { border-color: var(--B); background: var(--l); }
+  .win.lvup .foot { flex: none; justify-content: space-between; flex-wrap: wrap; margin-top: 5px; padding-top: 6px; border-top: 1px solid var(--d); }
+  .perk-keys { color: var(--H); font-size: 15px; }
+  #veil #perk-confirm { min-height: 48px; height: auto; margin-left: auto; white-space: normal; touch-action: manipulation; }
+  #veil.arming #perk-confirm { --bt: var(--bt-e); --btd: var(--bt-e); color: var(--E); }
   .lock { color: var(--E); } /* 잠긴 것: 회색 틀 버튼(.btn.lock · .seg button.lock) + 자물쇠 (반투명으로 바탕이 비치지 않게) */
   .win.evt { width: 580px; }
   .win.pop.wide { width: 680px; } .win.pop.wide.buy { width: 980px; }
@@ -933,6 +948,7 @@
   body > #veil .quest-layout { grid-template-columns: 1fr; gap: 7px; }
   .win.story { border-image-source: var(--fr-cardq); } .win.story .st { line-height: 26px; }
   .t-looks { margin-top: 8px; display: flex; align-items: center; gap: 6px; } .t-looks label { color: var(--E); }
+  .t-hero { display: none; }
   .look { width: 40px; height: 48px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border: 6px solid transparent; border-image: var(--fr-chip) 6 fill / 6px; } .look.on { border-image-source: var(--fr-chipy); } .look img { width: 22px; height: 34px; display: block; }
   .e-box .epi { color: var(--B); }
   .sbtn.on { --bs: var(--bs-y); --bsd: var(--bs-y-d); }
@@ -995,6 +1011,7 @@
   .compact-layout .t-form { display: grid; grid-template-columns: auto minmax(0, 1fr); }
   .compact-layout .t-form input { width: 100%; min-height: 44px; }
   .compact-layout .t-looks { flex-wrap: wrap; }
+  .compact-layout .t-hero, .compact-layout .t-hero img { display: block; width: 44px; height: 68px; }
   .compact-layout .t-looks .look, .compact-layout .rec button { min-width: 44px; min-height: 44px; }
   .compact-layout #s-play { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
   .compact-layout #s-play > * { flex: none; }
@@ -1051,24 +1068,22 @@
   body > #veil .win { padding: 6px 7px 8px; }
   body > #veil .win .btn { min-width: 44px; min-height: 44px; }
   body > #veil .win:not(.mg) h3 { font-size: 24px; line-height: 28px; }
-  body > #veil.perk-veil { padding: 12px; }
-  body > #veil > .win.lvup { width: min(100%, 880px); padding: 16px; }
-  body > #veil .win.lvup h3 { margin-top: 10px; font-size: 32px; line-height: 36px; }
-  @media (max-width: 610px), (max-width: 900px) and (max-height: 430px) {
-    body > #veil.perk-veil { padding: 8px; }
-    body > #veil > .win.lvup { width: min(100%, 480px); padding: 8px; }
-    body > #veil .win.lvup h3 { font-size: 24px; line-height: 28px; }
-    .pcards { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 10px; }
-    .pcard { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 5px 8px; padding: 8px; }
-    .pcard .key, .perk-keys { display: none; }
-    .perk-icon { grid-row: 1 / 3; width: 40px; height: 40px; }
-    .perk-icon .ic { width: 32px; height: 32px; }
-    .perk-name { font-size: 20px; line-height: 24px; }
-    .pcard-effect, .pcard-notes, .pcard .have { grid-column: 2; }
-    .pcard-effect { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; padding: 4px 6px; }
-    .pcard-effect strong { font-size: 24px; line-height: 26px; }
-    .pcard .have { padding-top: 2px; }
+  body > #veil > .win.lvup { display: flex; flex-direction: column; width: min(100%, 566px);
+    max-height: calc(100dvh - 16px); padding: 5px 8px 7px; }
+  body > #veil .win.lvup h3 { margin: 0; font-size: 27px; line-height: 30px; }
+  @media (max-width: 470px) {
+    body > #veil > .win.lvup { padding-inline: 5px; }
+    body > #veil .win.lvup h3 { font-size: 22px; line-height: 25px; }
+    .pcard { grid-template-columns: 45px minmax(0, 1fr); }
+    .perk-rail .ic { width: 32px; height: 32px; }
+    .perk-copy { padding-left: 7px; }
+    .perk-name { font-size: 21px; line-height: 23px; }
+    .pcard-effect { font-size: 16px; line-height: 20px; }
+    .perk-details .con { gap: 4px; font-size: 15px; line-height: 18px; }
     #perk-confirm { width: 100%; }
+  }
+  @media (max-width: 470px), (pointer: coarse) {
+    .perk-keys, #perk-confirm .key { display: none; }
   }
   body > #veil .n-cols { grid-template-columns: 1fr; gap: 8px; }
   body > #veil .n-big { grid-template-columns: 20px 50px minmax(0, 1fr); }

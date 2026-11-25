@@ -31,6 +31,12 @@
     const LOOKS = [null, { b: 'R', l: 'r' }, { b: 'G', l: 'g' }, { b: 'E', l: 'e' }]; // 후드 색: 파랑(처음) · 빨강 · 초록 · 회색
     const WEARS = { vest: { b: 'O', l: 'o' }, padding: { b: 'k', l: 'E', E: 'k' }, suit: { b: 'k', l: 'B', E: 'B' }, gold: { b: 'O', l: 'y', E: 'o' } }; // 작업 조끼 · 롱패딩 · 정장 · 금빛 운동복
     function setWear(id, look) { WEAR = WEARS[id] || null; LOOK = LOOKS[look | 0] || null; WKEY = (WEAR ? id : '') + '_' + (look | 0); }
+    function withWear(wear, look, draw) {
+      if (wear == null) return draw();
+      const w0 = WEAR, l0 = LOOK, k0 = WKEY;
+      setWear(wear, look);
+      try { return draw(); } finally { WEAR = w0; LOOK = l0; WKEY = k0; }
+    }
     function P(g, x, y, w, h, k) {
       let kk = k;
       if (HERO_ON) { const o = WEAR || (MAP && MAP.outfit ? MAP : LOOK); if (o && o[kk]) kk = o[kk]; if (MAP && !MAP.outfit && MAP[kk]) kk = MAP[kk]; }
@@ -1277,18 +1283,15 @@
     old.prop = old.hero = () => '';
     Old.prop = safe('prop', (id, gray) => PROP[id] ? img('prop_' + id + (gray ? 'g' : ''), 32, 32, PROP_NAME[id] + (gray ? ' (잠김)' : ''), g => { MAP = gray ? GRAY : null; try { PROP[id](g); } finally { MAP = null; } }) : null);
     // 주인공만 (22×34, 머리 삐침까지): wear 를 주면 그 옷을 입은 모습 (가게의 옷 그림), 안 주면 지금 입은 대로 (로드맵의 "지금 여기")
-    Old.hero = safe('hero', (wear, look) => {
-      const w0 = WEAR, l0 = LOOK, k0 = WKEY;
-      if (wear != null) setWear(wear, look);
-      try { return img('hero_' + WKEY, 22, 34, '나', g => { MAP = null; drawHero(g, 0, 3, 'open'); }); } finally { WEAR = w0; LOOK = l0; WKEY = k0; }
-    });
+    Old.hero = safe('hero', (wear, look) => withWear(wear, look,
+      () => img('hero_' + WKEY, 22, 34, '나', g => { MAP = null; drawHero(g, 0, 3, 'open'); })));
     Old.die = safe('die', v => { const k = Math.max(1, Math.min(6, Math.round(Number(v) || 1))); return img('die' + k, 16, 16, '주사위 ' + k, g => drawDie(g, k)); });
     Old.cup = safe('cup', () => img('cup', 32, 32, '주사위 컵', drawCup));
 
     // 2단계에서 다시 쓸 그리는 함수들
     window.PxArt = {
       COL, XC, GRAY, PHASES, HERO, mk, P, box, map, disc, line, dither, sparkle,
-      setMap: m => { MAP = m || null; }, setWear, wearKey: () => WKEY, PROP, LOOKS, WEARS,
+      setMap: m => { MAP = m || null; }, setWear, withWear, wearKey: () => WKEY, PROP, LOOKS, WEARS,
       drawHero, drawHeroTop, drawHeroLegs, drawStatusWin, drawBenchBack, drawBenchSeat, drawLamp, lightPool,
       drawPigeon, drawTree, drawFlyers, drawCloud, drawSky, drawStars, drawMoon, drawStation, drawTower, drawFar,
       sceneStation, drawBuilding: (g, t) => BUILD[t](g), drawDie, drawCup, JOB, ACT, ASSET,

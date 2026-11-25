@@ -21,6 +21,7 @@
   const GUIDE = params.get('tut') === '1' || (params.get('tut') !== '0' && !MANUAL); // 처음 하는 사람을 위한 안내를 쓰는 창인가 (점검 도구는 ?tut=1 일 때만)
   const SAVE = 'seoul-station-save-v1', RUNS = 'seoul-station-runs', META = 'seoul-station-meta-v1';
   const OPENING_TITLES = ['서울역 벤치', '상태 진단', '우리의 목표', '첫 각성 선물', '첫 퀘스트'];
+  const GIFT_STEP = 3;
   const DREAM_CARDS = {
     family: {
       icon: 'hp', effect: '밤 체력 회복', amount: () => '+' + num(tune.dream_family),
@@ -48,7 +49,8 @@
 
   let scene = 'title', S = null; // S = 규칙의 상태 (window.game.state 가 요약해서 보여 줌)
   let persistOpening = true;
-  const ui = { joff: null, coin: 'coin', tab: 'road', sview: 'market', sel: 'daejang', qty: 1, bamt: 0, lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, fresh: {}, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
+  const ui = { joff: null, coin: 'coin', tab: 'road', sview: 'market', sel: 'daejang', qty: 1, bamt: 0, lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, newsUnread: false, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
+  const choosingGift = () => ui.modal?.type === 'intro' && S.opening.step === GIFT_STEP;
   const infoPopup = createInfoPopup($('info-popup'), () => scene === 'play' && !ui.modal);
 
   // 판 밖에 남는 것: 업적 · 기록 · 설정 (판 저장과 따로)
@@ -241,6 +243,12 @@
     if (infoPopup.handleKey(e)) return;
     const activate = e.code === 'Enter' || e.code === 'Space';
     const button = e.target instanceof Element && e.target.closest('button');
+    if (choosingGift()) {
+      if (e.code === 'Space') { e.preventDefault(); return; }
+      if (e.code === 'Enter' && button?.matches('.dcard.on')) {
+        e.preventDefault(); if (!e.repeat) hit.push(e.code); return;
+      }
+    }
     if (ui.modal?.type === 'perk') {
       if (e.code === 'Tab') {
         e.preventDefault();
@@ -248,10 +256,12 @@
         const at = buttons.indexOf(document.activeElement);
         const next = at < 0 ? (e.shiftKey ? buttons.length - 1 : 0) : (at + (e.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
         buttons[next].focus();
-      } else if (activate) {
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!e.repeat && !e.isComposing && !e.ctrlKey && !e.altKey && !e.metaKey) $('perk-confirm').click();
+      } else if (e.code === 'Space') {
         if (e.repeat || !veil.contains(button)) e.preventDefault();
-      }
-      else if (!e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) key(e.code);
+      } else if (!e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) key(e.code);
       return;
     }
     if (ui.modal?.type === 'night' && e.code === 'Tab') {
@@ -260,7 +270,7 @@
       return;
     }
     if (activate && button && (!ui.modal || button.closest('.intro, .quest-finished') ||
-        (veil.contains(button) && (button.matches('[data-do="ev"]') || (ui.modal.pre && button.closest('.mg')))))) {
+        (veil.contains(button) && (button.matches('[data-do="ev"], [data-do="stockopen"]') || (ui.modal.pre && button.closest('.mg')))))) {
       if (e.repeat) e.preventDefault();
       return;
     }
@@ -311,14 +321,25 @@
       seed = CONFIG.seed + runs * 101; // 판마다 시세가 다르게
     }
     S = R.create(seed, ui.name); R.setLook(S, meta.look || 0);
-    S.opening = { step: 0, dream: R.dreamList()[0].id }; persistOpening = persist;
+    S.opening = { step: 0, gift: null }; S.seenTabs = []; persistOpening = persist;
     ui.tut = GUIDE && meta.tut !== 2; // 안내를 끝낸 적이 없으면 첫날을 따라가며 알려 준다
     const mark = ui.tut ? 1 : meta.tut === 1 ? 0 : meta.tut; // "보는 중"(1)은 늘 지금 판을 가리킨다: 안내 없이 연 새 판이 보던 판을 갈아 치우면 "안 봄"으로 되돌림
     meta.tut = mark; meta.runs++; saveMeta(); // 판 수는 시작한 판으로 센다 (끝이 멀어서)
     begin();
   }
   function begin() {
-    ui.tab = R.unlocked(S, 'stock') ? 'stock' : 'road'; ui.sview = 'market'; ui.sel = 'daejang'; ui.qty = 1; ui.bamt = 0; ui.fresh = {}; ui.flash = {}; ui.queue = []; ui.modal = null; ui.ending = false; ui.say = null; ui.sayT = 0; ui.newAch = [];
+    if (S.opening && !('gift' in S.opening)) {
+      const old = S.opening.dream;
+      // 예전 저장의 첫 카드는 기본 선택이었으므로 선물 단계를 지난 경우에만 확정된 것으로 본다.
+      S.opening.gift = Object.hasOwn(DREAM_CARDS, old) && (S.opening.step > GIFT_STEP || old !== R.dreamList()[0].id) ? old : null;
+      delete S.opening.dream;
+    }
+    if (S.opening?.step > GIFT_STEP && !S.opening.gift) S.opening.step = GIFT_STEP;
+    if (!Array.isArray(S.seenTabs)) {
+      S.seenTabs = tabsOpen({ ...S, tier: R.topTier(S) });
+      if (S.unseen?.some(m => m.stockOpened)) S.seenTabs = S.seenTabs.filter(t => t !== 'stock' && t !== 'info');
+    }
+    ui.tab = R.unlocked(S, 'stock') && S.seenTabs.includes('stock') ? 'stock' : 'road'; ui.sview = 'market'; ui.sel = 'daejang'; ui.qty = 1; ui.bamt = 0; ui.newsUnread = false; ui.flash = {}; ui.queue = []; ui.modal = null; ui.ending = false; ui.say = null; ui.sayT = 0; ui.newAch = [];
     if (S.pending) { const p = typeof S.pending === 'string' ? { id: S.pending, n: 1 } : S.pending; S.pending = null; if (R.quitJob(S, p.id, p.n)) S.log.push({ day: S.day, text: '하다 만 알바는 대충 한 것으로 처리했습니다.', tone: 'warn' }); } // 하는 중에 새로 고침: 칸은 반드시 쓴다 (예전 저장은 알바 이름 하나 = 중)
     const missed = (S.ach || []).filter(id => !meta.ach[id]); // 알림이 뜨기 전에 새로 고쳐서 판 저장에만 남은 업적
     if (missed.length) { for (const id of missed) meta.ach[id] = 1; saveMeta(); }
@@ -370,7 +391,7 @@
         ui.askNew = false; sfx.up(); newGame(seed);
         saveNow(); // 새 판을 고른 순간 하던 판의 저장을 덮는다 ("보는 중"인 안내가 예전 판에 붙지 않게). ?scene=play 로 바로 여는 점검 길은 저장을 건드리지 않는다
       } else if (what === 'continue') { const s = hasSave(); if (s) { S = s; persistOpening = true; ui.tut = GUIDE && meta.tut === 1; sfx.click(); begin(); } }
-      else if (what === 'look') { meta.look = clamp(Number(arg) || 0, 0, 3); saveMeta(); sfx.click(); renderTitle(); }
+      else if (what === 'look') { meta.look = clamp(Number(arg) || 0, 0, 3); saveMeta(); sfx.click(); renderTitleLook(); }
       else if (what === 'tuttoggle') {
         if (meta.tut === 2) { guideOn(); toast(I('info') + '<span>새 판을 시작하면 첫날을 따라가며 알려 줍니다</span>', 'tip', 260); }
         else { guideOff(); toast(I('info') + '<span>첫 판 안내를 껐습니다</span>', 'tip', 200); }
@@ -390,11 +411,12 @@
       if (m.type === 'drill') { drillRun(what, arg); return; }
       if (what === 'ok') closeModal(true);
       else if (what === 'no') closeModal(false);
+      else if (what === 'stockopen' && m.stockOpened && R.unlocked(S, 'stock')) closeModal(true, true);
       else if (what === 'opt' && m.opts) { const i = Number(arg); if (m.opts[i]) { m.pick = i; sfx.click(); renderVeil(); } } // 집 사기 · 미리 갚기: 고르고 Enter
       else if (what === 'studyasset' && m.type === 'study') studyPick(arg);
       else if (what === 'studygo' && m.type === 'study') studyGo();
-      else if (what === 'dream' && m.type === 'intro' && S.opening.step === 3 && R.dreamList().some(d => d.id === arg)) {
-        S.opening.dream = arg; if (persistOpening) saveNow(); sfx.click();
+      else if (what === 'dream' && choosingGift() && Object.hasOwn(DREAM_CARDS, arg)) {
+        S.opening.gift = arg; if (persistOpening) saveNow(); sfx.click();
         const focusedChoice = $('veil').contains(document.activeElement) && document.activeElement.classList.contains('dcard');
         for (const button of $('veil').querySelectorAll('.dcard')) {
           const selected = button.dataset.arg === arg;
@@ -403,6 +425,7 @@
           if (selected && focusedChoice) button.focus();
         }
         $('opening-dream').innerHTML = openingDream();
+        $('gift-confirm').disabled = false;
       }
       else if (what === 'copy' && m.type === 'act1') copyCard('act1');
       else if (what === 'why') deny(arg);
@@ -431,7 +454,9 @@
     if (what === 'jpage') { const p = jobPage(), to = clamp(p.off + Number(arg) * JOBS_SHOWN, 0, p.max); if (to !== p.off) { ui.joff = to; sfx.click(); renderToday(); ui.coachDirty = true; } return; }
     if (what === 'coinsel') { if (!S.lev && R.visible(S, arg)) { ui.coin = arg; sfx.click(); renderBoard(); } return; }
     if (what === 'tab') {
-      ui.tab = arg; ui.fresh[arg] = false; if (arg === 'stock' && ui.sview === 'detail' && !R.visible(S, ui.sel)) ui.sview = 'market'; sfx.click(); renderQuest(); renderBoard();
+      if (!tabsOpen().includes(arg)) return;
+      if (visitTab(arg)) saveNow();
+      if (arg === 'stock' && ui.sview === 'detail' && !R.visible(S, ui.sel)) ui.sview = 'market'; sfx.click(); renderQuest(); renderBoard();
       if (arg === 'coin' && GUIDE && !meta.seen.coin && !S.lev && R.unlocked(S, 'coin')) openModal(drillNew()); // 코인 탭을 처음 열면: 설명 대신 직접 눌러 보는 연습 (진짜 돈 아님)
       return;
     }
@@ -601,9 +626,10 @@
 
   function key(code) {
     const m = ui.modal;
+    if (code === 'Space' && choosingGift()) return;
     if (m?.type === 'perk') {
       const n = /^(?:Digit|Numpad)([1-3])$/.exec(code);
-      if (n && ui.guard === 0) selectPerk(S.offer[Number(n[1]) - 1]);
+      if (n && ui.guard === 0) selectPerk(S.offer[Number(n[1]) - 1], true);
       return;
     }
     if (code === 'KeyM') { setMute(!ui.mute); return; }
@@ -648,8 +674,11 @@
   // ── 규칙이 쌓아 둔 사건을 화면으로 ──
   function drain() {
     const evs = S.ev.splice(0);
+    if (evs.some(e => e.t === 'trade')) rollNow('cash', ui.cash = S.cash);
     const homeQuest = evs.some(e => e.t === 'quest_done' && /^(roof|address|oneroom|jeonse)$/.test(e.quest.id)); // 이사로 끝난 퀘스트 창이 "열림"을 이미 알려 줌
     const flies = [], quests = { done: [], skipped: [], next: null, at: -1 }; // 한꺼번에 끝난 퀘스트는 창 한 장으로 모은다
+    const stockOpened = evs.find(e => e.t === 'tier' && e.stockOpened);
+    const stockQuest = !!stockOpened && evs.some(e => e.t === 'quest_done' && e.quest.id === 'roof');
     const heldShock = evs.some(e => e.t === 'shock' && e.held), liqNow = evs.some(e => e.t === 'liq'); // 내 것에 속보가 터진 칸: 도장 대신 속보 띠가 한 번 (청산까지 가면 흔들림은 청산이)
     for (let i = 0; i < evs.length; i++) {
       const e = evs[i];
@@ -673,7 +702,7 @@
       else if (e.t === 'borrow' && !e.auto) toast(I('bank') + '<div><span class="lab">마이너스 통장</span> <b>+' + cwon(e.amt) + '</b> · 빚 ' + cwon(e.balance) + '</div>', 'tip', 280);
       else if (e.t === 'prop') toast(I('building') + '<div><span class="lab">' + esc(e.name) + (e.side === 'buy' ? ' 삼' : ' 팖') + '</span> <b>' + cwon(e.amt) + '</b>' + (e.side === 'sell' ? ' · <b class="' + cls(e.pnl) + '">손익 ' + csign(e.pnl) + '</b>' : '') + '</div>', '', 300);
       else if (e.t === 'credit' && (Math.abs(e.delta) >= 20 || e.grade !== e.was)) toast(I('bank') + '<div><span class="lab">신용점수</span> <b class="' + (e.delta > 0 ? 'good' : 'bad') + '">' + (e.delta > 0 ? '+' : '−') + Math.abs(e.delta) + '</b> · ' + e.score + '점 ' + e.grade + '등급</div>', e.delta > 0 ? '' : 'deny', 300);
-      else if (e.t === 'know') { toast(I('book') + '<div><span class="lab">투자 공부 ' + e.lv + '단계</span> <b>' + esc(e.name) + '</b></div>', '', 360); sfx.level(); burst(860, 360, 36, 2.4); ui.fresh.info = ui.tab !== 'info'; }
+      else if (e.t === 'know') { toast(I('book') + '<div><span class="lab">투자 공부 ' + e.lv + '단계</span> <b>' + esc(e.name) + '</b></div>', '', 360); sfx.level(); burst(860, 360, 36, 2.4); ui.newsUnread = ui.tab !== 'info'; }
       else if (e.t === 'alert') toast(I('warn') + '<div><span class="lab">속보 경보</span> <b>' + esc(e.name) + '</b> · 오늘 큰 소식</div>', 'gap up', 420);
       else if (e.t === 'world') { // 세상 사건: 닥치면 창 한 장(보기 전에 새로 고쳐도 다시 뜨게 판 저장에 남김 — 수리비 · 체력은 이미 반영돼 있으니 까닭을 못 보면 안 된다), 빗나간 예보는 알림만
         if (e.miss) toast(I(e.icon) + '<div><span class="lab">예보가 빗나갔다</span> <b>' + esc(e.text) + '</b></div>', '', 420);
@@ -681,7 +710,7 @@
       }
       else if (e.t === 'merge') toast(I('info') + '<div><span class="lab">' + esc(e.name) + ' ' + e.by + ':1 병합</span> <b>표시 값만 ' + e.by + '배</b> · 손익은 그대로</div>', 'tip', 480);
       else if (e.t === 'promo') toast(I('rocket') + '<div><span class="lab">방송 효과</span> <b>오늘 사업 매출 +' + Math.round(e.pct * 100) + '%</b></div>', '', 360);
-      else if (e.t === 'forecast') { const t = x => '<div><span class="lab">내일 예보</span> <b>' + esc(e.name) + '</b>' + x + '</div>'; toast(I(e.icon) + fitLine([t(' · ' + esc(e.sum)), t(' · 뉴스 탭에서 본다'), t('')]), 'gap up', 480); ui.fresh.info = ui.tab !== 'info'; }
+      else if (e.t === 'forecast') { const t = x => '<div><span class="lab">내일 예보</span> <b>' + esc(e.name) + '</b>' + x + '</div>'; toast(I(e.icon) + fitLine([t(' · ' + esc(e.sum)), t(' · 뉴스 탭에서 본다'), t('')]), 'gap up', 480); ui.newsUnread = ui.tab !== 'info'; }
       else if (e.t === 'dream') { ui.queue.push({ type: 'story', e }); }
       else if (e.t === 'tick') { for (const id in e.chg) ui.flash[id] = e.chg[id]; if (!heldShock) stamps(e.chg); }
       else if (e.t === 'shock') ui.queue.push({ type: 'shock', e, still: liqNow }); // 속보 띠: 다른 창과 같은 줄에 서서 하나씩
@@ -691,10 +720,11 @@
       else if (e.t === 'quest_new') { quests.next = e.quest; ping(); } // 마지막에 나온 것이 지금 할 퀘스트
       else if (e.t === 'perk') ping();
       else if (e.t === 'tier') {
-        if (e.up && e.to === 1) { ui.fresh.stock = true; ui.fresh.info = true; }
-        if (e.up && e.to === 2) ui.fresh.bank = true;
-        if (e.up && e.to === 3 && !e.swap) { ui.fresh.coin = true; ui.fresh.realty = true; }
-        if (e.up && (!homeQuest || e.swap) && e.to !== 4) ui.queue.push({ type: 'tier', e }); // 내 집은 1막 끝 창이 알려 줌
+        if (e.up && e.to !== 4 && (e.stockOpened ? !stockQuest : !homeQuest || e.swap)) { // 내 집은 1막 끝 창이 알려 줌
+          const m = { type: 'tier', e, stockOpened: !!e.stockOpened };
+          ui.queue.push(m);
+          if (m.stockOpened) rememberNotice(m);
+        }
         ui.joff = null; // 새 일이 열렸을 수 있다: 알바 카드는 다시 새로 열린 일부터
         meta.bestTier = Math.max(meta.bestTier || 0, e.to); saveMeta();
       }
@@ -705,9 +735,9 @@
       else if (e.t === 'ach') { ui.newAch.push(e.id); if (!meta.ach[e.id]) { meta.ach[e.id] = 1; saveMeta(); } toast(I(e.icon) + '<div><span class="lab">업적</span> <b>' + esc(e.name) + '</b></div>', '', 300); sfx.ding(); } // 규칙(achTick)이 판마다 한 번만 낸다 (S.ach 에 남아 이어하기 · 새로 고침 뒤에도 다시 안 냄)
     }
     if (quests.done.length) {
-      const m = { type: 'quest', done: quests.done, skipped: quests.skipped, next: quests.next };
+      const m = { type: 'quest', done: quests.done, skipped: quests.skipped, next: quests.next, stockOpened: stockQuest };
       ui.queue.splice(quests.at, 0, m);
-      if (firstQuestDone(m)) rememberNotice(m);
+      if (firstQuestDone(m) || m.stockOpened) rememberNotice(m);
     }
     else for (const q of quests.skipped) toast(I('skip') + fitLine(['<div><span class="lab">때가 지나 건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>', '<div><span class="lab">건너뛴 퀘스트</span> <b>' + esc(q.title) + '</b></div>']), '', 300);
     if (!ui.modal && !ui.queue.length && !S.offer && !S.event && !ui.ending) for (const f of flies) { fly(f[0], f[1], f[2]); if (f[3]) coins(f[2], f[3]); } // 창이 뜰 참이면 창 위에 겹치므로 내지 않음 (숫자는 위쪽 띠에서 굴러감)
@@ -939,9 +969,10 @@
     renderVeil();
     veil.scrollTop = 0;
   }
-  function closeModal(yes) {
+  function closeModal(yes, openStock = false) {
     const m = ui.modal;
     if (!m || m.type === 'perk' || m.type === 'den' || (m.type === 'event' && !m.done)) return; // 고르기 전에는 닫히지 않음 (도박장은 "그만"으로만)
+    if (yes && choosingGift() && !S.opening.gift) return;
     const hadFocus = veil.contains(document.activeElement);
     hold(16);
     if (m.type === 'mg' && m.pre) { if (!yes) { ui.modal = null; sfx.click(); renderVeil(); render(); } return; } // 돌아가기: 아무것도 쓰지 않는다
@@ -957,7 +988,7 @@
     }
     if (m.type === 'intro') {
       if (yes && S.opening.step === OPENING_TITLES.length - 1) {
-        R.setDream(S, S.opening.dream);
+        R.setDream(S, S.opening.gift);
         delete S.opening;
       } else {
         S.opening.step = Math.max(0, S.opening.step + (yes ? 1 : -1));
@@ -974,11 +1005,17 @@
       if (yes) { if (m.type === 'buy') { if (R.buyHome(S, m.to, o.loan, o.lease)) sfx.up(); } else if (m.type === 'lease') { if (R.move(S, 3, o.lease)) sfx.up(); } else if (R.repay(S, o.amt)) sfx.pay(); }
       done(); return;
     }
-    if (m.type === 'act1' || m.type === 'biz' || m.type === 'world' || m.type === 'foreclose' || (m.type === 'quest' && firstQuestDone(m))) {
+    if (openStock) { ui.sview = 'market'; visitTab('stock'); }
+    if (m.stockOpened || m.type === 'act1' || m.type === 'biz' || m.type === 'world' || m.type === 'foreclose' || (m.type === 'quest' && firstQuestDone(m))) {
       S.unseen = (S.unseen || []).filter(x => x.type !== m.type); saveNow(); // 본 창은 저장에서 지움
     }
     ui.modal = null; sfx.click(); renderVeil(); pump(); render();
-    if (hadFocus) focusAfterModal();
+    if (openStock && !ui.modal) {
+      const tab = $('board').querySelector('.tabs [data-arg="stock"]');
+      if (compactLayout()) tab.scrollIntoView({ block: 'start' });
+      tab.focus({ preventScroll: true });
+    }
+    else if (hadFocus) focusAfterModal();
   }
   function focusAfterModal() {
     if (veil.contains(document.activeElement)) return;
@@ -1129,7 +1166,7 @@
     earn: { n: 4, at: 'right', ring: ['#board .rung.next'], lit: ['#quest', '#today', '#me', '#hud'], // 찜질방 요금이 없을 때: 막지 않고, 벌 수 있게 오늘 칸을 밝혀 둔다
       html: () => '현금 ' + won(R.saunaCost(S)) + '이 모이면 <b>옮기기</b>가 켜진다<i>그때까지는 알바로 벌어 둡니다</i>' },
     goal: { n: 5, at: 'above', ring: ['#quest', '#hud .goal'], lit: ['#hud [data-do="help"]'], ok: '알겠다',
-      html: () => '안내는 여기까지<i>할 일은 늘 이 <b>상태창</b>에 뜹니다. 위쪽 ' + I('key', '', 's') + ' 은 다음 목표 — 기한 없이 한 단계씩 올라 한국 최고 부자까지. 주식 계좌도 열렸습니다(오른쪽 아래 탭). 모르는 아이콘은 오른쪽 위 ' + I('help', '', 's') + '</i>' },
+      html: () => '안내는 여기까지<i>할 일은 늘 이 <b>상태창</b>에 뜹니다. 위쪽 ' + I('key', '', 's') + ' 은 다음 목표 — 기한 없이 한 단계씩 올라 한국 최고 부자까지. 모르는 아이콘은 오른쪽 위 ' + I('help', '', 's') + '</i>' },
     stock: { lab: '주식 — 처음 열었을 때', num: true, at: [660, 78], ring: ['#board .mlist', '#board .svtabs [data-arg="mine"]', '#board .tabs [data-arg="info"]'], ok: '알겠다',
       html: () => '<p><u>1</u><b>종목을 누르면</b> 차트가 뜨고, 몇 주를 살지 골라 산다. 팔아야 내 돈</p><p><u>2</u>가진 것은 <b>내 보유</b>에서 한눈에</p><p><u>3</u>소식과 공부는 <b>뉴스·공부</b> 탭에. 오늘 소식은 이미 값에 들어가 있다</p>' },
   };
@@ -1485,12 +1522,19 @@
   }
 
   // ── 구역 board: 투자가 열리기 전에는 로드맵, 열린 뒤에는 주식 / 코인 ──
-  const TABS = ['road', 'stock', 'coin', 'info', 'realty', 'bank', 'shop'];
+  const TABS = ['road', 'stock', 'coin', 'info', 'realty', 'bank', 'shop'], START_TABS = ['road', 'shop'];
   const TAB_NAME = { road: '로드맵', stock: '주식', coin: '코인', info: '뉴스·공부', realty: '부동산', bank: '은행', shop: '가게' };
   const TAB_IC = { road: 'map', stock: 'chart', coin: 'bolt', info: 'news', realty: 'building', bank: 'bank', shop: 'cart' };
   const TAB_TIP = { road: '로드맵 — 서울역에서 한국 최고 부자까지 열 단계', stock: '주식 — 장 보기 · 내 보유 · 종목 상세', coin: '코인 레버리지', info: '뉴스·공부 — 오늘 소식 · 내일 리포트 · 투자 공부 단계',
     realty: '부동산 — 시세 · 상가와 건물 (임대수익)', bank: '은행 — 신용등급 · 마이너스 통장 · 이번 일요일 정산', shop: '가게 — 사 먹기 · 옷 · 살림' };
-  const tabsOpen = () => TABS.filter(t => t === 'road' || t === 'shop' || R.unlocked(S, t === 'info' ? 'stock' : t)); // 아직 못 쓰는 탭은 아예 안 보인다
+  const tabsOpen = (state = S) => TABS.filter(t => START_TABS.includes(t) || R.unlocked(state, t === 'info' ? 'stock' : t)); // 아직 못 쓰는 탭은 아예 안 보인다
+  function visitTab(tab) {
+    ui.tab = tab;
+    if (tab === 'info') ui.newsUnread = false;
+    if (START_TABS.includes(tab) || S.seenTabs.includes(tab)) return false;
+    S.seenTabs.push(tab);
+    return true;
+  }
   function renderBoard() {
     const tabs = tabsOpen();
     if (ui.tut && S.day >= 2 && S.tier === 0) ui.tab = 'road'; // 첫 판 안내가 로드맵의 "옮기기"를 짚는 동안
@@ -1499,7 +1543,14 @@
     const extra = t === 'coin' ? '<button class="chip go drillbtn" data-do="drill" title="코인 연습 — 진짜 돈이 아닌 ' + won(DRILL_PUT) + '으로 롱 · 숏 · 청산을 직접 눌러 봅니다 (판에는 영향 없음)">' + I('play', '', 's') + '연습</button>'
       : t === 'road' ? '<button class="chip go drillbtn" data-do="roadmap" title="로드맵을 큰 창으로 — 열 단계의 값 · 고정비 · 열리는 것을 전부">' + I('map', '', 's') + '크게 보기</button>'
         : t === 'info' ? (() => { const w = R.worldView(S); return '<span class="chip season" title="계절은 ' + tune.season_days + '일마다 바뀝니다 (가을 → 겨울 → 봄 → 여름). 날씨는 제철에만 옵니다 — 태풍 · 폭우는 여름과 가을, 폭설 · 한파는 겨울, 황사는 봄, 폭염은 여름">' + I('calendar', '', 's') + w.seasonName + '<i>· ' + w.nextSeason + '까지 ' + w.seasonLeft + '일</i></span>'; })() : '';
-    $('board').innerHTML = '<div class="zh tabs">' + tabs.map(k => '<button class="' + (t === k ? 'on' : ui.fresh[k] ? 'new' : '') + '" data-do="tab" data-arg="' + k + '" title="' + TAB_TIP[k] + '">' + I(TAB_IC[k], '', 's') + TAB_NAME[k] + '</button>').join('') +
+    $('board').innerHTML = '<div class="zh tabs">' + tabs.map(k => {
+      const unlocked = !START_TABS.includes(k) && !S.seenTabs.includes(k);
+      const news = k === 'info' && ui.newsUnread;
+      const status = unlocked ? '새로 해금됨' : news ? '새 소식' : '';
+      return '<button class="' + (t === k ? 'on' : '') + (unlocked ? ' newly-unlocked' : news ? ' news-unread' : '') +
+        '" data-do="tab" data-arg="' + k + '" title="' + TAB_TIP[k] + (status ? ' · ' + status : '') + '"' +
+        (status ? ' aria-label="' + TAB_NAME[k] + ' · ' + status + '"' : '') + '>' + I(TAB_IC[k], '', 's') + TAB_NAME[k] + '</button>';
+    }).join('') +
       (extra ? '<span class="r">' + extra + '</span>' : '') + '</div><div class="pbody tb-' + t + '">' +
       (t === 'road' ? roadmapHtml() : t === 'stock' ? stockHtml() : t === 'coin' ? coinHtml() : t === 'info' ? infoHtml() : t === 'realty' ? realtyHtml() : t === 'bank' ? bankHtml() : shopHtml()) + '</div>';
     if (t === 'road') roadDraw($('board'));
@@ -1559,7 +1610,8 @@
         (show ? '<div class="rows">' + (cond ? [all[0], cond] : show).join('') + '</div>' : '') + '<div class="foot">' + foot + '</div></div></div>';
     }).join('') + '</div>';
   }
-  function todayChg(id) { const h = S.market.hist[id], open = h[h.length - 1 - Math.min(3, S.slot)]; return S.slot === 0 ? null : S.market.px[id] / open - 1; }
+  const changeText = (c, prefix = '', format = pct) => c ? (c.fromOpen ? prefix : '기록 대비 ') + format(c.pct) : '';
+  const changeTitle = (c, title) => c?.fromOpen === false ? '오늘 첫 시세 기록 대비 등락률' : title;
   const pxText = id => Math.round(S.market.px[id]).toLocaleString('en-US') + '원';
   const REL = { official: 3, article: 2, rumor: 1 };
   const newsLine = n => { // 소식 한 줄: 출처(믿을 만한 정도) · 호재/악재 · 머리글 · 밤사이 이미 들어간 만큼 · 리포트가 본 방향
@@ -1620,7 +1672,7 @@
     return head + (sv === 'mine' ? mineHtml(hv) : '<div class="mlist' + (c3 ? ' c3' : '') + '">' + hv.rows.map(x => marketRow(x, c3)).join('') + '</div>');
   }
   function marketRow(x, c3) { // 장 보기의 한 칸: 종목 · 값 / 오늘 소식 · 내가 가진 만큼 · 오늘 움직임
-    const d = todayChg(x.id), f = ui.flash[x.id], n = R.todayNews(S).find(q => q.asset === x.id);
+    const d = R.todayChange(S, x.id), f = ui.flash[x.id], n = R.todayNews(S).find(q => q.asset === x.id);
     const badge = x.id === 'hantang' && R.htAlert(S) ? '<i class="vol" title="오늘 거래량 알림 — 누군가 사 모으는 중 (진짜면 급등, 아니면 폭락)">' + I('up', '', 's') + '거래량</i>'
       : x.id === 'game' && R.gmAlert(S) ? '<i class="vol" title="신작 출시를 앞두고 있습니다 — 흥행이면 급등, 혹평이면 급락">' + I('warn', '', 's') + '신작</i>' : '<i>' + x.tag + '</i>';
     const hot = badge.indexOf('class="vol"') >= 0, mark = c3 && x.units > 0 && hot ? badge.replace(/(거래량|신작)<\/i>$/, '</i>') : ''; // 세 줄 칸에서 든 종목: 둘째 줄이 수량이라 딱지 자리가 없다 — 알림만은 이름 옆에 아이콘으로 (가장 필요한 사람에게 안 보이면 안 된다)
@@ -1628,7 +1680,7 @@
       '<span class="l1"><span class="nm">' + x.name + (c3 ? mark : badge) + '</span><span class="px">' + pxText(x.id) + '</span></span>' +
       '<span class="l2"><span class="mine' + (x.units > 0 ? '' : ' dim') + '">' + (n ? '<span class="' + cls(n.dir) + '" title="오늘 소식: ' + esc(n.head) + ' (' + n.srcName + ')">' + I('news', '', 's') + '</span>' : '') +
       (x.units > 0 ? '<span title="내가 가진 수량 · 산 값 대비 손익 ' + sign(x.pnl) + '">' + (c3 ? '' : '내 것 ') + unitsText(x.units) + ' <em class="' + cls(x.pnl) + '">' + (c3 ? pct0(x.pct) : pct(x.pct, 1)) + '</em></span>' : c3 ? '<span class="tg" title="이 종목은 가진 것이 없습니다">' + badge + '</span>' : '<span title="이 종목은 가진 것이 없습니다">내 것 없음</span>') + '</span>' +
-      '<span class="chg ' + (d == null ? 'dim' : cls(d)) + '" title="오늘 시세 움직임 (내 손익 아님)">' + (d == null ? '' : '오늘 ' + (c3 ? pct0(d) : pct(d, 1))) + '</span></span></span></button>';
+      '<span class="chg ' + cls(d?.pct) + '" title="' + changeTitle(d, '오늘 시세 움직임 (내 손익 아님)') + '">' + changeText(d, '오늘 ', c3 ? pct0 : pct) + '</span></span></span></button>';
   }
   function mineHtml(hv) { // 내 보유: 가진 종목만. 칸마다 수량 · 평가액 / 산 값 · 손익
     const rows = hv.rows.filter(r => r.units > 0), lv = hv.lev;
@@ -1649,7 +1701,7 @@
     return kind + ' ' + amount + ' 팔기';
   }
   function detailHtml(hv) { // 종목 상세: 차트 · 오늘 소식 · 내 보유 · 수량을 골라 사고판다
-    const x = hv.rows.find(r => r.id === ui.sel), a = R.ASSETS.find(q => q.id === x.id), c = todayChg(x.id), h = S.hold[x.id], fr = feeRate();
+    const x = hv.rows.find(r => r.id === ui.sel), a = R.ASSETS.find(q => q.id === x.id), c = R.todayChange(S, x.id), h = S.hold[x.id], fr = feeRate();
     ui.qty = clamp(Math.floor(ui.qty) || 1, 1, maxOrderQty(h.units, x.max));
     const q = ui.qty, qt = R.quote(S, x.id, q), cost = qt.buy, get = qt.sell, sale = sellOrderLabel(q, h.units), no = augWhy('coinonly');
     const ns = R.todayNews(S).filter(n => n.asset === x.id);
@@ -1657,9 +1709,9 @@
     const alert = x.id === 'hantang' && R.htAlert(S) ? '<i class="vol">' + I('up', '', 's') + '거래량</i>' : x.id === 'game' && R.gmAlert(S) ? '<i class="vol">' + I('warn', '', 's') + '신작 출시 대기</i>' : '';
     const st = (arg, t, tip, dis) => '<button data-do="qty" data-arg="' + arg + '"' + (dis ? ' disabled' : '') + ' title="' + tip + '">' + t + '</button>';
     return '<div class="dt"><div class="thead"><button class="chip go back" data-do="sview" data-arg="market" title="종목 목록으로">' + I('up', '', 's') + '목록</button><span class="em">' + art('asset', x.id) + '</span><b>' + x.name + '</b><i class="tg">' + x.tag + '</i>' + alert +
-      '<span class="p">' + pxText(x.id) + '</span><span class="' + (c == null ? 'dim' : cls(c)) + '" title="오늘 움직임">' + (c == null ? '' : pct(c)) + '</span>' +
+      '<span class="p">' + pxText(x.id) + '</span><span class="' + cls(c?.pct) + '" title="' + changeTitle(c, '오늘 움직임') + '">' + changeText(c) + '</span>' +
       '<span class="h" title="사고팔 때 수수료">' + I('percent', '', 's') + '수수료 ' + (fr * 100).toFixed(2).replace(/0$/, '') + '%</span></div>' +
-      '<div class="chart"><canvas id="chart" width="1560" height="232"></canvas></div><div class="dnews">' + note + '</div>' +
+      '<div class="chart"><canvas id="chart" width="1560" height="232"></canvas><span class="price-point" hidden></span><span class="price-tip" aria-hidden="true" hidden></span></div><div class="dnews">' + note + '</div>' +
       '<div class="mine-line">' + (h.units > 0 ? '<span title="가진 수량">' + I('wallet', '', 's') + '<b>' + unitsText(h.units) + '</b></span><span title="지금 값">' + won(x.value) + '</span><span class="dim" title="산 값">' + I('cart', '', 's') + won(x.cost) + '</span><span class="' + cls(x.pnl) + '" title="평가 손익">' + sign(x.pnl) + ' (' + pct(x.pct) + ')</span>' : '<span class="dim">가진 것 없음 · 현금 ' + won(S.cash) + ' — 최대 ' + num(x.max) + '주</span>') + '</div>' +
       '<div class="order2"><span class="olab" title="몇 주를 사고팔지">수량</span><div class="seg qty">' + st('-10', '−10', '10주 줄이기', q <= 1) + st('-1', '−1', '1주 줄이기', q <= 1) +
       '<input id="qty" class="qin" inputmode="numeric" maxlength="7" autocomplete="off" value="' + q + '" title="주 수를 직접 적습니다" aria-label="주 수">' + st('+1', '+1', '1주 늘리기') + st('+10', '+10', '10주 늘리기') + '</div>' +
@@ -1683,7 +1735,7 @@
   // ── 코인 탭: 왼쪽 = 주문 칸(또는 내 포지션), 오른쪽 = 차트와 버튼. 정리 버튼은 롱 · 숏과 다른 자리에 둔다 ──
   const coinNow = () => (S.lev ? R.levId(S.lev) : R.visible(S, ui.coin) ? ui.coin : 'coin'); // 지금 보는 코인 (포지션이 있으면 그 코인, 못 보는 코인이면 달나라코인)
   function coinHtml() {
-    const cid = ui.coin = coinNow(), a = R.ASSETS.find(x => x.id === cid), c = todayChg(cid), l = S.lev, fund = n => (n * tune.lev_fund * 100).toFixed(1) + '%';
+    const cid = ui.coin = coinNow(), a = R.ASSETS.find(x => x.id === cid), c = R.todayChange(S, cid), l = S.lev, fund = n => (n * tune.lev_fund * 100).toFixed(1) + '%';
     const coins = R.ASSETS.filter(x => x.kind === 'coin' && R.visible(S, x.id)); // 내 집부터는 코인이 둘: 고른다 (포지션은 한 번에 한 코인)
     const csel = coins.length > 1 ? '<div class="seg pick csel" title="코인을 고릅니다 — 포지션은 한 번에 한 코인만">' + coins.map(x => '<button class="' + (x.id === cid ? 'on' : '') + '" data-do="coinsel" data-arg="' + x.id + '"' + (l && x.id !== cid ? ' disabled title="포지션을 정리해야 바꿀 수 있습니다"' : ' title="' + esc(x.name + ' — ' + x.hint) + '"') + '>' + x.name + '</button>').join('') + '</div>' : '<b>' + a.name + '</b>';
     let left, main;
@@ -1708,7 +1760,7 @@
     }
     const ns = R.todayNews(S).filter(n => n.asset === cid);
     return '<div class="trade coin"><div class="alist">' + left + '<div class="dnews">' + (ns.length ? ns.map(newsLine).join('') : '<div class="nitem dim">' + I('news', '', 's') + '<span class="tx">오늘 ' + a.name + ' 소식 없음</span></div>') + '</div></div><div class="tmain">' +
-      '<div class="thead"><span class="em">' + art('asset', cid) + '</span>' + csel + '<span class="p">' + pxText(cid) + '</span><span class="' + (c == null ? 'dim' : cls(c)) + '" title="오늘 움직임">' + (c == null ? '' : pct(c)) + '</span>' +
+      '<div class="thead"><span class="em">' + art('asset', cid) + '</span>' + csel + '<span class="p">' + pxText(cid) + '</span><span class="' + cls(c?.pct) + '" title="' + changeTitle(c, '오늘 움직임') + '">' + changeText(c) + '</span>' +
       '<span class="h" title="포지션을 열 때 수수료: 증거금 × 배율 × ' + (tune.lev_fee * 100).toFixed(1) + '%">' + I('percent', '', 's') + '수수료 ' + (tune.lev_fee * 100).toFixed(2).replace(/0$/, '') + '% × 배율</span></div>' +
       '<div class="chart"><canvas id="chart" width="1092" height="232"></canvas></div>' + main + '</div></div>';
   }
@@ -1795,6 +1847,11 @@
     fitCanvas(cv);
     const c = cv.getContext('2d'), Wc = cv.width, Hc = cv.height, h = S.market.hist[id].slice(-61), n = h.length;
     c.clearRect(0, 0, Wc, Hc);
+    const tip = cv.parentElement.querySelector('.price-tip');
+    if (!n) {
+      if (tip) { tip.removeAttribute('aria-hidden'); tip.classList.add('empty'); tip.textContent = '가격 기록 없음'; tip.hidden = false; }
+      return;
+    }
     const lines = [];
     const isCoin = (R.ASSETS.find(a => a.id === id) || {}).kind === 'coin';
     if (isCoin && S.lev && R.levId(S.lev) === id) { lines.push([S.lev.entry, PX.O, '진입']); lines.push([R.levLiq(S.lev), PX.R, '청산']); }
@@ -1802,21 +1859,78 @@
     let lo = Math.min.apply(null, h), hi = Math.max.apply(null, h);
     for (const l of lines) if (l[0] > lo * 0.7 && l[0] < hi * 1.3) { lo = Math.min(lo, l[0]); hi = Math.max(hi, l[0]); }
     const pad = (hi - lo) * 0.12 || 1; lo -= pad; hi += pad;
-    const X = i => 16 + (Wc - 120) * i / (n - 1), Y = v => Hc - 14 - (Hc - 28) * (v - lo) / (hi - lo);
+    const X = i => n === 1 ? Wc - 104 : 16 + (Wc - 120) * i / (n - 1), Y = v => Hc - 14 - (Hc - 28) * (v - lo) / (hi - lo);
     const real = S.market.tick - 17, labs = []; // 판이 시작된 뒤의 틱 수
     let lastX = -99;
     for (let i = 0; i < n; i++) { // 하루의 경계선 (날짜 글자는 64px 넘게 떨어진 것만 — 빽빽하면 선 위에 겹쳐서)
       const r = real - (n - 1 - i);
-      if (r >= 0 && r % 3 === 0) { const x = Math.round(X(i) / 2) * 2; c.fillStyle = PX.d; c.fillRect(x, 0, 2, Hc); if (x / 2 - lastX >= 64 && X(i) < Wc - 190) { lastX = x / 2; labs.push([x / 2 + 3, 0, '', (r / 3 + 1) + '일', 'day']); } } // 오른쪽 끝은 선 이름(진입 · 청산 · 산 값) 자리
+      if (r >= 0 && r % 3 === 0 && !(i === n - 1 && S.slot === 3)) { const x = Math.round(X(i) / 2) * 2; c.fillStyle = PX.d; c.fillRect(x, 0, 2, Hc); if (x / 2 - lastX >= 64 && X(i) < Wc - 190) { lastX = x / 2; labs.push([x / 2 + 3, 0, '', (r / 3 + 1) + '일', 'day']); } } // 오른쪽 끝은 선 이름(진입 · 청산 · 산 값) 자리
     }
     const up = h[n - 1] >= h[Math.max(0, n - 1 - Math.max(1, Math.min(3, S.slot)))], col = up ? PX.r : PX.b, dark = up ? PX.R : PX.B;
-    pxLine(c, h.map((v, i) => [X(i), Y(v)]), Hc, col, dark); // 계단진 선 + 아래 칠 (한 점 = 2px)
+    const pts = h.map((v, i) => [X(i), Y(v)]);
+    pxLine(c, pts, Hc, col, dark); // 계단진 선 + 아래 칠 (한 점 = 2px)
+    if (tip) {
+      c.fillStyle = dark;
+      for (const [x, y] of pts.slice(0, -1)) c.fillRect(Math.round(x / 4) * 4 - 4, Math.round(y / 4) * 4 - 4, 8, 8);
+      inspectPrices(cv, tip, pts, h, real);
+    }
     for (const l of lines) {
       const y = clamp(Y(l[0]), 14, Hc - 14);
       pxDash(c, y, 16, Wc - 104, l[1]);
       labs.push([Math.round((Wc - 96) / 2), clamp(Math.round(y / 2) - 8, 0, Hc / 2 - 16), l[1], l[2], 'ln']);
     }
     chartLabels(cv, labs);
+  }
+
+  function inspectPrices(cv, tip, pts, prices, real) {
+    const box = cv.parentElement, mark = box.querySelector('.price-point'), last = prices.length - 1;
+    let at = last;
+    const label = i => {
+      const tick = real - (last - i);
+      // 밤사이 변동은 저녁 마감점을 다음 날 오전 가격으로 갱신한다.
+      const time = tick < 0 ? '시작 ' + (-tick) + '칸 전' : i === last && S.slot === 3 ? S.day + '일 저녁 마감'
+        : (Math.floor(tick / 3) + 1) + '일 ' + SLOTS[tick % 3];
+      return time + ' · ' + won(prices[i]);
+    };
+    const setPoint = i => {
+      cv.setAttribute('aria-valuenow', i + 1);
+      cv.setAttribute('aria-valuetext', label(i));
+    };
+    cv.tabIndex = 0;
+    cv.setAttribute('role', 'slider');
+    cv.setAttribute('aria-label', '가격 기록');
+    cv.setAttribute('aria-valuemin', '1');
+    cv.setAttribute('aria-valuemax', prices.length);
+    setPoint(at);
+    const show = i => {
+      at = i;
+      setPoint(i);
+      const [x, y] = pts[i].map(v => Math.round(v / 4) * 4);
+      const left = x / cv.width * cv.clientWidth, top = y / cv.height * cv.clientHeight;
+      mark.style.left = left + 'px'; mark.style.top = top + 'px'; mark.hidden = false;
+      tip.textContent = cv.getAttribute('aria-valuetext'); tip.hidden = false;
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      tip.style.left = clamp(left - w / 2, 0, Math.max(0, cv.clientWidth - w)) + 'px';
+      tip.style.top = (top > h + 8 ? top - h - 8 : top + 8) + 'px';
+    };
+    const fromPointer = e => {
+      const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * cv.width / r.width;
+      const first = pts[0][0], span = pts[last][0] - first;
+      show(last ? clamp(Math.round((x - first) / span * last), 0, last) : 0);
+    };
+    const hide = () => { tip.hidden = true; mark.hidden = true; };
+    cv.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') fromPointer(e); });
+    cv.addEventListener('pointerleave', () => { if (document.activeElement !== cv) hide(); });
+    cv.addEventListener('click', e => { cv.focus({ preventScroll: true }); fromPointer(e); });
+    cv.addEventListener('focus', () => show(at));
+    cv.addEventListener('blur', hide);
+    cv.addEventListener('keydown', e => {
+      const keys = { ArrowLeft: at - 1, ArrowDown: at - 1, ArrowRight: at + 1, ArrowUp: at + 1, Home: 0, End: last };
+      if (!Object.hasOwn(keys, e.key) && e.key !== ' ' && e.key !== 'Enter') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (Object.hasOwn(keys, e.key)) show(clamp(keys[e.key], 0, last));
+    });
   }
 
   function createInfoPopup(panel, canShow) {
@@ -1914,7 +2028,8 @@
   }
 
   // ── 겹쳐 뜨는 창 ──
-  const okBtn = t => '<div class="foot"><button class="btn main" data-do="ok">' + (t || '확인') + ' <span class="key">Space</span></button></div>';
+  const okBtn = (t, stockOpened) => '<div class="foot"><button class="btn' + (stockOpened ? '' : ' main') + '" data-do="ok">' + (t || '확인') + ' <span class="key">Space</span></button>' +
+    (stockOpened ? '<button class="btn main" data-do="stockopen">' + I('chart', '', 's') + '주식 보기</button>' : '') + '</div>';
   function evFx(f) { // 사건이 바꾼 것: 현금 · 체력 · 경험치 · 잠
     const out = [];
     if (!f) return '';
@@ -1945,7 +2060,8 @@
         '<p class="quest-recovery">' + recovery + '</p></section></div>';
   }
   function openingDream() {
-    const dream = DREAM_CARDS[S.opening.dream];
+    const dream = DREAM_CARDS[S.opening.gift];
+    if (!dream) return '';
     const arrow = '<span class="dream-arrow" aria-label="그다음">' + I('up', '', 's') + '</span>';
     const path = dream.path.map(([kind, icon, label]) => '<span class="dream-stop"><span class="dream-stop-icon" aria-hidden="true">' +
       art(kind, icon) + '</span><span>' + label + '</span></span>').join(arrow);
@@ -1982,10 +2098,10 @@
           '<div><small>' + I('crown', '', 's') + '최종 목표</small><b>한국 최고 부자</b><span>호텔에서 순자산 ' + eok(tune.top_worth) + ' 원</span></div></div>' +
           '<div class="opening-slots"><span>오늘의 행동 3칸</span>' +
           ['아침', '오후', '저녁'].map((label, i) => '<span class="opening-slot">' + I(SLOT_IC[i], '', 's') + label + '</span>').join('') + '</div>';
-      case 3:
-        return '<p class="opening-dialogue">첫 각성을 기념해 다음 중 하나를 고를 수 있습니다.</p>' +
+      case GIFT_STEP:
+        return '<p class="opening-dialogue">선물을 하나 골라 주세요.</p>' +
           '<div class="dreams" role="group" aria-label="꿈 선택">' + R.dreamList().map((d, i) => {
-            const selected = d.id === S.opening.dream;
+            const selected = d.id === S.opening.gift;
             const card = DREAM_CARDS[d.id];
             return '<button class="dcard' + (selected ? ' on' : '') + '" data-do="dream" data-arg="' + d.id +
               '" aria-pressed="' + selected + '"><span class="key" aria-hidden="true">' + (i + 1) + '</span>' +
@@ -2002,41 +2118,50 @@
   }
   function renderOpening() {
     const step = S.opening.step;
+    const gift = step === GIFT_STEP;
     const quest = step === 4 ? R.questView(S) : null;
     const header = step ? '<div class="opening-head"><h2>' + I('quest', '', 's') + '시스템</h2><span>' + step + ' / ' + (OPENING_TITLES.length - 1) + '</span></div>' : '';
     const back = step ? '<button class="btn" data-do="no">이전</button>' : '';
+    const next = gift ? '<button id="gift-confirm" class="btn main" data-do="ok"' + (S.opening.gift ? '' : ' disabled') + '>선물 받기 <span class="key">Enter</span></button>'
+      : '<button class="btn main" data-do="ok">다음 <span class="key">Space</span></button>';
     const title = '<h3 id="opening-title" tabindex="-1">' + esc(quest ? quest.title : OPENING_TITLES[step]) + '</h3>';
-    veil.innerHTML = '<section class="win pop intro corner' + (step === 3 ? ' dream-step' : '') + '" role="dialog" aria-modal="true" aria-labelledby="opening-title">' +
+    veil.innerHTML = '<section class="win pop intro corner' + (gift ? ' dream-step' : '') + '" role="dialog" aria-modal="true" aria-labelledby="opening-title">' +
       header + (quest ? '<div class="quest-heading">' + title + '<span>퀘스트 ' + quest.n + ' / ' + quest.of + '</span></div>' : title) + openingBody(quest) +
-      '<div class="foot">' + back + '<button class="btn main" data-do="ok">다음 <span class="key">Space</span></button></div></section>';
+      '<div class="foot">' + back + next + '</div></section>';
   }
   const ARROW = { ArrowLeft: -90, ArrowRight: 90, ArrowUp: 0, ArrowDown: 180 };
   const keyName = c => (c in ARROW ? '<span class="ic s" style="transform:rotate(' + ARROW[c] + 'deg)">' + art('icon', 'up') + '</span>' : c.replace('Digit', '').replace('Key', '')); // 방향키는 위 화살표 아이콘을 돌려서
-  function selectPerk(id) {
+  function selectPerk(id, focus = false) {
     const cards = [...veil.querySelectorAll('.pcard')];
     const chosen = cards.find(b => b.dataset.arg === id);
     if (!chosen) return;
     ui.modal.pick = id;
     for (const b of cards) b.setAttribute('aria-pressed', b === chosen);
-    $('perk-confirm').textContent = chosen.querySelector('.perk-name > span').textContent + ' 선택';
+    $('perk-confirm-name').textContent = chosen.querySelector('.perk-name > span').textContent + ' 선택';
+    if (focus) chosen.focus();
     sfx.click();
   }
   function perkOfferHtml(m) {
     const cards = R.offerView(S), level = S.lv - S.picks + 1;
-    return '<section class="win lvup" role="dialog" aria-modal="true" aria-labelledby="perk-title">' +
-      '<div class="perk-head"><h2>' + I('star', '', 's') + '레벨 업</h2><span>Lv.' + level + '</span></div><h3 id="perk-title">특성 하나를 고르세요</h3>' +
-      '<div class="pcards" style="--perk-count:' + cards.length + '">' + cards.map((p, i) => {
+    return '<section class="win lvup" role="dialog" aria-modal="true" aria-labelledby="perk-title" aria-describedby="perk-level">' +
+      '<div class="perk-head"><h2 id="perk-level"><span aria-hidden="true">' + I('star', '', 's') + '</span>Lv.' + level + ' 레벨 업</h2>' +
+      '<h3 id="perk-title">특성 하나를 고르세요</h3></div>' +
+      '<div class="pcards" role="group" aria-label="특성 후보">' + cards.map((p, i) => {
+        const n = i + 1;
+        const nameId = 'perk-name-' + n, detailsId = 'perk-details-' + n;
         const marks = Array.from({ length: p.max }, (_, j) => '<i' + (j < p.n ? ' class="on"' : '') + '></i>').join('');
-        return '<button type="button" class="pcard' + (p.aug ? ' aug' : '') + '" data-do="perkchoice" data-arg="' + p.id + '" aria-pressed="' + (p.id === m.pick) + '">' +
-          '<span class="key" aria-hidden="true">' + (i + 1) + '</span><span class="perk-icon" aria-hidden="true">' + I(p.icon) + '</span>' +
-          '<span class="perk-name"><span>' + esc(p.name) + '</span>' + (p.aug ? '<small>양날</small>' : '') + '</span>' +
-          '<span class="pcard-effect"><span>' + esc(p.label) + '</span><strong>' + esc(p.value) + '</strong></span>' +
-          (p.note || p.con || p.excl ? '<span class="pcard-notes">' + (p.note ? '<span>' + esc(p.note) + '</span>' : '') +
-            (p.con ? '<span class="con">대신 ' + esc(p.con) + '</span>' : '') +
-            (p.excl ? '<span class="excl">' + I('lock', '', 's') + '<span>' + esc(p.excl) + '</span></span>' : '') + '</span>' : '') +
-          '<span class="have">보유 ' + p.n + ' / ' + p.max + '<span class="perk-marks" aria-hidden="true">' + marks + '</span></span></button>';
-      }).join('') + '</div><div class="foot"><span class="perk-keys">' + cards.map((_, i) => '<span class="key">' + (i + 1) + '</span>').join(' ') +
-      ' 숫자 키로 후보 보기</span><button type="button" class="btn down" id="perk-confirm" data-do="perkconfirm">' + esc(cards.find(p => p.id === m.pick).name) + ' 선택</button></div></section>';
+        return '<button type="button" class="pcard' + (p.aug ? ' aug' : '') + '" data-do="perkchoice" data-arg="' + p.id + '" data-max="' + p.max +
+          '" aria-pressed="' + (p.id === m.pick) + '" aria-keyshortcuts="' + n + '" aria-labelledby="' + nameId + '" aria-describedby="' + detailsId + '">' +
+          '<span class="perk-rail" aria-hidden="true"><kbd class="key">' + n + '</kbd>' + I(p.icon) + '</span>' +
+          '<span class="perk-copy"><span class="perk-name" id="' + nameId + '"><span>' + esc(p.name) + '</span>' + (p.aug ? '<small>양날</small>' : '') + '</span>' +
+          '<span class="perk-details" id="' + detailsId + '"><span class="pcard-effect">' + esc(p.label) + ' <strong>' + esc(p.value) + '</strong></span>' +
+          (p.con ? '<span class="con"><b>대신</b><span>' + esc(p.con) + '</span></span>' : '') +
+          (p.excl ? '<span class="excl"><span aria-hidden="true">' + I('lock', '', 's') + '</span><span>' + esc(p.excl) + '</span></span>' : '') +
+          (p.note ? '<span class="note">' + esc(p.note) + '</span>' : '') +
+          '<span class="have">보유 ' + p.n + ' / ' + p.max + '<span class="perk-marks" aria-hidden="true">' + marks + '</span></span></span></span></button>';
+      }).join('') + '</div><div class="foot"><span class="perk-keys">' + cards.map((_, i) => '<kbd class="key">' + (i + 1) + '</kbd>').join(' ') +
+      ' 후보 보기</span><button type="button" class="btn main" id="perk-confirm" data-do="perkconfirm" aria-keyshortcuts="Enter">' +
+      '<span id="perk-confirm-name">' + esc(cards.find(p => p.id === m.pick).name) + ' 선택</span><kbd class="key" aria-hidden="true">Enter</kbd></button></div></section>';
   }
   function renderVeil() {
     const v = $('veil'), m = ui.modal;
@@ -2050,7 +2175,7 @@
     const night = !!m && m.type === 'night';
     v.classList.toggle('hide', !m); v.classList.toggle('top', !!m && m.type === 'shock'); // 속보는 위쪽 띠
     v.classList.toggle('opening-veil', opening);
-    v.classList.toggle('dream-veil', opening && S.opening.step === 3);
+    v.classList.toggle('dream-veil', opening && S.opening.step === GIFT_STEP);
     v.classList.toggle('first-quest-veil', !!firstQuest);
     v.classList.toggle('perk-veil', m?.type === 'perk');
     placeVeil();
@@ -2107,16 +2232,18 @@
     } else if (m.type === 'quest') {
       const one = m.done.length + m.skipped.length === 1, q0 = m.done[0];
       const heading = '퀘스트 완료' + (m.done.length > 1 ? ' ×' + m.done.length : '');
+      const unlocked = m.stockOpened ? '<div class="rewardbox">' + I('chart') + '<b>' + esc(R.HOMES[1].unlock) + ' 열림</b></div>' : '';
       if (firstQuest) {
         v.innerHTML = '<section class="win pop quest-finished corner" role="dialog" aria-modal="true" aria-labelledby="quest-finished-title">' +
           '<div class="opening-head"><h2>' + I('quest', '', 's') + '시스템</h2><span>첫 퀘스트</span></div>' +
           '<div class="quest-heading"><h3 id="quest-finished-title" tabindex="-1">' + heading + '</h3><span>퀘스트 ' + firstQuest.n + ' / ' + firstQuest.of + '</span></div>' +
           '<p class="quest-finished-name">' + esc(firstQuest.title) + '</p>' + firstQuestCards(firstQuest, true) +
-          questDoneList(m.done.filter(q => q !== firstQuest), m.skipped) + nextBox(m.next) + okBtn('다음') + '</section>';
+          questDoneList(m.done.filter(q => q !== firstQuest), m.skipped) + unlocked + nextBox(m.next) + okBtn('다음', m.stockOpened) + '</section>';
       } else {
         v.innerHTML = '<div class="win pop corner"><h2>' + I('check', '', 's') + heading + '</h2>' +
           (one ? '<h3>' + esc(q0.title) + '</h3><div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(q0.reward) + '</b></div>'
-            : questDoneList(m.done, m.skipped)) + nextBox(m.next) + okBtn() + '</div>';
+            : questDoneList(m.done, m.skipped)) + unlocked +
+          nextBox(m.next) + okBtn(null, m.stockOpened) + '</div>';
       }
     } else if (m.type === 'perk') {
       v.innerHTML = perkOfferHtml(m);
@@ -2130,7 +2257,7 @@
       v.innerHTML = '<div class="win pop corner"><h2>' + I('door', '', 's') + '주거 변경</h2><h3>' + esc(e.name) + (e.lease ? ' · ' + R.LEASE[e.lease] : '') + '</h3>' + (e.unlock ? '<div class="rewardbox">' + I('gift') + '<b class="gold">' + esc(e.unlock) + '</b> 열림</div>' : '') +
         (e.deposit ? '<div class="crows">' + row('wallet', (e.to === 2 ? '예치금 ' : '보증금 ') + '<b>' + won(e.deposit) + '</b> <span class="dim">나갈 때 돌려받는 돈 — 순자산은 그대로</span>' + (e.refund ? ' <span class="dim">살던 곳의 ' + won(e.refund) + '은 돌려받음</span>' : ''), 'good') + row('bill', '일요일 밤마다 고정비 <b class="gold">' + won(R.weekCost(S, e.to)) + '</b>' + (e.to >= 5 ? '' : ' <span class="dim">끼니 포함</span>')) + '</div>' : '') +
         (e.price ? '<div class="crows">' + row('key', '값 <b>' + won(e.price) + '</b>' + (e.sold ? ' <span class="dim">살던 집 ' + won(e.sold) + '에 팔림</span>' : '')) +
-          (e.loan ? row('bill', '주담대 <b>' + won(e.loan) + '</b> <span class="dim">한 주 이자 ' + pct1(e.rate) + '</span> — 일요일 밤마다 고정비와 함께 <b class="gold">' + won(R.weekCost(S, e.to) + r1k(e.loan * e.rate) + Math.min(e.loan, r1k(e.loan / tune.loan_weeks))) + '</b>', 'gold') : row('check', '대출 없음 — 일요일 밤 고정비 <b>' + won(R.weekCost(S, e.to)) + '</b>만', 'good')) + '</div>' : '') + okBtn() + '</div>';
+          (e.loan ? row('bill', '주담대 <b>' + won(e.loan) + '</b> <span class="dim">한 주 이자 ' + pct1(e.rate) + '</span> — 일요일 밤마다 고정비와 함께 <b class="gold">' + won(R.weekCost(S, e.to) + r1k(e.loan * e.rate) + Math.min(e.loan, r1k(e.loan / tune.loan_weeks))) + '</b>', 'gold') : row('check', '대출 없음 — 일요일 밤 고정비 <b>' + won(R.weekCost(S, e.to)) + '</b>만', 'good')) + '</div>' : '') + okBtn(null, m.stockOpened) + '</div>';
     } else if (m.type === 'act1') { // 1막 끝: 내 집을 처음 산 순간. 등급 · 결과 카드 복사 · 계속한다
       const a = S.act1 || { day: m.e.day, rank: m.e.rank };
       v.innerHTML = '<div class="win act1 corner"><h2>' + I('key', '', 's') + '1막 끝</h2><h3>내 집 마련</h3><div class="rank" title="며칠째에 샀는지로 정해지는 등급 (' + tune.act1_s + '일까지 S · ' + tune.act1_a + '일까지 A · ' + tune.act1_b + '일까지 B)">' + a.rank + '</div>' +
@@ -2352,18 +2479,29 @@
 
 
   // ── 제목 · 결과 · 등장물 ──
+  function renderTitleLook() {
+    const title = $('s-title'), look = meta.look || 0;
+    title.querySelector('.bg').innerHTML = art('title', look);
+    title.querySelector('.t-hero').innerHTML = art('hero', '', look);
+    for (const b of title.querySelectorAll('.look')) {
+      const selected = Number(b.dataset.arg) === look;
+      b.classList.toggle('on', selected);
+      b.setAttribute('aria-pressed', selected);
+    }
+  }
   function renderTitle() {
     const s = hasSave(), total = R.achList().length;
-    $('s-title').innerHTML = '<div class="bg">' + art('title') + '</div><div class="t-box"><div class="tag">무일푼에서 한국 최고 부자까지</div><h1>서울역<br>상태창</h1>' +
+    $('s-title').innerHTML = '<div class="bg"></div><div class="t-box"><div class="tag">무일푼에서 한국 최고 부자까지</div><h1>서울역<br>상태창</h1>' +
       '<div class="lead">서울역 벤치에서 눈을 떴더니 나에게만 보이는 상태창이 떴다. 꿈 하나를 품고 알바로 버티고, 방을 구하고, 내 집을 사고, 사업과 건물을 키워 한국 최고 부자가 되어라.</div>' +
       '<div class="t-form"><label for="name">이름</label><input id="name" maxlength="8" placeholder="나" value="' + esc(ui.name) + '" autocomplete="off"><label for="code" title="같은 코드면 같은 시세의 판이 시작됩니다">' + I('dice', '', 's') + '판 코드</label><input id="code" maxlength="7" placeholder="비우면 새 판" autocomplete="off"></div>' +
-      '<div class="t-looks" title="후드 색 — 꾸미기만 (효과 없음). 옷은 판 안의 가게에서 삽니다"><label>후드 색</label>' + [0, 1, 2, 3].map(n => '<button class="look' + ((meta.look || 0) === n ? ' on' : '') + '" data-do="look" data-arg="' + n + '" title="' + ['파랑', '빨강', '초록', '회색'][n] + '">' + art('hero', '', n) + '</button>').join('') + '</div>' +
+      '<div class="t-looks" role="group" aria-label="후드 색" title="후드 색 — 꾸미기만 (효과 없음). 옷은 판 안의 가게에서 삽니다"><label>후드 색</label>' + ['파랑', '빨강', '초록', '회색'].map((color, n) => '<button class="look" data-do="look" data-arg="' + n + '" aria-label="' + color + '" title="' + color + '">' + art('hero', '', n) + '</button>').join('') + '<span class="t-hero" aria-hidden="true"></span></div>' +
       '<div class="t-hint">판 코드: 같은 코드면 같은 시세의 판 (결과 카드에 적힘) · 오늘의 판: 오늘은 누구나 같은 판</div>' +
       '<div class="t-btns">' + (s ? '<button class="btn main" data-do="continue">이어하기 (' + s.day + '일째) <span class="key">Enter</span></button>' : '') +
       '<button class="btn' + (s ? (ui.askNew === 'new' ? ' warm' : '') : ' main') + '" data-do="new">' + (ui.askNew === 'new' ? '하던 판을 지우고 새로 시작' : '새로 시작') + (s ? '' : ' <span class="key">Enter</span>') + '</button>' +
       '<button class="btn' + (ui.askNew === 'daily' ? ' warm' : '') + '" data-do="daily" title="오늘 날짜로 정해지는 판 — 누구나 같은 시세">' + I('calendar') + (ui.askNew === 'daily' ? '하던 판을 지우고 오늘의 판' : '오늘의 판') + '</button></div>' +
       '<div class="rec"><button class="chip go" data-do="help">' + I('help', '', 's') + '도움말</button>' + (GUIDE ? '<button class="chip go" data-do="tuttoggle" title="' + (meta.tut === 2 ? '끝냈거나 끈 안내입니다 — 누르면 다음 새 판에서 다시 봅니다' : '새 판을 시작하면 첫날을 따라가며 알려 줍니다 (하던 판에는 뜨지 않음) — 누르면 끕니다') + '">' + I('info', '', 's') + '첫 판 안내 ' + (meta.tut === 2 ? '꺼짐' : '켜짐') + '</button>' : '') + '<button class="chip go" data-do="achs">' + I('trophy', '', 's') + '업적 ' + achCount() + ' / ' + total + '</button>' + recChips() + '</div>' +
       '<div class="t-keys"><b>마우스</b>만으로 전부 됩니다. 키보드: <b>1~6</b> 고르기 · <b>Space</b> 넘기기 · <b>M</b> 소리</div></div>';
+    renderTitleLook();
   }
   function renderResults() {
     const e = S.ended, st = S.stats, a = S.act1; // 끝은 한국 최고 부자 선언 하나뿐 (실패 결과 화면은 없다)

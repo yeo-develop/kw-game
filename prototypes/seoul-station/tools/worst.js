@@ -240,13 +240,17 @@ fs.mkdirSync(out, { recursive: true });
   const p9 = await fresh();
   ag.card = await p9.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 3, cash: 9000000, day: 15, movedDay: 12, quest: 99, offer: ['iron', 'coinonly', 'hustle'], picks: 1, lv: 3, event: null }); g.render(); g.run('rest'); g.step(60);
     const cs = [...document.querySelectorAll('#veil .pcard')].map(c => {
-      const effect = c.querySelector('.pcard-effect');
-      return { aug: c.classList.contains('aug'), tag: (c.querySelector('.perk-name small') || {}).textContent || '', gain: effect?.textContent || '', con: (c.querySelector('.con') || {}).textContent || '', border: effect ? getComputedStyle(effect).borderLeftColor : '' };
+      const rail = c.querySelector('.perk-rail'), railStyle = rail && getComputedStyle(rail);
+      return { aug: c.classList.contains('aug'), tag: c.querySelector('.perk-name small')?.textContent || '',
+        gain: c.querySelector('.pcard-effect')?.textContent || '', costLabel: c.querySelector('.con b')?.textContent || '',
+        con: c.querySelector('.con > span')?.textContent || '', rail: railStyle && railStyle.borderRightWidth !== '0px' ? railStyle.borderRightColor : '' };
     });
     return { modal: g.state.modal, cs }; });
   await p9.waitForTimeout(450); await p9.screenshot({ path: path.join(out, 'aug-card.png') });
   { const c = ag.card.cs, a = c.find(x => x.aug), n = c.find(x => !x.aug);
-    if (ag.card.modal !== 'perk' || !a || a.tag !== '양날' || !/코인 이익\+30%/.test(a.gain) || !/^대신 이 판 끝까지 주식을 살 수 없다/.test(a.con) || !n || n.tag || n.con || !a.border || !n.border || a.border === n.border) ag.bad.push('양날 카드가 다른 카드와 달라 보이지 않거나 딱지 · 얻는 것 · 대신 줄이 없음: ' + JSON.stringify(ag.card)); }
+    if (ag.card.modal !== 'perk' || !a || a.tag !== '양날' || !/^코인 이익\s*\+30%$/.test(a.gain) ||
+        a.costLabel !== '대신' || !/^이 판 끝까지 주식을 살 수 없다/.test(a.con) ||
+        !n || n.tag || n.costLabel || n.con || !a.rail || !n.rail || a.rail === n.rail) ag.bad.push('양날 카드가 다른 카드와 달라 보이지 않거나 딱지 · 얻는 것 · 대신 줄이 없음: ' + JSON.stringify(ag.card)); }
   await p9.keyboard.press('Digit2');
   ag.selected = await p9.evaluate(() => ({ id: document.querySelector('#veil .pcard[aria-pressed=true]')?.dataset.arg, modal: window.game.state.modal, perks: { ...window.game.state.raw.perks } }));
   if (ag.selected.id !== 'coinonly' || ag.selected.modal !== 'perk' || ag.selected.perks.coinonly) ag.bad.push('숫자 2가 둘째 후보만 강조하지 않음: ' + JSON.stringify(ag.selected));

@@ -239,7 +239,7 @@ fs.mkdirSync(out, { recursive: true });
   const seed = await page.evaluate(() => window.game.state.raw && window.game.state.raw.seed);
   if (await page.evaluate(() => window.game.state.tut)) errs.push('안내를 끝냈는데 다음 판에 또 뜸');
   if (seed !== parseInt('00A5', 36)) errs.push('판 코드로 시작한 씨앗이 다름: ' + seed); log.push('판 코드 SS-00A5 → 씨앗 ' + seed);
-  await clear();
+  await advanceOpening(page);
   await page.evaluate(() => { const S = window.game.state.raw; S.tier = 3; S.stats.maxTier = 3; S.cash = 50000000; window.game.render(); window.game.run('house'); }); await wait(600); // 원룸에서 현금으로 내 집
   await page.keyboard.press('Space'); await wait(600); // 확인 창에서 Space 는 늘 "돌아가기"
   if ((await st()).modal || (await st()).tier !== 3) errs.push('내 집 사는 창에서 Space 가 돌아가기가 아님');
@@ -258,7 +258,7 @@ fs.mkdirSync(out, { recursive: true });
   if (await page.evaluate(() => window.game.scene) !== 'play' || (await st()).tier !== 4) errs.push('"계속한다" 뒤 판이 이어지지 않음');
   await page.click('#hud [data-do="quit"]'); await wait(500); await shot('rt14f_title_records');
   if (!/내 집 최단/.test(await page.textContent('#s-title .rec'))) errs.push('제목 화면 기록에 "내 집 최단"이 없음');
-  await page.click('[data-do="new"]'); await wait(400); await page.click('[data-do="new"]'); await wait(700); await clear(); // 저장이 있어 두 번
+  await page.click('[data-do="new"]'); await wait(400); await page.click('[data-do="new"]'); await advanceOpening(page); // 저장이 있어 두 번
   // 작은 창 · 큰 창: 통째로 늘고 주는지
   await page.setViewportSize({ width: 800, height: 450 }); await wait(400); await shot('rt15_small_800x450');
   await page.setViewportSize({ width: 1920, height: 1080 }); await wait(400); await shot('rt16_large_1080p');

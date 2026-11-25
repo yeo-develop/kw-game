@@ -1360,7 +1360,11 @@ ok('저장 v4: 새 칸(신용 · 계약 · 보증금 · 상가 · 공부 · 물�
   for (const k of ['credit', 'cl', 'addr', 'lease', 're', 'props', 'know', 'items', 'wear', 'look', 'ate', 'sick', 'hosp', 'dream', 'dreamSet', 'beats']) delete o[k]; delete o.market.gm;
   for (const id of ['bank', 'battery', 'game', 'build']) { delete o.market.px[id]; delete o.market.hist[id]; delete o.market.chg[id]; delete o.hold[id]; }
   const b = R.load(JSON.stringify(o)); assert.ok(b); assert.equal(b.v, 5); assert.equal(b.lease, 'own'); assert.equal(b.credit, T.credit_start + T.credit_addr + 3 * T.credit_ontime + T.credit_home); assert.equal(b.know, 6); assert.equal(b.dream, 'family'); assert.equal(b.loan.rate, T.loan_rate);
-  assert.equal(b.market.px.bank, R.ASSETS.find(a => a.id === 'bank').px); assert.ok(b.market.hist.game.length >= 4); assert.equal(b.re.idx, 1);
+  for (const id of ['bank', 'battery', 'game', 'build']) {
+    const price = R.ASSETS.find(a => a.id === id).px;
+    assert.equal(b.market.px[id], price); assert.deepEqual(b.market.hist[id], [price]);
+  }
+  assert.deepEqual(b.market.hist.daejang, o.market.hist.daejang); assert.equal(b.re.idx, 1);
   b.quest = 99; for (let d = 0; d < 15; d++) { day(b, x => R.doJob(x, 'store', 0.8) || R.doRest(x)); while (b.offer) R.pickPerk(b, safePerk(b)); if (b.event) R.choose(b, 'b'); }
   assert.ok(Number.isFinite(R.worth(b))); b.cash = 1e7; assert.ok(R.buyUnits(b, 'bank', 1));
 }));
@@ -1650,13 +1654,47 @@ ok('저장 v5: 예전 저장(v4 — 알바 넷 · 종목 여덟)을 불러오면
   for (const k of ['cr', 'crLog', 'crStreak', 'crWeeks', 'crSpend', 'spent', 'clBoost', 'ever']) delete o[k]; delete o.market.world; delete o.lev.id;
   const w = R.worth(s), t = R.load(JSON.stringify(o)); assert.ok(t); assert.equal(t.v, 5); assert.equal(R.worth(t), w, '순자산은 그대로');
   assert.deepEqual(Object.keys(t.jobs).sort(), R.JOBS.map(j => j.id).sort()); assert.equal(t.jobs.cafe, 0); assert.equal(t.jobs.flyer, 5); assert.deepEqual(t.ever, { flyer: 1 });
-  for (const a of R.ASSETS) { assert.ok(t.market.px[a.id] > 0 && t.market.hist[a.id].length >= 4, a.id); assert.ok(t.hold[a.id]); } assert.equal(t.market.px.etf, R.ASSETS.find(a => a.id === 'etf').px); assert.deepEqual(t.market.world, []);
+  for (const a of R.ASSETS) {
+    assert.equal(t.market.px[a.id], o.market.px[a.id] ?? a.px, a.id);
+    assert.deepEqual(t.market.hist[a.id], o.market.hist[a.id] ?? [a.px], a.id);
+    assert.ok(t.hold[a.id]);
+  }
+  assert.deepEqual(t.market.world, []);
   assert.equal(t.credit, o.credit); assert.deepEqual(t.cr, { pay: o.credit - T.credit_start - T.credit_addr, debt: 0, age: T.credit_addr, asset: 0, mix: 0 }, '주소 몫은 거래 기간에, 나머지는 상환 이력에'); assert.equal(R.creditView(t).factors.reduce((a, f) => a + f.pts, 0), o.credit - T.credit_start); assert.deepEqual(t.crLog, []);
   assert.equal(R.levId(t.lev), 'coin'); assert.ok(R.levValue(t) > 0);
   let worlds = 0; for (let d = 0; d < 40; d++) { day(t, x => R.doJob(x, 'cafe', 0.8) || R.doRest(x)); while (t.offer) R.pickPerk(t, safePerk(t)); worlds += t.ev.filter(e => e.t === 'world').length; t.ev.length = 0; const bad = JSON.stringify(t).match(/NaN|null,"px"/); assert.ok(!bad); assert.ok(Number.isFinite(R.worth(t)) && Number.isFinite(t.hp)); }
   assert.ok(worlds >= 2, '이어 한 40일에 세상 사건 ' + worlds + '번'); assert.ok(t.jobs.cafe > 0); assert.equal(JSON.parse(R.save(t)).v, 5); assert.ok(R.load(R.save(t)));
   for (const a of R.ASSETS) assert.ok(Number.isFinite(t.market.px[a.id]) && t.market.px[a.id] >= 10, a.id);
 })));
+ok('당일 등락률: 시가가 없으면 첫 기록 대비, 시가나 기존 기록이 있으면 그대로', () => {
+  const s = R.create(5);
+  assert.equal(R.todayChange(s, 'daejang'), null);
+  let afternoon;
+  for (let slot = 1; slot <= 3; slot++) {
+    assert.ok(R.doRest(s));
+    const old = JSON.parse(R.save(s)); old.v = 4;
+    delete old.market.px.gold; delete old.market.hist.gold; delete old.market.chg.gold; delete old.hold.gold;
+    const migrated = R.load(JSON.stringify(old));
+    assert.deepEqual(R.todayChange(migrated, 'gold'), { pct: 0, fromOpen: false });
+    assert.deepEqual(migrated.market.hist.gold, [12500]);
+    const history = old.market.hist.daejang;
+    const expected = old.market.px.daejang / history[history.length - 1 - slot] - 1;
+    assert.deepEqual(R.todayChange(migrated, 'daejang'), { pct: expected, fromOpen: true });
+    assert.deepEqual(migrated.market.hist.daejang, history);
+    if (slot === 1) afternoon = R.load(R.save(migrated));
+  }
+  assert.deepEqual(R.todayChange(afternoon, 'gold'), { pct: 0, fromOpen: false });
+  for (let slot = 2; slot <= 3; slot++) {
+    assert.ok(R.doRest(afternoon));
+    assert.deepEqual(R.todayChange(afternoon, 'gold'), { pct: afternoon.market.px.gold / 12500 - 1, fromOpen: false });
+    assert.equal(afternoon.market.hist.gold.length, slot);
+  }
+  assert.ok(R.endDay(afternoon)); assert.ok(R.nextDay(afternoon));
+  const open = afternoon.market.px.gold;
+  assert.equal(R.todayChange(afternoon, 'gold'), null);
+  assert.ok(R.doRest(afternoon));
+  assert.deepEqual(R.todayChange(afternoon, 'gold'), { pct: afternoon.market.px.gold / open - 1, fromOpen: true });
+});
 ok('업적 48개: 새 여덟(N잡러 · 세상 사건 · 빗나간 예보 · 수리비 · 거꾸로ETF · 여러 바구니 · 성실 납부 · 멍멍)이 조건에 맞게 한 번씩', () => now(() => withTune({ event_p: 0, world_p: 0 }, () => {
   assert.equal(R.achList().length, 48); assert.equal(new Set(R.achList().map(a => a.id)).size, 48); assert.ok(R.achList().every(a => a.name && a.hint && a.icon));
   const s = at(8); s.hp = 100; for (const j of R.JOBS) { s.slot = j.id === 'driver' ? 2 : 1; s.hp = 100; s.did = null; assert.ok(R.doJob(s, j.id, 0.5), j.id); } assert.ok(s.ach.indexOf('jobs10') >= 0);
