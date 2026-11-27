@@ -222,13 +222,19 @@
 
   #journal-key { touch-action: manipulation; }
   #journal-key[aria-expanded="true"] { --bs: var(--bs-b); --bsd: var(--bs-b-d); }
-  #journal-panel { top: 334px; right: 6px; z-index: 2; width: 390px; padding: 0 3px 3px; }
-  #journal-panel .zh { height: 50px; justify-content: space-between; }
-  #journal-panel h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 22px; }
-  #journal-panel .btn { height: 44px; min-width: 52px; }
-  #journal-list { max-height: 206px; overflow: auto; overscroll-behavior: contain; padding: 0 5px; user-select: text; }
-  body > #journal-panel { position: fixed; inset: max(8px, calc(50dvh - 180px)) 6px auto auto; width: min(390px, calc(100% - 12px)); }
-  body > #journal-panel #journal-list { max-height: min(310px, 50dvh); }
+  #s-play:has(#journal-key[aria-expanded="true"]) :disabled { pointer-events: none; } /* 꺼진 버튼 위의 입력도 일지 바깥 클릭으로 받는다 */
+  #journal-panel { top: var(--journal-top); left: var(--journal-left); width: var(--journal-width); height: var(--journal-height);
+    z-index: 6; flex-direction: column; overflow: visible; padding: 0 3px 3px; }
+  #journal-panel:not([hidden]) { display: flex; }
+  body > #journal-panel { position: fixed; z-index: 2; }
+  #journal-panel::before { content: ""; position: absolute; top: -15px; left: var(--journal-tip); width: 12px; height: 12px;
+    box-sizing: border-box; border-top: 2px solid var(--k); border-left: 2px solid var(--k); background: var(--b);
+    transform: translateX(-50%) rotate(45deg); pointer-events: none; }
+  #journal-panel.above::before { top: auto; bottom: -15px; transform: translateX(-50%) rotate(225deg); background: var(--c); }
+  #journal-panel.anchor-hidden::before { display: none; }
+  #journal-panel .zh { height: 40px; flex: none; }
+  #journal-panel h2 { margin: 0; font-size: 22px; }
+  #journal-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 5px; user-select: text; }
   #journal-list:focus-visible { outline: 2px dashed var(--B); outline-offset: -2px; }
   .journal-day { position: sticky; top: 0; margin: 0; padding: 5px 0; background: var(--c); border-bottom: 1px solid var(--b); color: var(--B); font-size: 18px; }
   .journal-entry { margin: 0; padding: 6px; border-left: 3px solid var(--b); border-bottom: 1px dotted var(--e); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1050,8 +1056,6 @@
   .compact-layout #season-details { max-width: calc(100vw - 48px); }
   .compact-layout #hud .sky-window { width: 124px; }
   .compact-layout #hud > .goal { flex: 1 0 100%; height: auto; min-height: 36px; }
-  .compact-layout #journal-panel { position: relative; inset: auto; order: 0; width: 100%; }
-  .compact-layout #journal-list { max-height: min(310px, 50dvh); }
   .compact-layout .goal-go { min-height: 44px; }
   .compact-layout #coach { order: 1; position: static; }
   .compact-layout #coach .bubble { position: static; width: 100%; }
@@ -1167,7 +1171,7 @@
   <div id="s-play" class="screen hide">
     <div id="hud" class="zone" data-zone="hud"></div>
     <section id="journal-panel" class="zone" aria-labelledby="journal-title" hidden>
-      <div class="zh"><h2 id="journal-title">일지</h2><button type="button" class="btn small" id="journal-close" data-do="journal-close">닫기</button></div>
+      <div class="zh"><h2 id="journal-title">일지</h2></div>
       <div id="journal-list" role="region" aria-label="날짜별 기록" tabindex="0"></div>
     </section>
     <div id="me" class="zone" data-zone="me"></div>

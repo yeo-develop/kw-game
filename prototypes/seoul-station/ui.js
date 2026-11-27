@@ -110,21 +110,52 @@
     stage.style.transform = compact ? 'none' : 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
     const coach = $('coach'), coachParent = compact && scene === 'play' ? $('s-play') : stage;
     if (coach.parentNode !== coachParent) coachParent.appendChild(coach);
-    placeVeil(); placeJournal(compact); ui.coachDirty = true;
+    placeVeil(); placeJournal(); ui.coachDirty = true;
     const bs = document.body && document.body.style;
     if (bs) { bs.backgroundSize = 48 * k + 'px ' + 48 * k + 'px'; bs.backgroundPosition = x + 'px ' + y + 'px'; } // 테두리의 바둑판이 무대의 바둑판과 이어지게
     infoPopup.reposition();
   }
-  function placeJournal(compact) {
-    const panel = $('journal-panel'), outside = scene === 'play' && compactScreen.matches && !compact;
-    if ((panel.parentNode === document.body) === outside) return;
-    const focused = panel.contains(document.activeElement) ? document.activeElement : null;
-    // 뒤쪽 날짜의 작은 화면에서도 일지의 글자는 무대와 함께 줄이지 않는다.
-    if (outside) document.body.appendChild(panel);
-    else $('hud').after(panel);
-    focused?.focus({ preventScroll: true });
+  function placeJournal() {
+    const panel = $('journal-panel'), outside = scene === 'play' && compactScreen.matches;
+    if ((panel.parentNode === document.body) !== outside) {
+      const focused = panel.contains(document.activeElement) ? document.activeElement : null;
+      if (outside) document.body.appendChild(panel);
+      else $('hud').after(panel);
+      focused?.focus({ preventScroll: true });
+    }
+    positionJournal();
+  }
+  function positionJournal() {
+    const panel = $('journal-panel'), button = $('journal-key');
+    if (panel.hidden || !button) return;
+    const outside = panel.parentNode === document.body, view = window.visualViewport;
+    const bounds = stage.getBoundingClientRect(), key = button.getBoundingClientRect();
+    const scale = outside ? 1 : bounds.width / stage.offsetWidth;
+    const x = outside ? view?.offsetLeft || 0 : bounds.left, y = outside ? view?.offsetTop || 0 : bounds.top;
+    const right = outside ? x + (view?.width || innerWidth) : bounds.right;
+    const bottom = outside ? y + (view?.height || innerHeight) : $('board').getBoundingClientRect().top;
+    const margin = 8 * scale, center = (key.left + key.right) / 2;
+    const width = Math.min((outside ? 390 : 360) * scale, right - x - 2 * margin);
+    const left = clamp(center - width / 2, x + margin, right - margin - width);
+    const top = Math.max(y + margin, key.bottom + margin, $('hud').getBoundingClientRect().bottom + 4 * scale);
+    const belowRoom = bottom - margin - top;
+    const aboveBottom = Math.min(bottom - margin, key.top - margin);
+    const aboveRoom = aboveBottom - y - margin;
+    const above = outside && belowRoom < 128 && aboveRoom > belowRoom;
+    const height = Math.min(244 * scale, above ? aboveRoom : belowRoom);
+    const offset = (value, edge) => (value - (outside ? 0 : edge)) / scale + 'px';
+    panel.style.setProperty('--journal-left', offset(left, x));
+    panel.style.setProperty('--journal-top', offset(above ? aboveBottom - height : top, y));
+    panel.style.setProperty('--journal-width', width / scale + 'px');
+    panel.style.setProperty('--journal-height', height / scale + 'px');
+    panel.style.setProperty('--journal-tip', clamp((center - left) / scale - panel.clientLeft, 8, width / scale - 26) + 'px');
+    panel.classList.toggle('above', above);
+    panel.classList.toggle('anchor-hidden', key.bottom <= y || key.top >= bottom || center < x || center > right);
   }
   addEventListener('resize', () => { const wasCompact = stage.classList.contains('compact-layout'); fit(); if (wasCompact !== compactLayout()) render(); }); fit();
+  $('s-play').addEventListener('scroll', positionJournal, { passive: true });
+  window.visualViewport?.addEventListener('resize', positionJournal);
+  window.visualViewport?.addEventListener('scroll', positionJournal);
   function placeVeil() {
     const m = ui.modal, perk = m?.type === 'perk';
     const outsideStage = perk || (compactScreen.matches && m && (compactLayout() || ['intro', 'mg', 'night'].includes(m.type) || veil.classList.contains('first-quest-veil')));
@@ -248,11 +279,15 @@
   const rearm = () => hold(15); // 창이 막힌 동안 또 누르면 조금 더 막는다: 연타로는 안 넘어가고, 멈췄다 눌러야 넘어간다
   const GUARD = { world: 30, credit: 12, night: 36, quest: 36, tier: 36, liq: 36, intro: 36, perk: 30, event: 24, confirm: 24, den: 30, roadmap: 12, buy: 24, repay: 18, study: 12, act1: 45, foreclose: 36, biz: 30, drill: 24, shock: 30, collapse: 45, story: 36, lease: 24 }; // 창마다 처음 막는 걸음 수
   const DEN_ROLL = 42, DEN_AFTER = 24; // 도박장: 주사위가 구르는 걸음 수(0.7초) · 결과가 뜬 뒤 누름을 버리는 걸음 수
+  function outsideJournal(target) {
+    const panel = $('journal-panel');
+    return !panel.hidden && !panel.contains(target) && !$('journal-key')?.contains(target);
+  }
   addEventListener('keydown', e => {
     startAudio();
     if (!ui.modal && !$('journal-panel').hidden) {
       if (e.code === 'Escape') { e.preventDefault(); setJournal(false); return; }
-      if ($('journal-panel').contains(e.target)) return; // 일지에서는 브라우저의 스크롤 · 버튼 키를 그대로 쓴다
+      if ($('journal-panel').contains(e.target)) return; // 일지에서는 브라우저의 스크롤 키를 그대로 쓴다
     }
     if (e.code === 'Escape' && $('season-badge')?.getAttribute('aria-expanded') === 'true') {
       toggleSeason(false); $('season-badge').focus({ preventScroll: true }); e.preventDefault(); return;
@@ -298,6 +333,7 @@
   });
   const mgPress = code => { try { ui.modal.mg.press(code); } catch (e) { /* 미니게임의 오류가 판을 멈추지 않게 */ } };
   document.addEventListener('pointerdown', e => {
+    if (outsideJournal(e.target)) { e.preventDefault(); return; } // 뒤에 있는 입력칸으로 초점이 옮겨가지 않게
     if (!e.target.closest('.date-group')) toggleSeason(false);
     if (stage.contains(e.target) || veil.contains(e.target)) startAudio();
     const m = ui.modal;
@@ -319,6 +355,12 @@
     const rail = card.parentElement, left = card.offsetLeft;
     rail.scrollLeft = clamp(rail.scrollLeft, left + card.offsetWidth - rail.clientWidth, left);
   });
+  document.addEventListener('click', e => {
+    if (!outsideJournal(e.target)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    setJournal(false, false);
+  }, true); // 무대 바깥도 포함하고, 버튼과 차트에 닿기 전에 이 클릭을 쓴다.
   document.addEventListener('click', e => {
     if (!stage.contains(e.target) && !veil.contains(e.target) && !$('journal-panel').contains(e.target)) return;
     const sr = stage.getBoundingClientRect();
@@ -480,7 +522,7 @@
       return;
     }
     if (what === 'season') { toggleSeason($('season-details').hidden); sfx.click(); return; }
-    if (what === 'journal' || what === 'journal-close') { setJournal(what === 'journal' && $('journal-panel').hidden); sfx.click(); return; }
+    if (what === 'journal') { setJournal($('journal-panel').hidden); sfx.click(); return; }
     if (what === 'coachoff') { ui.tut = false; guideOff(); sfx.click(); toast(I('info') + '<span>안내를 껐습니다. 제목 화면에서 다시 켤 수 있습니다</span>', 'tip', 300); render(); return; }
     const c = coachNow();
     if (what === 'coachok') { if (c && c.ok) { if (c.id === 'goal') { ui.tut = false; meta.tut = 2; } else meta.seen[c.id] = 1; saveMeta(); sfx.click(); hold(12); render(); } return; }
@@ -1364,6 +1406,7 @@
       '<button class="btn sq" data-do="mute" title="소리 (M)">' + I(ui.mute ? 'mute' : 'sound') + '</button>' +
       '<button class="btn sq" data-do="quit" title="제목 화면으로 (지금까지는 저장됨)">' + I('home') + '</button></div>';
     fitHud();
+    positionJournal();
     if (expanded) toggleSeason(true);
     if (focused) $('season-badge').focus({ preventScroll: true });
     if (journalFocused) $('journal-key').focus({ preventScroll: true });
@@ -1390,10 +1433,12 @@
     ui.coachDirty = true;
     if (open) {
       infoPopup.hide();
+      if (compactLayout()) button?.scrollIntoView({ block: 'nearest' });
+      placeJournal();
       renderJournal();
-      $('journal-list').scrollTop = 0;
-      $('journal-close').focus({ preventScroll: true });
-      if (compactLayout()) panel.scrollIntoView({ block: 'nearest' });
+      const list = $('journal-list');
+      list.scrollTop = 0;
+      list.focus({ preventScroll: true });
     } else if (restore) {
       button?.focus({ preventScroll: true });
       if (compactLayout()) button?.scrollIntoView({ block: 'nearest' });

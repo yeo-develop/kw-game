@@ -856,6 +856,56 @@ const LINT = () => {
       await key('Space', 20); if ((await st()).modal) forced.push('신용 보고서가 Space 로 안 닫힘'); }
     await G(() => { window.CONFIG.event_p.value = 0.5; window.CONFIG.world_p.value = 0.2; });
   }
+  // M. 일지: 읽기 초점 · 바깥 누름 한 번으로 닫기 · 다음 누름부터 원래 행동
+  await fresh();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await G(() => {
+    const g = window.game, s = g.state.raw;
+    Object.assign(s, { day: 9, slot: 3, tier: 4, lease: 'own', addr: 1, cash: 30000000, quest: 99 });
+    s.hold.etf = { units: 2, cost: 2 * s.market.px.etf, min: 2 };
+    s.log = Array.from({ length: 43 }, (_, i) => ({ day: 9, text: '기록 ' + i + '\n두 번째 줄', tone: 'good' }));
+    g.render(); g.run('sel', 'etf'); g.step(40);
+  });
+  const journal = () => G(() => {
+    const panel = document.getElementById('journal-panel'), list = document.getElementById('journal-list');
+    const button = document.getElementById('journal-key'), s = window.game.state;
+    const r = panel.getBoundingClientRect(), b = button.getBoundingClientRect();
+    return { hidden: panel.hidden, expanded: button.getAttribute('aria-expanded'),
+      buttons: panel.querySelectorAll('button').length, focus: document.activeElement.id, scroll: list.scrollTop,
+      count: list.querySelectorAll('.journal-entry').length, first: list.querySelector('.journal-entry')?.textContent,
+      underHud: r.top >= document.getElementById('hud').getBoundingClientRect().bottom && r.bottom < document.getElementById('board').getBoundingClientRect().top,
+      tipAligned: Math.abs(r.left + panel.clientLeft + parseFloat(getComputedStyle(panel, '::before').left) - (b.left + b.right) / 2) < 1,
+      owned: s.raw.hold.etf?.units || 0, cash: s.cash, day: s.day, slot: s.slot, modal: s.modal };
+  });
+  const notebook = '#journal-key', sale = '[data-do="sellq"]', endDay = '[data-do="endday"]';
+  await click(notebook);
+  const opened = await journal();
+  if (opened.hidden || opened.expanded !== 'true' || opened.buttons || opened.focus !== 'journal-list' ||
+      opened.count !== 40 || opened.first !== '기록 42\n두 번째 줄') forced.push('일지 열기: 읽기 초점 · 최근 기록 40건 · 줄바꿈이 필요함');
+  if (!opened.underHud || !opened.tipAligned) forced.push('일지는 공책을 가리키며 HUD 아래와 판 위 사이에 놓여야 함');
+  await page.keyboard.press('PageDown');
+  try { await page.waitForFunction(() => document.getElementById('journal-list').scrollTop > 0, null, { timeout: 1000 }); }
+  catch { forced.push('일지 목록에서 PageDown으로 스크롤되지 않음'); }
+  await click('#journal-list');
+  if ((await journal()).hidden) forced.push('일지 안쪽을 눌렀는데 닫힘');
+  await page.keyboard.press('Escape');
+  const escaped = await journal();
+  if (!escaped.hidden || escaped.expanded !== 'false' || escaped.focus !== 'journal-key') forced.push('Esc로 일지를 닫고 공책으로 초점을 돌려야 함');
+  await page.keyboard.press('Enter'); await click(notebook);
+  if (!(await journal()).hidden) forced.push('공책을 다시 눌렀는데 일지가 닫히지 않음');
+  await click(notebook); await page.mouse.click(5, 5);
+  if (!(await journal()).hidden) forced.push('무대 밖 여백을 눌렀는데 일지가 닫히지 않음');
+  await click(notebook); await click(sale);
+  const dismissed = await journal();
+  if (!dismissed.hidden || dismissed.owned !== opened.owned || dismissed.cash !== opened.cash) forced.push('팔기 첫 클릭은 일지만 닫아야 함');
+  await click(sale);
+  if ((await journal()).owned !== opened.owned - 1) forced.push('일지가 닫힌 뒤 팔기가 작동하지 않음');
+  await click(notebook); await click(endDay);
+  const beforeNight = await journal();
+  if (!beforeNight.hidden || beforeNight.modal || beforeNight.day !== opened.day || beforeNight.slot !== opened.slot) forced.push('하루 마치기 첫 클릭은 일지만 닫아야 함');
+  await click(endDay);
+  if ((await journal()).modal !== 'night') forced.push('일지가 닫힌 뒤 정산이 열리지 않음');
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=figures'); await page.screenshot({ path: path.join(out, 'figures.png') });
   const zones = await G(() => document.querySelectorAll('[data-zone]').length);
   forced.unshift(...forcedMain);
