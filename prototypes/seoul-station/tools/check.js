@@ -19,6 +19,13 @@ const LINT = () => {
     const r = document.createRange(); r.selectNodeContents(n);
     const rs = [...r.getClientRects()].filter(b => b.width > 0.5 && b.height > 0.5); if (!rs.length) continue;
     const b = { x0: Math.min(...rs.map(q => q.left)), y0: Math.min(...rs.map(q => q.top)), x1: Math.max(...rs.map(q => q.right)), y1: Math.max(...rs.map(q => q.bottom)) };
+    const rail = el.closest('#job-rail');
+    if (rail) { // 스크롤로 가린 가로 부분은 빼되, 카드 안에 글이 들어가는지는 모든 알바에서 확인한다.
+      const card = el.closest('.card').getBoundingClientRect(), clip = rail.getBoundingClientRect();
+      if (b.x0 < card.left - 2 || b.x1 > card.right + 2 || b.y0 < card.top - 2 || b.y1 > card.bottom + 2) bad.push('알바 카드 밖: ' + t.slice(0, 24));
+      b.x0 = Math.max(b.x0, clip.left); b.x1 = Math.min(b.x1, clip.right);
+      if (b.x1 - b.x0 < 0.5) continue;
+    }
     const top = document.elementFromPoint((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
     if (!top || !(top === el || el.contains(top) || top.contains(el))) { // 다른 것 밑에 깔린 글자
       // 창 · 안내 · 알림처럼 위에 덮는 것에 가려진 글자는 보지 않는다. 그러나 같은 구역(같은 창) 안의 다른 것 밑에 깔린 글자는 아래의 겹침 검사에 넣는다
@@ -34,7 +41,7 @@ const LINT = () => {
       const pr = p.getBoundingClientRect();
       if (b.x1 > pr.right + 2 || b.y1 > pr.bottom + 2 || b.x0 < pr.left - 2 || b.y0 < pr.top - 2) { if (!(ps.textOverflow === 'ellipsis' || ps.webkitLineClamp !== 'none')) bad.push('잘림(' + (p.id || p.className) + '): ' + t.slice(0, 24)); break; }
     }
-    const box = el.closest('.arow,.opt,.sbtn,#hud,#me,#quest,#today,#board,.win,.e-box,.t-box'); // 종목 줄 · 고를 것 · 종목 단추 안에서 넘친 글도
+    const box = el.closest('.arow,.opt,.sbtn,#season-details,#hud,#me,#quest,#today,#board,.win,.e-box,.t-box'); // 종목 줄 · 고를 것 · 종목 단추 안에서 넘친 글도
     if (box) { const br = box.getBoundingClientRect(); if (b.x1 > br.right + 1 || b.y1 > br.bottom + 1 || b.x0 < br.left - 1 || b.y0 < br.top - 1) bad.push('칸 밖(' + (box.id || box.className) + '): ' + t.slice(0, 24)); }
     // 겹침은 보이는 부분끼리 잰다: … 으로 줄인 글(줄 수 제한 · 말줄임)의 가려진 줄은 overflow 로 안 보이므로 그 조상의 칸으로 자른다 (넘침 자체는 위의 잘림 검사가 본다)
     const v = Object.assign({}, b);
@@ -59,7 +66,11 @@ const LINT = () => {
   for (const w of root.querySelectorAll('#veil .win')) { const q = w.getBoundingClientRect(); if (q.height && (q.top < sr.top - 1 || q.bottom > sr.bottom + 1)) bad.push('창이 화면 밖: ' + ((w.querySelector('h2') || {}).textContent || w.className).slice(0, 16)); }
   // 버튼이 화면 밖이거나 서로 겹치는지
   const btns = [...root.querySelectorAll('button,[data-do]')].filter(e => !e.closest('.hide') && e.offsetParent !== null);
-  for (const e of btns) { const r = e.getBoundingClientRect(); if (r.right > sr.right + 1 || r.bottom > sr.bottom + 1 || r.left < sr.left - 1 || r.top < sr.top - 1) bad.push('버튼 화면 밖: ' + (e.textContent || '').trim().slice(0, 16)); }
+  for (const e of btns) {
+    const r = e.getBoundingClientRect(), clip = e.closest('#job-rail')?.getBoundingClientRect();
+    if ((clip ? Math.min(r.right, clip.right) : r.right) > sr.right + 1 || r.bottom > sr.bottom + 1 ||
+        (clip ? Math.max(r.left, clip.left) : r.left) < sr.left - 1 || r.top < sr.top - 1) bad.push('버튼 화면 밖: ' + (e.textContent || '').trim().slice(0, 16));
+  }
   return [...new Set(bad)];
 };
 (async () => {
@@ -158,8 +169,12 @@ const LINT = () => {
     // 창이 없을 때: 화면 점검 한 번씩
     if (s.day === 1 && s.slot === 0) { await shot('04_play_day1'); await hudCheck('1일째'); }
     if (s.tier === 1) await shot('05_sauna');
-    if (s.tier >= 1 && !seen.has('05b_shop') && s.cash >= 30000) { // 가게: 한 번 사 먹는다 (퀘스트 "든든하게 먹어라")
-      await click('#board .tabs [data-arg="shop"]'); await step(10); await shot('05b_shop');
+    if (s.tier >= 1 && !seen.has('05b_shop') && s.cash >= 30000 && s.quest === await QI('meal')) { // 가게: 퀘스트 "든든하게 먹어라"가 뜨면 한 번 사 먹는다.
+      const mealState = () => G(() => { const { cash, hp, slot, raw } = window.game.state; return [cash, hp, slot, raw.stats.meals]; });
+      const before = await mealState();
+      await click('#quest-route'); await step(10);
+      await click('#quest-route'); await step(10); await shot('05b_shop');
+      if (String(before) !== String(await mealState()) || !(await G(() => document.querySelector('#quest .q-prog > #quest-route[aria-current="location"]') && document.activeElement.matches('#board .food')))) forcedMain.push('가게로 반복 이동한 뒤 상태가 바뀌었거나 먹기 위치를 짚지 않음');
       await click('#board [data-do="eat"]'); await step(20); await shot('05c_shop_ate');
       if (!(await G(() => window.game.state.raw.stats.meals === 1 && !document.querySelector('#board [data-do="eat"]')))) forcedMain.push('가게에서 사 먹었는데 먹은 것으로 안 남거나 오늘 또 먹을 수 있음');
       await G(() => window.game.run('tab', 'road')); await step(5); continue; }
@@ -168,8 +183,8 @@ const LINT = () => {
     const mv = await G(() => { const R = window.Rules, S = window.game.state.raw, t = S.tier + 1; if (t > 3) return 0; const i = R.moveInfo(S, t); if (i.ok) return t; const hv = R.holdings(S).total.value; return t >= 2 && hv > 0 && i.have + hv * 0.98 >= i.need + 100000 ? -t : 0; });
     if (mv < 0 && style !== 'stay') { await G(() => { const g = window.game, S = g.state.raw; for (const a of ['daejang', 'buldak', 'hantang']) if (S.hold[a].units > 0) { g.run('tab', 'stock'); g.run('sel', a); g.run('sell', '1'); } }); await step(10); log.push(s.day + '일째: 보증금을 마련하려고 주식을 팔았다 (' + (-mv) + '단계로)'); continue; }
     if (mv > 0 && style !== 'stay' && (mv < 2 || s.cash >= 5 * M)) {
-      const inQuest = await G(t => !!document.querySelector('#quest [data-do="move"][data-arg="' + t + '"]'), mv);
-      if (inQuest) await click('#quest [data-do="move"]');
+      const inQuest = await G(t => document.getElementById('quest-route')?.getAttribute('aria-label').endsWith(window.Rules.HOMES[t].name + ' 입주'), mv);
+      if (inQuest) { await click('#quest-route'); if (mv === 1) await click('#board [data-do="move"]'); }
       else if (mv === 1) await click('#board [data-do="move"]');
       else { await G(() => window.game.run('roadmap')); await step(20); await shot('07_roadmap_move' + mv); await click('#veil [data-do="move"]'); }
       await step(20);
@@ -252,14 +267,16 @@ const LINT = () => {
   const fresh = async () => { await page.goto('file://' + path.resolve(dir, 'index.html') + '?manual=1&scene=play&seed=' + seed); await advanceOpening(page); await step(40); await G(() => { window.game.state.raw.beats = ['family1', 'family2', 'sign1', 'sign2', 'landlord1', 'landlord2']; }); }; // 일부러 만든 화면에서는 꿈의 장면 창이 끼어들지 않게 본 것으로 해 둔다 (장면 창은 J 에서 따로 본다)
   await fresh();
   await G(() => { const S = window.game.state.raw; S.day = 2; S.cash = 40000; S.quest = 2; window.game.render(); }); await step(10); await shot('40_roadmap_board_next'); // 찜질방 옮기기 버튼이 켜진 로드맵 판
-  if (!(await G(() => !!document.querySelector('#board .rung.next [data-do="move"]') && !!document.querySelector('#quest [data-do="move"]')))) forced.push('로드맵 판 · 상태창에 찜질방 옮기기 버튼이 없음');
+  await click('#quest-route');
+  if (!(await G(() => document.activeElement.matches('#board .rung.next [data-do="move"]') && window.game.state.tier === 0))) forced.push('찜질방 화살표가 입주 전에 로드맵 옮기기 버튼을 짚지 않음');
   if (await G(() => !!document.querySelector('#hud .wk'))) forced.push('고정비가 없는데(고시원 전) 위쪽 띠에 일곱 칸 띠가 보임 — "7일 기한"으로 읽힘');
   { const r = await G(() => ({ n: document.querySelectorAll('#board .rung').length, far: document.querySelectorAll('#board .rung.far').length, names: [...document.querySelectorAll('#board .rung .nm')].map(e => e.textContent), vals: document.querySelector('#board .ladder').textContent }));
     if (r.n !== 10 || r.names[9] !== '한국 최고 부자' || r.far < 7) forced.push('로드맵 판이 열 단계(먼 단계는 흐리게)가 아님: ' + JSON.stringify(r).slice(0, 200));
     const C = await G(() => { const c = window.CONFIG, n = window.Rules.num; return [n(c.price_home.value), n(c.price_apt.value), n(c.price_hotel.value), n(c.top_worth.value), '예치금 ' + n(c.gosiwon_dep.value), '보증금 ' + n(c.oneroom_dep.value)]; });
     for (const v of C.concat(['가게', '재벌'])) if (r.vals.indexOf(v) < 0) forced.push('로드맵 판에 ' + v + '이(가) 안 보임'); } // 값의 사다리 · 고시원 예치금 · 원룸 보증금(2026-11-19 보증금 부활)
   await G(qi => { const S = window.game.state.raw, R = window.Rules; S.tier = 1; S.quest = qi; S.cash = 120000; S.day = 6; window.game.render(); }, await QI('address')); await step(10); await shot('41_roadmap_board_short'); // 고시원 예치금에 못 미침: 이유 · 막대
-  if (!(await G(() => { const b = document.querySelector('#quest [data-do="why"]'); return !!b && /모자랍니다/.test(b.dataset.arg); }))) forced.push('상태창의 옮기기 버튼이 못 할 때 이유(moveInfo.why)를 안 줌');
+  await click('#quest-route');
+  if (!(await G(() => /모자랍니다/.test(document.querySelector('#toasts .toast.deny:last-child')?.textContent || '')))) forced.push('상태창의 옮기기 화살표가 잠금 이유(moveInfo.why)를 안 줌');
   if (!(await G(() => { const e = document.querySelector('#board .rung.next'); return /예치금 500,000/.test(e.textContent) && /돌려받는/.test([...e.querySelectorAll('[title]')].map(q => q.title).join()) && /380,000 더/.test(e.textContent); }))) forced.push('로드맵 고시원 칸에 예치금 · "돌려받는 돈"(설명) · 모자란 만큼이 없음');
   await G(() => window.game.run('roadmap')); await step(20);
   if (!(await G(() => /돌려받는 돈/.test(document.querySelector('#veil .road-note').textContent) && /예치금 500,000/.test(document.querySelector('#veil .rung.next').textContent) && /전세 650만·주 90만/.test(document.querySelector('#veil .ladder').textContent)))) forced.push('로드맵 창에 "보증금은 돌려받는 돈" 머리글 · 고시원 예치금 · 원룸의 전세 줄이 안 보임');
@@ -304,7 +321,7 @@ const LINT = () => {
   await G(() => { const S = window.game.state.raw; S.day = 17; window.game.render(); }); await step(10);
   if (await G(() => document.querySelectorAll('#quest .note.bill').length)) forced.push('고정비 이틀 전인데 알림이 뜸');
   await G(() => { const S = window.game.state.raw; S.cash = 90000000; window.game.render(); }); await step(60); await shot('43_house_button'); await hudCheck('내 집 사기');
-  if (!(await G(() => !!document.querySelector('#hud [data-do="house"]') && !!document.querySelector('#quest [data-do="house"]')))) forced.push('현금이 내 집 값을 넘었는데 위쪽 띠 · 상태창에 내 집 사기 버튼이 없음');
+  if (!(await G(() => !!document.querySelector('#hud [data-do="house"]') && document.getElementById('quest-route')?.title.includes('내 집 사기')))) forced.push('현금이 내 집 값을 넘었는데 위쪽 띠 · 상태창에 내 집 사기 버튼이 없음');
   await G(() => window.game.run('roadmap')); await step(20); await shot('44_roadmap_modal_late');
   if (!(await G(() => !!document.querySelector('#veil .rung [data-do="house"]') && document.querySelectorAll('#veil .rung').length === 10))) forced.push('로드맵 창에 열 단계 · 내 집 사기 버튼이 없음');
   await G(() => window.game.press('Space')); await step(20);
@@ -418,7 +435,7 @@ const LINT = () => {
   await closeAll();
   await step(10); await shot('56_auto_cards');
   // 아파트에서는 알바가 일곱: 전단지는 앞쪽 넷에 있다 (◀ 로 넘긴 뒤 본다)
-  { const c = await G(() => { window.game.run('jpage', '-1'); const R = window.Rules, S = window.game.state.raw, a = R.acts(S); return { biz: S.biz, pay: R.num(a.find(x => x.id === 'flyer').pay), base: R.num(Math.round(90000 * Math.pow(5, 2) / 1000) * 1000), card: document.querySelector('#today [data-arg="flyer"] .pay').textContent, rest: (document.querySelector('#today [data-do="rest"] .auto') || {}).textContent || '', study: (document.querySelector('#today [data-do="study"] .auto') || {}).textContent || '', auto: R.num(a.find(x => x.kind === 'rest').auto) }; });
+  { const c = await G(() => { document.getElementById('job-rail').scrollLeft = 0; const R = window.Rules, S = window.game.state.raw, a = R.acts(S); return { biz: S.biz, pay: R.num(a.find(x => x.id === 'flyer').pay), base: R.num(Math.round(90000 * Math.pow(5, 2) / 1000) * 1000), card: document.querySelector('#today [data-arg="flyer"] .pay').textContent, rest: (document.querySelector('#today [data-do="rest"] .auto') || {}).textContent || '', study: (document.querySelector('#today [data-do="study"] .auto') || {}).textContent || '', auto: R.num(a.find(x => x.kind === 'rest').auto) }; });
     if (c.biz !== 2 || c.card !== c.pay || c.pay !== c.base) forced.push('법인 뒤 전단지 카드 일당이 ×25 가 아님: ' + JSON.stringify(c));
     if (!/쉬어도/.test(c.rest) || c.rest.indexOf(c.auto) < 0 || c.study.indexOf(c.auto) < 0) forced.push('쉬기 · 공부 카드에 "쉬어도 +자동 수입"이 없음: ' + JSON.stringify(c)); }
   // 자동 수입: 쉬면 사업 매출이 들어오고 떠오른다
@@ -436,7 +453,7 @@ const LINT = () => {
     const r = await G(() => ({ assets: (window.Rules.intelView(window.game.state.raw) || {}).assets, right: [...document.querySelectorAll('#board .icol.study .nitem')].map(e => e.textContent).join(' | '), know: (document.querySelector('#board .know') || {}).textContent || '', xp: window.game.state.raw.know }));
     if (!r.assets || r.assets.join() !== 'buldak' || !/화끈식품/.test(r.right) || /대장전자|달나라/.test(r.right)) forced.push('공부한 종목만 리포트 칸에 보여야 함: ' + JSON.stringify(r));
     if (r.xp !== 1 || !/투자공부1단계/.test(r.know.replace(/\s/g, '')) || !/1 \/ 2번/.test(r.know) || !/56%/.test(r.know)) forced.push('뉴스·공부 탭의 투자 공부(단계 · 쌓인 횟수 1 / 2 · 리포트 정확도)가 다름: ' + JSON.stringify(r));
-    if (!(await G(() => /아침 값에 이미 들어감/.test(document.querySelector('#board .icol.news h4').textContent)))) forced.push('소식 칸에 "아침 값에 이미 들어감"이 없음'); }
+    if (!(await G(() => document.querySelector('#board .icol.news h4').textContent.trim() === '오늘 소식'))) forced.push('소식 칸 제목에 "오늘 소식" 이외의 문구가 표시됨'); }
   // D2. 리포트 채점: 어제 리포트가 붙은 오늘 소식 → 소식 옆 딱지가 글로 "리포트" → 그 소식의 하루가 끝난 밤 정산에 "리포트 맞음 / 틀림" 한 줄
   await G(() => { const g = window.game, S = g.state.raw; S.slot = 0; S.hp = 100; S.event = null; S.offer = null; S.picks = 0; S.market.news = S.market.news.filter(n => !(n.day === S.day && n.asset === 'buldak')); S.market.news.push({ id: 9801, day: S.day, asset: 'buldak', dir: 1, src: 'article', truth: false, mag: 0.05, head: '화끈식품 신제품 품절 대란', pre: 0 }); S.market.brief = { day: S.day, madeOn: S.day - 1, ht: null, items: [{ nid: 9801, asset: 'buldak', dir: 1, by: 'study' }] }; g.run('tab', 'info'); g.render(); });
   await step(10); await shot('57b_news_report_tag');
@@ -484,7 +501,7 @@ const LINT = () => {
   await step(60); await closeAll(); await shot('61_hotel_goal_long'); await hudCheck('호텔 · 긴 숫자 (선언 전)');
   if (await G(() => !!document.querySelector('#hud [data-do="top"]'))) forced.push('순자산이 기준 아래인데 선언 버튼이 뜸');
   await G(() => { const S = window.game.state.raw; S.cash = 34999999999; window.game.render(); }); await step(60); await shot('62_hotel_declare'); await hudCheck('호텔 · 가장 긴 숫자');
-  { const h = await G(() => ({ hud: !!document.querySelector('#hud [data-do="top"]'), quest: !!document.querySelector('#quest [data-do="top"]'), over: document.getElementById('hud').scrollWidth - document.getElementById('hud').clientWidth, cash: document.getElementById('cash').textContent }));
+  { const h = await G(() => ({ hud: !!document.querySelector('#hud [data-do="top"]'), quest: document.getElementById('quest-route')?.title.includes('한국 최고 부자 선언'), over: document.getElementById('hud').scrollWidth - document.getElementById('hud').clientWidth, cash: document.getElementById('cash').textContent }));
     if (!h.hud || !h.quest) forced.push('호텔에서 순자산이 기준을 넘었는데 위쪽 띠 · 상태창에 선언 버튼이 없음: ' + JSON.stringify(h));
     if (h.over > 0 || h.cash !== '34,999,999,999원') forced.push('가장 긴 숫자에서 위쪽 띠가 넘침: ' + JSON.stringify(h)); }
   await G(() => window.game.run('roadmap')); await step(20); await shot('63_roadmap_10_hotel');
@@ -750,28 +767,34 @@ const LINT = () => {
       if (!(b.rent > 0 && b.div > 0 && b.inDays === 0) || !(n.cl > 0) || n.missed !== 0 || n.credit !== 655 || !(n.re >= 2)) forced.push('일요일 정산: 자동 대출(연체 아님) · 신용 +15 · 시세 기록이 다름: ' + JSON.stringify({ b, n }));
       await key('Space', 40); await closeAll(); }
   }
-  // L. 2026-11-21 피드백으로 생긴 화면을 실제 버튼으로: 알바 넘기기(◀ ▶ · ← → · 숫자 키) · 새 알바 한 판(카페: Space 로 붓고 멈추기) · 세상 사건(예보 칩 → 닥친 아침의 창 → 못 하는 알바 · 뉴스 탭)
+  // L. 알바 스크롤 · 새 알바 한 판(카페: Space 로 붓고 멈추기) · 세상 사건(예보 칩 → 닥친 아침의 창 → 못 하는 알바 · 뉴스 탭)
   //    · 종목 세 줄 칸에서 ETF 사기 · 코인 고르기(멍멍코인으로 열고 정리) · 은행의 신용 다섯 항목 → 신용 보고서
   {
     const veil = () => G(() => ({ modal: window.game.state.modal, t: (document.querySelector('#veil .win') || {}).textContent || '' }));
     const key = async (k, n) => { await G(k => window.game.press(k), k); await step(n || 20); };
-    const names = () => G(() => ({ cards: [...document.querySelectorAll('#today .card .nm')].map(e => e.textContent), pager: (document.querySelector('#today .jpg b') || {}).textContent || '', left: !!(document.querySelector('#today [data-do="jpage"][data-arg="-1"]') || {}).disabled, right: !!(document.querySelector('#today [data-do="jpage"][data-arg="1"]') || {}).disabled }));
+    const rail = () => G(() => {
+      const e = document.getElementById('job-rail');
+      return { jobs: [...e.querySelectorAll('.nm')].map(el => el.textContent), fixed: [...document.querySelectorAll('.action-fixed .nm')].map(el => el.textContent),
+        left: e.scrollLeft, max: e.scrollWidth - e.clientWidth, keys: [...document.querySelectorAll('#today .card > .key')].map(el => el.textContent) };
+    });
     await fresh();
     await G(() => { const g = window.game, S = g.state.raw; window.CONFIG.event_p.value = 0; window.CONFIG.world_p.value = 0; // 이 구획은 정해 둔 사건만 본다
       Object.assign(S, { tier: 4, lease: 'own', homeVal: 11000000, deposit: 0, addr: 1, credit: 640, cash: 30000000, hp: 100, day: 9, movedDay: 2, slot: 0, quest: 99, offer: null, picks: 0, event: null, xp: 0, inten: {} }); S.stats.maxTier = 4; S.market.world = []; S.market.news = [];
       Object.assign(g.meta.seen, { stock: 1, coin: 1, cafe: 1 }); g.render(); });
     await closeAll(); await step(10);
-    // 1. 알바 넘기기: 내 집이면 알바가 여섯 — 처음에는 새로 열린 일부터 넷
-    { let n = await names(); await shot('91_jobs_page');
-      if (n.cards.join() !== '편의점,배달,카페,과외,쉬기,공부' || n.pager !== '일 3~6 / 6' || n.left || !n.right) forced.push('내 집의 오늘 칸: 새로 열린 일부터 넷(편의점 · 배달 · 카페 · 과외) + 쉬기 · 공부, 머리줄에 "일 3~6 / 6"이어야 함: ' + JSON.stringify(n));
-      await click('#today [data-do="jpage"][data-arg="-1"]'); await step(5); n = await names(); await shot('91b_jobs_page_old');
-      if (n.cards.join() !== '전단지,상하차,편의점,배달,쉬기,공부' || n.pager !== '일 1~4 / 6' || !n.left || n.right) forced.push('◀ 를 누르면 앞의 일 넷(전단지 · 상하차 · 편의점 · 배달)이 보여야 함: ' + JSON.stringify(n));
-      await key('ArrowRight', 5); n = await names(); if (n.cards[3] !== '과외') forced.push('→ 키로 뒤의 일로 넘어가지 않음: ' + JSON.stringify(n));
+    // 1. 내 집 알바 여섯과 고정 행동. 처음에는 새로 열린 일을 보여 주고 갱신 뒤에도 고른 위치가 남는다.
+    { const n = await rail(); await shot('91_jobs_rail_end');
+      if (n.jobs.join() !== '전단지,상하차,편의점,배달,카페,과외' || n.fixed.join() !== '쉬기,공부' || n.left !== n.max || n.max <= 0 || n.keys.join() !== '5,6') forced.push('내 집의 긴 알바 줄과 고정 행동(5·6) 또는 처음 표시할 스크롤 위치가 다름: ' + JSON.stringify(n));
+      await G(() => { document.getElementById('job-rail').scrollLeft = 0; window.game.render(); }); await shot('91b_jobs_rail_start');
+      if ((await rail()).left !== 0) forced.push('다시 그리면 앞의 알바를 보던 위치를 잃음');
+      await page.keyboard.press('Digit3'); await step(5);
+      if ((await st()).modal) forced.push('긴 목록에서 알바 번호를 누르면 미리보기가 열림');
       const cafe = await G(() => { const c = document.querySelector('#today .card[data-arg="cafe"]'); return { tag: (c.querySelector('.tag.mod') || {}).textContent || '', pay: c.querySelector('.pay').textContent, want: window.Rules.num(window.Rules.acts(window.game.state.raw).find(a => a.id === 'cafe').pay) }; });
       if (cafe.tag !== '+15%' || cafe.pay !== cafe.want) forced.push('오전의 카페 카드에 "+15%" 딱지와 그만큼 오른 일당이 없음: ' + JSON.stringify(cafe)); }
-    // 2. 숫자 키 3 = 지금 보이는 셋째 카드(카페) → 시작 전 화면 → 진짜 한 판을 손으로(Space 로 붓고 멈추기)
-    { await key('Digit3', 20); let v = await G(() => ({ modal: window.game.state.modal, pre: window.game.state.pre, title: (document.querySelector('.mg-head b') || {}).textContent || '', how: (document.querySelector('.mg-how') || {}).textContent || '' })); await step(120); await shot('92_cafe_pre');
-      if (v.modal !== 'mg' || !v.pre || v.title !== '카페 음료' || !/Space 로 붓기 시작/.test(v.how)) forced.push('숫자 키 3 으로 셋째 카드(카페)의 시작 전 화면이 안 열림: ' + JSON.stringify(v));
+    // 2. 카페 카드에 키보드 초점을 두고 미리보기 → 진짜 한 판을 손으로(Space 로 붓고 멈추기)
+    { await page.locator('[data-act="cafe"] .card-main').focus(); await page.keyboard.press('Enter'); await step(20);
+      let v = await G(() => ({ modal: window.game.state.modal, pre: window.game.state.pre, title: (document.querySelector('.mg-head b') || {}).textContent || '', how: (document.querySelector('.mg-how') || {}).textContent || '' })); await step(120); await shot('92_cafe_pre');
+      if (v.modal !== 'mg' || !v.pre || v.title !== '카페 음료' || !/Space 로 붓기 시작/.test(v.how)) forced.push('카페 카드에서 Enter로 시작 전 화면이 안 열림: ' + JSON.stringify(v));
       const c0 = await G(() => window.game.state.raw.cash);
       await key('Space', 4);
       const r = await G(() => { const g = window.game, hand = window.Minigames._hand('cafe', null, () => 0.5); let n = 0, shotAt = 0; for (let f = 0; f < 1500 && g.mg && !g.mg.done; f++) { const c = hand(g.mg._state, 1 / 60); if (c) { g.press(c); n++; } g.step(1); } return { done: !!(g.mg && g.mg.done), score: g.mg && g.mg.result ? g.mg.result.score : -1, detail: g.mg && g.mg.result ? g.mg.result.detail : '', presses: n }; });
@@ -785,14 +808,20 @@ const LINT = () => {
       let h = await G(() => [...document.querySelectorAll('#today .zh .wchip')].map(e => e.textContent + '|' + e.title)); await shot('93_forecast_chip');
       if (h.length !== 1 || !/^내일태풍\|내일 예보: 태풍 \(열에 일곱 번쯤 맞음\) — 야외 알바 불가/.test(h[0])) forced.push('오늘 칸 머리줄에 "내일 태풍" 예보 칩(맞을 확률 · 무엇이 달라지는지)이 없음: ' + JSON.stringify(h));
       await click('#today .zh .wchip'); await step(5);
-      const nw = await G(() => ({ tab: (document.querySelector('#board .tabs .on') || {}).textContent || '', lines: [...document.querySelectorAll('#board .wline')].map(e => e.textContent), season: (document.querySelector('#board .chip.season') || {}).textContent || '' })); await shot('93b_news_forecast');
-      if (!/뉴스/.test(nw.tab) || nw.lines.length !== 1 || !/내일 예보.*태풍.*야외 알바 불가/.test(nw.lines[0]) || !/가을.*겨울까지 \d+일/.test(nw.season)) forced.push('예보 칩을 누르면 뉴스 탭이 열리고 "내일 예보 태풍" 한 줄 · 계절이 보여야 함: ' + JSON.stringify(nw));
+      const nw = await G(() => ({ tab: (document.querySelector('#board .tabs .on') || {}).textContent || '', lines: [...document.querySelectorAll('#board .wline')].map(e => e.textContent), season: document.getElementById('season-badge').textContent,
+        hidden: document.getElementById('season-details').hidden, duplicate: !!document.querySelector('#board .chip.season') })); await shot('93b_news_forecast');
+      if (!/뉴스/.test(nw.tab) || nw.lines.length !== 1 || !/내일 예보.*태풍.*야외 알바 불가/.test(nw.lines[0]) || nw.season !== '가을' || !nw.hidden || nw.duplicate) forced.push('예보 칩은 뉴스에서 태풍을 열고 날짜 옆에서만 계절을 표시해야 함: ' + JSON.stringify(nw));
+      await click('#season-badge');
+      const season = await G(() => ({ open: document.getElementById('season-badge').getAttribute('aria-expanded'), details: document.getElementById('season-details').textContent }));
+      if (season.open !== 'true' || season.details !== '겨울까지 6일 · 15일째 시작') forced.push('9일째의 계절 배지가 겨울 전환 날짜를 열어야 함: ' + JSON.stringify(season));
+      await page.keyboard.press('Escape');
+      if (!(await G(() => document.getElementById('season-details').hidden && document.activeElement.id === 'season-badge'))) forced.push('Esc가 계절 배지를 닫고 초점을 돌려줘야 함');
       await G(() => { const g = window.game; g.run('rest'); g.step(30); g.run('rest'); g.step(30); }); await closeAll(); await click('[data-do="endday"]'); await step(20); if ((await st()).modal === 'confirm') await key('Enter', 30);
       await step(120); await key('Space', 40);
       let v = await veil(); await step(20); await shot('94_world_typhoon');
       if (v.modal !== 'world' || !/날씨 · 예보대로/.test(v.t) || !/태풍/.test(v.t) || !/야외 알바 불가/.test(v.t) || !/날개항공 −9%/.test(v.t) || !/아침 값에 이미 들어갔습니다/.test(v.t)) forced.push('태풍이 닥친 아침에 세상 사건 창(무엇이 달라지는지 · 시세)이 안 뜸: ' + JSON.stringify(v).slice(0, 400));
       await key('Space', 30); await closeAll(); await click('#board .tabs [data-arg="road"]'); await step(5);
-      await click('#today [data-do="jpage"][data-arg="-1"]'); await step(5);
+      await G(() => { document.getElementById('job-rail').scrollLeft = 0; }); await step(5);
       const b = await G(() => { const f = document.querySelector('#today .card[data-arg="전단지"], #today .card.banned'), all = [...document.querySelectorAll('#today .card.banned')].map(c => c.querySelector('.nm').textContent + ':' + c.querySelector('.lack').textContent); if (f) f.click(); window.game.step(5); return { banned: all, toast: document.getElementById('toasts').textContent, chip: [...document.querySelectorAll('#today .zh .wchip')].map(e => e.textContent), flyer: window.Rules.acts(window.game.state.raw).find(a => a.id === 'flyer').banned }; }); await shot('94b_typhoon_cards');
       if (b.banned.join() !== '전단지:태풍,배달:태풍' || !b.flyer || !/태풍 — 오늘은 밖에서 일할 수 없습니다/.test(b.toast) || b.chip.join() !== '태풍') forced.push('태풍 날: 전단지 · 배달 카드가 꺼지고("태풍") 누르면 까닭이 뜨고, 머리줄에 "태풍" 칩이 있어야 함: ' + JSON.stringify(b));
       await G(() => { const S = window.game.state.raw; S.market.world = []; window.game.render(); }); }

@@ -49,7 +49,7 @@
 
   let scene = 'title', S = null; // S = 규칙의 상태 (window.game.state 가 요약해서 보여 줌)
   let persistOpening = true;
-  const ui = { joff: null, coin: 'coin', tab: 'road', sview: 'market', sel: 'daejang', qty: 1, bamt: 0, lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, newsUnread: false, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, say: null, sayT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
+  const ui = { jobScroll: 0, jobCount: 0, coin: 'coin', tab: 'road', sview: 'market', sel: 'daejang', qty: 1, bamt: 0, lev: 2, share: 0.25, from: null, askNew: false, modal: null, queue: [], guard: 0, mute: false, newsUnread: false, flash: {}, cash: 0, worth: 0, flyN: 0, name: '', ending: false, notice: '', noticeT: 0, newAch: [], tut: false, coach: '', coachDirty: false, toastQ: [], toastCap: 2 };
   const choosingGift = () => ui.modal?.type === 'intro' && S.opening.step === GIFT_STEP;
   const infoPopup = createInfoPopup($('info-popup'), () => scene === 'play' && !ui.modal);
 
@@ -69,6 +69,7 @@
     return d;
   }
   const meta = loadMeta();
+  stage.classList.toggle('fx-off', !!meta.fxOff);
   function saveMeta() { if (MANUAL) return; try { localStorage.setItem(META, JSON.stringify(meta)); } catch (e) { /* 저장을 못 써도 게임은 됨 */ } }
   const achCount = () => Object.keys(meta.ach).length;
   const GUIDES = ['flyer', 'loading', 'store', 'delivery', 'cafe', 'tutor', 'driver', 'lecture', 'tv', 'advise', 'stock', 'coin']; // 한 번씩만 뜨는 설명: 알바 하는 법 열 · 주식 · 코인(연습)
@@ -109,10 +110,19 @@
     stage.style.transform = compact ? 'none' : 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
     const coach = $('coach'), coachParent = compact && scene === 'play' ? $('s-play') : stage;
     if (coach.parentNode !== coachParent) coachParent.appendChild(coach);
-    placeVeil(); ui.coachDirty = true;
+    placeVeil(); placeJournal(compact); ui.coachDirty = true;
     const bs = document.body && document.body.style;
     if (bs) { bs.backgroundSize = 48 * k + 'px ' + 48 * k + 'px'; bs.backgroundPosition = x + 'px ' + y + 'px'; } // 테두리의 바둑판이 무대의 바둑판과 이어지게
     infoPopup.reposition();
+  }
+  function placeJournal(compact) {
+    const panel = $('journal-panel'), outside = scene === 'play' && compactScreen.matches && !compact;
+    if ((panel.parentNode === document.body) === outside) return;
+    const focused = panel.contains(document.activeElement) ? document.activeElement : null;
+    // 뒤쪽 날짜의 작은 화면에서도 일지의 글자는 무대와 함께 줄이지 않는다.
+    if (outside) document.body.appendChild(panel);
+    else $('hud').after(panel);
+    focused?.focus({ preventScroll: true });
   }
   addEventListener('resize', () => { const wasCompact = stage.classList.contains('compact-layout'); fit(); if (wasCompact !== compactLayout()) render(); }); fit();
   function placeVeil() {
@@ -240,6 +250,13 @@
   const DEN_ROLL = 42, DEN_AFTER = 24; // 도박장: 주사위가 구르는 걸음 수(0.7초) · 결과가 뜬 뒤 누름을 버리는 걸음 수
   addEventListener('keydown', e => {
     startAudio();
+    if (!ui.modal && !$('journal-panel').hidden) {
+      if (e.code === 'Escape') { e.preventDefault(); setJournal(false); return; }
+      if ($('journal-panel').contains(e.target)) return; // 일지에서는 브라우저의 스크롤 · 버튼 키를 그대로 쓴다
+    }
+    if (e.code === 'Escape' && $('season-badge')?.getAttribute('aria-expanded') === 'true') {
+      toggleSeason(false); $('season-badge').focus({ preventScroll: true }); e.preventDefault(); return;
+    }
     if (infoPopup.handleKey(e)) return;
     const activate = e.code === 'Enter' || e.code === 'Space';
     const button = e.target instanceof Element && e.target.closest('button');
@@ -281,6 +298,7 @@
   });
   const mgPress = code => { try { ui.modal.mg.press(code); } catch (e) { /* 미니게임의 오류가 판을 멈추지 않게 */ } };
   document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.date-group')) toggleSeason(false);
     if (stage.contains(e.target) || veil.contains(e.target)) startAudio();
     const m = ui.modal;
     if (!m || m.type !== 'mg' || m.res || m.pre || !veil.contains(e.target)) return;
@@ -291,10 +309,18 @@
       if (cs.length) { mgPress(cs[clamp(Math.floor((e.clientX - r.left) / r.width * cs.length), 0, cs.length - 1)].code); e.preventDefault(); }
     }
   });
+  document.addEventListener('focusin', e => { if (!e.target.closest('.date-group')) toggleSeason(false); });
   stage.addEventListener('input', e => { if (e.target && e.target.id === 'qty' && scene === 'play' && S) qtyTyped(e.target); });
   stage.addEventListener('change', e => { if (e.target && e.target.id === 'qty' && scene === 'play' && S && !ui.modal) qtyTyped(e.target, true); }); // 칸에서 손을 뗄 때: 다시 그리지 않는다 (바로 이어 누른 "사기"의 누름이 씹히지 않게)
+  $('today').addEventListener('focusin', e => {
+    if (!e.target.matches('.card-main:focus-visible, .skip:focus-visible')) return;
+    const card = e.target.closest('#job-rail > .card');
+    if (!card) return;
+    const rail = card.parentElement, left = card.offsetLeft;
+    rail.scrollLeft = clamp(rail.scrollLeft, left + card.offsetWidth - rail.clientWidth, left);
+  });
   document.addEventListener('click', e => {
-    if (!stage.contains(e.target) && !veil.contains(e.target)) return;
+    if (!stage.contains(e.target) && !veil.contains(e.target) && !$('journal-panel').contains(e.target)) return;
     const sr = stage.getBoundingClientRect();
     ui.from = { x: (e.clientX - sr.left) / sr.width * 1280, y: (e.clientY - sr.top) / sr.height * 720 }; // 번 돈 숫자가 떠오를 자리
     const el = e.target.closest('[data-do]');
@@ -306,13 +332,26 @@
   // ── 장면 전환 · 저장 ──
   function show(name) {
     infoPopup.hide();
+    toggleSeason(false);
+    if (name !== 'play') setJournal(false, false);
     scene = name;
     for (const n of ['title', 'play', 'results', 'figures']) $('s-' + n).classList.toggle('hide', n !== name);
     if (name !== 'play') { ui.modal = null; ui.queue = []; renderVeil(); }
     fit();
     $('fx').innerHTML = ''; $('toasts').innerHTML = ''; ui.toastQ = []; ui.coachDirty = true;
   }
-  function hasSave() { if (MANUAL) return null; try { const s = R.load(localStorage.getItem(SAVE) || ''); if (s && s.ended) { clearSave(); return null; } return s; } catch (e) { return null; } } // 끝난 판의 저장(예전 버전)은 이어 할 것이 없으니 지움
+  function hasSave() {
+    if (MANUAL) return null;
+    try {
+      const json = localStorage.getItem(SAVE);
+      if (!json) return null;
+      const old = JSON.parse(json);
+      // v1 보증금 환급도 기록을 쓰므로 변환 전에 빈 목록을 마련한다.
+      const s = R.load(old && !Array.isArray(old.log) ? JSON.stringify({ ...old, log: [] }) : json);
+      if (s?.ended) { clearSave(); return null; }
+      return s;
+    } catch (e) { return null; }
+  }
   function newGame(seed, persist = true) {
     seed = seed || Number(params.get('seed'));
     if (!seed) {
@@ -339,8 +378,9 @@
       S.seenTabs = tabsOpen({ ...S, tier: R.topTier(S) });
       if (S.unseen?.some(m => m.stockOpened)) S.seenTabs = S.seenTabs.filter(t => t !== 'stock' && t !== 'info');
     }
-    ui.tab = R.unlocked(S, 'stock') && S.seenTabs.includes('stock') ? 'stock' : 'road'; ui.sview = 'market'; ui.sel = 'daejang'; ui.qty = 1; ui.bamt = 0; ui.newsUnread = false; ui.flash = {}; ui.queue = []; ui.modal = null; ui.ending = false; ui.say = null; ui.sayT = 0; ui.newAch = [];
-    if (S.pending) { const p = typeof S.pending === 'string' ? { id: S.pending, n: 1 } : S.pending; S.pending = null; if (R.quitJob(S, p.id, p.n)) S.log.push({ day: S.day, text: '하다 만 알바는 대충 한 것으로 처리했습니다.', tone: 'warn' }); } // 하는 중에 새로 고침: 칸은 반드시 쓴다 (예전 저장은 알바 이름 하나 = 중)
+    $('today').replaceChildren(); ui.jobScroll = 0; ui.jobCount = 0;
+    ui.tab = R.unlocked(S, 'stock') && S.seenTabs.includes('stock') ? 'stock' : 'road'; ui.sview = 'market'; ui.sel = 'daejang'; ui.qty = 1; ui.bamt = 0; ui.newsUnread = false; ui.flash = {}; ui.queue = []; ui.modal = null; ui.ending = false; ui.notice = ''; ui.noticeT = 0; ui.newAch = [];
+    if (S.pending) { const p = typeof S.pending === 'string' ? { id: S.pending, n: 1 } : S.pending; S.pending = null; if (R.quitJob(S, p.id, p.n)) { const text = '하다 만 알바는 대충 한 것으로 처리했습니다.'; S.log.push({ day: S.day, text, tone: 'warn' }); questNotice(text); } } // 하는 중에 새로 고침: 칸은 반드시 쓴다 (예전 저장은 알바 이름 하나 = 중)
     const missed = (S.ach || []).filter(id => !meta.ach[id]); // 알림이 뜨기 전에 새로 고쳐서 판 저장에만 남은 업적
     if (missed.length) { for (const id of missed) meta.ach[id] = 1; saveMeta(); }
     ui.queue = (S.unseen || []).slice(); // 아직 확인하지 않은 안내는 다시 띄움
@@ -370,7 +410,7 @@
     }
     if (what === 'mute') { setMute(!ui.mute); return; }
     if (m && (m.type === 'achs' || m.type === 'help')) { // 어느 장면에서나 뜨는 책 두 권
-      if (what === 'fxtoggle') { meta.fxOff = !meta.fxOff; saveMeta(); renderVeil(); }
+      if (what === 'fxtoggle') { meta.fxOff = !meta.fxOff; stage.classList.toggle('fx-off', meta.fxOff); saveMeta(); renderVeil(); }
       else if (what === 'ok') { ui.modal = null; hold(12); sfx.click(); renderVeil(); if (scene === 'play') pump(); }
       return;
     }
@@ -439,9 +479,12 @@
       }
       return;
     }
+    if (what === 'season') { toggleSeason($('season-details').hidden); sfx.click(); return; }
+    if (what === 'journal' || what === 'journal-close') { setJournal(what === 'journal' && $('journal-panel').hidden); sfx.click(); return; }
     if (what === 'coachoff') { ui.tut = false; guideOff(); sfx.click(); toast(I('info') + '<span>안내를 껐습니다. 제목 화면에서 다시 켤 수 있습니다</span>', 'tip', 300); render(); return; }
     const c = coachNow();
     if (what === 'coachok') { if (c && c.ok) { if (c.id === 'goal') { ui.tut = false; meta.tut = 2; } else meta.seen[c.id] = 1; saveMeta(); sfx.click(); hold(12); render(); } return; }
+    if (what === 'questgo') { followQuest(c); return; }
     if (c && what !== 'quit' && (c.ok || (c.only && !c.only(what, arg)))) { nudge(); return; } // 안내가 한 곳을 짚는 동안은 그것만 받는다
     if (what === 'quit') { saveNow(); sfx.click(); ui.askNew = false; renderTitle(); show('title'); return; }
     if (what === 'why') { deny(arg); return; }
@@ -451,12 +494,11 @@
       for (const o of [...$('toasts').children]) if (o._kind === 'deny') o.remove();
       sfx.click(); openModal({ type: 'credit' }); return;
     }
-    if (what === 'jpage') { const p = jobPage(), to = clamp(p.off + Number(arg) * JOBS_SHOWN, 0, p.max); if (to !== p.off) { ui.joff = to; sfx.click(); renderToday(); ui.coachDirty = true; } return; }
     if (what === 'coinsel') { if (!S.lev && R.visible(S, arg)) { ui.coin = arg; sfx.click(); renderBoard(); } return; }
     if (what === 'tab') {
       if (!tabsOpen().includes(arg)) return;
       if (visitTab(arg)) saveNow();
-      if (arg === 'stock' && ui.sview === 'detail' && !R.visible(S, ui.sel)) ui.sview = 'market'; sfx.click(); renderQuest(); renderBoard();
+      if (arg === 'stock' && ui.sview === 'detail' && !R.visible(S, ui.sel)) ui.sview = 'market'; sfx.click(); renderBoard(); renderQuest();
       if (arg === 'coin' && GUIDE && !meta.seen.coin && !S.lev && R.unlocked(S, 'coin')) openModal(drillNew()); // 코인 탭을 처음 열면: 설명 대신 직접 눌러 보는 연습 (진짜 돈 아님)
       return;
     }
@@ -666,8 +708,12 @@
     if (ui.guard > 0) return;
     const c = coachNow();
     if (c && c.ok) { if (code === 'Space' || code === 'Enter') run('coachok'); else if (d) nudge(); return; } // 읽고 넘기는 안내 (숫자 키로 다른 것을 고르려 하면 무엇을 누를지 알려 줌)
-    if (d && S.slot < 3) { const a = jobPage().shown[Number(d[1]) - 1]; if (a && !(a.kind === 'job' ? a.any || a.push : a.ok)) deny(a.why); else if (a) run(a.kind === 'job' ? 'job' : a.kind, a.id); return; } // 숫자 = 지금 보이는 카드의 차례
-    if ((code === 'ArrowLeft' || code === 'ArrowRight') && S.slot < 3 && jobPage().max > 0) { run('jpage', code === 'ArrowLeft' ? '-1' : '1'); return; } // ← → : 알바 카드 넘기기 (넷을 넘을 때만)
+    if (d && S.slot < 3) {
+      const list = R.acts(S), count = list.filter(a => a.kind === 'job').length;
+      const a = list.find((a, i) => actionKey(a, i, count) === Number(d[1]));
+      if (a && !(a.kind === 'job' ? a.any || a.push : a.ok)) deny(a.why); else if (a) run(a.kind, a.id);
+      return;
+    }
     if (code === 'Space' && S.slot >= 3) run('endday'); // Enter 는 확인 창의 "한다"라서 여기서는 안 받음
   }
 
@@ -725,12 +771,12 @@
           ui.queue.push(m);
           if (m.stockOpened) rememberNotice(m);
         }
-        ui.joff = null; // 새 일이 열렸을 수 있다: 알바 카드는 다시 새로 열린 일부터
         meta.bestTier = Math.max(meta.bestTier || 0, e.to); saveMeta();
       }
       else if (e.t === 'liq') { ui.queue.push({ type: 'liq', e }); shake(); }
       else if (e.t === 'deny') deny(e.why);
-      else if (e.t === 'sys') { ui.say = e; ui.sayT = 420; ping(); }
+      // 이 결과들은 전용 결과창·알림이 없고 읽은 직후 알아야 한다.
+      else if (e.t === 'sys' && /^(리포트: |방송이 잘 나갔습니다\.|보증금 제도가 없어져 )/.test(e.text)) questNotice(e.text);
       else if (e.t === 'ending') ui.ending = true;
       else if (e.t === 'ach') { ui.newAch.push(e.id); if (!meta.ach[e.id]) { meta.ach[e.id] = 1; saveMeta(); } toast(I(e.icon) + '<div><span class="lab">업적</span> <b>' + esc(e.name) + '</b></div>', '', 300); sfx.ding(); } // 규칙(achTick)이 판마다 한 번만 낸다 (S.ach 에 남아 이어하기 · 새로 고침 뒤에도 다시 안 냄)
     }
@@ -956,6 +1002,7 @@
   }
   const clearFlies = () => { for (const e of $('fx').querySelectorAll('.fly')) e.remove(); }; // 떠오르던 숫자가 새로 뜬 창 위에 겹치지 않게
   function openModal(m) {
+    setJournal(false, false);
     clearFlies();
     for (const o of [...$('toasts').children].reverse()) if (o._kind !== 'deny') { ui.toastQ.unshift([o._key, o._kind, Math.max(120, o._life), o._day]); o.remove(); } // 떠 있던 알림은 창이 닫힌 뒤에 다시 (창 글 위로 올라오지 않게)
     ui.modal = m; hold(GUARD[m.type] || 18); $('veil').classList.add('arming'); // 0.3~0.6초: 연달아 누른 것이 새 창을 닫지 않게 (그동안 버튼이 흐림)
@@ -975,7 +1022,13 @@
     if (yes && choosingGift() && !S.opening.gift) return;
     const hadFocus = veil.contains(document.activeElement);
     hold(16);
-    if (m.type === 'mg' && m.pre) { if (!yes) { ui.modal = null; sfx.click(); renderVeil(); render(); } return; } // 돌아가기: 아무것도 쓰지 않는다
+    if (m.type === 'mg' && m.pre) {
+      if (!yes) {
+        ui.modal = null; sfx.click(); renderVeil(); render();
+        if (m.returnFocus) restoreActionFocus($('today').querySelector('[data-act="' + m.id + '"] .card-main'));
+      }
+      return;
+    } // 돌아가기: 아무것도 쓰지 않는다
     if (m.type === 'mg') { if (!m.res) return; ui.modal = null; ui.from = { x: 640, y: 330 }; renderVeil(); sfx.pay(); done(); return; }
     if (m.type === 'night') { ui.modal = null; R.nextDay(S); renderVeil(); done(); focusAfterModal(); return; }
     if (m.type === 'event') { ui.modal = null; renderVeil(); done(); if (hadFocus) focusAfterModal(); return; }
@@ -984,7 +1037,7 @@
       if (yes && m.kind === 'sleep') { sleepNow(); return; }
       if (yes) { if (m.kind === 'move') { if (R.move(S, m.to)) sfx.up(); } else if (m.kind === 'swap') { if (R.move(S, 3, 'jeonse')) sfx.up(); } else if (m.kind === 'biz') { if (R.bizUp(S)) sfx.level(); } else if (m.kind === 'top') R.declareTop(S);
         else if (m.kind === 'propbuy') { if (R.buyProp(S, m.v.id)) sfx.up(); } else if (m.kind === 'propsell') { if (R.sellProp(S, m.v.id)) sfx.pay(); } }
-      done(); return;
+      done(); if (!yes) restoreQuestRoute(m); return;
     }
     if (m.type === 'intro') {
       if (yes && S.opening.step === OPENING_TITLES.length - 1) {
@@ -1003,7 +1056,7 @@
       if (yes && !(o && o.ok)) { deny(o ? o.why : ''); return; } // 못 하는 것을 고른 채 Enter: 창은 그대로
       ui.modal = null; renderVeil();
       if (yes) { if (m.type === 'buy') { if (R.buyHome(S, m.to, o.loan, o.lease)) sfx.up(); } else if (m.type === 'lease') { if (R.move(S, 3, o.lease)) sfx.up(); } else if (R.repay(S, o.amt)) sfx.pay(); }
-      done(); return;
+      done(); if (!yes) restoreQuestRoute(m); return;
     }
     if (openStock) { ui.sview = 'market'; visitTab('stock'); }
     if (m.stockOpened || m.type === 'act1' || m.type === 'biz' || m.type === 'world' || m.type === 'foreclose' || (m.type === 'quest' && firstQuestDone(m))) {
@@ -1084,7 +1137,9 @@
     sfx.click(); clearFlies();
     for (const o of [...$('toasts').children]) if (o._kind === 'deny') o.remove(); // 방 그림 위에 떠 있던 "모자랍니다" 류는 지운다 (창과 겹치지 않게)
     const first = GUIDE && !meta.seen[id]; // 처음 하는 알바는 하는 법에 머리글을 달고 더 오래 막는다
-    ui.modal = { type: 'mg', id, act: a, n: a.use, mg: null, demo: null, res: null, pre: true, first }; ui.guard = 0; // n: 기억한 강도 이하에서 할 수 있는 가장 높은 것 (내려서 열어도 기억은 그대로)
+    const active = document.activeElement;
+    const returnFocus = active?.matches('.card-main:focus-visible') && active.closest('[data-act]')?.dataset.act === id;
+    ui.modal = { type: 'mg', id, act: a, n: a.use, mg: null, demo: null, res: null, pre: true, first, returnFocus }; ui.guard = 0; // n: 기억한 강도 이하에서 할 수 있는 가장 높은 것 (내려서 열어도 기억은 그대로)
     demoFor(ui.modal);
     hold(first ? 24 : 15); $('veil').classList.add('arming'); // 카드를 두 번 누른 것이 시작 · 강도 버튼까지 누르지 않게
     renderVeil();
@@ -1281,10 +1336,22 @@
       art('hudSky', slot) + '<span class="sky-window-label" aria-hidden="true"><b>' + label + '</b><span class="sky-window-pips">' +
       SLOTS.map((_, i) => '<i' + (i >= slot ? ' class="remaining"' : '') + '></i>').join('') + '</span></span></div>';
   }
+  function toggleSeason(open) {
+    const badge = $('season-badge'), details = $('season-details');
+    if (!badge || details.hidden === !open) return;
+    details.hidden = !open;
+    badge.setAttribute('aria-expanded', String(open));
+    if (open) badge.setAttribute('aria-describedby', details.id);
+    else badge.removeAttribute('aria-describedby');
+  }
   function renderHud() {
-    const wk = R.week(S);
+    const wk = R.week(S), w = R.worldView(S);
+    const oldBadge = $('season-badge'), expanded = oldBadge?.getAttribute('aria-expanded') === 'true', focused = oldBadge && oldBadge === document.activeElement;
+    const journalFocused = $('journal-key') === document.activeElement;
     $('hud').innerHTML =
-      '<div class="zh" title="' + wk.week + '주차 ' + wk.dow + '일 — 판을 시작하고 ' + S.day + '일째 (기한 없음)">' + I('calendar') + '<b>' + S.day + '일째</b>' + weekStrip(wk) + '</div>' +
+      '<div class="zh date-group"><span class="hud-date" title="' + wk.week + '주차 ' + wk.dow + '일 — 판을 시작하고 ' + S.day + '일째 (기한 없음)">' + I('calendar') + '<b>' + S.day + '일째</b></span>' + weekStrip(wk) +
+      '<button type="button" class="chip season-badge" id="season-badge" data-do="season" aria-expanded="false" aria-controls="season-details">' + I(['leaf', 'snow', 'flower', 'noon'][w.season], '', 's') + w.seasonName + '</button>' +
+      '<div id="season-details" hidden>' + w.nextSeason + '까지 ' + w.seasonLeft + '일 · ' + (S.day + w.seasonLeft) + '일째 시작</div></div>' +
       timeWindow() +
       (S.combo ? '<div class="money gold" title="콤보 ' + S.combo + ' — 다음 알바 일당 +' + Math.round((tune.combo_bonus + tune.perk_streak * R.perk(S, 'streak')) * S.combo * 100) + '%. 직접 해서 잘함 이상이면 쌓이고, 실수하거나 대충 하면 끊깁니다"><span class="ic" style="color:var(--O)">' + art('icon', 'fire') + '</span><b>' + S.combo + '</b></div>' : '') +
       '<div class="money" title="현금">' + I('cash') + '<i>현금</i><b id="cash">' + won(ui.cash) + '</b></div>' +
@@ -1292,10 +1359,45 @@
       goalHtml() +
       '<div class="hbtns">' +
       '<button class="btn sq" data-do="achs" title="업적 (숫자는 이번 판에 얻은 수)">' + I('trophy') + (S.ach.length ? '<span class="n">' + S.ach.length + '</span>' : '') + '</button>' +
+      '<button type="button" class="btn sq" id="journal-key" data-do="journal" title="일지" aria-label="일지" aria-controls="journal-panel" aria-expanded="' + !$('journal-panel').hidden + '">' + I('diary') + '</button>' +
       '<button class="btn sq" data-do="help" title="도움말">' + I('help') + '</button>' +
       '<button class="btn sq" data-do="mute" title="소리 (M)">' + I(ui.mute ? 'mute' : 'sound') + '</button>' +
       '<button class="btn sq" data-do="quit" title="제목 화면으로 (지금까지는 저장됨)">' + I('home') + '</button></div>';
     fitHud();
+    if (expanded) toggleSeason(true);
+    if (focused) $('season-badge').focus({ preventScroll: true });
+    if (journalFocused) $('journal-key').focus({ preventScroll: true });
+  }
+
+  function renderJournal() {
+    const list = $('journal-list'), top = list.scrollTop, groups = new Map();
+    for (const entry of (Array.isArray(S.log) ? S.log : []).slice(-40).reverse()) {
+      const day = Number(entry?.day);
+      if (!Number.isInteger(day) || day < 1 || typeof entry.text !== 'string') continue;
+      if (!groups.has(day)) groups.set(day, []);
+      const tone = ['good', 'warn', 'bad'].includes(entry.tone) ? ' ' + entry.tone : '';
+      groups.get(day).push('<p class="journal-entry' + tone + '">' + esc(entry.text) + '</p>');
+    }
+    list.innerHTML = [...groups].sort((a, b) => b[0] - a[0]).map(([day, entries]) =>
+      '<section><h3 class="journal-day">' + day + '일째</h3>' + entries.join('') + '</section>').join('') || '<p>아직 기록이 없습니다.</p>';
+    list.scrollTop = top;
+  }
+  function setJournal(open, restore = true) {
+    const panel = $('journal-panel'), button = $('journal-key');
+    if (open === !panel.hidden) return;
+    panel.hidden = !open;
+    button?.setAttribute('aria-expanded', String(open));
+    ui.coachDirty = true;
+    if (open) {
+      infoPopup.hide();
+      renderJournal();
+      $('journal-list').scrollTop = 0;
+      $('journal-close').focus({ preventScroll: true });
+      if (compactLayout()) panel.scrollIntoView({ block: 'nearest' });
+    } else if (restore) {
+      button?.focus({ preventScroll: true });
+      if (compactLayout()) button?.scrollIntoView({ block: 'nearest' });
+    }
   }
   function fitHud() { // 넘치지 않을 때까지 한 단계씩 줄인다 (index.html 의 #hud.k1~k4: "현금" · "순자산" 이름은 끝까지, 마지막은 목표 알약에 …). 잴 때는 굴러가는 숫자 대신 도착할 숫자(더 긴 쪽)를 넣고 잰다
     const hud = $('hud'), goal = hud.querySelector('#hud > .goal'), cash = $('cash'), worth = $('worth');
@@ -1392,70 +1494,125 @@
     }));
   }
 
-  // ── 구역 quest: 상태창 (지금 퀘스트 하나 · 시스템의 한마디 · 다가오는 것) ──
+  // ── 구역 quest: 상태창 (지금 퀘스트 하나 · 빠른 이동 · 다가오는 것) ──
   function progText(q) { return q.unit === '원' ? won(q.cur) + ' / ' + won(q.goal) : q.cur + ' / ' + q.goal; }
-  function questGo(q) { // 퀘스트 그 자리에서 누르는 버튼: 옮기기 · 집 계약 · 주식/코인 탭
-    if (!q || !q.go) return '';
+  function questGo(q) {
+    if (!q) return null;
+    if (q.id === 'first_job' || q.id === 'study') {
+      const job = q.id === 'first_job', id = job ? 'flyer' : 'study';
+      return { what: job ? 'job' : 'study', arg: job ? id : undefined, label: job ? '전단지 알바' : '공부',
+        target: '#today [data-act="' + id + '"] .card-main', why: S.slot >= 3 ? '오늘은 세 칸을 모두 썼습니다' : !job && !R.unlocked(S, 'study') ? '찜질방부터 공부할 수 있습니다' : '' };
+    }
     if (q.go === 'move') {
-      const to = S.tier + 1, info = R.moveInfo(S, to), alt = to === 3 ? R.moveInfo(S, 3, 'jeonse') : null;
-      if (to > 3) return '';
-      const label = I('door', '', 's') + R.HOMES[to].name + '으로 옮기기';
-      return info.ok || (alt && alt.ok) ? '<button class="chip hot go" data-do="move" data-arg="' + to + '" title="' + R.HOMES[to].name + '으로 옮깁니다">' + label + '</button>'
-        : '<button class="chip off" data-do="why" data-arg="' + esc(info.why) + '" title="' + esc(info.why) + '">' + label + '</button>';
+      const to = { roof: 1, address: 2, oneroom: 3 }[q.id], info = R.moveInfo(S, to), alt = to === 3 && R.moveInfo(S, to, 'jeonse');
+      return { what: 'move', arg: String(to), label: R.HOMES[to].name + ' 입주', target: to === 1 ? '#board .rung.next [data-do="move"]' : '',
+        why: info.ok || alt?.ok ? '' : info.why || '다음 집부터 차례로 올라갑니다' };
     }
-    if (q.go === 'house') { // 다음 집 사기 (살 수 있을 때만)
-      const to = S.tier + 1;
-      return to >= 4 && to <= 8 && R.goalView(S).canBuy ? '<button class="chip hot go warmgo" data-do="house" title="' + R.HOMES[to].name + ' — ' + (to === 4 ? '현금으로만' : '전세 · 대출을 고르는 창') + '">' + I('key', '', 's') + R.HOMES[to].name + (to === 4 ? ' 사기' : ' 들어가기') + '</button>' : '';
+    if (q.go === 'house') {
+      const to = { house: 4, apt: 5, house2: 6, villa: 7, hotel: 8 }[q.id];
+      const info = R.homeInfo(S, to), jeonse = info.leases.includes('jeonse') && R.homeInfo(S, to, 'jeonse');
+      return { what: 'house', label: R.HOMES[to].name + (to === 4 ? ' 사기' : ' 입주'), why: info.ok || jeonse?.ok ? '' : info.why };
     }
-    if (q.go === 'biz') { // 사업 키우기
+    if (q.go === 'biz') {
       const n = R.bizView(S).next;
-      if (!n) return '';
-      return n.ok ? '<button class="chip hot go" data-do="bizup" title="' + n.name + ' 차리기 — ' + won(n.cost) + '">' + I('rocket', '', 's') + n.name + ' 차리기</button>'
-        : '<button class="chip off" data-do="why" data-arg="' + esc(n.why) + '" title="' + esc(n.why) + '">' + I('rocket', '', 's') + n.name + ' 차리기</button>';
+      return n && { what: 'bizup', label: n.name + ' 차리기', why: n.why };
     }
-    if (q.go === 'jeonse') { // 원룸 월세 → 전세
-      if (S.tier !== 3 || R.leaseOf(S) !== 'rent') return '';
-      const info = R.moveInfo(S, 3, 'jeonse'), label = I('key', '', 's') + '전세로 갈아타기';
-      return info.ok ? '<button class="chip hot go" data-do="lease" data-arg="jeonse" title="원룸을 전세로 바꿉니다 — 보증금 ' + won(info.need) + '">' + label + '</button>' : '<button class="chip off" data-do="why" data-arg="' + esc(info.why) + '" title="' + esc(info.why) + '">' + label + '</button>';
+    if (q.go === 'jeonse') {
+      const info = R.moveInfo(S, 3, 'jeonse');
+      return { what: 'lease', label: '원룸 전세로 갈아타기', why: info.ok ? '' : info.why || '원룸에 월세로 살 때 전세로 갈아탈 수 있습니다' };
     }
-    if (q.go === 'shop' || q.go === 'bank' || q.go === 'realty') return q.go !== ui.tab && (q.go === 'shop' || R.unlocked(S, q.go)) ? '<button class="chip hot go" data-do="tab" data-arg="' + q.go + '">' + I(TAB_IC[q.go], '', 's') + TAB_NAME[q.go] + '</button>' : '';
-    if (q.go === 'top') return R.goalView(S).canBuy && R.goalView(S).kind === 'top' ? '<button class="chip hot go warmgo" data-do="top" title="한국 최고 부자 선언 — 이 판의 끝">' + I('crown', '', 's') + '최고 부자 선언</button>' : '';
-    if (q.go !== ui.tab && R.unlocked(S, q.go)) return '<button class="chip hot go" data-do="tab" data-arg="' + q.go + '">' + I(q.go === 'coin' ? 'bolt' : 'chart', '', 's') + (q.go === 'coin' ? '코인' : '주식') + '</button>';
-    return '';
+    if (q.go === 'top') {
+      const g = R.goalView(S);
+      return { what: 'top', label: '한국 최고 부자 선언', why: g.kind !== 'top' ? '호텔부터 선언할 수 있습니다' : g.canBuy ? '' : '순자산이 ' + won(g.price - g.have) + ' 모자랍니다' };
+    }
+    if (['shop', 'stock', 'coin', 'bank', 'realty'].includes(q.go)) {
+      const unlock = { stock: '찜질방', coin: '원룸', bank: '고시원', realty: '원룸' };
+      return { what: 'tab', arg: q.go, label: q.go === 'shop' ? '가게에서 먹기' : TAB_NAME[q.go],
+        why: tabsOpen().includes(q.go) ? '' : unlock[q.go] + '부터 ' + TAB_NAME[q.go] + ' 탭이 열립니다' };
+    }
+    return null;
+  }
+  function focusQuestTarget(el) {
+    if (!el) return;
+    if (!el.matches('button')) el.tabIndex = -1;
+    el.classList.add('q-destination');
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    el.focus({ preventScroll: true });
+  }
+  function followQuest(coach) {
+    if (ui.guard || ui.modal) return;
+    const q = R.questView(S), go = questGo(q);
+    if (!go) return;
+    if (coach && (coach.ok || (coach.only && !coach.only(go.what, go.arg)))) { nudge(); return; }
+    if (go.why) { deny(go.why); return; }
+    setJournal(false, false);
+    if (go.what === 'tab') {
+      if (ui.tab !== go.arg) run('tab', go.arg);
+      else sfx.click();
+      if (ui.modal || coachNow()?.ok) return;
+      const panel = $('board').querySelector('.tb-' + go.arg);
+      const aim = { shop: '.food:not(.off)', stock: '.mlist .arow', bank: '.bcol', realty: '.prow' }[go.arg];
+      focusQuestTarget((aim && panel?.querySelector(aim)) || (go.arg === 'shop' && panel?.querySelector('.food')) || panel);
+    } else if (go.target) {
+      if (go.what === 'move' && ui.tab !== 'road') { visitTab('road'); renderBoard(); }
+      sfx.click(); focusQuestTarget(document.querySelector(go.target));
+    } else {
+      run(go.what, go.arg);
+      if (ui.modal) {
+        ui.modal.questRoute = q.id;
+        focusQuestTarget(veil.querySelector('h2'));
+      }
+    }
+  }
+  function restoreQuestRoute(modal) {
+    if (modal.questRoute && !ui.modal && modal.questRoute === R.questView(S)?.id) $('quest-route')?.focus({ preventScroll: true });
+  }
+  function questNotice(text) { ui.notice = { day: S.day, text }; ui.noticeT = 420; }
+  function questRouteHtml(go) {
+    if (!go) return '';
+    const label = '빠른 이동 · ' + go.label, here = go.what === 'tab' && go.arg === ui.tab && !go.why;
+    return '<button type="button" class="q-route" id="quest-route" data-do="questgo" aria-label="' + esc(label) + '" title="' + esc(go.why || label) + '"' +
+      (here ? ' aria-current="location"' : '') + '><span class="chip face' + (go.why ? ' off' : '') + '" aria-hidden="true"><span class="arrow"></span></span></button>';
   }
   function renderQuest() {
-    const q = R.questView(S), say = ui.say || S.log[S.log.length - 1]; // 시스템의 마지막 한마디 (잠깐 밝다가 흐려짐)
-    const go = questGo(q), notes = R.notices(S), dr = R.dreamView(S);
+    const q = R.questView(S), routeFocused = document.activeElement === $('quest-route');
+    const go = questRouteHtml(questGo(q)), notes = R.notices(S), dr = R.dreamView(S);
+    const notice = ui.notice?.day === S.day ? ui.notice.text : '';
     const news = R.unlocked(S, 'stock') ? R.todayNews(S).filter(n => n.asset !== 'coin' || R.unlocked(S, 'coin')).length : 0;
     $('quest').innerHTML =
       '<div class="zh">' + I('quest') + '<span>상태창</span>' + (q || news ? '<span class="r">' + (news ? '<span class="nw" title="오늘 소식 ' + news + '건 — 오른쪽 주식 탭의 소식 칸">' + I('news', '', 's') + news + '건</span>' : '') + (q ? '퀘스트 ' + q.n + ' / ' + q.of : '') + '</span>' : '') + '</div>' + // 오늘 소식 수는 머리줄에 (아래 알림 줄이 한 줄로 들게)
       (q ? '<div class="q-in"><div class="q-title">' + esc(q.title) + '</div><div class="q-desc" title="' + esc(q.desc) + '">' + esc(q.desc) + '</div>' + // 줄 수는 fitQuest 가 (네 줄까지, 넘치면 … · 전부는 title)
-        '<div class="q-prog"><div class="bar"><div style="width:' + (q.pct * 100).toFixed(1) + '%"></div></div><b>' + progText(q) + '</b></div>' +
-        '<div class="q-row"><span class="rw" title="끝내면 받는 것: ' + esc(q.reward) + '">' + I('gift', '', 's') + '<span>' + esc(q.reward) + '</span></span>' + (q.near ? '<span class="near">거의 다 됨</span>' : '') + go + '</div></div>' : '<div class="q-in"><div class="q-title">모든 퀘스트 완료</div></div>') + // 보상이 길면 버튼이 다음 줄로 (보상 글은 자르지 않음)
-      (say ? '<div class="q-say ' + (say.tone || '') + (ui.sayT > 400 ? ' in' : ui.sayT === 0 ? ' old' : '') + '" title="' + esc(say.text) + '">' + esc(say.text) + '</div>' : '') + // 앞에 "[시스템] " 이 붙는다. 줄 수는 fitQuest 가
+        '<div class="q-prog"><div class="bar"><div style="width:' + (q.pct * 100).toFixed(1) + '%"></div></div><b>' + progText(q) + '</b>' + go + '</div>' +
+        '<div class="q-row"><span class="rw" title="끝내면 받는 것: ' + esc(q.reward) + '">' + I('gift', '', 's') + '<span>' + esc(q.reward) + '</span></span>' + (q.near ? '<span class="near">거의 다 됨</span>' : '') + '</div></div>' : '<div class="q-in"><div class="q-title">모든 퀘스트 완료</div></div>') +
+      (notice ? '<div class="q-notice" role="status" title="' + esc(notice) + '">' + esc(notice) + '</div>' : '') +
       '<div class="q-due">' + // 알림 줄: 고정비(+ 원리금)는 전날(차분하게)과 당일(눈에 띄게)에만
       notes.map(n => '<span class="note plain ' + n.kind + ' ' + n.when + '" title="정산(고정비 · 원리금 · 이자)은 일요일 밤에 현금에서 나갑니다. 모자라면 마이너스 통장에서 자동으로 빌리고, 그래도 안 되면 연체 — 두 번 연속이면 한 단계 아래로">' + I('bill', '', 's') + esc(n.text) + '</span>').join('') +
       (dr.set ? '<span class="note plain dream" title="꿈: ' + esc(dr.name + ' — ' + dr.line + '. 장면 ' + dr.done + ' / ' + dr.of + (dr.on ? ' · 얻은 힘: ' + dr.gain : ' · 둘째 장면에서 얻는 힘: ' + dr.gain)) + '">' + I('star', '', 's') + '꿈 · ' + esc(dr.name) + ' ' + dr.done + '/' + dr.of + '</span>' : '') +
       '</div>';
     fitQuest();
+    if (routeFocused) $('quest-route')?.focus({ preventScroll: true });
   }
-  function fitQuest() { // 상태창은 위에서부터 쌓고 알림 줄이 맨 아래. 자리가 있으면 설명 · 시스템 한마디를 다 보인다(줄 수 제한 없음).
-    // 넘칠 때만: 시스템 한마디를 한 줄씩 → 설명을 한 줄씩 줄이고(줄인 글은 … · 전부는 title), 둘 다 한 줄인데도 넘치면 시스템 한마디를 숨긴다(맨 아래 고정비 알림이 잘리지 않게)
-    const box = $('quest'), d = box.querySelector('.q-desc'), s = box.querySelector('.q-say');
-    const set = (el, n) => { if (el) { el.style.webkitLineClamp = String(n); el.style.maxHeight = (n * 20 + (el === s ? 12 : 0)) + 'px'; } };
-    const need = el => { if (!el) return 0; set(el, 99); return Math.max(1, Math.round((el.offsetHeight - (el === s ? 12 : 0)) / 20)); };
-    const over = () => box.scrollHeight > box.clientHeight + 0.5;
-    let dn = need(d), sn = need(s);
-    set(d, dn); set(s, sn);
-    while (over() && (sn > 1 || dn > 1)) { if (sn > 1) sn--; else dn--; set(d, dn); set(s, sn); }
-    if (over() && s) s.style.display = 'none';
+  function fitQuest() { // 설명을 줄여 일요일 정산이 항상 보이게 한다. 전체 설명은 title.
+    const box = $('quest'), desc = box.querySelector('.q-desc');
+    if (!desc) return;
+    desc.style.maxHeight = 'none';
+    desc.style.webkitLineClamp = '99';
+    let lines = Math.max(1, Math.round(desc.offsetHeight / 20));
+    while (box.scrollHeight > box.clientHeight + 0.5 && lines > 1) desc.style.webkitLineClamp = String(--lines);
+    const notice = box.querySelector('.q-notice'), over = box.scrollHeight - box.clientHeight;
+    if (notice && over > 0) notice.style.maxHeight = Math.max(32, notice.offsetHeight - over) + 'px';
   }
 
   // ── 구역 today: 지금 칸에서 고를 것 ──
-  const JOBS_SHOWN = 4; // 오늘 칸에 한 번에 보이는 알바 카드 수 (더 있으면 머리줄의 ◀ ▶ 로 넘긴다 — 서울역 ~ 고시원은 넷 이하라 그대로)
-  function jobPage() { // 알바가 넷을 넘으면 넷씩: 처음에는 새로 열린 일부터(맨 뒤 넷). off = 보이는 첫 알바의 차례, shown = 지금 보이는 카드(알바 + 쉬기 · 공부)
-    const list = R.acts(S), jobs = list.filter(a => a.kind === 'job'), n = jobs.length, max = Math.max(0, n - JOBS_SHOWN), off = max ? clamp(ui.joff == null ? max : ui.joff, 0, max) : 0;
-    return { list, jobs, n, max, off, shown: (max ? jobs.slice(off, off + JOBS_SHOWN) : jobs).concat(list.filter(a => a.kind !== 'job')) };
+  function actionKey(a, i, jobCount) {
+    if (jobCount <= 4) return i + 1;
+    return a.kind === 'job' ? 0 : a.kind === 'rest' ? 5 : 6;
+  }
+  function restoreActionFocus(button) {
+    if (!button) return;
+    const rail = $('job-rail'), left = rail.scrollLeft;
+    button.focus({ preventScroll: true });
+    rail.scrollLeft = left; // 갱신 때는 사용자가 스크롤로 고른 위치를 유지한다
   }
   function worldChips() { // 오늘의 세상 사건 · 내일 예보 (누르면 뉴스 탭 — 자세한 것은 거기에)
     const w = R.worldView(S), now = w.now, nx = w.next;
@@ -1464,32 +1621,37 @@
       (nx ? '<button class="chip wchip next" data-do="tab" data-arg="info" title="' + esc(tx) + '"><i>내일</i>' + I(nx.icon, '', 's') + esc(nx.name) + '</button>' : '');
   }
   function renderToday() {
-    const pg = S.slot < 3 ? jobPage() : null, wc = worldChips();
-    const pager = pg && pg.max ? '<span class="jpg" title="알바 ' + pg.n + '가지 — 넷씩 보입니다(처음에는 새로 열린 일부터). ◀ ▶ 또는 키보드 ← → 로 넘깁니다"><button class="chip go" data-do="jpage" data-arg="-1"' + (pg.off <= 0 ? ' disabled' : '') + ' title="앞의 일 (←)">' + keyName('ArrowLeft') + '</button><b>일 ' + (pg.off + 1) + '~' + (pg.off + JOBS_SHOWN) + ' / ' + pg.n + '</b><button class="chip go" data-do="jpage" data-arg="1"' + (pg.off >= pg.max ? ' disabled' : '') + ' title="뒤의 일 (→)">' + keyName('ArrowRight') + '</button></span>' : '';
-    const head = '<div class="zh"><span>행동</span>' + wc + pager + '<span class="r">' +
+    const today = $('today'), oldRail = $('job-rail'), active = document.activeElement;
+    const focusCard = today.contains(active) && active.closest('[data-act]')?.dataset.act;
+    if (oldRail) ui.jobScroll = oldRail.scrollLeft;
+    const head = '<div class="zh"><span>행동</span>' + worldChips() + '<span class="r">' +
       (S.buff && S.buff.nextJob ? '<span class="chip hot" title="대타: 다음 알바 일당 ×' + S.buff.nextJob + '">' + I('swap', '', 's') + '×' + S.buff.nextJob + '</span>' : '') +
       (S.slot === 2 ? '<span class="chip last-action">오늘 마지막 행동</span>' : '') + '</span></div>';
     if (S.slot >= 3) {
       const b = R.bill(S), due = b && b.inDays === 0;
-      $('today').innerHTML = head + '<div class="cards"><button class="card wide go" data-do="endday"><span class="pic">' + art('act', 'rest') + '</span><span><span class="big">하루 마치기</span>' +
+      today.innerHTML = head + '<div class="cards"><button class="card wide go" data-do="endday"><span class="pic">' + art('act', 'rest') + '</span><span><span class="big">하루 마치기</span>' +
         (due ? '<b class="gold">' + I('bill', '', 's') + ' 오늘 밤 ' + (b.loan ? '고정비 · 원리금 ' : '고정비 ') + won(b.amt) + (b.days < 7 ? ' (' + b.days + '일치)' : '') + (S.cash < b.amt ? ' — 현금이 모자랍니다' : '') + '</b>' : '<span class="dim">' + ((coachNow() || {}).id === 'endday' ? '밤 정산 뒤 다음 날로 넘어갑니다' : '자기 전에 매매 · 이사를 할 수 있습니다') + '</span>') + '</span><span class="key">Space</span></button></div>';
       return;
     }
     const first = (coachNow() || {}).id === 'job'; // 안내가 첫 알바를 짚는 동안은 "대충"을 감춘다 (미니게임을 한 번은 해 보게)
     const can = a => (a.kind === 'job' ? a.any || a.push : a.ok); // 알바는 어느 강도로든 할 수 있으면 켜짐 — 체력이 모자라도 조금이라도 있으면 "무리"로 (대충은 중의 체력이 있을 때만)
-    const list = pg.list, shown = pg.shown, q = R.questView(S) || {}, jobs = list.filter(a => a.kind === 'job' && a.any), wnow = R.worldView(S).now;
+    const list = R.acts(S), jobs = list.filter(a => a.kind === 'job'), fixed = list.filter(a => a.kind !== 'job');
+    const q = R.questView(S) || {}, wnow = R.worldView(S).now, longList = jobs.length > 4;
     const want = q.id === 'first_job' ? 'flyer' : q.id === 'study' ? 'study' : '';
-    const rec = want && list.some(a => a.id === want && can(a)) ? want : !jobs.length && list.some(a => a.kind === 'rest' && a.ok) ? 'rest' : ''; // 상태창 추천: 퀘스트가 바로 가리키는 카드(할 수 있을 때), 아니면 일할 체력이 없을 때 쉬기 (그 밖에는 없음)
+    const rec = want && list.some(a => a.id === want && can(a)) ? want : !jobs.some(a => a.any) && fixed.some(a => a.kind === 'rest' && a.ok) ? 'rest' : ''; // 상태창 추천: 퀘스트가 바로 가리키는 카드(할 수 있을 때), 아니면 일할 체력이 없을 때 쉬기 (그 밖에는 없음)
     const tag = a => (a.id === rec && can(a) ? '<span class="tag chip hot" title="지금 퀘스트(또는 체력)로 보아 상태창이 권하는 것">' + I('quest', '', 's') + '<span class="tl">상태창 </span>추천</span>' : '');
     const autoLine = a => (a.auto ? '<span class="auto" title="' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + ' 사업 매출 ' + won(a.auto) + '이 들어옵니다 (직원이 일함)"><i>' + (a.kind === 'rest' ? '쉬어도' : '공부해도') + '</i><b>+' + num(a.auto) + '</b></span>' : '');
-    const jl = a => a.levels[a.any || a.push ? a.use : 1], short = shown.some(a => a.kind === 'job' && num(jl(a).pay).length > 11), jw = n => (short ? cwon(n) : num(n)); // 알바 카드의 금액: 하나라도 줄이면 다 줄임 (한 줄에서 "721,913,000"과 "13억"이 섞이지 않게, 전부는 title)
-    $('today').innerHTML = head + '<div class="cards' + (shown.length >= 5 ? ' n5' : '') + '">' + shown.map((a, i) => {
+    const jl = a => a.levels[a.any || a.push ? a.use : 1], short = jobs.some(a => num(jl(a).pay).length > 11), jw = n => (short ? cwon(n) : num(n)); // 알바 카드의 금액: 하나라도 줄이면 다 줄임 (한 줄에서 "721,913,000"과 "13억"이 섞이지 않게, 전부는 title)
+    const card = (a, i) => {
       const go = can(a);
-      const k = '<span class="key">' + (i + 1) + '</span>', off = go ? 'data-do="' + a.kind + '"' + (a.kind === 'job' ? ' data-arg="' + a.id + '"' : '') + ' role="button"' : 'data-do="why" data-arg="' + esc(a.why) + '"';
+      const n = actionKey(a, i, jobs.length), k = n ? '<span class="key">' + n + '</span>' : '';
+      const off = 'data-act="' + a.id + '" ' + (go ? 'data-do="' + a.kind + '"' + (a.kind === 'job' ? ' data-arg="' + a.id + '"' : '') : 'data-do="why" data-arg="' + esc(a.why) + '"');
+      const main = '<button type="button" class="card-main" aria-label="' + esc(go ? a.name : a.name + ' · ' + a.why) + '"' + (n ? ' aria-keyshortcuts="' + n + '"' : '') + '></button>';
       if (a.kind === 'job') {
         const lv = '<span class="lv" title="숙련도: 직접 한 횟수가 ' + tune.skill_n1 + ' · ' + tune.skill_n2 + ' · ' + tune.skill_n3 + '번이 되면 일당이 ' + Math.round(tune.skill_bonus * 100) + '%씩 오릅니다">' + [1, 2, 3].map(n => '<s class="' + (a.lv >= n ? 'on' : '') + '"></s>').join('') + '</span>';
         const L = jl(a); // 기억한 강도(체력이 모자라면 할 수 있는 가장 높은 것)의 일당 · 체력
-        const pt = jw(L.pay), long = pt.length > 8 ? ' long' : '', sk = Math.round(a.pay * R.skipMult(S) / 1000) * 1000; // 사업이 커져 일당이 길면 일당 · 체력을 두 줄로. sk = "대충"이 받는 돈 (늘 중 기준)
+        const pt = jw(L.pay), sk = Math.round(a.pay * R.skipMult(S) / 1000) * 1000; // "대충"이 받는 돈 (늘 중 기준)
+        const long = pt.length > 8 || (longList && wid(pt + '−' + L.hp) > 7) ? ' long' : ''; // 좁은 카드에서 일당 · 체력을 두 줄로 놓고 대충 버튼 자리를 남긴다
         const risk = a.push ? Math.round(L.risk * 100) : 0; // 무리: 어느 강도도 체력이 모자람 — 하더라도 쓰러질 수 있다
         const md = a.mod || { pay: 1, hp: 1 }, mk = a.banned || a.closed ? 0 : Math.round((md.pay - 1) * 100); // 오늘 · 이 칸의 덤(카페의 오전 · 과외의 공부 단계 · 폭우의 배달 …)
         const mwhy = [md.plus, md.world && md.wpay !== 1 ? md.world + ' ' + (md.wpay > 1 ? '+' : '−') + Math.abs(Math.round((md.wpay - 1) * 100)) + '%' : ''].filter(Boolean).join(' · ');
@@ -1498,13 +1660,25 @@
         return '<div class="card ' + (go ? 'go' : 'off') + long + (a.push ? ' push' : '') + (a.closed ? ' closed' : '') + (a.banned ? ' banned' : '') + (a.id === rec && go ? ' sug' : '') + '" ' + off + ' title="' + esc(a.name + ' — ' + (a.closed ? '오늘은 이 알바를 마쳤습니다 (같은 알바는 하루 한 번)' : a.banned ? a.why : a.note + (a.bizMult > 1 ? ' (사업 ×' + num(a.bizMult) + ')' : '') + (mwhy ? ' · ' + mwhy : '') + (a.push ? ' · 체력이 모자랍니다 — 무리하면 쓰러질 확률 ' + risk + '%' : go ? ' · 강도 ' + L.name : ''))) + '">' + k + (go && !a.push && L.n !== 1 ? ich(L.n) : '') + (a.push ? '<em class="ich i3" title="체력이 모자란 채 일합니다 — 끝나고 쓰러질 확률 ' + risk + '%">무리</em>' : '') + lv + tag(a) + mtag + '<span class="pic">' + pic('job', a.id, !go) + '</span><span class="nm">' + a.name + '</span>' + // 강도 딱지는 하 · 상 · 최상만 (중은 기본이라 안 닮), 숫자 키 옆
 
           '<span class="st"><span class="pay" title="일당(보통) ' + won(L.pay) + (a.bizMult > 1 ? ' — 사업 ×' + num(a.bizMult) + ' 포함' : '') + '">' + I('coin', '', 's') + pt + '</span>' + (a.closed ? '<span class="lack" title="같은 알바는 하루 한 번">' + I('check', '', 's') + '오늘 마감</span>' : a.banned ? '<span class="lack" title="' + esc(a.why) + '">' + I(md.by === 'world' && wnow ? wnow.icon : 'moon', '', 's') + esc(md.by === 'world' ? md.world : '저녁에만') + '</span>' : '<span class="' + (go && !a.push ? 'cost' : 'lack') + (md.whp > 1 ? ' more' : '') + '" title="' + hpTip + (go && !a.push ? '' : ' — 모자랍니다') + '">' + I('hp', '', 's') + '−' + L.hp + '</span>') + '</span>' +
-          (a.ok && !first ? '<button class="skip" data-do="skip" data-arg="' + a.id + '" title="대충: 미니게임 없이 중 강도 일당의 ' + Math.round(R.skipMult(S) * 100) + '% (' + won(sk) + ') · 체력 −' + a.hp + ' · 숙련도와 콤보는 오르지 않음">대충 ' + (num(sk).length > 9 ? cwon(sk) : jw(sk)) + '</button>' : '') + '</div>';
+          main + (a.ok && !first ? '<button class="skip" data-do="skip" data-arg="' + a.id + '" title="대충: 미니게임 없이 중 강도 일당의 ' + Math.round(R.skipMult(S) * 100) + '% (' + won(sk) + ') · 체력 −' + a.hp + ' · 숙련도와 콤보는 오르지 않음">대충 ' + (num(sk).length > 9 ? cwon(sk) : jw(sk)) + '</button>' : '') + '</div>';
       }
       const st = a.kind === 'rest' ? (a.ok ? '<span class="gain">' + I('hp', '', 's') + '+' + (-a.hp) + '</span>' : '<span class="lack">' + I('lock', '', 's') + esc(a.why.split(':')[0]) + '</span>') // 일중독(양날): 할 수 있는 알바가 있으면 못 쉼
         : a.ok ? '<span class="' + (a.hp > S.hp ? 'lack' : 'cost') + '" title="드는 체력">' + I('hp', '', 's') + '−' + a.hp + '</span><span class="sys" title="고른 종목의 내일 소식">' + I('news', '', 's') + '내일</span>' : '<span class="lack">' + I('check', '', 's') + (/읽었/.test(a.why) ? '읽음' : '체력') + '</span>';
       return '<div class="card ' + (a.ok ? 'go' : 'off') + (a.auto ? ' auto' : '') + (a.id === rec && a.ok ? ' sug' : '') + '" ' + off + ' title="' + (a.kind === 'rest' ? '쉬기 — 체력을 채웁니다' : '공부 — 체력 ' + a.hp + '과 한 칸을 써서, 고른 종목' + (a.picks > 1 ? ' 둘' : ' 하나') + '의 내일 소식이 오르는 쪽인지 내리는 쪽인지 리포트를 봅니다 (' + Math.round(R.studyAcc(S) * 100) + '% 맞음). 공부가 쌓이면 단계가 오릅니다') + '">' + k + tag(a) + '<span class="pic">' + pic('act', a.id, !a.ok) + '</span><span class="nm">' + a.name + '</span>' +
-        '<span class="st">' + st + '</span>' + autoLine(a) + '</div>';
-    }).join('') + '</div>';
+        '<span class="st">' + st + '</span>' + autoLine(a) + main + '</div>';
+    };
+    today.innerHTML = head + '<div class="cards action-cards' + (list.length >= 5 ? ' n5' : '') + (longList ? ' many-jobs' : '') + '">' +
+      '<div class="job-rail" id="job-rail" role="group" aria-label="알바" style="--job-columns:' + Math.min(jobs.length, 4) + '">' + jobs.map(card).join('') + '</div>' +
+      '<div class="action-fixed" style="--action-columns:' + fixed.length + '">' + fixed.map((a, i) => card(a, jobs.length + i)).join('') + '</div></div>';
+    const rail = $('job-rail');
+    if (jobs.length > ui.jobCount && (longList || ui.jobCount)) ui.jobScroll = rail.scrollWidth; // 긴 목록을 처음 열거나 이사로 일이 늘면 끝의 새 카드를 보여 준다
+    ui.jobCount = jobs.length;
+    rail.scrollLeft = ui.jobScroll;
+    if (focusCard) {
+      const replacement = today.querySelector('[data-act="' + focusCard + '"]');
+      const skip = active.matches('.skip') && replacement?.querySelector('.skip');
+      restoreActionFocus(skip || replacement?.querySelector('.card-main'));
+    }
   }
 
   const grayCache = {};
@@ -1541,8 +1715,7 @@
     if (tabs.indexOf(ui.tab) < 0) ui.tab = 'road';
     const t = ui.tab;
     const extra = t === 'coin' ? '<button class="chip go drillbtn" data-do="drill" title="코인 연습 — 진짜 돈이 아닌 ' + won(DRILL_PUT) + '으로 롱 · 숏 · 청산을 직접 눌러 봅니다 (판에는 영향 없음)">' + I('play', '', 's') + '연습</button>'
-      : t === 'road' ? '<button class="chip go drillbtn" data-do="roadmap" title="로드맵을 큰 창으로 — 열 단계의 값 · 고정비 · 열리는 것을 전부">' + I('map', '', 's') + '크게 보기</button>'
-        : t === 'info' ? (() => { const w = R.worldView(S); return '<span class="chip season" title="계절은 ' + tune.season_days + '일마다 바뀝니다 (가을 → 겨울 → 봄 → 여름). 날씨는 제철에만 옵니다 — 태풍 · 폭우는 여름과 가을, 폭설 · 한파는 겨울, 황사는 봄, 폭염은 여름">' + I('calendar', '', 's') + w.seasonName + '<i>· ' + w.nextSeason + '까지 ' + w.seasonLeft + '일</i></span>'; })() : '';
+      : t === 'road' ? '<button class="chip go drillbtn" data-do="roadmap" title="로드맵을 큰 창으로 — 열 단계의 값 · 고정비 · 열리는 것을 전부">' + I('map', '', 's') + '크게 보기</button>' : '';
     $('board').innerHTML = '<div class="zh tabs">' + tabs.map(k => {
       const unlocked = !START_TABS.includes(k) && !S.seenTabs.includes(k);
       const news = k === 'info' && ui.newsUnread;
@@ -1630,7 +1803,7 @@
       (wv.next ? wl(wv.next, '내일 예보', 'next', '내일 예보: ' + wv.next.name + (wv.next.sure ? '' : ' — ' + R.accText(wv.next.acc) + '. 빗나가면 아무 일도 없습니다') + '. 시세에는 예보가 뜬 오늘 아침에 믿을 만한 만큼 이미 들어갔습니다') : '');
     const cap = Math.max(4, 12 - (wv.now ? 1 : 0) - (wv.next ? 1 : 0) - alerts.length), mineFirst = today.slice().sort((p, q) => (S.hold[q.asset] && S.hold[q.asset].units > 0 ? 1 : 0) - (S.hold[p.asset] && S.hold[p.asset].units > 0 ? 1 : 0)); // 소식이 많은 날은 든 종목부터, 넘치는 것은 "외 N건"
     const seen = mineFirst.length > cap ? mineFirst.slice(0, cap - 1) : mineFirst, more = mineFirst.slice(seen.length);
-    const left = '<h4 title="오늘 소식 — 점이 많을수록 믿을 만합니다 (공시 · 기사 · 찌라시). 오늘 소식은 아침 장 전에 믿을 만한 만큼 이미 값에 들어갔습니다">' + I('news', '', 's') + '오늘 소식<span class="pre">아침 값에 이미 들어감 — 보고 사면 늦음</span></h4>' + world +
+    const left = '<h4 title="오늘 소식 — 점이 많을수록 믿을 만합니다 (공시 · 기사 · 찌라시). 오늘 소식은 아침 장 전에 믿을 만한 만큼 이미 값에 들어갔습니다">' + I('news', '', 's') + '오늘 소식</h4>' + world +
       (today.length ? seen.map(newsLine).join('') + (more.length ? '<div class="nitem dim more" title="' + esc(more.map(n => n.head).join(' · ')) + '">' + I('news', '', 's') + '<span class="tx">외 ' + more.length + '건 — ' + esc(more.map(n => n.name).join(' · ')) + '</span></div>' : '') : world ? '' : '<div class="nitem dim">조용함</div>') +
       alerts.map(x => '<div class="nitem alert" title="공부 5단계: 오늘 이 종목에 예고 없는 큰 소식이 터질 수 있습니다 (오를지 내릴지는 모릅니다)">' + I('warn', '', 's') + '<span class="tx">속보 경보 — ' + esc(nm(x.asset)) + '</span></div>').join('');
     let rep;
@@ -2159,8 +2332,7 @@
           (p.excl ? '<span class="excl"><span aria-hidden="true">' + I('lock', '', 's') + '</span><span>' + esc(p.excl) + '</span></span>' : '') +
           (p.note ? '<span class="note">' + esc(p.note) + '</span>' : '') +
           '<span class="have">보유 ' + p.n + ' / ' + p.max + '<span class="perk-marks" aria-hidden="true">' + marks + '</span></span></span></span></button>';
-      }).join('') + '</div><div class="foot"><span class="perk-keys">' + cards.map((_, i) => '<kbd class="key">' + (i + 1) + '</kbd>').join(' ') +
-      ' 후보 보기</span><button type="button" class="btn main" id="perk-confirm" data-do="perkconfirm" aria-keyshortcuts="Enter">' +
+      }).join('') + '</div><div class="foot"><button type="button" class="btn main" id="perk-confirm" data-do="perkconfirm" aria-keyshortcuts="Enter">' +
       '<span id="perk-confirm-name">' + esc(cards.find(p => p.id === m.pick).name) + ' 선택</span><kbd class="key" aria-hidden="true">Enter</kbd></button></div></section>';
   }
   function renderVeil() {
@@ -2168,6 +2340,7 @@
     ui.coachDirty = true;
     if (m) {
       infoPopup.hide();
+      toggleSeason(false);
       if (document.activeElement && document.activeElement.matches('[data-info-trigger]')) document.activeElement.blur();
     }
     const opening = !!m && m.type === 'intro';
@@ -2543,7 +2716,8 @@
   function render() {
     if (scene !== 'play') return;
     if (stage.classList.contains('compact-layout') !== compactLayout()) fit();
-    renderHud(); renderMe(); renderQuest(); renderToday(); renderBoard();
+    renderHud(); renderMe(); renderToday(); renderBoard(); renderQuest();
+    if (!$('journal-panel').hidden) renderJournal();
   }
 
   // ── 고정 간격 걸음 ──
@@ -2566,7 +2740,7 @@
         rollTo('cash', S.cash, 'cash', won); rollTo('worth', w, 'worth', won);
       }
       stepRolls(); ui.cash = rolls.cash.v; ui.worth = rolls.worth.v;
-      if (ui.sayT > 0 && --ui.sayT === 0) { const el = document.querySelector('.q-say'); if (el) el.classList.add('old'); } // 시스템의 한마디는 잠깐 밝다가 흐려짐
+      if (!m && ui.noticeT > 0 && --ui.noticeT === 0) { ui.notice = ''; renderQuest(); ui.coachDirty = true; }
     }
     const box = $('toasts');
     for (let i = box.children.length - 1; i >= 0; i--) if (--box.children[i]._life <= 0) box.children[i].remove();

@@ -37,7 +37,14 @@ fs.mkdirSync(out, { recursive: true });
     const bad = [], cut = [], B = document.getElementById('board'), P = B.getBoundingClientRect(), St = document.getElementById('quest').getBoundingClientRect();
     const lab = e => ((e.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 22) || e.className || e.tagName);
     const road = !!B.querySelector('.road, .rungs, .rung'); // 로드맵은 그림 위에 겹쳐 놓는 것이 많아 겹침 검사는 하지 않는다
-    for (const z of document.querySelectorAll('[data-zone]')) { const zr = z.getBoundingClientRect(); for (const e of z.querySelectorAll('button, .chip, .pk, .ic, b, span')) { const r = e.getBoundingClientRect(); if (r.width && (r.right > zr.right + 1 || r.bottom > zr.bottom + 1 || r.left < zr.left - 1)) { bad.push('구역 밖(' + z.dataset.zone + '): ' + lab(e)); break; } } }
+    for (const z of document.querySelectorAll('[data-zone]')) {
+      const zr = z.getBoundingClientRect();
+      for (const e of z.querySelectorAll('button, .chip, .pk, .ic, b, span')) {
+        const r = e.getBoundingClientRect(), rail = e.closest('#job-rail')?.getBoundingClientRect();
+        if (r.width && ((rail ? Math.min(r.right, rail.right) : r.right) > zr.right + 1 || r.bottom > zr.bottom + 1 ||
+            (rail ? Math.max(r.left, rail.left) : r.left) < zr.left - 1)) { bad.push('구역 밖(' + z.dataset.zone + '): ' + lab(e)); break; }
+      }
+    }
     const clipped = e => { for (let q = e.parentElement; q && q !== B; q = q.parentElement) { const o = getComputedStyle(q); if (o.overflowX !== 'visible' || o.overflowY !== 'visible') return true; } return false; };
     for (const e of B.querySelectorAll('*')) {
       const r = e.getBoundingClientRect(); if (!r.width || !r.height) continue;
@@ -89,7 +96,7 @@ fs.mkdirSync(out, { recursive: true });
   const VIEWS = [['A', 'stock', g => { g.run('tab', 'stock'); g.run('sview', 'market'); }], ['A', 'stock-detail', g => { g.run('tab', 'stock'); g.run('sel', 'hantang'); g.run('qty', 'max'); }], ['A', 'stock-mine', g => { g.run('tab', 'stock'); g.run('sview', 'mine'); }],
     ['A', 'info', g => g.run('tab', 'info')], ['A', 'coin', g => g.run('tab', 'coin')], ['A', 'coin-open', g => { g.run('tab', 'coin'); if (!g.state.raw.lev) { g.run('lev', '5'); g.run('share', '1'); g.step(40, false); g.run('long'); g.step(40, false); } g.run('tab', 'coin'); }],
     ['A', 'realty', g => g.run('tab', 'realty')], ['A', 'bank', g => { g.run('tab', 'bank'); g.run('bamt', 'room'); }], ['A', 'shop', g => g.run('tab', 'shop')], ['A', 'road', g => g.run('tab', 'road')],
-    ['B', 'B-stock', g => { g.run('tab', 'stock'); g.run('sview', 'market'); }], ['B', 'B-info', g => g.run('tab', 'info')], ['B', 'B-coin', g => g.run('tab', 'coin')], ['B', 'B-jobs-old', g => { g.run('tab', 'road'); g.run('jpage', '-1'); g.run('jpage', '-1'); }],
+    ['B', 'B-stock', g => { g.run('tab', 'stock'); g.run('sview', 'market'); }], ['B', 'B-info', g => g.run('tab', 'info')], ['B', 'B-coin', g => g.run('tab', 'coin')], ['B', 'B-jobs-start', g => { g.run('tab', 'road'); document.getElementById('job-rail').scrollLeft = 0; }],
     ['B', 'B-realty', g => g.run('tab', 'realty')], ['B', 'B-bank', g => { g.run('tab', 'bank'); g.run('bamt', 'room'); }], ['B', 'B-shop', g => g.run('tab', 'shop')], ['B', 'B-stock-mine', g => { g.run('tab', 'stock'); g.run('sview', 'mine'); }], ['B', 'B-stock-detail', g => { g.run('tab', 'stock'); g.run('sel', 'daejang'); g.run('qty', 'max'); }], ['B', 'B-road', g => g.run('tab', 'road')]];
   const cuts = {};
   for (const [which, name, open] of VIEWS) {
@@ -288,7 +295,7 @@ fs.mkdirSync(out, { recursive: true });
   const pl = await fresh(), lp = { bad: [] };
   const fit = sel => pl.evaluate(sel => [...document.querySelectorAll(sel)].map(b => { const r = b.getBoundingClientRect(), cs = getComputedStyle(b), bw = parseFloat(cs.borderLeftWidth), bb = parseFloat(cs.borderBottomWidth), kids = [...b.querySelectorAll('.nm, .st, .st > span, .skip, .ich, b, span:not(.lv):not(.key)')].filter(e => e.getBoundingClientRect().width && !e.closest('.lv, .tag'));
     return { t: b.textContent.trim().slice(0, 40), over: kids.filter(e => { const q = e.getBoundingClientRect(); return q.right > r.right - bw + 0.5 || q.left < r.left + bw - 0.5 || q.bottom > r.bottom - bb + 0.5; }).map(e => e.className || e.tagName) }; }), sel); // 글 · 버튼이 틀(테두리) 안쪽에 다 들어오는지
-  lp.want = await pl.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 8, biz: 5, hp: 100, slot: 2, quest: 99, offer: null, picks: 0, event: null, xp: 0, perks: { hustle: 3, workaholic: 1 }, inten: {} }); for (const j of window.Rules.JOBS) S.inten[j.id] = 3; for (const id in S.jobs) S.jobs[id] = 99; S.market.world = []; g.render(); return window.Rules.acts(S).filter(a => a.kind === 'job').slice(-4).map(a => window.Rules.num(a.levels[3].pay)); }); // 오늘 칸에 보이는 넷(새로 열린 일부터) · 저녁 칸이라 대리도 열려 있다
+  lp.want = await pl.evaluate(() => { const g = window.game, S = g.state.raw; Object.assign(S, { tier: 8, biz: 5, hp: 100, slot: 2, quest: 99, offer: null, picks: 0, event: null, xp: 0, perks: { hustle: 3, workaholic: 1 }, inten: {} }); for (const j of window.Rules.JOBS) S.inten[j.id] = 3; for (const id in S.jobs) S.jobs[id] = 99; S.market.world = []; g.render(); return window.Rules.acts(S).filter(a => a.kind === 'job').map(a => window.Rules.num(a.levels[3].pay)); }); // 알바 줄 전체 · 저녁 칸이라 대리도 열려 있다
   await pl.evaluate(() => window.game.step(10)); await pl.screenshot({ path: path.join(out, 'long-pay-cards.png') });
   lp.cards = await fit('#today .card');
   lp.cardPays = await pl.evaluate(() => [...document.querySelectorAll('#today .card .pay')].map(e => e.textContent));
@@ -299,7 +306,7 @@ fs.mkdirSync(out, { recursive: true });
   lp.ibPays = await pl.evaluate(() => [...document.querySelectorAll('#veil .ib .p')].map(e => e.textContent));
   if (Math.max(...lp.want.map(s => s.length)) < 13) lp.bad.push('점검이 10억 단위 일당을 못 만듦: ' + lp.want.join(' · '));
   { const short = lp.want.some(t => t.length > 11), v = t => Number(t.replace(/,/g, '')) / 1e8, eok = t => (v(t) >= 10 ? Math.floor(v(t)) : Math.floor(v(t) * 10) / 10) + '억'; // 하나라도 10억이 넘으면 알바 카드 전부 줄임 ("13억" · "7.2억")
-    if (!short || lp.cardPays.some((t, i) => t !== eok(lp.want[i]))) lp.bad.push('카드의 일당이 최상의 일당이 아니거나, 한 줄에 줄임 표기와 긴 숫자가 섞임: ' + lp.cardPays.join(' · ') + ' ≠ ' + lp.want.join(' · ')); }
+    if (!short || lp.cardPays.length !== lp.want.length || lp.cardPays.some((t, i) => t !== eok(lp.want[i]))) lp.bad.push('카드의 일당이 최상의 일당이 아니거나, 한 줄에 줄임 표기와 긴 숫자가 섞임: ' + lp.cardPays.join(' · ') + ' ≠ ' + lp.want.join(' · ')); }
   if (lp.ibPays[3] !== lp.wantIb) lp.bad.push('최상 버튼의 일당이 다름: ' + lp.ibPays[3] + ' ≠ ' + lp.wantIb);
   for (const k of ['cards', 'ib', 'head', 'line']) for (const x of lp[k]) if (x.over.length) lp.bad.push('긴 일당에서 틀 밖으로 나감(' + k + ' · ' + x.over.join() + '): ' + x.t);
   await pl.close();
